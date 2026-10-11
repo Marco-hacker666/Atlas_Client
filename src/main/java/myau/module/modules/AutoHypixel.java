@@ -62,4 +62,8 @@ public class AutoHypixel extends Module {
             }
         }
     }
+
+    /* Merged modules (2026-10-11, ModuleBundle). */
+    public final myau.module.ModuleBundle autoPlayMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.AutoPlay(), "auto-play", "Auto play", false);
+    public final myau.module.ModuleBundle requeueMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.AutoRequeue(), "requeue", "Requeue", false);
 }

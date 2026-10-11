@@ -29,9 +29,31 @@ public class SetupCatalogTest {
         assertFalse(mods.isEmpty());
         for (SetupEntry entry : mods) {
             assertEquals(entry.fileName, SetupEntry.Section.MODS, entry.section);
-            assertEquals(entry.fileName, SetupEntry.Source.DIRECT, entry.source);
+            /* OptiFine comes from optifine.net's own download page (2026-10-11). */
+            assertEquals(entry.fileName, "OptiFine".equals(entry.displayName())
+                    ? SetupEntry.Source.OPTIFINE : SetupEntry.Source.DIRECT, entry.source);
             assertTrue(entry.fileName, entry.fileName.endsWith(".jar"));
         }
+    }
+
+    /** 2026-10-11: official sources only, each pinned to its file's SHA-1. */
+    @Test
+    public void optiFineAndOneConfigAreOfficialAndPinned() {
+        boolean optifine = false;
+        boolean oneconfig = false;
+        for (SetupEntry entry : SetupCatalog.mods()) {
+            if ("OptiFine".equals(entry.displayName())) {
+                optifine = true;
+                assertTrue(entry.url, entry.url.startsWith("https://optifine.net/"));
+                assertEquals(40, entry.sha1.length());
+            } else if ("OneConfig".equals(entry.displayName())) {
+                oneconfig = true;
+                assertTrue(entry.url, entry.url.startsWith("https://cdn.modrinth.com/"));
+                assertEquals(40, entry.sha1.length());
+            }
+            assertFalse(entry.fileName, entry.fileName.contains("ModernF3"));
+        }
+        assertTrue(optifine && oneconfig);
     }
 
     @Test

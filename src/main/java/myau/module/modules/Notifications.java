@@ -28,8 +28,6 @@ public class Notifications extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final IntProperty maxNotifications = new IntProperty("max-notifications", 4, 1, 8);
-    public final ModeProperty toggleSet = new ModeProperty("toggle-set", 0, new String[]{"Skid", "Ghost", "Macro"});
-    public final PercentProperty toggleVolume = new PercentProperty("toggle-volume", 50);
     /* Added with the HUD editor (2026-10-05): the stack's shift from the bottom-right corner. 0 = the old place. */
     public final IntProperty offsetX = new IntProperty("offset-x", 0, -1000, 1000);
     public final IntProperty offsetY = new IntProperty("offset-y", 0, -1000, 1000);

@@ -64,4 +64,13 @@ public class Reach extends Module {
     public String[] getSuffix() {
         return new String[]{df.format(this.range.getValue())};
     }
+
+    /* Merged modules as modes (2026-10-11, ModuleBundle): the module's own
+       work pauses while another type is picked. */
+    public final myau.property.properties.ModeProperty mergedType = new myau.property.properties.ModeProperty("type", 0, new String[]{"Normal", "Legit"});
+    public final myau.module.ModuleBundle legitMerged = myau.module.ModuleBundle.forMode(this, new myau.module.modules.LegitReach(), "legit", "Legit", () -> this.mergedType.getValue() == 1).deselectWith(() -> this.mergedType.setValue(0));
+
+    {
+        this.pauseWhen(() -> this.mergedType.getValue() != 0);
+    }
 }

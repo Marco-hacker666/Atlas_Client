@@ -169,6 +169,7 @@ public final class SetupDownloader {
 
         InputStream in = connection.getInputStream();
         FileOutputStream out = new FileOutputStream(temp);
+        java.security.MessageDigest sha1 = java.security.MessageDigest.getInstance("SHA-1");
         boolean valid = false;
         try {
             byte[] buffer = new byte[32768];
@@ -189,10 +190,20 @@ public final class SetupDownloader {
                     throw new Exception("file too large (over 128MB)");
                 }
                 out.write(buffer, 0, read);
+                sha1.update(buffer, 0, read);
                 listener.onProgress(downloaded, total);
             }
             if (isArchive(entry.fileName) && !(first == 'P' && second == 'K')) {
                 throw new Exception("not a valid jar or zip (the host sent a web page)");
+            }
+            if (entry.sha1 != null) {
+                StringBuilder hex = new StringBuilder();
+                for (byte b : sha1.digest()) {
+                    hex.append(String.format("%02x", b & 0xFF));
+                }
+                if (!entry.sha1.equalsIgnoreCase(hex.toString())) {
+                    throw new Exception("not the expected file (checksum mismatch)");
+                }
             }
             valid = true;
         } finally {
@@ -228,6 +239,15 @@ public final class SetupDownloader {
     static String resolveDirectUrl(SetupEntry entry, Download handle) throws Exception {
         if (entry.source == SetupEntry.Source.DIRECT) {
             return entry.url;
+        }
+        if (entry.source == SetupEntry.Source.OPTIFINE) {
+            /* optifine.net hands out a per-visit key on its download page. */
+            java.util.regex.Matcher key = java.util.regex.Pattern.compile("downloadx\\?f=[^'\"\\s>]+")
+                    .matcher(fetchText(entry.url, handle));
+            if (!key.find()) {
+                throw new Exception("could not resolve the OptiFine download link");
+            }
+            return "https://optifine.net/" + key.group().replace("&amp;", "&");
         }
         String page = fetchText(entry.url, handle);
         String link = extractShareLink(page);

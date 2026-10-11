@@ -95,8 +95,17 @@ public final class ModuleDocs {
                 property.setHelpEn(helpEn);
             }
         }
+        /* Settings of merged modules (ModuleBundle) keep their own heading and
+           come last, in order. */
+        List<Property<?>> own = new ArrayList<Property<?>>();
+        List<Property<?>> merged = new ArrayList<Property<?>>();
+        for (Property<?> property : properties) {
+            (property.isGroupFixed() ? merged : own).add(property);
+        }
         String[][] spec = GROUPS.get(key);
-        return spec != null ? grouped(properties, spec) : autoGrouped(properties);
+        List<Property<?>> out = new ArrayList<Property<?>>(spec != null ? grouped(own, spec) : autoGrouped(own));
+        out.addAll(merged);
+        return out;
     }
 
     private static List<Property<?>> grouped(List<Property<?>> properties, String[][] spec) {
@@ -222,20 +231,15 @@ public final class ModuleDocs {
     }
 
     static {
-        d("StopMotion", "啟用時把水平/垂直速度歸零，用來在半空中精準停住。");
-        d("VClip", "把自己垂直往上或往下傳送設定的方塊距離。");
         d("NoClickDelay", "移除兩次左鍵之間的延遲。");
         d("Parkour", "在方塊邊緣自動起跳，避免掉落。");
         d("ViewPackets", "把收發的封包名稱記錄到聊天欄，可過濾名稱。");
-        d("Spider", "像蜘蛛一樣攀爬牆面。");
         d("PearlSaver", "自動瞄準並投擲終界珍珠自救。");
         d("ProjectileAimBot", "自動瞄準並投擲投射物。");
         d("SmartClicking", "依 CPS 設定智慧調整點擊。");
         d("DelayRemover", "移除點擊與跳躍的延遲。");
-        d("ForwardTrack", "自動追蹤前方目標。");
         d("AutoArmor", "自動穿上與更換最佳護甲。");
         d("BedWars", "BedWars 的遊戲資訊與提醒。");
-        d("SpeedBuilders", "SpeedBuilders 模式的計時與提示。");
         d("BedDefender", "自動放置並防守床邊防禦。");
         d("AutoBed", "自動放置床的防護方塊。");
         d("AutoPlay", "依設定自動重新進入遊戲。");
@@ -243,8 +247,6 @@ public final class ModuleDocs {
         d("MobESP", "高亮顯示附近的生物。");
         d("AutoBlock", "攻擊時自動舉盾格擋。");
         d("ScriptModule", "載入腳本檔案並執行其鉤子。");
-        d("Phase", "可穿過方塊移動，內建多種繞過模式。");
-        d("Step", "不需跳躍即可爬上高方塊。");
         d("JumpReset", "受擊時自動跳躍以減少擊退。");
         d("Tower", "快速垂直向上堆疊前進，含隧道模式。");
         d("FastUse", "加快進食與格擋的完成速度。");
@@ -254,34 +256,22 @@ public final class ModuleDocs {
         d("WaterClutch", "墜落時自動倒水自救（MLG）。");
         d("SkyWars", "天空之戰的遊戲輔助與資訊顯示。");
         d("SkywarsAlerts", "天空之戰的事件與對手提醒。");
-        d("MegaWallsDetector", "超級牆遊戲的偵測與情報提示。");
         d("MurderDetector", "判斷兇手與偵探身分並提醒。");
         d("MurderMystery", "謀殺之謎遊戲的輔助工具。");
-        d("SumoFences", "相撲模式的柵欄輔助。");
-        d("ThePitUtils", "The Pit 遊戲的實用工具。");
-        d("WoolWars", "羊毛戰爭遊戲的輔助工具。");
-        d("FireBallPredict", "預測火球落點並畫出飛行軌跡。");
         d("AutoPot", "自動投擲藥水。");
         d("AutoSoup", "血量過低時自動喝湯。");
         d("AutoRod", "自動切換並投擲釣魚竿。");
         d("AutoWeapon", "攻擊時自動切換最佳武器。");
         d("Arrows", "在畫面邊緣指示畫面外的玩家。");
-        d("AntiFalseFlag", "偵測連續旗標並自動暫停相關功能。");
         d("ModSpoofer", "偽造客戶端品牌封包。");
         d("PingSpoof", "偽造延遲以製造封包延遲效果。");
-        d("GhostBlock", "讓放置的方塊只保留在客戶端。");
         d("KillEffect", "擊殺時播放特效與音效。");
         d("KillMessage", "擊殺後自動發送訊息。");
         d("KillSounds", "擊殺時播放音效。");
         d("KillSults", "擊殺後自動嘲諷對手。");
         d("FallIndicator", "標記落點方便 MLG 救場。");
-        d("BridgeInfo", "顯示搭橋進度與敵人資訊。");
         d("SmartBlinker", "智慧型封包閃爍，依情況自動收發。");
-        d("LeapModeHUD", "顯示跳躍模式的狀態。");
         d("BridgeAssist", "協助搭橋的轉向與放置。");
-        d("LegitBridge", "正規搭橋三合一：邊緣自動潛行加上腳下自動放置。");
-        d("AutoWho", "遊戲開始與結束時自動執行 /who，並顯示線上人數。");
-        d("DuelsStats", "統計本次遊戲的決鬥勝場、敗場與連勝。");
         d("StaffDetector", "偵測附近的工作人員與可疑行為並發出提醒。");
         d("CheatDetector", "觀察附近玩家並在聊天室回報疑似作弊行為。");
         d("BedProximityAlert", "敵人接近你的床時發出警報。");
@@ -289,12 +279,9 @@ public final class ModuleDocs {
         d("LegitReach", "在難以察覺的範圍內微調攻擊距離。");
         d("NoWeb", "在蜘蛛網中不再被拖慢移動速度。");
         d("Freecam", "讓視角離開身體自由飛行偵查。");
-        d("Nuker", "自動破壞周圍的方塊。");
         d("AutoPlace", "準心對準方塊面時自動放置方塊。");
-        d("AutoBuy", "開啟商店時自動購買預設的 BedWars 物品。");
         d("AutoRequeue", "遊戲結束後自動重新排隊。");
         d("ArmorBreaker", "戰鬥中自動切換斧頭以破壞對手護甲。");
-        d("PartyDetector", "追蹤組隊的加入、離開與邀請並發出提醒。");
         d("AutoReconnect", "被踢出或斷線後自動重新連線到同一個伺服器。");
         d("AutoGG", "遊戲結束時自動發送訊息（預設是 gg）。");
         // ------------------------------------------------------------ COMBAT
@@ -371,6 +358,10 @@ public final class ModuleDocs {
         d("Jesus", "可以在水面上行走。");
         d("NoSlow", "使用物品（格擋、吃東西、拉弓）時不減速。");
         help("HUD", "hud-theme", "所有 HUD 的外觀。JELLO：LiquidBounce JelloBounce 主題（黑 45%、柔和陰影、圓角卡片、模組清單貼齊）。CLASSIC：各 HUD 原本的畫法。");
+        d("NoDelay", "移除各種延遲：攻擊、點擊、跳躍。");
+        d("MLG", "墜落時用水或梯子自救。");
+        d("BlockESP", "標出箱子、床或自訂方塊的位置。");
+        d("AutoMessage", "遊戲結束或擊殺後自動發送訊息。");
         d("NoItemRelease", "放開右鍵時不送出「停止使用物品」封包，伺服器仍當你在使用；本機照常停止（來源：Slinky）。");
         help("NoItemRelease", "safe-release", "一移動或疾跑，就在該 tick 的移動封包前補送放開封包（避免 Grim NoSlow）；關掉則一直不送。");
         d("NoJumpDelay", "移除連續跳躍之間的延遲。");
@@ -394,7 +385,6 @@ public final class ModuleDocs {
         d("AntiObbyTrap", "頭卡在黑曜石等陷阱方塊裡時，把那格當成空氣，讓你看得到、出得去。");
         // ------------------------------------------------------------ RENDER
         d("ESP", "在其他玩家身上畫外框或光暈，隔牆也看得到。");
-        d("ESP2D", "以 2D 方框顯示玩家，附血條、護甲條與名字。");
         d("Chams", "隔牆顯示玩家模型。");
         d("NameTags", "放大並強化名牌：顯示血量、距離、裝備與附魔。");
         d("Tracers", "從畫面中央畫線指向其他玩家。");
@@ -456,7 +446,6 @@ public final class ModuleDocs {
         d("Hotbar", "自訂快捷欄的外觀。");
         d("FPScounter", "在畫面上顯示 FPS。");
         d("WaterMark", "畫面上的客戶端浮水印。");
-        d("WaterMark2", "另一種樣式的浮水印。");
         d("DynamicIsland", "仿動態島的資訊條（目前狀態、通知）。");
         d("Statistics", "這次連線的時間、擊殺與勝場統計。");
         d("PlayTracker", "小 HUD：記錄玩了多久、玩了幾場（含今天累計、勝敗），並在疑似被減傷時提醒。");

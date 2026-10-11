@@ -535,4 +535,8 @@ public class AutoBedDef extends Module {
     public int getSlot() {
         return lastSlot;
     }
+
+    /* Merged modules (2026-10-11, ModuleBundle). */
+    public final myau.module.ModuleBundle defenderMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.BedDefender(), "defender", "Bed defender", false);
+    public final myau.module.ModuleBundle autoBedMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.AutoBed(), "auto-bed", "Bed protection", false);
 }

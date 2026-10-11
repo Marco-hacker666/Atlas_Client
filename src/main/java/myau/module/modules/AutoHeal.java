@@ -160,4 +160,9 @@ public class AutoHeal extends Module {
             event.setCancelled(true);
         }
     }
+
+    /* Merged modules (2026-10-11, ModuleBundle). */
+    public final myau.module.ModuleBundle potMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.AutoPot(), "pot", "Potions", false);
+    public final myau.module.ModuleBundle soupMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.AutoSoup(), "soup", "Soup", false);
+    public final myau.module.ModuleBundle gappleMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.AutoGapple(), "gapple", "Golden apples", false);
 }

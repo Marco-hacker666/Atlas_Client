@@ -31,63 +31,55 @@ public final class ModuleCategories {
 
     static {
         put(Category.COMBAT,
-                AimAssist.class, AutoClicker.class, KillAura.class, PlainAura.class, Criticals.class,
-                Velocity.class, HitBox.class, Reach.class, BackTrack.class, TickBase.class, TimerRange.class,
+                NoDelay.class, AimAssist.class, AutoClicker.class, KillAura.class, PlainAura.class, Criticals.class,
+                JumpReset.class, Velocity.class, HitBox.class, Reach.class, BackTrack.class, TickBase.class, TimerRange.class,
                 FakeLag.class, LagRange.class, KnockbackDelay.class, ServerLag.class, MoreKB.class,
                 SprintReset.class, Wtap.class, KeepSprint.class, BlockHit.class, HitSelect.class,
-                Hitflick.class, InvulnTiming.class, ClickAssits.class, Piercing.class, Displace.class,
+                Hitflick.class, InvulnTiming.class, Piercing.class, Displace.class,
                 KeepRange.class, AimBacktrack.class, KBDisplacement.class, ThrowAura.class, AutoHeal.class,
-                AutoGapple.class, FastBow.class, NoHitDelay.class, NoClickDelay.class, BurstClicker.class, LegitReach.class, ArmorBreaker.class,
-                JumpReset.class, AutoPot.class, AutoSoup.class, AutoRod.class, AutoWeapon.class,
-                PingSpoof.class, SmartBlinker.class, PearlSaver.class, ProjectileAimBot.class, SmartClicking.class,
-                AutoBlock.class);
+                FastBow.class, ArmorBreaker.class,
+                AutoRod.class, AutoWeapon.class,
+                PingSpoof.class, SmartBlinker.class, PearlSaver.class, ProjectileAimBot.class);
         put(Category.PLAYER,
-                Blink.class, NoFall.class, AntiVoid.class, Clutch.class, AutoTool.class, AutoSwap.class,
+                MLG.class, Blink.class, NoFall.class, AntiVoid.class, Clutch.class, AutoTool.class, AutoSwap.class,
                 InvManager.class, Refill.class, AntiAFK.class, AntiFireball.class, AutoAnduril.class,
-                InventoryClicker.class, FastUse.class, LadderClutch.class, WaterClutch.class, AutoArmor.class);
+                InventoryClicker.class, FastUse.class);
         put(Category.MOVEMENT,
-                Fly.class, Speed.class, LongJump.class, Jesus.class, NoSlow.class, NoItemRelease.class, NoJumpDelay.class,
-                SafeWalk.class, Eagle.class, InvWalk.class, TargetStrafe.class, MoveFix.class,
-                Stasis.class, StopMotion.class, VClip.class, Parkour.class, NoWeb.class, Phase.class, Step.class, Tower.class, BridgeAssist.class, LegitBridge.class, Spider.class, DelayRemover.class,
-                ForwardTrack.class);
+                Fly.class, Speed.class, LongJump.class, Jesus.class, NoSlow.class, NoItemRelease.class, SafeWalk.class, Eagle.class, InvWalk.class, TargetStrafe.class, MoveFix.class,
+                Stasis.class, Parkour.class, NoWeb.class, Tower.class);
         put(Category.RENDER,
-                ESP.class, ESP2D.class, Chams.class, NameTags.class, Tracers.class,
-                TargetESP.class, TargetHUD.class, ItemESP.class, ChestESP.class, BedESP.class, Xray.class,
+                BlockESP.class, ESP.class, Chams.class, NameTags.class, Tracers.class,
+                TargetESP.class, TargetHUD.class, ItemESP.class, Xray.class,
                 ViewClip.class, Trajectories.class, BlockOverlay.class,
                 BreakProgress.class, Indicators.class, Radar.class, LatencyCrosshair.class,
                 TeamHealthDisplay.class, RenderFixes.class,
                 AntiDebuff.class, BedPlates.class, TNTTimer.class, DamageTags.class, ItemTags.class,
-                EntityCulling.class, Freecam.class, FireBallPredict.class, Arrows.class, FallIndicator.class, BridgeInfo.class, BlocksESP.class,
-                MobESP.class);
+                EntityCulling.class, Freecam.class, FallIndicator.class);
         put(Category.WORLD,
                 Scaffold.class, AutoBlockIn.class, AutoBedDef.class, AutoHeadHitter.class, BedNuker.class,
                 ChestAura.class, ChestStealer.class, FastPlace.class, SpeedMine.class, Timer.class,
-                AntiObbyTrap.class, Nuker.class, AutoPlace.class, LegitScaffold.class, BlockLadder.class, BedDefender.class, AutoBed.class);
+                AntiObbyTrap.class, AutoPlace.class);
         put(Category.MISC,
-                AntiBot.class, TargetFilter.class, MCF.class, NickHider.class, Spammer.class, AutoAuth.class,
+                AutoMessage.class, AntiBot.class, TargetFilter.class, MCF.class, NickHider.class, Spammer.class, AutoAuth.class,
                 AutoHypixel.class, BedwarUtils.class, BedTracker.class, LightningTracker.class,
                 ESPDetector.class, AntiCheat.class, AntiObfuscate.class, MouseRawInput.class,
                 ResourceSpoofer.class, NoRotate.class, ExploitFixer.class,
-                AutoReconnect.class, AutoGG.class, PartyDetector.class, AutoWho.class, DuelsStats.class, StaffDetector.class,
-                BedProximityAlert.class, AutoBuy.class, AutoRequeue.class, SkyWars.class, SkywarsAlerts.class,
-                MegaWallsDetector.class, MurderDetector.class, MurderMystery.class, SumoFences.class,
-                ThePitUtils.class, WoolWars.class, KillMessage.class, KillSults.class, BedWars.class,
-                SpeedBuilders.class, AutoPlay.class);
+                AutoReconnect.class, StaffDetector.class,
+                SkyWars.class, MurderMystery.class);
         put(Category.EXPLOIT,
-                Disabler.class, GhostHand.class, ClientSpoofer.class, ModSpoofer.class, GhostBlock.class);
+                Disabler.class, GhostHand.class, ClientSpoofer.class);
         put(Category.CLIENT,
                 ClickGUIModule.class, GuiModule.class, FlagDetector.class,
                 FlagResponder.class, HitCheck.class, FightLog.class, Debug.class, PacketLogger.class,
                 ServerFingerprint.class, AutoTune.class, Adaptive.class, ServerProfiles.class,
-                LatencyGovernor.class, Panic.class, Rotations.class, Notifications.class, ViewPackets.class, CheatDetector.class, AntiFalseFlag.class, ScriptModule.class);
+                LatencyGovernor.class, Panic.class, Rotations.class, Notifications.class, ScriptModule.class);
         put(Category.LEGIT,
                 Ambience.class, Animations.class, ArmorHUD.class, AutoRespawn.class, Capes.class,
                 DynamicIsland.class, EffectsHUD.class, FPScounter.class, FreeLook.class, FullBright.class,
-                HUD.class, HitParticleEffects.class, Hotbar.class,
+                HUD.class, Hotbar.class,
                 ItemPhysics.class, LegitHUD.class, NoHurtCam.class, Sprint.class, Statistics.class, PlayTracker.class,
-                WaterMark.class, WaterMark2.class, KeyStrokes.class, PotionHUD.class, InventoryHUD.class,
-                PlayerList.class, ClosestPlayerHUD.class, FKCounter.class, KillEffect.class, KillSounds.class,
-                LeapModeHUD.class);
+                WaterMark.class, KeyStrokes.class, PotionHUD.class, InventoryHUD.class,
+                PlayerList.class, ClosestPlayerHUD.class, FKCounter.class, KillEffect.class);
         /* In the order they appear on screen, not sorted: the order is the point. */
         put(Category.THEME,
                 Theme.class, PlayerColors.class, TracerColors.class, TargetColors.class, BacktrackColors.class,

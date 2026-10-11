@@ -70,7 +70,6 @@ public class TimerRange extends Module {
    public final ModeProperty markMode = new ModeProperty("mark", 0, new String[]{"OFF", "BOX", "PLATFORM"}, () -> timerBoostMode.getValue() == 2);
    public final BooleanProperty outline = new BooleanProperty("outline", false, () -> timerBoostMode.getValue() == 2 && markMode.getValue() == 1);
 
-   public final BooleanProperty onWeb = new BooleanProperty("on-web", false);
    public final BooleanProperty onLiquid = new BooleanProperty("on-liquid", false);
    public final BooleanProperty onForwardOnly = new BooleanProperty("on-forward-only", true);
    public final BooleanProperty resetOnLagBack = new BooleanProperty("reset-on-lagback", false);

@@ -18,11 +18,21 @@ public final class SetupCatalog {
 
     public static List<SetupEntry> mods() {
         List<SetupEntry> out = new ArrayList<>();
+        /* 2026-10-11: from optifine.net itself (it used to be a copy of a preview
+           build in someone's GitHub repo), the stable 1.8.9 build, checked
+           against the file's SHA-1 so nothing else can be installed. */
+        out.add(new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.OPTIFINE,
+                "OptiFine", "Performance plus zoom (official, optifine.net). Installs silently.",
+                "OptiFine_1.8.9_HD_U_M5.jar",
+                "https://optifine.net/adloadx?f=OptiFine_1.8.9_HD_U_M5.jar",
+                2585014L, true, true, "d362d58a28f5373b141b9e426e8e160638bfafcd"));
+        /* OneConfig (Polyfrost's official build, Modrinth); OneConfigPatcher moves
+           its menu key off RightShift, this client's ClickGUI key. */
         out.add(new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.DIRECT,
-                "OptiFine", "Performance plus zoom. Installs silently.",
-                "preview_OptiFine_1.8.9_HD_U_M6_pre2.jar",
-                "https://raw.githubusercontent.com/loloshelly102-a11y/OpenSkid/main/configs/preview_OptiFine_1.8.9_HD_U_M6_pre2.jar",
-                0, true, true));
+                "OneConfig", "Polyfrost's mod settings menu (official, Modrinth).",
+                "Aoneconfigbootstrap-1.8.9-forge-1.0.3.jar",
+                "https://cdn.modrinth.com/data/AibBIVmj/versions/TcuRDj1R/Aoneconfigbootstrap-1.8.9-forge-1.0.3.jar",
+                15323L, false, false, "1c3a3ca214c936037e056ae3b619ec2ba6aef5c7"));
         out.add(new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.DIRECT,
                 "3DSkinLayers", "3D skin layers on players.",
                 "3dSkinLayers-forge-mc1.8.9-1.2.0.jar",
@@ -37,11 +47,6 @@ public final class SetupCatalog {
                 "CreamyKeys", "Keystrokes overlay.",
                 "CreamyKeys-0.0.5-1.8.9.jar",
                 "https://cdn.modrinth.com/data/vKOxyOq8/versions/pdFnz68w/CreamyKeys-0.0.5-1.8.9.jar",
-                0, false));
-        out.add(new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.DIRECT,
-                "ModernF3", "Cleaner F3 debug screen.",
-                "ModernF3-1.8.9-forge-1.0.0.jar",
-                "https://cdn.modrinth.com/data/nc1d7LP3/versions/JGiY0f7H/ModernF3-1.8.9-forge-1.0.0.jar",
                 0, false));
         out.add(new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.DIRECT,
                 "WaveyCapes", "Animated cape physics.",

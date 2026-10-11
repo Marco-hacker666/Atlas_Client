@@ -56,9 +56,9 @@ public class HUD extends Module {
             TargetESP.class, TargetHUD.class, Indicators.class, BedESP.class, ItemESP.class,
             ViewClip.class, NoHurtCam.class, HUD.class, GuiModule.class,
             ChestESP.class, Trajectories.class, Radar.class, RenderFixes.class, FPScounter.class,
-            WaterMark.class, WaterMark2.class, HitParticleEffects.class, DynamicIsland.class,
+            WaterMark.class, HitParticleEffects.class, DynamicIsland.class,
             ArmorHUD.class, EffectsHUD.class, LegitHUD.class,
-            ESP2D.class, TeamHealthDisplay.class, Statistics.class, Animations.class, Hotbar.class
+            TeamHealthDisplay.class, Statistics.class, Animations.class, Hotbar.class
     ));
     private static final Set<Class<?>> PLAYER_MODULES = new HashSet<>(Arrays.<Class<?>>asList(
             AutoHeal.class, FakeLag.class, AutoTool.class, ChestStealer.class, InvManager.class,
@@ -373,7 +373,8 @@ public class HUD extends Module {
     }
 
     private boolean shouldShowInArraylist(Module module) {
-        return module != null && module.isEnabled() && !module.isHidden() && !isHiddenByArraylistCategory(module);
+        return module != null && module.isEnabled() && !module.isHidden() && !isHiddenByArraylistCategory(module)
+                && !Debug.hidesWithPanel(module);
     }
 
     private boolean isHiddenByArraylistCategory(Module module) {

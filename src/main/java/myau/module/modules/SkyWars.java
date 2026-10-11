@@ -249,4 +249,7 @@ public class SkyWars extends Module {
         alerts = 0;
         tick = 0;
     }
+
+    /* Merged modules (2026-10-11, ModuleBundle). */
+    public final myau.module.ModuleBundle alertsMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.SkywarsAlerts(), "alerts", "Alerts", true);
 }

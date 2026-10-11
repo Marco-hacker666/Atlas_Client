@@ -70,7 +70,7 @@ public abstract class Property<T> {
         }
     }
 
-    private final String name;
+    private String name;
     private final T type;
     private final Predicate<T> validator;
     private final BooleanSupplier visibleChecker;
@@ -100,6 +100,40 @@ public abstract class Property<T> {
 
     public String getName() {
         return this.name;
+    }
+
+    /*
+     * 2026-10-11, module merging (ModuleBundle): a merged module's settings
+     * live under the module it was merged into, so their keys get a prefix to
+     * stay unique there; the label keeps the old wording. Their heading is
+     * fixed so the host's own grouping leaves them together.
+     */
+    public Property<T> rekey(String key) {
+        if (this.label == null) {
+            this.label = prettify(this.name);
+        }
+        this.name = key;
+        return this;
+    }
+
+    private boolean groupFixed;
+
+    public Property<T> fixGroup(String group) {
+        this.group = group;
+        this.groupFixed = true;
+        return this;
+    }
+
+    public boolean isGroupFixed() {
+        return this.groupFixed;
+    }
+
+    /** Shown only while this also holds, on top of every condition it already has. */
+    public Property<T> alsoWhen(java.util.function.BooleanSupplier condition) {
+        final java.util.function.BooleanSupplier before = this.alsoVisible;
+        this.alsoVisible = before == null ? condition
+                : () -> before.getAsBoolean() && condition.getAsBoolean();
+        return this;
     }
 
     /* How the menus present this setting (2026-10-04, ModuleDocs). None of it

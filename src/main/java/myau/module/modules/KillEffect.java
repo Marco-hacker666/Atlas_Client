@@ -123,4 +123,8 @@ public class KillEffect extends Module {
         this.target = null;
         this.lastAttackAt = 0L;
     }
+
+    /* Merged modules (2026-10-11, ModuleBundle). */
+    public final myau.module.ModuleBundle soundsMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.KillSounds(), "sounds", "Kill sounds", false);
+    public final myau.module.ModuleBundle particlesMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.HitParticleEffects(), "hit-particles", "Hit particles", false);
 }

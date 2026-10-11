@@ -22,4 +22,8 @@ public interface IAccessorMinecraft {
 
     @Accessor("rightClickDelayTimer")
     void setRightClickDelayTimer(int integer);
+
+    /* 2026-10-11: where MyauResources adds the jar's "myau" resources. */
+    @Accessor("defaultResourcePacks")
+    java.util.List<net.minecraft.client.resources.IResourcePack> getDefaultResourcePacks();
 }

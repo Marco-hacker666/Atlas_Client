@@ -350,4 +350,7 @@ public class AntiCheat extends Module {
         int count;
         long lastReport;
     }
+
+    /* Merged modules (2026-10-11, ModuleBundle). */
+    public final myau.module.ModuleBundle cheatDetectorMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.CheatDetector(), "cheat-detector", "Cheat detector", false);
 }

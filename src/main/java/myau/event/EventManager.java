@@ -257,6 +257,9 @@ public final class EventManager {
                module, without a single module being written to report itself.
                It costs one comparison per listener, on packet events only. */
             final boolean watched = event instanceof PacketEvent;
+            /* 2026-10-11: and what a module does to the player without a
+               packet -- motion, ground, look, timer (ActionWatch). */
+            final boolean moved = myau.util.ActionWatch.watches(event);
             if (event instanceof EventStoppable) {
                 EventStoppable stoppable = (EventStoppable) event;
                 for (final MethodData data : dataList) {
@@ -264,7 +267,13 @@ public final class EventManager {
                         continue;
                     }
                     boolean before = watched && ((PacketEvent) event).isCancelled();
+                    if (moved) {
+                        myau.util.ActionWatch.before(event);
+                    }
                     invoke(data, event);
+                    if (moved) {
+                        myau.util.ActionWatch.after(data.getSource(), event);
+                    }
                     if (watched && !before && ((PacketEvent) event).isCancelled()) {
                         noteCancel(data, (PacketEvent) event);
                     }
@@ -278,7 +287,13 @@ public final class EventManager {
                         continue;
                     }
                     boolean before = watched && ((PacketEvent) event).isCancelled();
+                    if (moved) {
+                        myau.util.ActionWatch.before(event);
+                    }
                     invoke(data, event);
+                    if (moved) {
+                        myau.util.ActionWatch.after(data.getSource(), event);
+                    }
                     if (watched && !before && ((PacketEvent) event).isCancelled()) {
                         noteCancel(data, (PacketEvent) event);
                     }
@@ -421,7 +436,7 @@ public final class EventManager {
 
         /** A switched-off module's handler that does nothing while it is off. */
         boolean skipped() {
-            return this.skipWhenOff != null && !this.skipWhenOff.isEnabled();
+            return this.skipWhenOff != null && !this.skipWhenOff.isRunning();
         }
 
         void record(long elapsed) {

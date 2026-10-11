@@ -195,6 +195,10 @@ public class Adaptive extends Module {
     }
 
     private static void releaseKnobs() {
+        if (Myau.moduleManager == null) {
+            /* No client (a test or a headless run): nothing was turned down. */
+            return;
+        }
         Module reach = Myau.moduleManager.modules.get(Reach.class);
         if (reach instanceof Reach) {
             ((Reach) reach).range.release(OWNER);

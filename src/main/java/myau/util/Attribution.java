@@ -64,7 +64,16 @@ public final class Attribution {
         switch (kind) {
             case "held-send":
             case "release":
+            case "move-packet":
                 return 1.0;
+            /* 2026-10-11 (ActionWatch): changing the motion, the ground state
+               or the timer moves the server-side position; a turn mostly does
+               not, but it is what rotation checks look at. */
+            case "move":
+            case "timer":
+                return 0.9;
+            case "rotate":
+                return 0.3;
             case "held-self":
             case "release-self":
                 return 0.8;

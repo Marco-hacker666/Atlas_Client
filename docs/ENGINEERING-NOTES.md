@@ -4281,3 +4281,63 @@ live percentage, speed and ETA.
 Verified: 298 tests pass; the download path was also exercised outside the game against the real
 catalog (Controlling fetched and validated as a PK jar, an HTML-as-jar URL rejected, no temp files
 left behind).
+
+## 2026-10-11 — Scaffold POLAR: LiquidBounce's GodBridge technique, and why it jumped every block
+
+`rotations = POLAR` is LiquidBounce nextgen's `ScaffoldGodBridgeTechnique` run with the online
+config's GodBridge block (LiquidCloud `settings/nextgen/polar.json`): `Modes = [Jump]`,
+`ForceSneakBelowCount = 5`, `SneakTime = 1..1`. The reference is
+`features/module/modules/world/scaffold/techniques/ScaffoldGodBridgeTechnique.kt` and the ledge
+rule in `features/ScaffoldLedgeFeature.kt`, read from a sparse checkout.
+
+The owner's report on the first build was four things: it jumps way too often (about one jump
+per seven blocks would be right), the rotations are not fixed, the polar settings show up while
+another rotation mode is selected, and a diagonal should jump or sneak. What each one was:
+
+1. **Jumping on every block.** The first build jumped whenever the next step had no floor —
+   that is every edge, so every block. LiquidBounce's `ledge()` only acts when the crosshair of
+   the rotation it is about to send *cannot* place the block
+   (`targetFulfillsRequirements && isValidCrosshairTarget -> NO_LEDGE`). While the fixed
+   GodBridge look still lands on the wanted face, the block goes down and the player never
+   really leaves the floor, so there is nothing to jump for. That guard is what turns "every
+   block" into "some edges".
+2. **Rotations not fixed.** The S4d fallback — when the fixed look misses, re-aim at the
+   nearest point on the face and place there — is a Myau deviation made for the old
+   `GODBRIDGE` mode. Polar is the technique *defined* by a fixed look
+   (`ScaffoldGodBridgeTechnique.getRotations`: straight = move yaw ±45° / pitch 75.7,
+   diagonal = move yaw / pitch 75.6, no input = aimed corner / pitch 75), so the fallback is now
+   gated off for POLAR and the look stays where the technique puts it.
+3. **Polar settings under other modes.** `polar-force-sneak-below-count` and `polar-sneak-time`
+   were registered with no visibility check. Both, and the new `polar-modes`, now carry
+   `() -> rotationMode == POLAR`.
+4. **Diagonals.** Follows from 1: with the can-place guard in, the diagonal edge is the one that
+   gets the jump or the sneak, because the straight-back look (pitch 75.6) is the one that
+   rarely hits the side block.
+
+Also added while making polar.json faithful:
+
+- `polar-modes` (Jump / Sneak / StopInput / Backwards, default Jump): the config's `Modes`
+  setting. Without it the stop-input and step-back ledge actions that `applyPolarLedgeInput`
+  already implements were unreachable.
+- `jumpApexHeight()`: LiquidBounce's guard against jumping for a jump that would carry two
+  blocks (Jump Boost). The guard it replaces was `motionY <= 0.0`, which is always true on the
+  ground and so did nothing. The port sums the jump velocity — 0.42, plus 0.1 a level of Jump
+  Boost — down by gravity and drag: a plain jump reaches **1.2522** blocks, Jump Boost I
+  1.8361 (still under the 2.0 threshold, so it jumps), Jump Boost II 2.5168 (over it, so the mode
+  becomes Sneak), which is exactly LiquidBounce's rule.
+
+The rule is now `Scaffold.polarLedgeAction(...)`, a static decision with no Minecraft in it
+(on-ground / forward / target / edge / can-place / block count / configured mode / jump-boost
+level in, the action out); `updatePolarLedge` is only the live-state adapter that stores the
+result for the input stage in `applyPolarLedgeInput`.
+
+**Verified:** `./gradlew test` on JDK 17 — **336 tests, 0 failures, 0 errors** (11 new in
+`ScaffoldPolarTest`, 325 before). Removing the can-place guard fails exactly
+`aLookThatStillPlacesGetsNoLedgeAction` and nothing else; the file was then restored
+byte-identical (md5 `9d77f7cf`).
+
+**Not verified: the cadence.** "One jump per seven blocks" is a property of the geometry —
+where the fixed look lands on Myau's placement model, whose `getBlockData` targets the cell
+under the player rather than LiquidBounce's forward target — and the tests cannot count it.
+The rule and the fixed look are what they can hold; the number to watch in game is jumps per 20
+blocks along a straight row.

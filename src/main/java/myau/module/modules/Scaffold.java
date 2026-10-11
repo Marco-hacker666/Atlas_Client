@@ -28,6 +28,7 @@ import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.minecraft.network.play.server.S23PacketBlockChange;
 import net.minecraft.network.play.client.C0APacketAnimation;
 import net.minecraft.potion.Potion;
+import net.minecraft.potion.PotionEffect;
 import net.minecraft.util.*;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 import net.minecraft.world.WorldSettings.GameType;
@@ -51,6 +52,15 @@ public class Scaffold extends Module {
     private static final int ROTATION_SNAP = 7;
     private static final int ROTATION_THREE_FMC = 8;
     private static final int ROTATION_SNAP2 = 9;
+    private static final int ROTATION_POLAR = 10;
+    /* polar.json's GodBridge technique (LiquidBounce): the Mode index is also
+       the ledge action the decision returns ({@link #polarLedgeAction}).
+       Modes = [Jump], ForceSneakBelowCount = 5, SneakTime = 1..1. */
+    private static final int POLAR_JUMP = 0;
+    private static final int POLAR_SNEAK = 1;
+    private static final int POLAR_STOP_INPUT = 2;
+    private static final int POLAR_BACKWARDS = 3;
+    private static final int LEDGE_NONE = -1;
     private static final double[] placeOffsets = new double[]{
             0.03125,
             0.09375,
@@ -102,7 +112,7 @@ public class Scaffold extends Module {
     private int threeFmcPlaceCooldown = 0;
     private float lastSnapPlaceYaw = Float.NaN;
     private float lastSnapPlacePitch = Float.NaN;
-    public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2"})
+    public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2", "POLAR"})
             /* 2026-10-08: fewer modes in the menu; the rest still load from old configs. */
             .hide("BACKWARDS", "SIDEWAYS", "SMOOTH", "Hypixel", "3FMC", "SNAP2")
             .alias("GODBIRGDE", "GODBRIDGE");
@@ -137,6 +147,27 @@ public class Scaffold extends Module {
     private int eagleSneakTicks = 0;
     private long eagleLastSneakTime = 0L;
     private int eagleBlocksPlaced = 0;
+
+    /* ---- Polar: the full GodBridge technique (LiquidBounce polar.json) -----
+       Rotations alone are not a Godbridge; the part that keeps the player on
+       the block edge is the ledge action. When the next step has no floor and
+       the block cannot be placed, LiquidBounce's ScaffoldGodBridgeTechnique
+       picks an action (jump / sneak / stop input / step back) so the player
+       does not fall off. polar.json runs it with:
+         Modes = [Jump], ForceSneakBelowCount = 5, SneakTime = 1..1
+       i.e. normally JUMP, but SNEAK when fewer than 5 blocks remain. */
+    private final IntProperty polarForceSneakBelowCount = new IntProperty("polar-force-sneak-below-count", 5, 0, 20, () -> this.rotationMode.getValue() == ROTATION_POLAR);
+    private final IntProperty polarSneakTime = new IntProperty("polar-sneak-time", 1, 1, 10, () -> this.rotationMode.getValue() == ROTATION_POLAR);
+    /* polar.json's Modes = [Jump]. A single choice, as Myau's other mode
+       settings are; the ledge decision reads it, so Sneak, StopInput and
+       Backwards can be picked without a rebuild. */
+    private final ModeProperty polarModes = new ModeProperty("polar-modes", POLAR_JUMP,
+            new String[]{"Jump", "Sneak", "StopInput", "Backwards"},
+            () -> this.rotationMode.getValue() == ROTATION_POLAR);
+    private int polarLedgeSneakTicks = 0;
+    private boolean polarLedgeStopInput = false;
+    private boolean polarLedgeStepBack = false;
+    private boolean polarLedgeJump = false;
     public final BooleanProperty espOutline = new BooleanProperty("outline-esp", false);
     public final ModeProperty espColor = new ModeProperty("outline-color", 0, new String[]{"Default", "HUD"}, () -> this.espOutline.getValue());
     private final Map<BlockPos, Long> espHighlight = new HashMap<>();
@@ -728,7 +759,8 @@ public class Scaffold extends Module {
                                 this.yaw = RotationUtil.quantizeAngle(diagonalYaw);
                             }
                             break;
-                        case 4: // God Bridge Mode
+                        case ROTATION_GODBRIDGE: // God Bridge Mode
+                        case ROTATION_POLAR: // Polar: LiquidBounce GodBridge technique
                             // 1. SNAP YAW TO NEAREST 45-DEGREE DIAGONAL
                             // This finds if you are facing 45, 135, -45, or -135 and locks you there perfectly.
                             float roundedYaw = Math.round(currentYaw / 45.0f) * 45.0f;
@@ -783,8 +815,10 @@ public class Scaffold extends Module {
                 }
                 BlockData blockData = this.getBlockData();
 
-                boolean godBridge = this.rotationMode.getValue() == ROTATION_GODBRIDGE;
+                boolean godBridge = this.rotationMode.getValue() == ROTATION_GODBRIDGE
+                        || this.rotationMode.getValue() == ROTATION_POLAR;
                 float[] godBridgeLook = godBridge && blockData != null ? this.godBridgeRotation(this.yaw) : null;
+                this.updatePolarLedge(blockData, godBridgeLook);
                 /* The aim is measured from the look already sent -- or, in
                    GodBridge, from the fixed look, so a correction stays as
                    close to it as the edge allows (S4c). */
@@ -864,7 +898,8 @@ public class Scaffold extends Module {
                        at the block every tick -- 30-37 degree turns on the
                        click ticks in the 2026-10-07 Pika log. */
                     float[] fixed = godBridgeLook;
-                    if (aimDiff != Float.MAX_VALUE
+                    if (this.rotationMode.getValue() != ROTATION_POLAR
+                            && aimDiff != Float.MAX_VALUE
                             && this.lookHit(blockData, fixed[0], fixed[1]) == null) {
                         /* S4d (2026-10-08): the fixed look misses the face from
                            here: aim at the point on it nearest that look
@@ -1316,6 +1351,7 @@ public class Scaffold extends Module {
                 mc.thePlayer.movementInput.sneak = false;
                 return;
             }
+            this.applyPolarLedgeInput();
             this.quietThreeFmcMovement();
             if (this.moveFix.getValue() == 1
                     && RotationState.isActived()
@@ -1447,6 +1483,164 @@ public class Scaffold extends Module {
             return true;
         }
         return now < this.edgeSneakUntil;
+    }
+
+    /**
+     * Polar / GodBridge ledge decision, run once per tick from onUpdate.
+     *
+     * Mirrors LiquidBounce's ScaffoldGodBridgeTechnique.ledge(): when the next
+     * step has no floor (the {@link #edgeSneak()} test is the same "no floor one
+     * block down" check that clipLedged uses) the player is about to walk off,
+     * so we choose an action that holds the edge. With polar.json's config that
+     * is normally a jump, but a sneak when fewer than
+     * {@link #polarForceSneakBelowCount} blocks remain. The chosen action is
+     * stored and applied at the input stage by {@link #applyPolarLedgeInput()}.
+     *
+     * The rules themselves are {@link #polarLedgeAction}, which has no client
+     * in it and so can be tested; this method only reads the live state and
+     * stores the action for {@link #applyPolarLedgeInput()}.
+     */
+    private void updatePolarLedge(BlockData blockData, float[] godBridgeLook) {
+        if (this.rotationMode.getValue() != ROTATION_POLAR) {
+            this.polarLedgeSneakTicks = 0;
+            this.polarLedgeStopInput = false;
+            this.polarLedgeStepBack = false;
+            this.polarLedgeJump = false;
+            return;
+        }
+        // A pending sneak keeps its tick budget until it runs out.
+        if (this.polarLedgeSneakTicks > 0) {
+            this.polarLedgeStopInput = false;
+            this.polarLedgeStepBack = false;
+            this.polarLedgeJump = false;
+            return;
+        }
+        this.polarLedgeStopInput = false;
+        this.polarLedgeStepBack = false;
+        this.polarLedgeJump = false;
+        boolean onGround = mc.thePlayer.onGround;
+        boolean forward = MoveUtil.isForwardPressed();
+        boolean hasTarget = blockData != null && godBridgeLook != null;
+        /* edgeSneak() moves the safe-walk timer, so it is only asked while
+           actually bridging -- the same order as before. */
+        boolean onEdge = onGround && forward && hasTarget && this.edgeSneak();
+        boolean canPlaceFromLook = hasTarget
+                && this.lookHit(blockData, godBridgeLook[0], godBridgeLook[1]) != null;
+        switch (polarLedgeAction(onGround, forward, hasTarget, onEdge, canPlaceFromLook,
+                this.blockCount, this.polarForceSneakBelowCount.getValue(),
+                this.polarModes.getValue(), this.jumpBoostAmplifier())) {
+            case POLAR_SNEAK:
+                this.polarLedgeSneakTicks = this.polarSneakTime.getValue();
+                break;
+            case POLAR_STOP_INPUT:
+                this.polarLedgeStopInput = true;
+                break;
+            case POLAR_BACKWARDS:
+                this.polarLedgeStepBack = true;
+                break;
+            case POLAR_JUMP:
+                this.polarLedgeJump = true;
+                break;
+            default:
+                break;
+        }
+    }
+
+    /**
+     * LiquidBounce's ScaffoldGodBridgeTechnique.ledge as a decision with no
+     * client in it, so its rules can be tested. Returns the ledge action to
+     * take ({@link #POLAR_JUMP}, {@link #POLAR_SNEAK}, {@link
+     * #POLAR_STOP_INPUT}, {@link #POLAR_BACKWARDS}) or {@link #LEDGE_NONE}.
+     *
+     * LiquidBounce's conditions, in its order:
+     * - only on the ground, walking forward, with a target to place and about
+     *   to leave the floor (its clipLedged snapshot of the next tick);
+     * - not at all while the look already places the block
+     *   (targetFulfillsRequirements && isValidCrosshairTarget -> NO_LEDGE).
+     *   While that look hits, the block goes down and the player never really
+     *   leaves the floor, so there is nothing to jump for: this is why polar
+     *   jumps at some edges rather than at every block, and why a diagonal --
+     *   whose straight-back look rarely hits the side block -- is exactly the
+     *   case that gets the jump or the sneak;
+     * - SNEAK below forceSneakBelowCount blocks, otherwise the configured mode;
+     * - and a jump that would carry two blocks (Jump Boost) becomes a sneak
+     *   instead (jumpApexHeight() >= 2).
+     *
+     * @param jumpBoostAmplifier the player's Jump Boost amplifier, or -1 for none
+     */
+    static int polarLedgeAction(boolean onGround, boolean forwardPressed, boolean hasTarget,
+            boolean onEdge, boolean canPlaceFromLook, int blockCount, int forceSneakBelowCount,
+            int configuredMode, int jumpBoostAmplifier) {
+        if (!onGround || !forwardPressed || !hasTarget || !onEdge) {
+            return LEDGE_NONE;
+        }
+        if (canPlaceFromLook) {
+            return LEDGE_NONE;
+        }
+        int mode = blockCount < forceSneakBelowCount ? POLAR_SNEAK : configuredMode;
+        if (mode == POLAR_JUMP && jumpApexHeight(jumpBoostAmplifier) >= 2.0) {
+            mode = POLAR_SNEAK;
+        }
+        return mode;
+    }
+
+    /**
+     * How high a jump reaches, LiquidBounce's jumpApexHeight(): the jump
+     * velocity -- 0.42, plus 0.1 a level of Jump Boost (EntityLivingBase.jump)
+     * -- stepped down by gravity and air drag, summed while it still rises.
+     *
+     * @param jumpBoostAmplifier the player's Jump Boost amplifier, or -1 for none
+     */
+    static double jumpApexHeight(int jumpBoostAmplifier) {
+        double motion = 0.42 + (jumpBoostAmplifier >= 0 ? 0.1 * (jumpBoostAmplifier + 1) : 0.0);
+        double height = 0.0;
+        while (motion > 0.0) {
+            height += motion;
+            motion = (motion - 0.08) * 0.98;
+        }
+        return height;
+    }
+
+    /** The player's Jump Boost level, or -1 when they have none. */
+    private int jumpBoostAmplifier() {
+        PotionEffect jumpBoost = mc.thePlayer.getActivePotionEffect(Potion.jump);
+        return jumpBoost == null ? -1 : jumpBoost.getAmplifier();
+    }
+
+    /**
+     * Applies the ledge action chosen by {@link #updatePolarLedge(BlockData,
+     * float[])} at the movement-input stage, so vanilla itself acts on it.
+     * SNEAK is a real crouch (which vanilla slows and, with safe-walk, keeps on
+     * the block); JUMP triggers a vanilla jump; the stop-input / step-back
+     * actions zero the player's movement so no block is walked off.
+     */
+    private void applyPolarLedgeInput() {
+        if (this.rotationMode.getValue() != ROTATION_POLAR) {
+            return;
+        }
+        if (this.polarLedgeSneakTicks > 0) {
+            this.polarLedgeSneakTicks--;
+            if (!mc.thePlayer.movementInput.sneak) {
+                mc.thePlayer.movementInput.sneak = true;
+                mc.thePlayer.movementInput.moveForward *= 0.3F;
+                mc.thePlayer.movementInput.moveStrafe *= 0.3F;
+            }
+            return;
+        }
+        if (this.polarLedgeStopInput) {
+            mc.thePlayer.movementInput.moveForward = 0.0F;
+            mc.thePlayer.movementInput.moveStrafe = 0.0F;
+        }
+        if (this.polarLedgeStepBack) {
+            mc.thePlayer.movementInput.moveForward *= -0.5F;
+        }
+        if (this.polarLedgeJump && mc.thePlayer.onGround && !mc.thePlayer.isInWater()) {
+            // Let vanilla's onLivingUpdate perform the jump exactly once, the
+            // same way keep-y/tower does (see onMoveInput). Calling jump()
+            // directly here would leave jumpTicks at 0, so a held jump key
+            // would fire a second jump in the same update -> double height.
+            mc.thePlayer.movementInput.jump = true;
+        }
     }
 
     @EventTarget

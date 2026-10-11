@@ -339,6 +339,10 @@ public class Myau {
         moduleManager.modules.put(ArmorHUD.class, new ArmorHUD());
         moduleManager.modules.put(EffectsHUD.class, new EffectsHUD());
         moduleManager.modules.put(AutoRespawn.class, new AutoRespawn());
+        /* CrewX ports: soup recrafting, the knockback hold, and the cosmetics. */
+        moduleManager.modules.put(AutoRecraft.class, new AutoRecraft());
+        moduleManager.modules.put(Freeze.class, new Freeze());
+        moduleManager.modules.put(Accessories.class, new Accessories());
         commandManager.commands.add(new BindCommand());
         commandManager.commands.add(new myau.command.commands.ReportCommand());
         commandManager.commands.add(new ClickGuiCommand());

@@ -467,6 +467,9 @@ public final class ModuleDocs {
         d("FreeLook", "按住按鍵時可以自由轉動鏡頭，身體方向不變。");
         d("ItemPhysics", "掉落物平躺在地上，空中會翻滾。");
         d("Capes", "顯示自訂披風。");
+        d("Accessories", "在玩家頭上畫頭飾與翅膀，只有你看得到。");
+        d("AutoRecraft", "背包打開時自動用合成欄補做蘑菇湯。");
+        d("Freeze", "把來襲的擊退封包扣住不動，時間到才一次放行。");
         d("Animations", "自訂揮劍與格擋動畫。");
         d("HitParticleEffects", "打中時的粒子效果，擊殺時可播音效。");
         d("LegitHUD", "座標、FPS、延遲、CPS 與按鍵顯示。");

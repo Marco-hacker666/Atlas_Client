@@ -33,12 +33,12 @@ public final class ModuleCategories {
         put(Category.COMBAT,
                 AimAssist.class, AutoClicker.class, KillAura.class, PlainAura.class, Criticals.class,
                 Velocity.class, HitBox.class, Reach.class, BackTrack.class, TickBase.class, TimerRange.class,
-                FakeLag.class, LagRange.class, KnockbackDelay.class, ServerLag.class, MoreKB.class,
+                FakeLag.class, LagRange.class, KnockbackDelay.class, ServerLag.class, MoreKB.class, Freeze.class,
                 SprintReset.class, Wtap.class, KeepSprint.class, BlockHit.class, HitSelect.class,
                 Hitflick.class, InvulnTiming.class, ClickAssits.class, Piercing.class, Displace.class,
                 KeepRange.class, AimBacktrack.class, KBDisplacement.class, ThrowAura.class, AutoHeal.class,
                 AutoGapple.class, FastBow.class, NoHitDelay.class, NoClickDelay.class, BurstClicker.class, LegitReach.class, ArmorBreaker.class,
-                JumpReset.class, AutoPot.class, AutoSoup.class, AutoRod.class, AutoWeapon.class,
+                JumpReset.class, AutoPot.class, AutoSoup.class, AutoRecraft.class, AutoRod.class, AutoWeapon.class,
                 PingSpoof.class, SmartBlinker.class, PearlSaver.class, ProjectileAimBot.class, SmartClicking.class,
                 AutoBlock.class);
         put(Category.PLAYER,
@@ -81,7 +81,7 @@ public final class ModuleCategories {
                 ServerFingerprint.class, AutoTune.class, Adaptive.class, ServerProfiles.class,
                 LatencyGovernor.class, Panic.class, Rotations.class, Notifications.class, ViewPackets.class, CheatDetector.class, AntiFalseFlag.class, ScriptModule.class);
         put(Category.LEGIT,
-                Ambience.class, Animations.class, ArmorHUD.class, AutoRespawn.class, Capes.class,
+                Accessories.class, Ambience.class, Animations.class, ArmorHUD.class, AutoRespawn.class, Capes.class,
                 DynamicIsland.class, EffectsHUD.class, FPScounter.class, FreeLook.class, FullBright.class,
                 HUD.class, HitParticleEffects.class, Hotbar.class,
                 ItemPhysics.class, LegitHUD.class, NoHurtCam.class, Sprint.class, Statistics.class, PlayTracker.class,

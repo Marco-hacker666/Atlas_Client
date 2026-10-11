@@ -207,6 +207,9 @@ final class ModuleDocsEn {
         d("FreeLook", "Look around freely while a key is held, without turning your body.");
         d("ItemPhysics", "Dropped items lie flat and tumble in the air.");
         d("Capes", "Shows custom capes.");
+        d("Accessories", "Draws headwear and wings on players; only you see them.");
+        d("AutoRecraft", "Crafts more soup in the inventory grid while it is open.");
+        d("Freeze", "Holds incoming knockback packets, then releases them at the timeout.");
         d("Animations", "Custom sword swing and blocking animations.");
         d("HitParticleEffects", "Particles on hits; an optional sound on kills.");
         d("LegitHUD", "Coordinates, FPS, ping, CPS and keystrokes.");

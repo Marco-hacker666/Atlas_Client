@@ -115,6 +115,7 @@ final class ModuleDocsEn {
         d("NoJumpDelay", "Removes the delay between consecutive jumps.");
         d("SafeWalk", "Stops you walking off block edges, as if sneaking.");
         d("Eagle", "Sneaks automatically at edges, for bridging backwards.");
+        d("LegitBridge", "Legit bridging 3-in-1: edge sneak assist plus auto-place under your feet.");
         d("InvWalk", "Move while the inventory or a menu is open.");
         d("TargetStrafe", "Circles around the target.");
         d("MoveFix", "With silent rotations, corrects movement so it matches the rotation the server sees.");

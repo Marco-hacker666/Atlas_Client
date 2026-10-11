@@ -37,6 +37,8 @@ public class LegitScaffold extends Module {
     public void onEnabled() {
         this.placeTimer.reset();
         this.sneaking = false;
+        /* Part of LegitBridge now: one bridging helper at a time. */
+        LegitBridge.yieldTo(LegitScaffold.class);
     }
 
     @Override

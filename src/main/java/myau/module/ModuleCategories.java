@@ -48,7 +48,7 @@ public final class ModuleCategories {
         put(Category.MOVEMENT,
                 Fly.class, Speed.class, LongJump.class, Jesus.class, NoSlow.class, NoItemRelease.class, NoJumpDelay.class,
                 SafeWalk.class, Eagle.class, InvWalk.class, TargetStrafe.class, MoveFix.class,
-                Stasis.class, StopMotion.class, VClip.class, Parkour.class, NoWeb.class, Phase.class, Step.class, Tower.class, BridgeAssist.class, Spider.class, DelayRemover.class,
+                Stasis.class, StopMotion.class, VClip.class, Parkour.class, NoWeb.class, Phase.class, Step.class, Tower.class, BridgeAssist.class, LegitBridge.class, Spider.class, DelayRemover.class,
                 ForwardTrack.class);
         put(Category.RENDER,
                 ESP.class, ESP2D.class, Chams.class, NameTags.class, Tracers.class,

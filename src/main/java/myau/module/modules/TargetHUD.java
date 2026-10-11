@@ -90,6 +90,11 @@ public class TargetHUD extends Module {
     public final BooleanProperty shadow = new BooleanProperty("shadow", true, () -> this.style.getValue() == 0);
     public final BooleanProperty kaOnly = new BooleanProperty("ka-only", true);
     public final BooleanProperty chatPreview = new BooleanProperty("chat-preview", false);
+    /* 2026-10-11 (owner): bold, bigger text in every style. All of this
+       module's text goes through mcText / ttfText, and widths through
+       mcWidth / ttfWidth, so right-aligned text stays aligned. */
+    public final BooleanProperty boldText = new BooleanProperty("bold-text", true);
+    public final PercentProperty textSize = new PercentProperty("text-size", 115, 80, 160, null);
 
     private final TimerUtil lastAttackTimer = new TimerUtil();
     private final TimerUtil animTimer = new TimerUtil();
@@ -388,20 +393,20 @@ public class TargetHUD extends Module {
         String name = TeamUtil.stripName(entity);
         float nameMax = 79.0F;
         if (nameFont != null) {
-            while (name.length() > 1 && nameFont.getStringWidth(name) > nameMax) {
+            while (name.length() > 1 && this.ttfWidth(nameFont, name) > nameMax) {
                 name = name.substring(0, name.length() - 1);
             }
-            nameFont.drawString(name, 39.0, 5.0, textAlpha | 0xFFFFFF);
+            this.ttfText(nameFont, name, 39.0, 5.0, textAlpha | 0xFFFFFF);
         } else {
-            mc.fontRendererObj.drawString(mc.fontRendererObj.trimStringToWidth(name, (int) nameMax), 39, 5, -1);
+            this.mcText(mc.fontRendererObj.trimStringToWidth(name, (int) nameMax), 39, 5, -1);
         }
 
-        mc.fontRendererObj.drawString("\u2764", 40, 17, textAlpha | 0xE6E6E6);
+        this.mcText("\u2764", 40, 17, textAlpha | 0xE6E6E6);
         String health = String.valueOf((int) Math.floor(hp));
         if (nameFont != null) {
-            nameFont.drawString(health, 49.0, 16.0, textAlpha | 0xC8C8C8);
+            this.ttfText(nameFont, health, 49.0, 16.0, textAlpha | 0xC8C8C8);
         } else {
-            mc.fontRendererObj.drawString(health, 49, 17, 0xFFC8C8C8);
+            this.mcText(health, 49, 17, 0xFFC8C8C8);
         }
         String verdict;
         int verdictColor;
@@ -416,10 +421,10 @@ public class TargetHUD extends Module {
             verdictColor = 0xFFD6AA57;
         }
         if (smallFont != null) {
-            smallFont.drawString(verdict, 117.0 - smallFont.getStringWidth(verdict), 18.5,
+            this.ttfText(smallFont, verdict, 117.0 - this.ttfWidth(smallFont, verdict), 18.5,
                     textAlpha | (verdictColor & 0xFFFFFF));
         } else {
-            mc.fontRendererObj.drawString(verdict, 117 - mc.fontRendererObj.getStringWidth(verdict), 18, verdictColor);
+            this.mcText(verdict, 117 - this.mcWidth(verdict), 18, verdictColor);
         }
 
         float barX = 40.0F;
@@ -444,17 +449,17 @@ public class TargetHUD extends Module {
         Color healthDeltaColor = ColorUtil.getHealthBlend(healthDeltaRatio);
         ScaledResolution scaledResolution = new ScaledResolution(mc);
         String targetNameText = ChatColors.formatColor(String.format("&r%s&r", TeamUtil.stripName(entity)));
-        int targetNameWidth = mc.fontRendererObj.getStringWidth(targetNameText);
+        int targetNameWidth = this.mcWidth(targetNameText);
         String healthText = ChatColors.formatColor(
                 String.format("&r&f%s%s\u2764&r", healthFormat.format(heal), abs > 0.0F ? "&6" : "&c")
         );
-        int healthTextWidth = mc.fontRendererObj.getStringWidth(healthText);
+        int healthTextWidth = this.mcWidth(healthText);
         String statusText = ChatColors.formatColor(String.format("&r&l%s&r", heal == health ? "D" : (heal < health ? "W" : "L")));
-        int statusTextWidth = mc.fontRendererObj.getStringWidth(statusText);
+        int statusTextWidth = this.mcWidth(statusText);
         String healthDiffText = ChatColors.formatColor(
                 String.format("&r%s&r", heal == health ? "0.0" : diffFormat.format(health - heal))
         );
-        int healthDiffWidth = mc.fontRendererObj.getStringWidth(healthDiffText);
+        int healthDiffWidth = this.mcWidth(healthDiffText);
         float barContentWidth = Math.max(
                 (float) targetNameWidth + (this.indicator.getValue() ? 2.0F + (float) statusTextWidth + 2.0F : 0.0F),
                 (float) healthTextWidth + (this.indicator.getValue() ? 2.0F + (float) healthDiffWidth + 2.0F : 0.0F)
@@ -498,11 +503,11 @@ public class TargetHUD extends Module {
         GlStateManager.disableDepth();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        mc.fontRendererObj.drawString(targetNameText, headIconOffset + 2.0F, 2.0F, -1, this.shadow.getValue());
-        mc.fontRendererObj.drawString(healthText, headIconOffset + 2.0F, 12.0F, -1, this.shadow.getValue());
+        this.mcText(targetNameText, headIconOffset + 2.0F, 2.0F, -1, this.shadow.getValue());
+        this.mcText(healthText, headIconOffset + 2.0F, 12.0F, -1, this.shadow.getValue());
         if (this.indicator.getValue()) {
-            mc.fontRendererObj.drawString(statusText, barTotalWidth - 2.0F - (float) statusTextWidth, 2.0F, healthDeltaColor.getRGB(), this.shadow.getValue());
-            mc.fontRendererObj.drawString(healthDiffText, barTotalWidth - 2.0F - (float) healthDiffWidth, 12.0F, ColorUtil.darker(healthDeltaColor, 0.8F).getRGB(), this.shadow.getValue());
+            this.mcText(statusText, barTotalWidth - 2.0F - (float) statusTextWidth, 2.0F, healthDeltaColor.getRGB(), this.shadow.getValue());
+            this.mcText(healthDiffText, barTotalWidth - 2.0F - (float) healthDiffWidth, 12.0F, ColorUtil.darker(healthDeltaColor, 0.8F).getRGB(), this.shadow.getValue());
         }
         if (this.head.getValue() && this.headTexture != null) {
             GlStateManager.color(1.0F, 1.0F, 1.0F);
@@ -546,7 +551,7 @@ public class TargetHUD extends Module {
 
         ScaledResolution scaledResolution = new ScaledResolution(mc);
         int padding = 8;
-        int targetStrWithPadding = mc.fontRendererObj.getStringWidth(playerInfo) + padding;
+        int targetStrWithPadding = this.mcWidth(playerInfo) + padding;
         int x = (scaledResolution.getScaledWidth() / 2 - targetStrWithPadding / 2) + offX.getValue();
         int y = (scaledResolution.getScaledHeight() / 2 + 15) + offY.getValue();
         int n6 = x - padding;
@@ -633,7 +638,7 @@ public class TargetHUD extends Module {
 
         GL11.glPushMatrix();
         GL11.glEnable(GL11.GL_BLEND);
-        mc.fontRendererObj.drawString(playerInfo, x, y,
+        this.mcText(playerInfo, x, y,
                 new Color(220, 220, 220, 255).getRGB() & 0xFFFFFF | Math.min(alpha + 15, 255) << 24, true);
         GL11.glDisable(GL11.GL_BLEND);
         GL11.glPopMatrix();
@@ -714,7 +719,7 @@ public class TargetHUD extends Module {
 
         String targetName = TeamUtil.stripName(entity);
         int nameColor = (int) (alpha * 0xFF) << 24 | 0xFFFFFF;
-        mc.fontRendererObj.drawString(targetName, x + 40, y + 8, nameColor, true);
+        this.mcText(targetName, x + 40, y + 8, nameColor, true);
 
         float maxHealth = entity.getMaxHealth();
         float healthPercent = Math.min(1.0F, this.animatedHealth / maxHealth);
@@ -739,7 +744,7 @@ public class TargetHUD extends Module {
 
         String healthText = String.format("%.1f/%.1f", this.animatedHealth, maxHealth);
         int healthTextColor = (int) (alpha * 0xFF) << 24 | 0xCCCCCC;
-        mc.fontRendererObj.drawString(healthText, x + 40, y + 15, healthTextColor, true);
+        this.mcText(healthText, x + 40, y + 15, healthTextColor, true);
 
         GL11.glPopMatrix();
     }
@@ -782,7 +787,7 @@ public class TargetHUD extends Module {
 
         String targetName = TeamUtil.stripName(entity);
         int nameColor = (int) (alpha * 0xFF) << 24 | 0xFFFFFF;
-        mc.fontRendererObj.drawString(targetName, x + 5, y + 5, nameColor, true);
+        this.mcText(targetName, x + 5, y + 5, nameColor, true);
 
         float maxHealth = entity.getMaxHealth();
         float healthPercent = Math.min(1.0F, this.animatedHealth / maxHealth);
@@ -800,8 +805,8 @@ public class TargetHUD extends Module {
         int actualHealthInt = Math.round(this.animatedHealth);
         String healthText = String.format("%d/%d", actualHealthInt, (int) maxHealth);
         int healthTextColor = (int) (alpha * 0xFF) << 24 | 0xCCCCCC;
-        double healthTextWidth = mc.fontRendererObj.getStringWidth(healthText);
-        mc.fontRendererObj.drawString(healthText, (int) (x + hudWidth - 5 - healthTextWidth), y + 5, healthTextColor, true);
+        double healthTextWidth = this.mcWidth(healthText);
+        this.mcText(healthText, (int) (x + hudWidth - 5 - healthTextWidth), y + 5, healthTextColor, true);
 
         GL11.glPopMatrix();
     }
@@ -887,11 +892,11 @@ public class TargetHUD extends Module {
 
         String targetName = TeamUtil.stripName(entity);
         int nameColor = (int) (alpha * 0xFF) << 24 | 0xFFFFFF;
-        mc.fontRendererObj.drawString(targetName, x + 40, y + 8, nameColor, true);
+        this.mcText(targetName, x + 40, y + 8, nameColor, true);
 
         String healthText = String.format("%.1f/%.1f", this.animatedHealth, maxHealth);
         int healthTextColor = (int) (alpha * 0xFF) << 24 | 0xCCCCCC;
-        mc.fontRendererObj.drawString(healthText, x + 40, y + 22, healthTextColor, true);
+        this.mcText(healthText, x + 40, y + 22, healthTextColor, true);
 
         GL11.glPopMatrix();
     }
@@ -969,7 +974,7 @@ public class TargetHUD extends Module {
         }
 
         String targetName = TeamUtil.stripName(entity);
-        mc.fontRendererObj.drawStringWithShadow(
+        this.mcTextShadow(
                 targetName,
                 x + 45,
                 y + 7,
@@ -1002,14 +1007,14 @@ public class TargetHUD extends Module {
         RenderUtil.drawRoundedRect(barX, armorBarY, barWidth, 4, 2, new Color(20, 20, 20, 120).getRGB());
         RenderUtil.drawRoundedRect(barX, armorBarY, barWidth * armorPercent, 4, 2, new Color(70, 170, 255).getRGB());
 
-        mc.fontRendererObj.drawStringWithShadow(
+        this.mcTextShadow(
                 String.format("%.1f \u2764", hp),
                 barX,
                 y + 43,
                 new Color(220, 220, 220, (int) (alpha * 255)).getRGB()
         );
 
-        mc.fontRendererObj.drawStringWithShadow(
+        this.mcTextShadow(
                 Math.round(this.animatedArmor) + " \u26e8",
                 barX + 60,
                 y + 43,
@@ -1192,8 +1197,8 @@ public class TargetHUD extends Module {
         }
 
         drawMyauPlusFace(renderTarget, 4.0F, 3.3F, 33, 33, 6);
-        FontManager.productSans18.drawString(String.format("%.1f", health), width - 30, 9, getMyauPlusColor(0).getRGB(), true);
-        FontManager.productSans18.drawString(renderTarget.getName(), 42, 9, -1, true);
+        this.ttfText(FontManager.productSans18, String.format("%.1f", health), width - 30, 9, getMyauPlusColor(0).getRGB(), true);
+        this.ttfText(FontManager.productSans18, renderTarget.getName(), 42, 9, -1, true);
         GlStateManager.popMatrix();
     }
 
@@ -1207,11 +1212,11 @@ public class TargetHUD extends Module {
         RenderUtil.drawRect(0, 0, width, height, new Color(0, 0, 0, bgAlpha.getValue()).getRGB());
 
         drawEntityOnScreen(25, 45, renderTarget);
-        FontManager.regular18.drawString(renderTarget.getName(), 50, 6, -1, true);
+        this.ttfText(FontManager.regular18, renderTarget.getName(), 50, 6, -1, true);
 
         GlStateManager.pushMatrix();
         GlStateManager.scale(1.5F, 1.5F, 1.5F);
-        FontManager.regular18.drawString(String.format("%.1f", health) + " \u2764", 50 / 1.5F, 22 / 1.5F, getMyauPlusColor(0).getRGB(), true);
+        this.ttfText(FontManager.regular18, String.format("%.1f", health) + " \u2764", 50 / 1.5F, 22 / 1.5F, getMyauPlusColor(0).getRGB(), true);
         GlStateManager.popMatrix();
 
         float healthPct = MathHelper.clamp_float(health / renderTarget.getMaxHealth(), 0, 1);
@@ -1236,7 +1241,7 @@ public class TargetHUD extends Module {
         drawExhibitionBorderedRect(2.5F, 2.5F, 37.5F, 37.5F, 0.5F, getExhibitionColor(17), getExhibitionColor(48));
         drawEntityOnScreen(20, 36, renderTarget);
 
-        FontManager.tahomaBold16.drawString(renderTarget.getName(), 46, 4, -1, true);
+        this.ttfText(FontManager.tahomaBold16, renderTarget.getName(), 46, 4, -1, true);
 
         float pct = MathHelper.clamp_float(health / renderTarget.getMaxHealth(), 0, 1);
         Color hpColor = blendColors(new float[]{0.0F, 0.5F, 1.0F}, new Color[]{Color.RED, Color.YELLOW, Color.GREEN}, pct);
@@ -1244,7 +1249,7 @@ public class TargetHUD extends Module {
         RenderUtil.drawRect(42, 12, width - 8, 16, getExhibitionColor(0, 0));
         RenderUtil.drawRect(42.5F, 12.5F, 42.5F + (width - 51.0F) * pct, 15.5F, hpColor.getRGB());
 
-        FontManager.tahomaBold12.drawString("HP: " + (int) health + " | Dist: " + (int) mc.thePlayer.getDistanceToEntity(renderTarget), 46, 19, -1, true);
+        this.ttfText(FontManager.tahomaBold12, "HP: " + (int) health + " | Dist: " + (int) mc.thePlayer.getDistanceToEntity(renderTarget), 46, 19, -1, true);
         GlStateManager.popMatrix();
     }
 
@@ -1267,13 +1272,13 @@ public class TargetHUD extends Module {
         }
 
         drawMyauPlusFace(renderTarget, 2.5F, 2.5F, 35, 35, 8);
-        FontManager.tenacity12.drawString(String.format("%.1f", health) + "HP", 40, 17, -1, true);
-        FontManager.tenacity16.drawString(renderTarget.getName(), 40, 6, -1, true);
+        this.ttfText(FontManager.tenacity12, String.format("%.1f", health) + "HP", 40, 17, -1, true);
+        this.ttfText(FontManager.tenacity16, renderTarget.getName(), 40, 6, -1, true);
         GlStateManager.popMatrix();
     }
 
     private void renderNeverlose(float x, float y, float health, boolean shadow) {
-        float width = Math.max(125.0F, (float) (FontManager.tenacity16.getStringWidth(renderTarget.getName()) + 42));
+        float width = Math.max(125.0F, (float) (this.ttfWidth(FontManager.tenacity16, renderTarget.getName()) + 42));
         float height = 32.5F;
         GlStateManager.pushMatrix();
         GlStateManager.translate(x, y, 0.0F);
@@ -1289,8 +1294,8 @@ public class TargetHUD extends Module {
         drawCircle(circleX, new Color(0, 0, 0, 100).getRGB());
         drawArc(circleX, 360 * MathHelper.clamp_float(health / renderTarget.getMaxHealth(), 0, 1), getMyauPlusColor(0).getRGB());
 
-        FontManager.tenacity16.drawString(renderTarget.getName(), 34, 8, -1, true);
-        FontManager.tenacity12.drawString("Dist: " + String.format("%.1f", renderTarget.getDistanceToEntity(mc.thePlayer)) + "m", 34, 20, getMyauPlusColor(0).getRGB(), true);
+        this.ttfText(FontManager.tenacity16, renderTarget.getName(), 34, 8, -1, true);
+        this.ttfText(FontManager.tenacity12, "Dist: " + String.format("%.1f", renderTarget.getDistanceToEntity(mc.thePlayer)) + "m", 34, 20, getMyauPlusColor(0).getRGB(), true);
         GlStateManager.popMatrix();
     }
 
@@ -1304,8 +1309,8 @@ public class TargetHUD extends Module {
         RenderUtil.drawRoundedRect(0, 0, width, height, 6, new Color(0, 0, 0, bgAlpha.getValue()).getRGB());
 
         drawMyauPlusFace(renderTarget, 4, 4, 34, 34, 6);
-        FontManager.tenacity20.drawString(renderTarget.getName(), 43, 10, -1, true);
-        FontManager.tenacity12.drawString("HP: " + String.format("%.1f", health), 43, 20, -1, true);
+        this.ttfText(FontManager.tenacity20, renderTarget.getName(), 43, 10, -1, true);
+        this.ttfText(FontManager.tenacity12, "HP: " + String.format("%.1f", health), 43, 20, -1, true);
 
         float pct = MathHelper.clamp_float(health / renderTarget.getMaxHealth(), 0, 1);
         float barWidth = width - 52;
@@ -1417,17 +1422,17 @@ public class TargetHUD extends Module {
         String name = renderTarget.getName();
         switch (getMyauPlusStyle()) {
             case 0:
-                return new float[]{Math.max(130, (float) (FontManager.regular18.getStringWidth(name) + 60)), 56};
+                return new float[]{Math.max(130, (float) (this.ttfWidth(FontManager.regular18, name) + 60)), 56};
             case 1:
-                return new float[]{Math.max(120, (float) (FontManager.tahomaBold16.getStringWidth(name) + 50)), 40};
+                return new float[]{Math.max(120, (float) (this.ttfWidth(FontManager.tahomaBold16, name) + 50)), 40};
             case 2:
-                return new float[]{Math.max(110, (float) (FontManager.tenacity16.getStringWidth(name) + 68)), 40.5F};
+                return new float[]{Math.max(110, (float) (this.ttfWidth(FontManager.tenacity16, name) + 68)), 40.5F};
             case 3:
-                return new float[]{Math.max(160, (float) (FontManager.productSans18.getStringWidth(name) + 30)), 40.5F};
+                return new float[]{Math.max(160, (float) (this.ttfWidth(FontManager.productSans18, name) + 30)), 40.5F};
             case 4:
-                return new float[]{Math.max(125, (float) (FontManager.tenacity16.getStringWidth(name) + 42)), 32.5F};
+                return new float[]{Math.max(125, (float) (this.ttfWidth(FontManager.tenacity16, name) + 42)), 32.5F};
             case 5:
-                return new float[]{Math.max(120, (float) (FontManager.tenacity20.getStringWidth(name) + 50)), 44};
+                return new float[]{Math.max(120, (float) (this.ttfWidth(FontManager.tenacity20, name) + 50)), 44};
             default:
                 return new float[]{120, 40};
         }
@@ -1609,5 +1614,62 @@ public class TargetHUD extends Module {
         this.fadingEntity = null;
         this.fadeTimer = null;
         this.lastTarget = null;
+    }
+
+    // ---- text (2026-10-11): bold and size for every style ------------------
+
+    private float textScale() {
+        return this.textSize.getValue() / 100.0F;
+    }
+
+    /** Bold through every colour code: Minecraft resets formatting at each one. */
+    private String bolded(String text) {
+        if (!this.boldText.getValue() || text == null) {
+            return text;
+        }
+        return "\u00a7l" + text.replaceAll("(\u00a7[0-9a-fA-FrR])", "$1\u00a7l");
+    }
+
+    private int mcText(String text, float x, float y, int color, boolean shadow) {
+        float k = textScale();
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(x, y, 0.0F);
+        GlStateManager.scale(k, k, 1.0F);
+        int end = mc.fontRendererObj.drawString(bolded(text), 0.0F, 0.0F, color, shadow);
+        GlStateManager.popMatrix();
+        return Math.round(x + end * k);
+    }
+
+    private int mcText(String text, float x, float y, int color) {
+        return mcText(text, x, y, color, false);
+    }
+
+    private int mcTextShadow(String text, float x, float y, int color) {
+        return mcText(text, x, y, color, true);
+    }
+
+    private int mcWidth(String text) {
+        return Math.round(mc.fontRendererObj.getStringWidth(bolded(text)) * textScale());
+    }
+
+    private void ttfText(myau.util.font.impl.FontRenderer font, String text, double x, double y, int color, boolean shadow) {
+        float k = textScale();
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(x, y, 0.0);
+        GlStateManager.scale(k, k, 1.0F);
+        font.drawString(text, 0.0, 0.0, color, shadow);
+        if (this.boldText.getValue()) {
+            /* TTF fonts have no bold style here: the text again, half a pixel on. */
+            font.drawString(text, 0.5 / k, 0.0, color, false);
+        }
+        GlStateManager.popMatrix();
+    }
+
+    private void ttfText(myau.util.font.impl.FontRenderer font, String text, double x, double y, int color) {
+        ttfText(font, text, x, y, color, false);
+    }
+
+    private double ttfWidth(myau.util.font.impl.FontRenderer font, String text) {
+        return font.getStringWidth(text) * textScale() + (this.boldText.getValue() ? 0.5 : 0.0);
     }
 }

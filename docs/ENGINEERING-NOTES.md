@@ -4438,3 +4438,19 @@ leaving, closing the game or losing the connection), and say why. `LogUploader` 
 Relay unchanged (kind auto, LOG_WEBHOOK, 4/hour). 319 tests OK, md5 e6342eb6a6bfef1738a69854d490711c, installed as
 `mods/Myau Atlas v2.0.0(stable).jar` (includes the OptiFine Connected Textures default) and copied to release-assets.
 Backups: `backups/src/pre-autolog-trigger-20261011`, `backups/src/beta2-autolog-trigger-20261011`.
+
+## 2026-10-11 — TargetHUD bold/bigger text, missing category icons, scrolling category column
+- **TargetHUD**: every text draw and width in the module goes through `mcText` / `mcTextShadow` / `mcWidth`
+  (Minecraft font: `\u00a7l` after every colour code, scaled about the text's origin) and `ttfText` / `ttfWidth`
+  (TTF fonts: scaled, bold by drawing again 0.5 px on). New `bold-text` (on) and `text-size` (115 %, 80-160).
+  Widths are scaled too, so right-aligned text keeps its edge. 33 draw calls and 16 width calls rewritten.
+- **Icons**: AtlasClickGui.icon had no drawing for World, Misc, Exploit, Client (and the Appearance sections Language,
+  Cosmos, Layout, Privacy), so they fell back to the four-squares glyph. Added: globe, three dots, lightning bolt,
+  gear, speech bubble, ringed planet, page layout, padlock.
+- **Category column**: on the module pages the categories scroll (mouse wheel over the column, one row per notch,
+  sprung) inside [top, height - SIDEBAR_FOOT (22)], clipped with a scissor; the pill lens gets the same clip; hits
+  are limited to the visible part; chevrons show more above / below. A small fixed strip stays at the foot. The
+  Client Settings page is unchanged.
+319 tests OK, md5 4daeb6ae585a0c2df8b65e112f4f29a0, installed and copied to release-assets. Backups:
+`backups/src/TargetHUD.java.pre-boldtext-20261011`, `AtlasClickGui.java.pre-icons-20261011`,
+`AtlasClickGui.java.pre-sidebar-scroll-20261011`, after `backups/src/beta2-ui-tweaks-20261011`.

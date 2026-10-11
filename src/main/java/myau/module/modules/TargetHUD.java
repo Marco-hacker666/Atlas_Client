@@ -393,12 +393,10 @@ public class TargetHUD extends Module {
         String name = TeamUtil.stripName(entity);
         float nameMax = 79.0F;
         if (nameFont != null) {
-            while (name.length() > 1 && this.ttfWidth(nameFont, name) > nameMax) {
-                name = name.substring(0, name.length() - 1);
-            }
-            this.ttfText(nameFont, name, 39.0, 5.0, textAlpha | 0xFFFFFF);
+            /* The whole name, smaller when long (2026-10-11; it used to be cut). */
+            this.ttfTextFit(nameFont, name, 39.0, 5.0, textAlpha | 0xFFFFFF, nameMax);
         } else {
-            this.mcText(mc.fontRendererObj.trimStringToWidth(name, (int) nameMax), 39, 5, -1);
+            this.mcTextFit(name, 39, 5, -1, nameMax);
         }
 
         this.mcText("\u2764", 40, 17, textAlpha | 0xE6E6E6);
@@ -1616,28 +1614,48 @@ public class TargetHUD extends Module {
         this.lastTarget = null;
     }
 
-    // ---- text (2026-10-11): bold and size for every style ------------------
+    // ---- text (2026-10-11): rounded bold text, size, whole names -----------
+    /*
+     * bold-text: every text in every style is drawn in Product Sans Medium --
+     * the rounded face of the Jello look -- sized to the line it replaces
+     * (the Minecraft font's 9 px, or the TTF font's own height) times
+     * text-size. Off: each style's own font, only scaled. Names are never cut:
+     * one too wide for its place is drawn smaller (*Fit).
+     */
 
     private float textScale() {
         return this.textSize.getValue() / 100.0F;
     }
 
-    /** Bold through every colour code: Minecraft resets formatting at each one. */
-    private String bolded(String text) {
-        if (!this.boldText.getValue() || text == null) {
-            return text;
+    private static myau.util.font.impl.FontRenderer rounded() {
+        return FontManager.productSansMedium;
+    }
+
+    private boolean smooth() {
+        return this.boldText.getValue() && rounded() != null;
+    }
+
+    /** Symbols such as the heart are not in Product Sans: those lines keep the Minecraft font. */
+    private boolean smooth(String text) {
+        if (!smooth() || text == null) {
+            return false;
         }
-        return "\u00a7l" + text.replaceAll("(\u00a7[0-9a-fA-FrR])", "$1\u00a7l");
+        for (int i = 0; i < text.length(); i++) {
+            if (text.charAt(i) >= 0x2000 && text.charAt(i) != 0x00a7) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Scale that makes {@code font} as tall as {@code height} GUI pixels. */
+    private static float fitHeight(myau.util.font.impl.FontRenderer font, double height) {
+        double own = font.getHeight();
+        return own <= 0.0 ? 1.0F : (float) (height / own);
     }
 
     private int mcText(String text, float x, float y, int color, boolean shadow) {
-        float k = textScale();
-        GlStateManager.pushMatrix();
-        GlStateManager.translate(x, y, 0.0F);
-        GlStateManager.scale(k, k, 1.0F);
-        int end = mc.fontRendererObj.drawString(bolded(text), 0.0F, 0.0F, color, shadow);
-        GlStateManager.popMatrix();
-        return Math.round(x + end * k);
+        return Math.round(x + drawMc(text, x, y, color, shadow, 1.0F));
     }
 
     private int mcText(String text, float x, float y, int color) {
@@ -1649,27 +1667,79 @@ public class TargetHUD extends Module {
     }
 
     private int mcWidth(String text) {
-        return Math.round(mc.fontRendererObj.getStringWidth(bolded(text)) * textScale());
+        return Math.round(mcWidthExact(text));
+    }
+
+    private float mcWidthExact(String text) {
+        if (smooth(text)) {
+            return (float) rounded().getStringWidth(strip(text)) * fitHeight(rounded(), 9.0) * textScale();
+        }
+        return mc.fontRendererObj.getStringWidth(text) * textScale();
+    }
+
+    /** Draws and returns the width drawn (GUI pixels). */
+    private float drawMc(String text, float x, float y, int color, boolean shadow, float extra) {
+        float k = textScale() * extra;
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(x, y, 0.0F);
+        float width;
+        if (smooth(text)) {
+            float f = fitHeight(rounded(), 9.0) * k;
+            GlStateManager.scale(f, f, 1.0F);
+            rounded().drawString(strip(text), 0.0, 0.0, color, shadow);
+            width = (float) rounded().getStringWidth(strip(text)) * f;
+        } else {
+            GlStateManager.scale(k, k, 1.0F);
+            width = mc.fontRendererObj.drawString(text, 0.0F, 0.0F, color, shadow) * k;
+        }
+        GlStateManager.popMatrix();
+        return width;
     }
 
     private void ttfText(myau.util.font.impl.FontRenderer font, String text, double x, double y, int color, boolean shadow) {
-        float k = textScale();
+        drawTtf(font, text, x, y, color, shadow, 1.0F);
+    }
+
+    private void ttfText(myau.util.font.impl.FontRenderer font, String text, double x, double y, int color) {
+        drawTtf(font, text, x, y, color, false, 1.0F);
+    }
+
+    private double ttfWidth(myau.util.font.impl.FontRenderer font, String text) {
+        if (smooth(text)) {
+            return rounded().getStringWidth(text) * fitHeight(rounded(), font.getHeight()) * textScale();
+        }
+        return font.getStringWidth(text) * textScale();
+    }
+
+    private void drawTtf(myau.util.font.impl.FontRenderer font, String text, double x, double y, int color,
+                         boolean shadow, float extra) {
+        float k = textScale() * extra;
         GlStateManager.pushMatrix();
         GlStateManager.translate(x, y, 0.0);
-        GlStateManager.scale(k, k, 1.0F);
-        font.drawString(text, 0.0, 0.0, color, shadow);
-        if (this.boldText.getValue()) {
-            /* TTF fonts have no bold style here: the text again, half a pixel on. */
-            font.drawString(text, 0.5 / k, 0.0, color, false);
+        if (smooth(text)) {
+            float f = fitHeight(rounded(), font.getHeight()) * k;
+            GlStateManager.scale(f, f, 1.0F);
+            rounded().drawString(text, 0.0, 0.0, color, shadow);
+        } else {
+            GlStateManager.scale(k, k, 1.0F);
+            font.drawString(text, 0.0, 0.0, color, shadow);
         }
         GlStateManager.popMatrix();
     }
 
-    private void ttfText(myau.util.font.impl.FontRenderer font, String text, double x, double y, int color) {
-        ttfText(font, text, x, y, color, false);
+    /** The whole name, smaller if it would not fit in {@code max}. */
+    private void ttfTextFit(myau.util.font.impl.FontRenderer font, String text, double x, double y, int color, double max) {
+        double width = ttfWidth(font, text);
+        drawTtf(font, text, x, y, color, false, width > max ? (float) (max / width) : 1.0F);
     }
 
-    private double ttfWidth(myau.util.font.impl.FontRenderer font, String text) {
-        return font.getStringWidth(text) * textScale() + (this.boldText.getValue() ? 0.5 : 0.0);
+    private void mcTextFit(String text, float x, float y, int color, float max) {
+        float width = mcWidthExact(text);
+        drawMc(text, x, y, color, false, width > max ? max / width : 1.0F);
+    }
+
+    /** TTF fonts here draw colour codes as text: drop them. */
+    private static String strip(String text) {
+        return text == null ? "" : text.replaceAll("\u00a7.", "");
     }
 }

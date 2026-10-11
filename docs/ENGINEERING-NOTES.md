@@ -4454,3 +4454,13 @@ Backups: `backups/src/pre-autolog-trigger-20261011`, `backups/src/beta2-autolog-
 319 tests OK, md5 4daeb6ae585a0c2df8b65e112f4f29a0, installed and copied to release-assets. Backups:
 `backups/src/TargetHUD.java.pre-boldtext-20261011`, `AtlasClickGui.java.pre-icons-20261011`,
 `AtlasClickGui.java.pre-sidebar-scroll-20261011`, after `backups/src/beta2-ui-tweaks-20261011`.
+
+## 2026-10-11 — TargetHUD: rounded bold text (Jello look) and whole names
+Owner: the bold text should be smooth like the Jello look, and names shown whole. With `bold-text` on, every text in
+every style is drawn in **Product Sans Medium** (`FontManager.productSansMedium`), scaled to the height of the line it
+replaces (9 px for the Minecraft font, the TTF font's own height otherwise) times `text-size`; colour codes are
+dropped for it (TTF draws them literally). Lines with symbols Product Sans lacks (>= U+2000, e.g. the heart) keep
+their own font. The old `\u00a7l` and the double-draw fake bold are gone. Bold off: each style's own font, scaled.
+Names: the JELLO style cut long names letter by letter; now `ttfTextFit` / `mcTextFit` draw the whole name, smaller
+when it would not fit its 79 px. 319 tests OK, md5 16da92291d7518cd87882b70a07d84da, installed, release-assets.
+Backup `backups/src/TargetHUD.java.pre-rounded-20261011`, after `backups/src/beta2-rounded-text-20261011`.

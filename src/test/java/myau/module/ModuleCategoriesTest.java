@@ -66,6 +66,6 @@ public class ModuleCategoriesTest {
         assertEquals(Category.CLIENT, ModuleCategories.of(myau.module.modules.FlagDetector.class));
         assertEquals(Category.EXPLOIT, ModuleCategories.of(myau.module.modules.Disabler.class));
         assertEquals(Category.LEGIT, ModuleCategories.of(myau.module.modules.LegitHUD.class));
-        assertEquals(Category.LEGIT, ModuleCategories.of(myau.module.modules.HitParticleEffects.class));
+        assertEquals(Category.LEGIT, ModuleCategories.of(myau.module.modules.KillEffect.class));
     }
 }

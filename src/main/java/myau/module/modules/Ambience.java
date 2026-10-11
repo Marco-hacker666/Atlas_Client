@@ -30,13 +30,6 @@ public final class Ambience extends Module {
                             "Unchanged", "Clear", "Rain", "Heavy Snow", "Light Snow", "Nether Particles"
                     });
 
-    public final ColorProperty snowColor =
-            new ColorProperty(
-                    "Snow Color",
-                    Color.WHITE.getRGB(),
-                    () ->
-                            !weather.getModeString().equals("Heavy Snow")
-                                    && !weather.getModeString().equals("Light Snow"));
 
     /* Whether the server says it is raining. Captured at switch-on and kept
        current from the weather packets this module otherwise swallows, so

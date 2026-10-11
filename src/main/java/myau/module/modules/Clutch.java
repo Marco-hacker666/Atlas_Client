@@ -2025,6 +2025,12 @@ public class Clutch extends Module {
             } finally {
                 this.quietNotes = false;
             }
+            if (this.plan == null) {
+                /* 2026-10-11: the click above finished the plan (3 NPEs in
+                   stepFor in the owner's logs): nothing left to turn to. */
+                lookBack(event, eyes);
+                return;
+            }
         }
         boolean clickedHeld = this.holdThisTick;
         /* Early turn, 2: a big turn with a tick to spare is made now and

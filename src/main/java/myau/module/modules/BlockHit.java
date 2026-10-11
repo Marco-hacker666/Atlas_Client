@@ -541,4 +541,7 @@ public class BlockHit extends Module {
     public String[] getSuffix() {
         return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getModeString())};
     }
+
+    /* Merged modules (2026-10-11, ModuleBundle). */
+    public final myau.module.ModuleBundle autoBlockMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.AutoBlock(), "auto-block", "Aura auto block", false);
 }

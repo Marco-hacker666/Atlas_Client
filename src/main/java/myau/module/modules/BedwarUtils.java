@@ -848,4 +848,8 @@ public class BedwarUtils extends Module {
         }
     }
 
+
+    /* Merged modules (2026-10-11, ModuleBundle). */
+    public final myau.module.ModuleBundle bedwarsMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.BedWars(), "bedwars", "BedWars info", false);
+    public final myau.module.ModuleBundle bedAlertMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.BedProximityAlert(), "bed-alert", "Bed alert", false);
 }

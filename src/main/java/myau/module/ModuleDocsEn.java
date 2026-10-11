@@ -110,12 +110,15 @@ final class ModuleDocsEn {
         d("Jesus", "Walk on water.");
         d("NoSlow", "No slowdown while using items (blocking, eating, drawing a bow).");
         help("HUD", "hud-theme", "How every HUD draws. JELLO: LiquidBounce's JelloBounce theme (black at 45%, soft shadow, rounded cards, flush module list). CLASSIC: each HUD's older drawing.");
+        d("NoDelay", "Removes delays: attacking, clicking, jumping.");
+        d("MLG", "Saves a fall with water or a ladder.");
+        d("BlockESP", "Marks chests, beds or chosen blocks.");
+        d("AutoMessage", "Sends a message after a game or a kill.");
         d("NoItemRelease", "Does not send the release-use-item packet when you let go of right click; the server still sees the item in use, the client stops as usual (from Slinky).");
         help("NoItemRelease", "safe-release", "Send the withheld release before the movement packet of the first tick you move or sprint (avoids Grim NoSlow); off = never send it.");
         d("NoJumpDelay", "Removes the delay between consecutive jumps.");
         d("SafeWalk", "Stops you walking off block edges, as if sneaking.");
         d("Eagle", "Sneaks automatically at edges, for bridging backwards.");
-        d("LegitBridge", "Legit bridging 3-in-1: edge sneak assist plus auto-place under your feet.");
         d("InvWalk", "Move while the inventory or a menu is open.");
         d("TargetStrafe", "Circles around the target.");
         d("MoveFix", "With silent rotations, corrects movement so it matches the rotation the server sees.");
@@ -134,7 +137,6 @@ final class ModuleDocsEn {
         d("AntiObbyTrap", "When your head is stuck in an obsidian trap, treats that block as air so you can see and get out.");
         // ------------------------------------------------------------ RENDER
         d("ESP", "Draws outlines or glow on other players, visible through walls.");
-        d("ESP2D", "Shows players as 2D boxes with health bar, armour bar and name.");
         d("Chams", "Shows player models through walls.");
         d("NameTags", "Larger, richer name tags: health, distance, gear and enchantments.");
         d("Tracers", "Draws lines from the screen centre to other players.");
@@ -196,7 +198,6 @@ final class ModuleDocsEn {
         d("Hotbar", "A custom look for the hotbar.");
         d("FPScounter", "Shows FPS on screen.");
         d("WaterMark", "The client watermark on screen.");
-        d("WaterMark2", "Another watermark style.");
         d("DynamicIsland", "A Dynamic Island style status bar (state, notifications).");
         d("Statistics", "Time, kills and wins for this connection.");
         d("PlayTracker", "A small HUD: time played and games played (with today's totals and wins/losses), and a warning when hits look damage-cut.");

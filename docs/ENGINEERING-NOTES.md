@@ -4282,6 +4282,205 @@ Verified: 298 tests pass; the download path was also exercised outside the game 
 catalog (Controlling fetched and validated as a PK jar, an HTML-as-jar URL rejected, no temp files
 left behind).
 
+## 2026-10-11 — Duplicate modules merged (ModuleBundle); work copy OpenMyau-Plus-beta2
+Work copy: `OpenMyau-Plus-beta2` (copied from the collaborator's beta2.1 on the Desktop, which stays untouched).
+Baseline backup `backups/src/beta2-baseline-20261011`; after: `backups/src/beta2-merged-20261011`.
+
+**Mechanism** (`myau/module/ModuleBundle.java`): a merged module keeps its own class and code but is no longer
+registered as a module. A `ModuleBundle` field in the host (a `PropertyGroup`, so Myau's setting scan picks it up)
+creates it, registers it with EventManager, and turns it on and off each PRE tick: on while the host is on and
+either its own switch (`withSwitch`) or the host's mode (`forMode`) selects it. If it switches itself off it shows
+that on its switch. Its settings appear under the host with their own heading (`Property.fixGroup`, kept apart by
+`ModuleDocs.apply`), keys prefixed `<prefix>-` (`Property.rekey`, label keeps the old wording), shown only with
+the switch / mode (`Property.alsoWhen`, ANDs with existing conditions). Its help texts are applied with its own
+class name first. `ModuleBundle.of(Class)` replaces `moduleManager.modules.get(Class)` for merged modules
+(MixinMinecraft NoHitDelay, MixinBlockRendererDispatcher / BedNuker BedESP). Mode hosts pause their own handlers
+while another type is picked: `Module.pauseWhen` / `isRunning`, used by EventManager's skip check.
+
+Merges (38 modules into 22 hosts, 4 of them new):
+- New **NoDelay**: NoHitDelay, NoClickDelay, NoJumpDelay (on), DelayRemover (off).
+- New **MLG**: WaterClutch, LadderClutch (on), BlockLadder (off). Clutch untouched.
+- New **BlockESP**: ChestESP, BedESP (on), BlocksESP (off).
+- New **AutoMessage**: AutoGG (on), KillMessage, KillSults (off).
+- Switches (off unless noted): BlockHit+AutoBlock, Velocity+JumpReset, AutoHeal+AutoPot/AutoSoup/AutoGapple,
+  InvManager+AutoArmor, ESP+MobESP, Indicators+Arrows, AutoBedDef+BedDefender/AutoBed, BedwarUtils+BedWars/
+  BedProximityAlert, MurderMystery+MurderDetector (on), SkyWars+SkywarsAlerts (on), AutoHypixel+AutoPlay/
+  AutoRequeue, ClientSpoofer+ModSpoofer, AntiCheat+CheatDetector, PacketLogger+ViewPackets,
+  KillEffect+KillSounds/HitParticleEffects (key `hit-particles`: KillEffect already has `particles`).
+- Modes (`type`): AutoClicker Normal/Burst/Smart/Assist (BurstClicker, SmartClicking, ClickAssits); Reach
+  Normal/Legit (LegitReach; Reach is event-driven, so pausing works).
+- Removed: LegitScaffold, BridgeAssist -- LegitBridge already contains both word for word (its own comment).
+**Not merged** (from the agreed table): Blink+SmartBlinker (Blink blinks in onEnabled, so a paused Blink would
+still blink) and Scaffold+Tower (both place and rotate; Scaffold's mixins read isEnabled) -- left as separate
+modules. Settings of merged modules start from defaults (new keys).
+Build: 313 tests OK (category test updated to KillEffect), md5 4bc00ad212f95522c5627b996b6f3e65, installed as
+`mods/Myau Atlas v2.1.0(beta).jar` (collaborator's jar kept as `backups/jars/collaborator-beta2.1-original.jar`),
+62 mixins. Not yet tested in game.
+
+## 2026-10-11 — Fonts and images load again (MyauResources); official OptiFine and OneConfig; ModernF3 removed
+**Visuals.** FML loads the jar as a "non-mod file" (no @Mod container), so it never got a resource pack and every
+`ResourceLocation("myau:...")` failed: all 16 fonts fell back to the system default font ("Failed to load font" x16
+in the owner's own latest.log, 2026-10-11 19:15) and WaterMark's textvape/textv4 images never loaded.
+`myau.util.MyauResources` is an IResourcePack serving domain "myau" from the jar (`/assets/myau/...` via the
+classloader); `register()` (first thing before fonts in Myau init) adds it to Minecraft's defaultResourcePacks
+(new accessor `IAccessorMinecraft.getDefaultResourcePacks`, no new mixin class) so it survives resource reloads, and
+to the live SimpleReloadableResourceManager (`reloadResourcePack`) so it works at once. Not a mod container: nothing
+changes in the FML handshake. Also `util/FontUtil` used "myau/font/..." (namespace minecraft) -> "myau:font/...".
+**Setup downloader.** OptiFine now comes from optifine.net itself: `Source.OPTIFINE` reads the per-visit
+`downloadx?f=...&x=<key>` link from `https://optifine.net/adloadx?f=OptiFine_1.8.9_HD_U_M5.jar` (stable M5, was a
+copy of M6 pre2 in a personal GitHub repo), size 2585014, SHA-1 d362d58a28f5373b141b9e426e8e160638bfafcd.
+`SetupEntry.sha1` (optional) is checked after download; a mismatch deletes the file. Added **OneConfig** (Polyfrost
+official, Modrinth: Aoneconfigbootstrap-1.8.9-forge-1.0.3.jar, 15323 bytes, SHA-1 1c3a3ca2..., matching Modrinth's
+own hash; not auto-installed; OneConfigPatcher moves its key off RightShift). Removed **ModernF3** ("better F3").
+Tests: SetupCatalogTest updated + `optiFineAndOneConfigAreOfficialAndPinned`; 314 tests OK.
+Built md5 782d76b5d46258e4863308f4aace8a8c; **not installed** (game running). Backups:
+`backups/src/pre-setup-official-20261011`, `backups/src/pre-visuals-20261011`, after: `beta2-visuals-setup-20261011`.
+
+## 2026-10-11 — JumpReset its own module again; LegitBridge removed
+Owner: JumpReset separate from Velocity (bundle field removed from Velocity; registered again, COMBAT, before
+Velocity). LegitBridge removed (class, registration, category, docs); Eagle restored to the original (the
+collaborator's `onEnabled` that called LegitBridge.yieldTo was its only change). Owner confirmed Eagle stays.
+Built 314 tests OK, md5 413638f604fdcc8d5abff0192d73776c; not installed (game running). Backups:
+`backups/src/pre-jr-lb-20261011`, after `backups/src/beta2-jr-lb-20261011`.
+
+## 2026-10-11 — 23 modules and the sounds removed (owner's list); installed with all of today's changes
+Removed (class, registration, category, docs; HUD's class set for WaterMark2/ESP2D): SpeedBuilders, ThePitUtils,
+WoolWars, SumoFences, MegaWallsDetector, DuelsStats, PartyDetector, AutoWho, AutoBuy, LeapModeHUD, BridgeInfo,
+AntiFalseFlag, FireBallPredict, WaterMark2, ESP2D, ForwardTrack, Phase, VClip, Spider, Step, StopMotion, GhostBlock,
+Nuker. Startup sound removed (MyauMainMenu.playStartupOnce, SoundPlayer + its test, `assets/myau/sounds`: startup.wav
+and the 7 unused kill-*.wav, ~1.6 MB). MenuConfig's `startupSound` key is left, now unused. **FallView kept**: not
+a module but ViewClip's fall-camera helper (beta2.1's ViewClip calls it; the collaborator's "nothing calls it" was
+about beta2.0, and I repeated it without checking -- corrected to the owner).
+190 modules registered. Build 311 tests OK, md5 82d19096b704b3d96632345ce248bf81, **installed** as
+`mods/Myau Atlas v2.1.0(beta).jar` (game closed, gated), 62 mixins -- includes MyauResources (fonts), official
+OptiFine / OneConfig, ModernF3 removed, JumpReset split, LegitBridge removed. Backups: `backups/src/pre-prune-20261011`
+(deleted classes + sounds), `backups/src/beta2-pruned-20261011`, `backups/jars/beta2-pre-prune-20261011.jar`.
+
+## 2026-10-11 — Audit (report only): FlagDetector coverage, Debug's modules in the module list, module errors
+`docs/MODULE-AUDIT-2026-10-11.md` (Chinese, for the owner). Key findings: ActionLedger records attack/place/dig/swing/
+sprint/abilities packets (module from the stack), module cancels and holds -- but not movement, rotation, Timer or
+module-crafted C03-C06, so 57 modules (KillAura, Scaffold, Speed, Fly, NoSlow, Velocity, NoFall, Criticals, Timer,
+...) are never attributed. FlagResponder looks modules up by name and cannot find merged ones. Debug manages
+FlagDetector, HitCheck, FightLog, LatencyCrosshair, LatencyGovernor, FlagResponder; HitCheck etc. are not hidden in the
+owner's config, so they show in the module list while Debug is hidden. Runtime errors in today's logs from our code:
+KillAura.onPacket S1C metadata list null (18, Netty thread), Clutch.onUpdate uses `plan` after post() cleared it
+(safe mode, 3). The rest (~370 scoreboard NPEs, piston, skins host, other mods' ClassNotFound) are not ours. Unused
+settings: Disabler x9, Ambience snowColor, Capes All player, DynamicIsland textShadow, InvWalk guiEnabled,
+Notifications toggleSet/toggleVolume, TimerRange onWeb. Nothing changed.
+
+## 2026-10-11 — Audit fixes 1-6 (all of MODULE-AUDIT-2026-10-11)
+1. **KillAura.onPacket** S1C: guards `mc.thePlayer` and a null metadata list (network thread; 18 NPEs). **Clutch**:
+   after safe mode's `post()`, a finished plan returns through `lookBack` instead of turning to a null plan (3 NPEs).
+2. **Debug's modules in the module list**: `Debug.MANAGED` (FlagDetector, HitCheck, FightLog, LatencyCrosshair,
+   LatencyGovernor, FlagResponder); `Debug.hidesWithPanel` -- while Debug is hidden they are too
+   (`HUD.shouldShowInArraylist`).
+3. **Merged modules for FlagResponder**: `ModuleManager.getModule(name)` falls back to `ModuleBundle.byName`. When
+   something switches a merged module off, `ModuleBundle.sync` turns its switch off, or for a mode merge runs
+   `deselectWith` (AutoClicker / Reach: back to type 0), so the next tick does not switch it on again.
+4. **FlagDetector coverage**: `myau.util.ActionWatch` -- EventManager snapshots motion, onGround, look, the
+   UpdateEvent's outgoing look and the timer speed before each listener of the movement-path events (UpdateEvent,
+   StrafeEvent, PlayerUpdateEvent, KnockbackEvent, JumpEvent, TickEvent, LivingUpdateEvent; client thread only) and
+   records changes as "move" / "rotate" / "timer" for that module, deduped per module and kind per 250 ms. Module-made
+   C03-C06 (a module on the stack) are recorded as "move-packet" in MixinNetworkManager. Attribution weights:
+   move-packet 1.0, move 0.9, timer 0.9, rotate 0.3.
+5. **Unused settings deleted**: Disabler start-sprint, move-disabler, offset-amount, spigot-spam, matrix-ta-188,
+   matrix-ta-packet, matrix-ab, matrix-reach, ta-packet-counter; Ambience snowColor; Capes "All player";
+   DynamicIsland TextShadow; InvWalk click-gui; Notifications toggle-set, toggle-volume; TimerRange on-web.
+6. **Adaptive.releaseKnobs** returns when there is no module manager (the shutdown NPE every build printed).
+Tests: AuditFixesTest (3), MyauResourcesTest (3: every font the client loads and both WaterMark images resolve
+through MyauResources). 317 tests OK. md5 31665fa734e693e095c7409fcc418257, installed, 62 mixins. In-game: not
+yet run with this build (the owner's last log, 19:21, predates the font fix).
+Backups: `backups/src/pre-audit-fixes-20261011`, after `backups/src/beta2-audit-fixes-20261011`.
+
+## 2026-10-11 — Published as a branch (main requires a pull request)
+GitHub main had become the collaborator's beta2.1 (PR #5, c0a665e) -- identical to the Desktop beta2.1 copy apart
+from line endings. The release repo was fast-forwarded to it and this work copy synced on top
+(`scratchpad/sync_beta2.py`: anonymised, private reports kept out: COLLABORATOR-BETA2-REVIEW, MODULE-AUDIT,
+REFERENCE-*), 96 files, built there too (317 tests OK). Commit 0b2537f. A direct push to main is refused by a repository
+rule ("Changes must be made through a pull request"), so it is on branch **merge-modules-audit** for a PR into main.
+Owner added a ruleset bypass for repository admins; pushed directly: main c0a665e..0b2537f (fast-forward, no force).
+Branch merge-modules-audit (same commit) is now redundant.
+
+## 2026-10-11 — v2.0.0 (stable)
+gradle.properties version 2.0.0 (work copy and release repo); commit "Version 2.0.0" pushed to main, tag v2.0.0.
+Release jar `release-assets/Myau Atlas v2.0.0(stable).jar`, md5 ccd918729532b8a3bee088f39cba3c7b, 317 tests OK.
+Same code as the installed 31665fa7 build apart from the version string.
+Installed as mods/Myau Atlas v2.0.0(stable).jar (old beta jar removed, backup backups/jars/pre-v2.0.0-20261011.jar), 62 mixins.
+
+## 2026-10-11 — OneConfig removed from the setup catalog
+Owner: remove OneConfig. Its SetupCatalog entry is gone (test renamed `optiFineIsOfficialAndPinnedAndOneConfigIsGone`,
+asserts it is absent). OneConfigPatcher stays: it only moves OneConfig's key off RightShift if a player has OneConfig
+from elsewhere. 317 tests OK, md5 5b99f4494866160e9b99a8ca423d753b, installed as `mods/Myau Atlas v2.0.0(stable).jar`
+and copied to release-assets (previous jar: backups/jars/v2.0.0-with-oneconfig.jar).
+Tag v2.0.0 moved to 3145984 (OneConfig removed) at the owner's choice; no release used it.
+
+## 2026-10-11 — First OptiFine install turns Connected Textures off
+Owner: a player getting OptiFine for the first time should have Connected Textures off. `myau.setup.OptiFineDefaults`:
+right after SetupDownloader installs OptiFine (Source.OPTIFINE), `optionsof.txt` in the game folder gets
+`ofConnectedTextures:3` (replaced or added; file created if missing). 3 = Off, confirmed from the owner's own
+optionsof.txt with the setting shown Off in OptiFine's menu (1 Fast, 2 Fancy = OptiFine's default). Only at our own
+install, so a player who turns it on later is not overridden. OptiFineDefaultsTest (2). 319 tests OK,
+md5 8ba5132e934c64c9361aa784ba2a33b4; copied to release-assets; not installed in mods yet (game running).
+
+## 2026-10-11 — Auto-send logs only when kicked or flagged a lot (no more 30-minute uploads)
+Owner: send automatically only when the player gets many flags in a short time or is kicked by the server (not when
+leaving, closing the game or losing the connection), and say why. `LogUploader` rewritten:
+- **flagged**: counts S08 corrections in a world -- not in the first 5 s after a world load, not relative ones, not
+  ones moving the player more than 8 blocks (server teleports) -- and at 8 within 60 s sends "flagged N times in 60s".
+  Counted here, not from FlagDetector (off by default unless Debug turns it on). At most one per 10 min.
+- **kicked**: a disconnect packet from the server -- play S40 ("kicked: <reason>") or login S00 ("kicked at login:
+  <reason>"); a self disconnect, closing the game or a dropped connection never receives one. At most one per 2 min.
+- The trigger plus `ActionLedger.summary(60 s, 3)` ("most active: ...") is the title (`[ver] <trigger> - server`),
+  the Discord message (`**Trigger:** ...`) and the log's first line. All redacted. Built via addScheduledTask on the
+  game thread (BugReport.sendAuto(trigger)); the S40 task is queued before vanilla's own handler, so the log is built
+  before the world closes.
+- New one-time chat notice (marker `auto-send-logs-notice-2.txt`) and Privacy text describe the new rule.
+Relay unchanged (kind auto, LOG_WEBHOOK, 4/hour). 319 tests OK, md5 e6342eb6a6bfef1738a69854d490711c, installed as
+`mods/Myau Atlas v2.0.0(stable).jar` (includes the OptiFine Connected Textures default) and copied to release-assets.
+Backups: `backups/src/pre-autolog-trigger-20261011`, `backups/src/beta2-autolog-trigger-20261011`.
+
+## 2026-10-11 — TargetHUD bold/bigger text, missing category icons, scrolling category column
+- **TargetHUD**: every text draw and width in the module goes through `mcText` / `mcTextShadow` / `mcWidth`
+  (Minecraft font: `\u00a7l` after every colour code, scaled about the text's origin) and `ttfText` / `ttfWidth`
+  (TTF fonts: scaled, bold by drawing again 0.5 px on). New `bold-text` (on) and `text-size` (115 %, 80-160).
+  Widths are scaled too, so right-aligned text keeps its edge. 33 draw calls and 16 width calls rewritten.
+- **Icons**: AtlasClickGui.icon had no drawing for World, Misc, Exploit, Client (and the Appearance sections Language,
+  Cosmos, Layout, Privacy), so they fell back to the four-squares glyph. Added: globe, three dots, lightning bolt,
+  gear, speech bubble, ringed planet, page layout, padlock.
+- **Category column**: on the module pages the categories scroll (mouse wheel over the column, one row per notch,
+  sprung) inside [top, height - SIDEBAR_FOOT (22)], clipped with a scissor; the pill lens gets the same clip; hits
+  are limited to the visible part; chevrons show more above / below. A small fixed strip stays at the foot. The
+  Client Settings page is unchanged.
+319 tests OK, md5 4daeb6ae585a0c2df8b65e112f4f29a0, installed and copied to release-assets. Backups:
+`backups/src/TargetHUD.java.pre-boldtext-20261011`, `AtlasClickGui.java.pre-icons-20261011`,
+`AtlasClickGui.java.pre-sidebar-scroll-20261011`, after `backups/src/beta2-ui-tweaks-20261011`.
+
+## 2026-10-11 — TargetHUD: rounded bold text (Jello look) and whole names
+Owner: the bold text should be smooth like the Jello look, and names shown whole. With `bold-text` on, every text in
+every style is drawn in **Product Sans Medium** (`FontManager.productSansMedium`), scaled to the height of the line it
+replaces (9 px for the Minecraft font, the TTF font's own height otherwise) times `text-size`; colour codes are
+dropped for it (TTF draws them literally). Lines with symbols Product Sans lacks (>= U+2000, e.g. the heart) keep
+their own font. The old `\u00a7l` and the double-draw fake bold are gone. Bold off: each style's own font, scaled.
+Names: the JELLO style cut long names letter by letter; now `ttfTextFit` / `mcTextFit` draw the whole name, smaller
+when it would not fit its 79 px. 319 tests OK, md5 16da92291d7518cd87882b70a07d84da, installed, release-assets.
+Backup `backups/src/TargetHUD.java.pre-rounded-20261011`, after `backups/src/beta2-rounded-text-20261011`.
+
+## 2026-10-11 — Client Settings > Appearance: the group list scrolls
+
+Owner report: "client settings 沒辦法向下滾動". The Appearance page's middle
+column lists ten groups (Language ... Privacy) under the presets; at normal
+window sizes the last ones fell below the column, and `handleMouseInput`
+returned without doing anything for `appearanceView`.
+
+- `AtlasClickGui`: `appearanceScroll` / `appearanceMaxScroll` (pixels, sprung
+  like the category column). The rows, the selection pill and the hit boxes
+  move with it inside the existing clip; chevrons show when there is more
+  above or below. The wheel over the middle column scrolls it by one row;
+  over the right column it still scrolls the settings card (`detailScroll`).
+- Backup: `backups/src/AtlasClickGui.java.pre-appearance-scroll-20261011`.
+- Jar md5 4d3c937daed6116186bbb97954e5e30a, installed as
+  `mods/Myau Atlas v2.0.0(stable).jar`.
+
 ## 2026-10-11 — Scaffold POLAR: LiquidBounce's GodBridge technique, and why it jumped every block
 
 `rotations = POLAR` is LiquidBounce nextgen's `ScaffoldGodBridgeTechnique` run with the online

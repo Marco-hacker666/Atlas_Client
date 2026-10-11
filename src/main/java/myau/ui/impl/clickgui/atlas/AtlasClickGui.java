@@ -93,6 +93,16 @@ public class AtlasClickGui extends GuiScreen {
     private int ROW_H = 24;
     private int ROW = 26;
     private int CAT_H = 26;
+    /* 2026-10-11 (owner): the category list scrolls, and the column keeps a
+       small empty strip at its foot. */
+    private static final int SIDEBAR_FOOT = 22;
+    private float sidebarScroll;
+    private float sidebarMaxScroll;
+    private float sidebarRight;
+    /* 2026-10-11: the Appearance page's group list scrolls (ten groups did
+       not fit, and the wheel did nothing there). */
+    private float appearanceScroll;
+    private float appearanceMaxScroll;
     private int CAT = 28;
 
     /** Nothing useful fits below these, so the resize grip stops here. */
@@ -1394,6 +1404,14 @@ public class AtlasClickGui extends GuiScreen {
         boolean profile = settingsPage && this.theme.accountCard.getValue()
                 && y + height - (appearanceRow + CAT_H) >= 46;
         float limit = y + height - (profile ? 44 : 4);
+        /* Module pages: the categories scroll inside [top, listLimit], over a
+           small fixed strip at the foot of the column. */
+        float listLimit = settingsPage ? limit : y + height - SIDEBAR_FOOT;
+        this.sidebarRight = x + sidebar;
+        this.sidebarMaxScroll = settingsPage ? 0.0F
+                : Math.max(0.0F, shownCategories.size() * CAT - (CAT - CAT_H) - (listLimit - top));
+        this.sidebarScroll = Math.max(0.0F, Math.min(this.sidebarMaxScroll, this.sidebarScroll));
+        float scrolled = settingsPage ? 0.0F : spring("sidebarScroll", this.sidebarScroll, 300.0F, 30.0F).value;
         boolean profilesFit = settingsPage && profilesRow + CAT_H <= limit;
         boolean appearanceFit = settingsPage && appearanceRow + CAT_H <= limit;
 
@@ -1410,7 +1428,7 @@ public class AtlasClickGui extends GuiScreen {
         /* Sprung in the column's own coordinates, so dragging the window
            carries the pill with it instead of leaving it to catch up. */
         Spring pill = spring("catPill", pillOnProfiles ? profilesRow - top
-                        : pillOnAppearance ? appearanceRow - top : Math.max(0, activeIndex) * CAT,
+                        : pillOnAppearance ? appearanceRow - top : Math.max(0, activeIndex) * CAT - scrolled,
                 380.0F, 26.0F);
         float shownPill = ease("catPillShown", activeIndex >= 0 || pillOnProfiles || pillOnAppearance, 12.0F);
         if (shownPill > 0.02F) {
@@ -1421,18 +1439,26 @@ public class AtlasClickGui extends GuiScreen {
             float py2 = top + pill.value + CAT_H + stretch / 2.0F;
             Liquid.shadow(px, py, px2, py2, 11.0F, 6.0F, alpha(0x40000000, shownPill), 2.0F);
             this.lenses.add(new Lens(px, py, px2, py2, 11.0F,
-                    pillStyle(shownPill), null));
+                    pillStyle(shownPill), settingsPage ? null : new float[]{x, top - 2, sidebar, listLimit - top + 2}));
         }
 
+        ScaledResolution sr = new ScaledResolution(mc);
+        if (!settingsPage) {
+            clip(sr, x, top - 2, sidebar, listLimit - top + 2);
+        }
         for (int i = 0; i < shownCategories.size(); i++) {
             String name = shownCategories.get(i);
-            float rowY = top + i * CAT;
-            if (rowY + CAT_H > limit) {
+            float rowY = top + i * CAT - scrolled;
+            if (settingsPage && rowY + CAT_H > limit) {
                 break;
             }
+            if (!settingsPage && (rowY + CAT_H < top || rowY > listLimit)) {
+                continue;
+            }
             boolean active = i == activeIndex;
-            boolean hovered = mx >= x + 10 && mx <= x + sidebar - 10 && my >= rowY && my <= rowY + CAT_H;
-            hit("category", name, x + 10, rowY, x + sidebar - 10, rowY + CAT_H);
+            boolean hovered = mx >= x + 10 && mx <= x + sidebar - 10 && my >= Math.max(rowY, top)
+                    && my <= Math.min(rowY + CAT_H, listLimit);
+            hit("category", name, x + 10, Math.max(rowY, top), x + sidebar - 10, Math.min(rowY + CAT_H, listLimit));
             float rowLit = ease("cat:" + name, hovered && !active, 10.0F);
             if (rowLit > 0.01F) {
                 Liquid.rect(x + 10, rowY, x + sidebar - 10, rowY + CAT_H, 11.0F,
@@ -1454,6 +1480,16 @@ public class AtlasClickGui extends GuiScreen {
             }
             if (hovered) {
                 this.hint = on + " of " + list.size() + " enabled in " + name;
+            }
+        }
+        if (!settingsPage) {
+            unclip();
+            /* More above or below: a small chevron at that edge. */
+            if (scrolled > 1.0F) {
+                icon("chevronup", x + sidebar / 2.0F, top + 3, FAINT);
+            }
+            if (scrolled < this.sidebarMaxScroll - 1.0F) {
+                icon("chevron", x + sidebar / 2.0F, listLimit - 3, FAINT);
             }
         }
 
@@ -1785,9 +1821,12 @@ public class AtlasClickGui extends GuiScreen {
         float bottom = y + height - 4;
         List<String> groups = new ArrayList<String>(this.theme.groups.keySet());
         int selectedIndex = groups.indexOf(this.appearanceGroup);
+        this.appearanceMaxScroll = Math.max(0.0F, groups.size() * ROW - (ROW - ROW_H) - (bottom - top));
+        this.appearanceScroll = Math.max(0.0F, Math.min(this.appearanceMaxScroll, this.appearanceScroll));
+        float scrolled = spring("appearanceScroll", this.appearanceScroll, 300.0F, 30.0F).value;
         clip(sr, x, top - 2, width, bottom - top + 2);
         if (selectedIndex >= 0) {
-            Spring pill = spring("groupPill", selectedIndex * ROW, 380.0F, 26.0F);
+            Spring pill = spring("groupPill", selectedIndex * ROW - scrolled, 380.0F, 26.0F);
             float stretch = Math.min(8.0F, Math.abs(pill.velocity) * this.jelly * 0.015F);
             float py = top + pill.value - stretch / 2.0F;
             float py2 = top + pill.value + ROW_H + stretch / 2.0F;
@@ -1797,15 +1836,18 @@ public class AtlasClickGui extends GuiScreen {
         }
         for (int i = 0; i < groups.size(); i++) {
             String group = groups.get(i);
-            float rowY = top + i * ROW;
+            float rowY = top + i * ROW - scrolled;
             if (rowY > bottom) {
                 break;
             }
+            if (rowY + ROW_H < top) {
+                continue;
+            }
             float cy = rowY + ROW_H / 2.0F;
             boolean active = group.equals(this.appearanceGroup);
-            boolean hovered = mx >= x + 10 && mx <= x + width - 10 && my >= rowY && my <= rowY + ROW_H
-                    && my <= bottom;
-            hit("group", group, x + 10, rowY, x + width - 10, Math.min(rowY + ROW_H, bottom));
+            boolean hovered = mx >= x + 10 && mx <= x + width - 10 && my >= Math.max(rowY, top)
+                    && my <= rowY + ROW_H && my <= bottom;
+            hit("group", group, x + 10, Math.max(rowY, top), x + width - 10, Math.min(rowY + ROW_H, bottom));
             float hoverLit = ease("grp:" + group, hovered && !active, 9.0F);
             if (hoverLit > 0.01F) {
                 Liquid.rect(x + 10, rowY, x + width - 10, rowY + ROW_H, 9.0F,
@@ -1820,6 +1862,12 @@ public class AtlasClickGui extends GuiScreen {
             }
         }
         unclip();
+        if (scrolled > 1.0F) {
+            icon("chevronup", x + width / 2.0F, top + 3, FAINT);
+        }
+        if (scrolled < this.appearanceMaxScroll - 1.0F) {
+            icon("chevron", x + width / 2.0F, bottom - 3, FAINT);
+        }
     }
 
     /** The right column of the Appearance page: the open group's settings. */
@@ -2954,6 +3002,58 @@ public class AtlasClickGui extends GuiScreen {
             Liquid.rim(x - 3.8F, y - 5.0F, x + 3.8F, y + 5.0F, 1.6F, 1.0F, c, c);
             Liquid.line(x - 1.8F, y - 1.2F, x + 1.8F, y - 1.2F, 0.9F, c);
             Liquid.line(x - 1.8F, y + 1.3F, x + 1.8F, y + 1.3F, 0.9F, c);
+        /* 2026-10-11: the categories and Appearance sections that fell back
+           to the four squares. */
+        } else if (key.equals("world")) {
+            /* A globe: outline, equator, a meridian and two latitudes. */
+            Liquid.ring(x, y, 5.0F, 1.1F, c);
+            Liquid.line(x - 5.0F, y, x + 5.0F, y, 1.0F, c);
+            Liquid.line(x, y - 5.0F, x, y + 5.0F, 1.0F, c);
+            Liquid.line(x - 4.0F, y - 2.6F, x + 4.0F, y - 2.6F, 0.9F, c);
+            Liquid.line(x - 4.0F, y + 2.6F, x + 4.0F, y + 2.6F, 0.9F, c);
+        } else if (key.equals("misc")) {
+            /* "More": three dots. */
+            Liquid.dot(x - 4.0F, y, 1.4F, c);
+            Liquid.dot(x, y, 1.4F, c);
+            Liquid.dot(x + 4.0F, y, 1.4F, c);
+        } else if (key.equals("exploit")) {
+            /* A lightning bolt. */
+            Liquid.line(x + 1.8F, y - 5.5F, x - 2.6F, y + 0.4F, 1.3F, c);
+            Liquid.line(x - 2.6F, y + 0.4F, x + 2.6F, y - 0.4F, 1.3F, c);
+            Liquid.line(x + 2.6F, y - 0.4F, x - 1.8F, y + 5.5F, 1.3F, c);
+        } else if (key.equals("client")) {
+            /* A gear: hub, rim and six teeth. */
+            Liquid.ring(x, y, 3.4F, 1.2F, c);
+            Liquid.dot(x, y, 1.1F, c);
+            for (int i = 0; i < 6; i++) {
+                double a = Math.PI / 3.0 * i;
+                float cx = (float) Math.cos(a);
+                float cy = (float) Math.sin(a);
+                Liquid.line(x + cx * 3.9F, y + cy * 3.9F, x + cx * 5.6F, y + cy * 5.6F, 1.5F, c);
+            }
+        } else if (key.equals("language")) {
+            /* A speech bubble with two lines of text. */
+            Liquid.line(x - 5.0F, y - 4.2F, x + 5.0F, y - 4.2F, 1.0F, c);
+            Liquid.line(x + 5.0F, y - 4.2F, x + 5.0F, y + 2.4F, 1.0F, c);
+            Liquid.line(x + 5.0F, y + 2.4F, x - 1.0F, y + 2.4F, 1.0F, c);
+            Liquid.line(x - 5.0F, y + 2.4F, x - 5.0F, y - 4.2F, 1.0F, c);
+            Liquid.line(x - 1.0F, y + 2.4F, x - 3.4F, y + 5.2F, 1.0F, c);
+            Liquid.line(x - 2.8F, y - 1.9F, x + 2.8F, y - 1.9F, 0.9F, c);
+            Liquid.line(x - 2.8F, y + 0.2F, x + 1.2F, y + 0.2F, 0.9F, c);
+        } else if (key.equals("cosmos")) {
+            /* A ringed planet. */
+            Liquid.ring(x, y, 3.2F, 1.1F, c);
+            Liquid.line(x - 6.0F, y + 2.2F, x + 6.0F, y - 2.2F, 1.0F, c);
+            Liquid.dot(x + 4.6F, y - 4.6F, 0.8F, c);
+        } else if (key.equals("layout")) {
+            /* A page: a header bar over two columns. */
+            Liquid.rect(x - 5.0F, y - 5.0F, x + 5.0F, y - 2.4F, 1.0F, c);
+            Liquid.rect(x - 5.0F, y - 1.2F, x - 0.8F, y + 5.0F, 1.0F, c);
+            Liquid.rect(x + 0.6F, y - 1.2F, x + 5.0F, y + 5.0F, 1.0F, c);
+        } else if (key.equals("privacy")) {
+            /* A padlock: shackle over a body with a keyhole. */
+            Liquid.ring(x, y - 2.2F, 2.8F, 1.1F, c);
+            Liquid.rect(x - 4.2F, y - 1.0F, x + 4.2F, y + 5.0F, 1.2F, c);
         } else if (key.equals("search")) {
             Liquid.ring(x - 0.8F, y - 0.8F, 3.3F, 1.2F, c);
             Liquid.line(x + 1.6F, y + 1.6F, x + 3.8F, y + 3.8F, 1.3F, c);
@@ -3513,8 +3613,11 @@ public class AtlasClickGui extends GuiScreen {
             this.detailScroll = Math.max(0, Math.min(this.detailMaxScroll, this.detailScroll + step * 16));
             /* An open list is anchored to a row that has just moved. */
             this.dropdown = null;
+        } else if (mouseX < this.sidebarRight && !"Client Settings".equals(this.page)) {
+            /* Over the category column: scroll the categories (2026-10-11). */
+            this.sidebarScroll = Math.max(0.0F, Math.min(this.sidebarMaxScroll, this.sidebarScroll + step * CAT));
         } else if (this.appearanceView) {
-            return;
+            this.appearanceScroll = Math.max(0.0F, Math.min(this.appearanceMaxScroll, this.appearanceScroll + step * ROW));
         } else if (this.profilesView) {
             this.profileScroll = Math.max(0, Math.min(this.profileMaxScroll, this.profileScroll + step));
         } else {

@@ -243,4 +243,7 @@ public class ESP extends Module {
             RenderUtil.disableRenderState();
         }
     }
+
+    /* Merged modules (2026-10-11, ModuleBundle). */
+    public final myau.module.ModuleBundle mobsMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.MobESP(), "mobs", "Mobs", false);
 }

@@ -20,7 +20,13 @@ public final class SetupEntry {
         /** {@code url} points straight at the file. */
         DIRECT,
         /** {@code url} is a MediaFire share page; the direct link is scraped from it. */
-        MEDIAFIRE_SHARE
+        MEDIAFIRE_SHARE,
+        /**
+         * {@code url} is optifine.net's own download page (adloadx): the link
+         * with that visit's key is read from it, then the file comes from
+         * optifine.net itself (2026-10-11).
+         */
+        OPTIFINE
     }
 
     public final Section section;
@@ -32,6 +38,8 @@ public final class SetupEntry {
     public final long expectedBytes;
     public final boolean auto;
     public final boolean matchPrefix;
+    /** SHA-1 of the one right file (lower-case hex), or null when it is not pinned. */
+    public final String sha1;
 
     public SetupEntry(Section section, Source source, String name, String blurb,
                       String fileName, String url, long expectedBytes, boolean auto) {
@@ -40,6 +48,13 @@ public final class SetupEntry {
 
     public SetupEntry(Section section, Source source, String name, String blurb,
                       String fileName, String url, long expectedBytes, boolean auto, boolean matchPrefix) {
+        this(section, source, name, blurb, fileName, url, expectedBytes, auto, matchPrefix, null);
+    }
+
+    public SetupEntry(Section section, Source source, String name, String blurb,
+                      String fileName, String url, long expectedBytes, boolean auto, boolean matchPrefix,
+                      String sha1) {
+        this.sha1 = sha1;
         this.section = section;
         this.source = source;
         this.name = name;

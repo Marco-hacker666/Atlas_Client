@@ -54,12 +54,6 @@ public class Eagle extends Module {
         super("Eagle", false);
     }
 
-    @Override
-    public void onEnabled() {
-        /* Part of LegitBridge now: one bridging helper at a time. */
-        LegitBridge.yieldTo(Eagle.class);
-    }
-
     @EventTarget(Priority.LOWEST)
     public void onTick(TickEvent event) {
         if (this.isEnabled() && event.getType() == EventType.PRE) {

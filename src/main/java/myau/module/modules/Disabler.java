@@ -58,7 +58,6 @@ public class Disabler extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final int MAX_DELAYED_PACKETS = 256;
     public final BooleanProperty lifeboat = new BooleanProperty("lifeboat", false);
-    public final BooleanProperty startSprint = new BooleanProperty("start-sprint", true);
     public final BooleanProperty grimPlace = new BooleanProperty("grim-place", false);
     public final BooleanProperty vulcanScaffold = new BooleanProperty("vulcan-scaffold", false);
     public final IntProperty vulcanPacketTick = new IntProperty("vulcan-packet-tick", 15, 1, 20);
@@ -66,13 +65,11 @@ public class Disabler extends Module {
     public final BooleanProperty verusCombat = new BooleanProperty("verus-combat", false);
     public final BooleanProperty onlyCombat = new BooleanProperty("only-combat", true);
     public final BooleanProperty intaveFly = new BooleanProperty("intave-fly", false);
-    public final BooleanProperty moveDisabler = new BooleanProperty("move-disabler", false);
     private boolean shouldDelay = false;
     // use diamond operator to avoid raw type warnings
     private final LinkedBlockingQueue<Packet<INetHandlerPlayClient>> packets = new LinkedBlockingQueue<>();
     public final BooleanProperty noRotationDisabler = new BooleanProperty("no-rotation-disabler", false);
     public final ModeProperty modifyMode = new ModeProperty("modify-mode", 0, new String[]{"ConvertNull", "Spoof", "Zero", "SpoofZero", "Negative", "OffsetYaw"});
-    public final FloatProperty offsetAmount = new FloatProperty("offset-amount", 6.0F, -180.0F, 180.0F);
     public final BooleanProperty basicDisabler = new BooleanProperty("basic-disabler", false);
     public final BooleanProperty cancelC00 = new BooleanProperty("cancel-c00", true);
     public final BooleanProperty cancelC0F = new BooleanProperty("cancel-c0f", true);
@@ -89,7 +86,6 @@ public class Disabler extends Module {
     public final BooleanProperty watchdogInventory = new BooleanProperty("watchdog-inventory", false);
     private boolean c16 = false;
     private boolean c0d = false;
-    public final BooleanProperty spigotSpam = new BooleanProperty("spigot-spam", false);
     public final TextProperty message = new TextProperty("message", "/skill");
     public final BooleanProperty chatDebug = new BooleanProperty("chat-debug", false);
     private boolean transaction = false;
@@ -105,13 +101,8 @@ public class Disabler extends Module {
     private final TimerUtil betaVerusLagTimer = new TimerUtil();
     public final BooleanProperty matrixDisabler = new BooleanProperty("matrix-disabler", false);
     public final BooleanProperty matrixTA = new BooleanProperty("matrix-ta", true);
-    public final BooleanProperty matrixTA188 = new BooleanProperty("matrix-ta-188", false);
-    public final FloatProperty matrixTAPacket = new FloatProperty("matrix-ta-packet", 1.0F, 1.0F, 5.0F);
-    public final ModeProperty matrixAB = new ModeProperty("matrix-ab", 0, new String[]{"Off", "BlockHit", "Shield"});
     public final ModeProperty matrixT = new ModeProperty("matrix-t", 0, new String[]{"Off", "Pingspoof", "FunnyValue", "OldCancel"});
-    public final BooleanProperty matrixReach = new BooleanProperty("matrix-reach", false);
     public final BooleanProperty matrixAllDir = new BooleanProperty("matrix-alldir", false);
-    public final BooleanProperty taPacketCounter = new BooleanProperty("ta-packet-counter", false);
     private final TimerUtil lastC00timer = new TimerUtil();
     private final TimerUtil lastSAPtimer = new TimerUtil();
     private final TimerUtil lastC03timer = new TimerUtil();

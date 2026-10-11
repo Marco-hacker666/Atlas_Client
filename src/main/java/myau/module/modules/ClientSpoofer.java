@@ -61,4 +61,7 @@ public class ClientSpoofer extends Module {
     public String[] getSuffix() {
         return new String[]{mode.getModeString()};
     }
+
+    /* Merged modules (2026-10-11, ModuleBundle). */
+    public final myau.module.ModuleBundle modSpooferMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.ModSpoofer(), "mod-spoofer", "Mod list spoof", false);
 }

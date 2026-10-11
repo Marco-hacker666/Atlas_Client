@@ -58,6 +58,11 @@ public abstract class MixinNetworkManager {
                packets a second are examined. */
             if (ActionLedger.isAttributable(packet)) {
                 ActionLedger.note(ActionLedger.callerModule(), ActionLedger.kindOf(packet));
+            } else if (packet instanceof net.minecraft.network.play.client.C03PacketPlayer) {
+                /* 2026-10-11: a movement packet a module made itself (NoFall,
+                   Criticals, Fly, Blink...) -- the game loop's own has no
+                   module on the stack and is not recorded. */
+                ActionLedger.note(ActionLedger.callerModule(), "move-packet");
             }
             PacketEvent event = new PacketEvent(EventType.SEND, packet);
             EventManager.call(event);

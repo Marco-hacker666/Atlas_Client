@@ -33,7 +33,7 @@ public abstract class MixinBlockRendererDispatcher {
             CallbackInfoReturnable<Boolean> callbackInfoReturnable
     ) {
         if (Myau.moduleManager != null) {
-            BedESP bedESP = (BedESP) Myau.moduleManager.modules.get(BedESP.class);
+            BedESP bedESP = (BedESP) myau.module.ModuleBundle.of(myau.module.modules.BedESP.class);
             if (bedESP.isEnabled() && iBlockState.getBlock() instanceof BlockBed && iBlockState.getValue(BlockBed.PART) == EnumPartType.HEAD) {
                 bedESP.beds.add(new BlockPos(blockPos));
             }

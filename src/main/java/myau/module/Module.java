@@ -70,6 +70,22 @@ public abstract class Module {
         return this.enabled;
     }
 
+    /*
+     * 2026-10-11 (ModuleBundle): a host module whose mode hands the work to a
+     * merged module stays on -- its key, its HUD entry -- but its own event
+     * handlers pause while that mode is picked.
+     */
+    private java.util.function.BooleanSupplier pausedWhen;
+
+    public void pauseWhen(java.util.function.BooleanSupplier condition) {
+        this.pausedWhen = condition;
+    }
+
+    /** On, and not handing its work to a merged module right now. */
+    public boolean isRunning() {
+        return this.enabled && (this.pausedWhen == null || !this.pausedWhen.getAsBoolean());
+    }
+
     public void setEnabled(boolean enabled) {
         if (this.enabled != enabled) {
             this.enabled = enabled;

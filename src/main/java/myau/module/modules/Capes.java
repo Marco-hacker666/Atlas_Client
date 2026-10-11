@@ -63,7 +63,6 @@ public class Capes extends Module {
         return capes;
     }
 
-    public final BooleanProperty allPlayer = new BooleanProperty("All player", false);
     public final BooleanProperty btnLoadCapes = new BooleanProperty("Load capes", false);
     public final BooleanProperty btnOpenFolder = new BooleanProperty("Open folder", false);
 

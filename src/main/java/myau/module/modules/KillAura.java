@@ -2027,7 +2027,10 @@ public class KillAura extends Module {
                 }
                 if (event.getPacket() instanceof S1CPacketEntityMetadata) {
                     S1CPacketEntityMetadata packet = (S1CPacketEntityMetadata) event.getPacket();
-                    if (packet.getEntityId() == mc.thePlayer.getEntityId()) {
+                    /* 2026-10-11: on the network thread; the list can be null and the
+                       player gone (18 NPEs in the owner's logs). */
+                    if (mc.thePlayer != null && packet.func_149376_c() != null
+                            && packet.getEntityId() == mc.thePlayer.getEntityId()) {
                         for (WatchableObject watchableObject : packet.func_149376_c()) {
                             if (watchableObject.getDataValueId() == 6) {
                                 float diff = (Float) watchableObject.getObject() - mc.thePlayer.getHealth();

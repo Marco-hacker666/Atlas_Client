@@ -27,7 +27,6 @@ public class DynamicIsland extends Module { // nah bro i took 2 hour just to did
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final ColorProperty textColor = new ColorProperty("AccentColor", new Color(255, 30, 0).getRGB());
-    public final BooleanProperty textShadow = new BooleanProperty("TextShadow", true);
     public final BooleanProperty enableGlow = new BooleanProperty("Glow", true);
     /* Added with the HUD editor (2026-10-05): drag it there, or set it here. 0 keeps the original place. */
     public final IntProperty offsetX = new IntProperty("offset-x", 0, -1000, 1000);

@@ -51,7 +51,6 @@ public class InvWalk extends Module {
     }};
 
     public final ModeProperty mode = new ModeProperty("mode", 1, new String[]{"VANILLA", "LEGIT", "HYPIXEL", "LEGIT+"});
-    public final BooleanProperty guiEnabled = new BooleanProperty("click-gui", true);
     public final IntProperty openDelay = new IntProperty("open-delay", 0, 0, 20, () -> mode.getValue() == 3);
     public final IntProperty closeDelay = new IntProperty("close-delay", 4, 0, 20, () -> mode.getValue() == 3);
     public final BooleanProperty lockMoveKey = new BooleanProperty("lock-move-dey", false);

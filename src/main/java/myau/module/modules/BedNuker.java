@@ -678,7 +678,7 @@ public class BedNuker extends Module {
         if (this.isEnabled() && this.targetBed != null && !mc.theWorld.isAirBlock(this.targetBed)) {
             mc.theWorld.sendBlockBreakProgress(mc.thePlayer.getEntityId(), this.targetBed, (int) (this.calcProgress() * 10.0F) - 1);
             if (this.showTarget.getValue() != 0) {
-                BedESP bedESP = (BedESP) Myau.moduleManager.modules.get(BedESP.class);
+                BedESP bedESP = (BedESP) myau.module.ModuleBundle.of(myau.module.modules.BedESP.class);
                 Color color = this.getProgressColor(this.showTarget.getValue());
                 RenderUtil.enableRenderState();
                 BlockPos target = this.targetBed;

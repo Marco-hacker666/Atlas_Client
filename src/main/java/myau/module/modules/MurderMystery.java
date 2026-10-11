@@ -212,4 +212,7 @@ public class MurderMystery extends Module {
         roleAnnounced = false;
         goldAnnounced = false;
     }
+
+    /* Merged modules (2026-10-11, ModuleBundle). */
+    public final myau.module.ModuleBundle detectorMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.MurderDetector(), "detector", "Murderer detector", true);
 }

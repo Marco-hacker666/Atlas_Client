@@ -133,4 +133,7 @@ public class Indicators extends Module {
             GlStateManager.popMatrix();
         }
     }
+
+    /* Merged modules (2026-10-11, ModuleBundle). */
+    public final myau.module.ModuleBundle playersMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.Arrows(), "players", "Off-screen players", false);
 }

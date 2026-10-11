@@ -17,7 +17,10 @@ public class ModuleManager {
     public final LinkedHashMap<Class<?>, Module> modules = new LinkedHashMap<>();
 
     public Module getModule(String string) {
-        return this.modules.values().stream().filter(mD -> mD.getName().equalsIgnoreCase(string)).findFirst().orElse(null);
+        Module module = this.modules.values().stream().filter(mD -> mD.getName().equalsIgnoreCase(string)).findFirst().orElse(null);
+        /* 2026-10-11: a merged module (ModuleBundle) by its own name, for
+           FlagResponder and anything else that names modules. */
+        return module != null ? module : myau.module.ModuleBundle.byName(string);
     }
 
     public Module getModule(Class<?> clazz){

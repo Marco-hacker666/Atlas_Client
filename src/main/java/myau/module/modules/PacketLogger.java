@@ -296,4 +296,7 @@ public class PacketLogger extends Module {
     public String[] getSuffix() {
         return new String[]{direction.getModeString(), String.valueOf(total)};
     }
+
+    /* Merged modules (2026-10-11, ModuleBundle). */
+    public final myau.module.ModuleBundle viewMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.ViewPackets(), "view", "Show in chat", false);
 }

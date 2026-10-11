@@ -86,6 +86,23 @@ public class Debug extends Module {
         set(FlagResponder.class, false);
     }
 
+    /** The modules this panel switches; while it is hidden, they are too (HUD's list). */
+    public static final Class<?>[] MANAGED = {FlagDetector.class, HitCheck.class, FightLog.class,
+            LatencyCrosshair.class, LatencyGovernor.class, FlagResponder.class};
+
+    public static boolean hidesWithPanel(Module module) {
+        Module panel = Myau.moduleManager == null ? null : Myau.moduleManager.modules.get(Debug.class);
+        if (panel == null || !panel.isHidden()) {
+            return false;
+        }
+        for (Class<?> type : MANAGED) {
+            if (type == module.getClass()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static void set(Class<?> type, boolean wanted) {
         Module module = Myau.moduleManager.modules.get(type);
         if (module != null && module.isEnabled() != wanted) {

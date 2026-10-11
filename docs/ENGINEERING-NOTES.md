@@ -4464,3 +4464,19 @@ their own font. The old `\u00a7l` and the double-draw fake bold are gone. Bold o
 Names: the JELLO style cut long names letter by letter; now `ttfTextFit` / `mcTextFit` draw the whole name, smaller
 when it would not fit its 79 px. 319 tests OK, md5 16da92291d7518cd87882b70a07d84da, installed, release-assets.
 Backup `backups/src/TargetHUD.java.pre-rounded-20261011`, after `backups/src/beta2-rounded-text-20261011`.
+
+## 2026-10-11 — Client Settings > Appearance: the group list scrolls
+
+Owner report: "client settings 沒辦法向下滾動". The Appearance page's middle
+column lists ten groups (Language ... Privacy) under the presets; at normal
+window sizes the last ones fell below the column, and `handleMouseInput`
+returned without doing anything for `appearanceView`.
+
+- `AtlasClickGui`: `appearanceScroll` / `appearanceMaxScroll` (pixels, sprung
+  like the category column). The rows, the selection pill and the hit boxes
+  move with it inside the existing clip; chevrons show when there is more
+  above or below. The wheel over the middle column scrolls it by one row;
+  over the right column it still scrolls the settings card (`detailScroll`).
+- Backup: `backups/src/AtlasClickGui.java.pre-appearance-scroll-20261011`.
+- Jar md5 4d3c937daed6116186bbb97954e5e30a, installed as
+  `mods/Myau Atlas v2.0.0(stable).jar`.

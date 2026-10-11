@@ -99,6 +99,10 @@ public class AtlasClickGui extends GuiScreen {
     private float sidebarScroll;
     private float sidebarMaxScroll;
     private float sidebarRight;
+    /* 2026-10-11: the Appearance page's group list scrolls (ten groups did
+       not fit, and the wheel did nothing there). */
+    private float appearanceScroll;
+    private float appearanceMaxScroll;
     private int CAT = 28;
 
     /** Nothing useful fits below these, so the resize grip stops here. */
@@ -1817,9 +1821,12 @@ public class AtlasClickGui extends GuiScreen {
         float bottom = y + height - 4;
         List<String> groups = new ArrayList<String>(this.theme.groups.keySet());
         int selectedIndex = groups.indexOf(this.appearanceGroup);
+        this.appearanceMaxScroll = Math.max(0.0F, groups.size() * ROW - (ROW - ROW_H) - (bottom - top));
+        this.appearanceScroll = Math.max(0.0F, Math.min(this.appearanceMaxScroll, this.appearanceScroll));
+        float scrolled = spring("appearanceScroll", this.appearanceScroll, 300.0F, 30.0F).value;
         clip(sr, x, top - 2, width, bottom - top + 2);
         if (selectedIndex >= 0) {
-            Spring pill = spring("groupPill", selectedIndex * ROW, 380.0F, 26.0F);
+            Spring pill = spring("groupPill", selectedIndex * ROW - scrolled, 380.0F, 26.0F);
             float stretch = Math.min(8.0F, Math.abs(pill.velocity) * this.jelly * 0.015F);
             float py = top + pill.value - stretch / 2.0F;
             float py2 = top + pill.value + ROW_H + stretch / 2.0F;
@@ -1829,15 +1836,18 @@ public class AtlasClickGui extends GuiScreen {
         }
         for (int i = 0; i < groups.size(); i++) {
             String group = groups.get(i);
-            float rowY = top + i * ROW;
+            float rowY = top + i * ROW - scrolled;
             if (rowY > bottom) {
                 break;
             }
+            if (rowY + ROW_H < top) {
+                continue;
+            }
             float cy = rowY + ROW_H / 2.0F;
             boolean active = group.equals(this.appearanceGroup);
-            boolean hovered = mx >= x + 10 && mx <= x + width - 10 && my >= rowY && my <= rowY + ROW_H
-                    && my <= bottom;
-            hit("group", group, x + 10, rowY, x + width - 10, Math.min(rowY + ROW_H, bottom));
+            boolean hovered = mx >= x + 10 && mx <= x + width - 10 && my >= Math.max(rowY, top)
+                    && my <= rowY + ROW_H && my <= bottom;
+            hit("group", group, x + 10, Math.max(rowY, top), x + width - 10, Math.min(rowY + ROW_H, bottom));
             float hoverLit = ease("grp:" + group, hovered && !active, 9.0F);
             if (hoverLit > 0.01F) {
                 Liquid.rect(x + 10, rowY, x + width - 10, rowY + ROW_H, 9.0F,
@@ -1852,6 +1862,12 @@ public class AtlasClickGui extends GuiScreen {
             }
         }
         unclip();
+        if (scrolled > 1.0F) {
+            icon("chevronup", x + width / 2.0F, top + 3, FAINT);
+        }
+        if (scrolled < this.appearanceMaxScroll - 1.0F) {
+            icon("chevron", x + width / 2.0F, bottom - 3, FAINT);
+        }
     }
 
     /** The right column of the Appearance page: the open group's settings. */
@@ -3601,7 +3617,7 @@ public class AtlasClickGui extends GuiScreen {
             /* Over the category column: scroll the categories (2026-10-11). */
             this.sidebarScroll = Math.max(0.0F, Math.min(this.sidebarMaxScroll, this.sidebarScroll + step * CAT));
         } else if (this.appearanceView) {
-            return;
+            this.appearanceScroll = Math.max(0.0F, Math.min(this.appearanceMaxScroll, this.appearanceScroll + step * ROW));
         } else if (this.profilesView) {
             this.profileScroll = Math.max(0, Math.min(this.profileMaxScroll, this.profileScroll + step));
         } else {

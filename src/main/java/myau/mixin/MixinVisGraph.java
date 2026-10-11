@@ -25,7 +25,7 @@ public abstract class MixinVisGraph {
     private void func_178606_a(CallbackInfo callbackInfo) {
         if (Myau.moduleManager != null) {
             if (Myau.moduleManager.modules.get(Chams.class).isEnabled()
-                    || Myau.moduleManager.modules.get(ViewClip.class).isEnabled()
+                    || ((ViewClip) Myau.moduleManager.modules.get(ViewClip.class)).isNoClipActive()
                     || Myau.moduleManager.modules.get(Xray.class).isEnabled()) {
                 callbackInfo.cancel();
             }
@@ -40,7 +40,7 @@ public abstract class MixinVisGraph {
     private void computeVisibility(CallbackInfoReturnable<SetVisibility> callbackInfoReturnable) {
         if (Myau.moduleManager != null) {
             if (Myau.moduleManager.modules.get(Chams.class).isEnabled()
-                    || Myau.moduleManager.modules.get(ViewClip.class).isEnabled()
+                    || ((ViewClip) Myau.moduleManager.modules.get(ViewClip.class)).isNoClipActive()
                     || Myau.moduleManager.modules.get(Xray.class).isEnabled()) {
                 SetVisibility setVisibility = new SetVisibility();
                 setVisibility.setAllVisible(true);

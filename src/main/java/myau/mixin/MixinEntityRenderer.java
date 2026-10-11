@@ -244,7 +244,10 @@ public abstract class MixinEntityRenderer {
         if (Myau.moduleManager == null) {
             return block.getMaterial();
         } else {
-            return Myau.moduleManager.modules.get(ViewClip.class).isEnabled() ? Material.air : block.getMaterial();
+            /* isNoClipActive, not isEnabled: the "no-clip" setting and the
+               VANILLA mode have to be able to leave fog alone, or the setting
+               is inert while the module is on. */
+            return ((ViewClip) Myau.moduleManager.modules.get(ViewClip.class)).isNoClipActive() ? Material.air : block.getMaterial();
         }
     }
 

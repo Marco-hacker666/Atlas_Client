@@ -6,6 +6,7 @@ import myau.enums.BlinkModules;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.event.types.Priority;
+import myau.events.LoadWorldEvent;
 import myau.events.PacketEvent;
 import myau.events.TickEvent;
 import myau.mixin.IAccessorC03PacketPlayer;
@@ -304,6 +305,16 @@ public class NoFall extends Module {
         }
         this.lastMlgSlot = -1;
         this.mlgPlaced = false;
+    }
+
+    /**
+     * A blink held through a world change belongs to the world that is gone
+     * (2026-10-11); releasing it here is the same cleanup a disable does, and
+     * it is what keeps a held fall from being replayed into the next server.
+     */
+    @EventTarget
+    public void onLoadWorld(LoadWorldEvent event) {
+        this.onDisabled();
     }
 
     @Override

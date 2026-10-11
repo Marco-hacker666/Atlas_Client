@@ -13,7 +13,8 @@ import net.minecraft.client.Minecraft;
 // Camera visuals. Adapted from raven donors ExtendCamera (distance),
 // NoCameraClip (clip bypass), FallView (fall gating) and Holdlook
 // (third-person save/restore). Rewritten for Myau APIs.
-// Camera math only. No mixin changes here.
+// The camera math lives here; MixinEntityRenderer and MixinVisGraph read
+// isNoClipActive() to decide whether the camera may pass through blocks.
 public class ViewClip extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
@@ -26,11 +27,8 @@ public class ViewClip extends Module {
 
     private static Field distanceField;
     private static Field distanceTempField;
-
-    static {
-        distanceField = findField("thirdPersonDistance", "field_78430_p");
-        distanceTempField = findField("thirdPersonDistanceTemp", "field_78437_w");
-    }
+    /** The renderer class the two fields above were resolved for. */
+    private static Class<?> resolvedRenderer;
 
     private float savedFov = -1.0F;
     private int savedThirdPerson = -1;
@@ -88,8 +86,13 @@ public class ViewClip extends Module {
         }
     }
 
-    // Future mixin hook. Mixins currently gate only on isEnabled,
-    // so this documents intent until a mixin follow-up reads it.
+    /**
+     * Whether the camera may pass through blocks right now: the module is on,
+     * "no-clip" is on, and the mode is not VANILLA (which means "leave the
+     * camera exactly as vanilla has it"). MixinEntityRenderer (setupFog) and
+     * MixinVisGraph ask this rather than isEnabled(), so the setting and the
+     * VANILLA mode both do what they say.
+     */
     public boolean isNoClipActive() {
         return this.isEnabled() && this.noClip.getValue() && this.mode.getValue() != 1;
     }
@@ -180,6 +183,7 @@ public class ViewClip extends Module {
     }
 
     private float readDistance() {
+        resolveDistanceFields();
         try {
             if (mc.entityRenderer != null && distanceField != null) {
                 return distanceField.getFloat(mc.entityRenderer);
@@ -190,6 +194,7 @@ public class ViewClip extends Module {
     }
 
     private void writeDistance(float value) {
+        resolveDistanceFields();
         try {
             if (mc.entityRenderer == null) {
                 return;
@@ -204,35 +209,54 @@ public class ViewClip extends Module {
         }
     }
 
-    private static Field findField(String deobf, String searge) {
-        if (mc == null || mc.entityRenderer == null) {
-            try {
-                Field f = net.minecraft.client.renderer.EntityRenderer.class.getDeclaredField(deobf);
-                f.setAccessible(true);
+    /**
+     * Resolves the two distance fields for the renderer actually running, once
+     * per renderer class (2026-10-11). Resolving from a static initializer
+     * found the fields on vanilla EntityRenderer only, because no renderer
+     * exists while the class loads; the renderer that ends up running may be a
+     * subclass anyway -- OptiFine and shaders builds replace it -- so the
+     * lookup is deferred to the first use and re-run if the class changes.
+     */
+    private static void resolveDistanceFields() {
+        Class<?> live = (mc != null && mc.entityRenderer != null)
+                ? mc.entityRenderer.getClass()
+                : net.minecraft.client.renderer.EntityRenderer.class;
+        if (live == resolvedRenderer) {
+            return;
+        }
+        resolvedRenderer = live;
+        distanceField = findField(live, "thirdPersonDistance", "field_78430_p");
+        distanceTempField = findField(live, "thirdPersonDistanceTemp", "field_78437_w");
+    }
+
+    /**
+     * The named field on {@code cls} or the nearest superclass declaring it, by
+     * deobfuscated name first and SRG name second. getDeclaredField only sees
+     * the class it is called on, so walking up is what finds a field a subclass
+     * inherits; a Field found on a superclass still reads and writes subclass
+     * instances.
+     */
+    private static Field findField(Class<?> cls, String deobf, String searge) {
+        for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
+            Field f = declaredField(c, deobf);
+            if (f != null) {
                 return f;
-            } catch (Exception first) {
-                try {
-                    Field f = net.minecraft.client.renderer.EntityRenderer.class.getDeclaredField(searge);
-                    f.setAccessible(true);
-                    return f;
-                } catch (Exception ignored) {
-                    return null;
-                }
+            }
+            f = declaredField(c, searge);
+            if (f != null) {
+                return f;
             }
         }
-        Class<?> cls = mc.entityRenderer.getClass();
+        return null;
+    }
+
+    private static Field declaredField(Class<?> owner, String name) {
         try {
-            Field f = cls.getDeclaredField(deobf);
+            Field f = owner.getDeclaredField(name);
             f.setAccessible(true);
             return f;
-        } catch (Exception first) {
-            try {
-                Field f = cls.getDeclaredField(searge);
-                f.setAccessible(true);
-                return f;
-            } catch (Exception ignored) {
-                return null;
-            }
+        } catch (Exception ignored) {
+            return null;
         }
     }
 }

@@ -35,6 +35,17 @@ public class KeepSprint extends Module {
         super("KeepSprint", false, false, "Keeps you sprinting through attacks and slowdown.");
     }
 
+    /**
+     * The buffer-abuse counter and the hit flag are module state, not player
+     * state: they have to start clean next time. Leaving bufferCount where it
+     * stopped meant a re-enabled KeepSprint began part-way up its buffer.
+     */
+    @Override
+    public void onDisabled() {
+        this.hitFlag = false;
+        this.bufferCount = 0.0;
+    }
+
     @Override
     public boolean shouldKeepSprint() {
         if (mc.thePlayer == null || mc.theWorld == null) {

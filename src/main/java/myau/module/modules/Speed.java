@@ -425,11 +425,14 @@ public class Speed extends Module {
         vulcanJumped = false;
         blocksmcSpeed = 0.0;
         blocksmcReset = true;
-        if (mc.thePlayer != null) {
-            net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
-            if (timer != null && timer.timerSpeed != 1.0F) {
-                timer.timerSpeed = 1.0F;
-            }
+        /* Not gated on thePlayer (2026-10-11): the game's Timer outlives a
+           world, so disabling Speed while disconnected used to leave
+           timerSpeed where the module had put it, and the next server ran at
+           that speed until Speed touched it again. Timer, Criticals and Fly
+           already reset unconditionally. */
+        net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
+        if (timer != null && timer.timerSpeed != 1.0F) {
+            timer.timerSpeed = 1.0F;
         }
     }
 

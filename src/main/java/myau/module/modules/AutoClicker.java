@@ -51,7 +51,14 @@ public class AutoClicker extends Module {
     public final BooleanProperty fatigue = new BooleanProperty("fatigue", false);
     public final FloatProperty fatigueFloor = new FloatProperty("fatigue-floor", 0.75F, 0.5F, 1.0F, this.fatigue::getValue);
     public final IntProperty fatigueSecs = new IntProperty("fatigue-secs", 120, 30, 600, this.fatigue::getValue);
-    public final BooleanProperty inventoryClicks = new BooleanProperty("inventory-clicks", false);
+    /* Runs the plain attack-key click cycle while a container GUI is open. It
+       does not click inventory slots: the donor's inventory-fill behaviour
+       (arm a start delay, then click the hovered slot) is not implemented, so
+       the setting is named for what it does rather than for what it does not. */
+    public final BooleanProperty guiAttack = new BooleanProperty("gui-attack", false);
+    /* True for the tick in which this module pressed the attack key itself, so
+       record mode can tell a synthesized click from a real one. */
+    private boolean moduleClickThisTick = false;
     public final IntProperty startDelayMs = new IntProperty("start-delay-ms", 0, 0, 1000);
     private long enabledAtMs = 0L;
     private long doubleClickAtMs = 0L;
@@ -226,16 +233,21 @@ public class AutoClicker extends Module {
     @EventTarget
     public void onTick(TickEvent event) {
         if (event.getType() == EventType.PRE) {
+            /* Cleared every tick: a click the module synthesizes lands in this
+               same tick (vanilla turns the key press into clickMouse()), so
+               the flag never outlives the tick it was set in. */
+            this.moduleClickThisTick = false;
             if (this.clickDelay > 0L) {
                 this.clickDelay -= 50L;
             }
             if (this.blockHitDelay > 0L) {
                 this.blockHitDelay -= 50L;
             }
-            // Inventory clicks run the normal click cycle inside container GUIs,
-            // adapted from raven inventory-fill (which arms a start delay then
-            // clicks the hovered slot). Here the attack-key cycle runs instead.
-            boolean invMode = this.inventoryClicks.getValue() && mc.currentScreen instanceof GuiContainer;
+            // GUI attack: keep the normal attack-key click cycle running inside
+            // container GUIs instead of stopping at the screen. Adapted from
+            // raven inventory-fill, which arms a start delay then clicks the
+            // hovered slot; the slot-clicking itself is not ported.
+            boolean invMode = this.guiAttack.getValue() && mc.currentScreen instanceof GuiContainer;
             if (mc.currentScreen != null && !invMode) {
                 this.clickPending = false;
                 this.blockHitPending = false;
@@ -260,6 +272,7 @@ public class AutoClicker extends Module {
                         } else {
                             while (this.clickDelay <= 0L) {
                                 this.clickPending = true;
+                                this.moduleClickThisTick = true;
                                 this.clickDelay = this.clickDelay + this.getNextClickDelay();
                                 KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindAttack.getKeyCode(), false);
                                 KeyBindUtil.pressKeyOnce(mc.gameSettings.keyBindAttack.getKeyCode());
@@ -276,6 +289,7 @@ public class AutoClicker extends Module {
                         }
                         if (this.doubleClickAtMs > 0L && System.currentTimeMillis() >= this.doubleClickAtMs) {
                             this.doubleClickAtMs = 0L;
+                            this.moduleClickThisTick = true;
                             KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindAttack.getKeyCode(), false);
                             KeyBindUtil.pressKeyOnce(mc.gameSettings.keyBindAttack.getKeyCode());
                             this.applyJitter();
@@ -301,7 +315,11 @@ public class AutoClicker extends Module {
     public void onCLick(LeftClickMouseEvent event) {
         if (this.isEnabled() && !event.isCancelled()) {
             long now = System.currentTimeMillis();
-            if (this.lastRealClick > 0L && this.clickMode.getValue() == 2) {
+            /* A click this module synthesized presses the attack key, which
+               vanilla turns into clickMouse() in the same tick and lands back
+               here. Recording that would feed record mode its own output, so
+               only real clicks are recorded. */
+            if (!this.moduleClickThisTick && this.lastRealClick > 0L && this.clickMode.getValue() == 2) {
                 this.recordGaps[this.recordPos] = Math.max(1L, now - this.lastRealClick);
                 this.recordPos = (this.recordPos + 1) % this.recordGaps.length;
                 if (this.recordCount < this.recordGaps.length) {
@@ -317,6 +335,7 @@ public class AutoClicker extends Module {
 
     @Override
     public void onEnabled() {
+        this.moduleClickThisTick = false;
         this.clickDelay = 0L;
         this.blockHitDelay = 0L;
         this.recordCount = 0;
@@ -333,6 +352,7 @@ public class AutoClicker extends Module {
     }
 
     public void onDisabled() {
+        this.moduleClickThisTick = false;
         this.clickPending = false;
         this.blockHitPending = false;
         this.recordCount = 0;

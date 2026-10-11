@@ -405,6 +405,17 @@ public class NoSlow extends Module {
         }
     }
 
+    /**
+     * A held packet has to be let go of when the world goes away (2026-10-11):
+     * GrimTest and GrimSemi hold packets by design, and a world change or a
+     * reconnect is not a release point the module's own code reaches on its
+     * way. Disabler and Velocity already reset this way on LoadWorldEvent.
+     */
+    @EventTarget
+    public void onLoadWorld(LoadWorldEvent event) {
+        this.onDisabled();
+    }
+
     @Override
     public void onEnabled() {
         this.newGrimTicks = 0;

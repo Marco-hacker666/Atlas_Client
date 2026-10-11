@@ -33,11 +33,11 @@ public final class ModuleCategories {
         put(Category.COMBAT,
                 NoDelay.class, AimAssist.class, AutoClicker.class, KillAura.class, PlainAura.class, Criticals.class,
                 JumpReset.class, Velocity.class, HitBox.class, Reach.class, BackTrack.class, TickBase.class, TimerRange.class,
-                FakeLag.class, LagRange.class, KnockbackDelay.class, ServerLag.class, MoreKB.class,
+                FakeLag.class, LagRange.class, KnockbackDelay.class, ServerLag.class, MoreKB.class, Freeze.class,
                 SprintReset.class, Wtap.class, KeepSprint.class, BlockHit.class, HitSelect.class,
                 Hitflick.class, InvulnTiming.class, Piercing.class, Displace.class,
                 KeepRange.class, AimBacktrack.class, KBDisplacement.class, ThrowAura.class, AutoHeal.class,
-                FastBow.class, ArmorBreaker.class,
+                FastBow.class, ArmorBreaker.class, AutoRecraft.class,
                 AutoRod.class, AutoWeapon.class,
                 PingSpoof.class, SmartBlinker.class, PearlSaver.class, ProjectileAimBot.class);
         put(Category.PLAYER,
@@ -74,7 +74,7 @@ public final class ModuleCategories {
                 ServerFingerprint.class, AutoTune.class, Adaptive.class, ServerProfiles.class,
                 LatencyGovernor.class, Panic.class, Rotations.class, Notifications.class, ScriptModule.class);
         put(Category.LEGIT,
-                Ambience.class, Animations.class, ArmorHUD.class, AutoRespawn.class, Capes.class,
+                Accessories.class, Ambience.class, Animations.class, ArmorHUD.class, AutoRespawn.class, Capes.class,
                 DynamicIsland.class, EffectsHUD.class, FPScounter.class, FreeLook.class, FullBright.class,
                 HUD.class, Hotbar.class,
                 ItemPhysics.class, LegitHUD.class, NoHurtCam.class, Sprint.class, Statistics.class, PlayTracker.class,

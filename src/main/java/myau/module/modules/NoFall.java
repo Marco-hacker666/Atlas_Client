@@ -16,10 +16,17 @@ import myau.property.properties.FloatProperty;
 import myau.property.properties.ModeProperty;
 import myau.property.properties.IntProperty;
 import net.minecraft.client.Minecraft;
+import net.minecraft.init.Items;
+import net.minecraft.item.ItemStack;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C03PacketPlayer;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.util.BlockPos;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.MathHelper;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.Vec3;
 
 public class NoFall extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -27,16 +34,25 @@ public class NoFall extends Module {
     private final TimerUtil scoreboardResetTimer = new TimerUtil();
     private boolean slowFalling = false;
     private boolean lastOnGround = false;
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"PACKET", "BLINK", "NO_GROUND", "SPOOF"});
+    private int lastMlgSlot = -1;
+    private boolean mlgPlaced = false;
+    private int timerTicks = 0;
+    private int timerSettick = 0;
+    private double timerRepdist = 0.0;
+    private int voidCacheTick = -1;
+    private boolean voidCacheResult = true;
+    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"PACKET", "BLINK", "NO_GROUND", "SPOOF", "LEGIT", "VULCAN", "TIMER", "OnGround1", "OnGround2", "MatrixSpoof", "HypixelNoGround"});
     public final FloatProperty distance = new FloatProperty("distance", 3.0F, 0.0F, 20.0F);
     public final IntProperty delay = new IntProperty("delay", 0, 0, 10000);
+    public final FloatProperty vulcanFall = new FloatProperty("vulcan-fall", 7.0F, 3.0F, 12.0F, () -> mode.getValue() == 5);
+    public final IntProperty spoofTicks = new IntProperty("spoof-ticks", 5, 1, 20, () -> mode.getValue() == 6);
 
     private boolean canTrigger() {
         return this.scoreboardResetTimer.hasTimeElapsed(3000) && this.packetDelayTimer.hasTimeElapsed(this.delay.getValue().longValue());
     }
 
     public NoFall() {
-        super("NoFall", false);
+        super("NoFall", false, false, "Prevents fall damage using packet tricks.");
     }
 
     @EventTarget(value = Priority.HIGH, whenDisabled = true)
@@ -115,14 +131,76 @@ public class NoFall extends Module {
                                 mc.thePlayer.fallDistance = 0.0F;
                             }
                         }
-                }
+                        break;
+                    case 4:
+                        // Donor LegitNoFall (MiauMinus): water-bucket clutch handled on tick.
+                        break;
+                    case 5:
+                        // Donor VulcanNoFall (MiauMinus): spoof ground once past the fall threshold.
+                        if (!packet.isOnGround() && mc.thePlayer.fallDistance > this.vulcanFall.getValue() && this.canTrigger()) {
+                            this.packetDelayTimer.reset();
+                            ((IAccessorC03PacketPlayer) packet).setOnGround(true);
+                            mc.thePlayer.fallDistance = 0.0F;
+                            mc.thePlayer.motionY = 0.0;
+                        }
+                        break;
+                    case 6: {
+                        // Donor TIMER block inside MiauMinus NoFall: re-timed ground spoofs while falling.
+                        float fallDist = mc.thePlayer.fallDistance;
+                        if (fallDist >= 1.51F && this.timerRepdist == 0.0 && !this.isOverVoid()) {
+                            ((IAccessorMinecraft) mc).getTimer().timerSpeed = 0.45F;
+                            PacketUtil.sendPacketNoEvent(new C03PacketPlayer(true));
+                            this.timerSettick = this.timerTicks + 1;
+                            this.timerRepdist = fallDist;
+                        }
+                        if (fallDist - this.timerRepdist >= 1.51F && !this.isOverVoid()) {
+                            ((IAccessorMinecraft) mc).getTimer().timerSpeed = 0.6F;
+                            PacketUtil.sendPacketNoEvent(new C03PacketPlayer(true));
+                            this.timerSettick = this.timerTicks + this.spoofTicks.getValue();
+                            this.timerRepdist = fallDist;
+                        }
+                        if (mc.thePlayer.onGround) {
+                            ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0F;
+                            this.timerRepdist = 0.0;
+                        }
+                        break;
+                    }
+                    case 7:
+                        ((IAccessorC03PacketPlayer) packet).setOnGround(true);
+                        mc.thePlayer.fallDistance = 0.0F;
+                        break;
+                    case 8:
+                        if (!packet.isOnGround() && mc.thePlayer.fallDistance > 3.0F && this.canTrigger()) {
+                            this.packetDelayTimer.reset();
+                            ((IAccessorC03PacketPlayer) packet).setOnGround(true);
+                            mc.thePlayer.fallDistance = 0.0F;
+                        }
+                        break;
+                    case 9:
+                        if (!packet.isOnGround() && mc.thePlayer.fallDistance > 3.0F && this.timerTicks % 2 == 0 && this.canTrigger()) {
+                            this.packetDelayTimer.reset();
+                            ((IAccessorC03PacketPlayer) packet).setOnGround(true);
+                            mc.thePlayer.fallDistance = 0.0F;
+                        }
+                        break;
+                    case 10:
+                        if (mc.thePlayer.fallDistance > 3.0F && this.canTrigger() && !this.isOverVoid()) {
+                            this.packetDelayTimer.reset();
+                            PacketUtil.sendPacketNoEvent(new C03PacketPlayer(true));
+                            mc.thePlayer.fallDistance = 0.0F;
+                        } else {
+                            ((IAccessorC03PacketPlayer) packet).setOnGround(false);
+                        }
+                        break;
             }
         }
+    }
     }
 
     @EventTarget(Priority.HIGHEST)
     public void onTick(TickEvent event) {
         if (this.isEnabled() && event.getType() == EventType.PRE) {
+            this.timerTicks++;
             if (ServerUtil.hasPlayerCountInfo()) {
                 this.scoreboardResetTimer.reset();
             }
@@ -130,17 +208,118 @@ public class NoFall extends Module {
                 PacketUtil.sendPacketNoEvent(new C03PacketPlayer(true));
                 mc.thePlayer.fallDistance = 0.0F;
             }
+            if (this.mode.getValue() == 4) {
+                this.handleLegitMlg();
+            }
+            if (this.mode.getValue() == 6) {
+                if (this.timerTicks == this.timerSettick) {
+                    ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0F;
+                }
+                if (this.timerTicks >= this.timerSettick) {
+                    this.timerSettick = 0;
+                }
+            }
         }
+    }
+
+    private boolean isOverVoid() {
+        if (this.voidCacheTick == this.timerTicks) {
+            return this.voidCacheResult;
+        }
+        boolean result = true;
+        if (mc.thePlayer != null && mc.theWorld != null) {
+            int x = MathHelper.floor_double(mc.thePlayer.posX);
+            int z = MathHelper.floor_double(mc.thePlayer.posZ);
+            for (int y = MathHelper.floor_double(mc.thePlayer.posY); y > -1; y--) {
+                if (!mc.theWorld.isAirBlock(new BlockPos(x, y, z))) {
+                    result = false;
+                    break;
+                }
+            }
+        }
+        this.voidCacheTick = this.timerTicks;
+        this.voidCacheResult = result;
+        return result;
+    }
+
+    private void handleLegitMlg() {
+        if (mc.thePlayer != null && mc.theWorld != null && mc.playerController != null) {
+            if (!mc.thePlayer.onGround && !mc.thePlayer.capabilities.isFlying && !mc.thePlayer.isInWater() && !mc.thePlayer.isOnLadder()) {
+                if (!(mc.thePlayer.fallDistance < this.distance.getValue()) && !(mc.thePlayer.motionY >= -0.1)) {
+                    int waterSlot = this.findWaterBucketSlot();
+                    if (waterSlot != -1) {
+                        BlockPos target = this.findMlgTarget();
+                        if (target != null) {
+                            if (this.lastMlgSlot == -1) {
+                                this.lastMlgSlot = mc.thePlayer.inventory.currentItem;
+                            }
+                            mc.thePlayer.inventory.currentItem = waterSlot;
+                            mc.playerController.updateController();
+                            mc.thePlayer.rotationPitch = 90.0F;
+                            if (!this.mlgPlaced && mc.thePlayer.getDistance(target.getX() + 0.5, target.getY() + 0.5, target.getZ() + 0.5) <= mc.playerController.getBlockReachDistance() + 1.5F) {
+                                Vec3 hitVec = new Vec3(target.getX() + 0.5, target.getY() + 1.0, target.getZ() + 0.5);
+                                ItemStack stack = mc.thePlayer.inventory.getCurrentItem();
+                                if (stack != null && mc.playerController.onPlayerRightClick(mc.thePlayer, mc.theWorld, stack, target, EnumFacing.UP, hitVec)) {
+                                    mc.thePlayer.swingItem();
+                                    this.mlgPlaced = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                this.resetLegitMlg();
+            }
+        }
+    }
+
+    private int findWaterBucketSlot() {
+        for (int i = 0; i < 9; i++) {
+            ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
+            if (stack != null && stack.getItem() == Items.water_bucket) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private BlockPos findMlgTarget() {
+        BlockPos playerPos = new BlockPos(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ);
+        for (int y = 1; y <= 6; y++) {
+            BlockPos pos = playerPos.down(y);
+            if (!mc.theWorld.isAirBlock(pos) && mc.theWorld.isAirBlock(pos.up())) {
+                return pos;
+            }
+        }
+        MovingObjectPosition ray = mc.theWorld.rayTraceBlocks(
+                new Vec3(mc.thePlayer.posX, mc.thePlayer.posY + mc.thePlayer.getEyeHeight(), mc.thePlayer.posZ),
+                new Vec3(mc.thePlayer.posX, mc.thePlayer.posY - mc.playerController.getBlockReachDistance() - 2.0, mc.thePlayer.posZ), false, true, false);
+        return ray != null && ray.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK ? ray.getBlockPos() : null;
+    }
+
+    private void resetLegitMlg() {
+        if (this.lastMlgSlot != -1 && mc.thePlayer != null) {
+            mc.thePlayer.inventory.currentItem = this.lastMlgSlot;
+            mc.playerController.updateController();
+        }
+        this.lastMlgSlot = -1;
+        this.mlgPlaced = false;
     }
 
     @Override
     public void onDisabled() {
         this.lastOnGround = false;
+        this.resetLegitMlg();
         Myau.blinkManager.setBlinkState(false, BlinkModules.NO_FALL);
         if (this.slowFalling) {
             this.slowFalling = false;
             ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0F;
         }
+        this.timerTicks = 0;
+        this.timerSettick = 0;
+        this.timerRepdist = 0.0;
+        this.voidCacheTick = -1;
+        ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0F;
     }
 
     @Override

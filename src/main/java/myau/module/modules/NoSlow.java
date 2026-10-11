@@ -26,11 +26,14 @@ import net.minecraft.item.ItemFood;
 import net.minecraft.item.ItemPotion;
 import net.minecraft.item.ItemSword;
 import net.minecraft.network.Packet;
+import net.minecraft.network.play.client.C00PacketKeepAlive;
+import net.minecraft.network.play.client.C01PacketChatMessage;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C07PacketPlayerDigging;
 import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
 import net.minecraft.network.play.client.C09PacketHeldItemChange;
 import net.minecraft.network.play.client.C0APacketAnimation;
+import net.minecraft.network.play.client.C0BPacketEntityAction;
 import net.minecraft.network.play.client.C0DPacketCloseWindow;
 import net.minecraft.network.play.client.C0EPacketClickWindow;
 import net.minecraft.network.play.client.C16PacketClientStatus;
@@ -40,27 +43,36 @@ import net.minecraft.util.BlockPos;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.MovingObjectPosition;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class NoSlow extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog"});
+    public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19"});
     public final IntProperty swapDelay = new IntProperty("Swap Delay", 0, 0, 3, () -> swordMode.getValue() == 2);
     public final BooleanProperty noAttack = new BooleanProperty("No Attack", false, () -> swordMode.getValue() == 2);
     public final PercentProperty swordMotion = new PercentProperty("Sword Motion", 100, () -> this.swordMode.getValue() != 0);
     public final BooleanProperty swordSprint = new BooleanProperty("Sword Sprint", true, () -> this.swordMode.getValue() != 0);
     public final BooleanProperty onlyKillAuraAutoBlock = new BooleanProperty("Only Kill Aura Auto Block", false, () -> this.swordMode.getValue() != 0);
-    public final ModeProperty foodMode = new ModeProperty("Food Mode", 0, new String[]{"None", "Vanilla", "Float", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog"});
+    public final ModeProperty foodMode = new ModeProperty("Food Mode", 0, new String[]{"None", "Vanilla", "Float", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19"});
     public final PercentProperty foodMotion = new PercentProperty("Food Motion", 100, () -> this.foodMode.getValue() != 0);
     public final BooleanProperty foodSprint = new BooleanProperty("Food Sprint", true, () -> this.foodMode.getValue() != 0);
-    public final ModeProperty bowMode = new ModeProperty("Bow Mode", 0, new String[]{"None", "Vanilla", "Float", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog"});
+    public final ModeProperty bowMode = new ModeProperty("Bow Mode", 0, new String[]{"None", "Vanilla", "Float", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19"});
     public final PercentProperty bowMotion = new PercentProperty("Bow Motion", 100, () -> this.bowMode.getValue() != 0);
     public final BooleanProperty bowSprint = new BooleanProperty("Bow Sprint", true, () -> this.bowMode.getValue() != 0);
 
     // Miau Client NoSlow modes (ported from miau.module.modules.movement.noslow.*).
-    // Appended to the Sword/Food/Bow mode lists above; property values >= MIAU_BASE map to these indices.
+    // MIAU_BASE..MIAU_MAX map to these indices; RAVEN_BASE and up are Raven ports below.
     private static final int MIAU_BASE = 3;
+    private static final int MIAU_MAX = 12;
+    private static final int RAVEN_BASE = 13;
+    private static final int RAVEN_GRIMAC = 0;
+    private static final int RAVEN_HYPIXEL = 1;
+    private static final int RAVEN_INTAVE = 2;
+    private static final int RAVEN_OLD_GRIM = 3;
+    private static final int RAVEN_VANILLA = 4;
     private static final int MIAU_NCP = 0;
     private static final int MIAU_NEW_NCP = 1;
     private static final int MIAU_WATCHDOG = 2;
@@ -71,8 +83,40 @@ public class NoSlow extends Module {
     private static final int MIAU_AAC = 7;
     private static final int MIAU_SPARTAN = 8;
     private static final int MIAU_OPAL_WATCHDOG = 9;
+    private static final int DONOR_BASE = 18;
+    private static final int DONOR_EXHI = 0;
+    private static final int DONOR_GRIMTEST = 1;
+    private static final int DONOR_GRIMSEMI = 2;
+    private static final int DONOR_LUCKYVN = 3;
+    private static final int DONOR_OLDINTAVE = 4;
+    private static final int DONOR_INTAVE14 = 5;
+    private static final int DONOR_INTAVEBLINK = 6;
+    private static final int DONOR_OLDINTAVEV2 = 7;
+    private static final int DONOR_VULCAN = 8;
+    private static final int DONOR_GRIM19 = 9;
 
     public final BooleanProperty antiSwitch = new BooleanProperty("Anti-Switch", false, () -> this.hasMiauMode());
+
+    public final IntProperty exhiInterval = new IntProperty("Exhi Interval", 3, 1, 10, () -> swordMode.getValue() == 18 || foodMode.getValue() == 18 || bowMode.getValue() == 18);
+    public final BooleanProperty exhiPacket = new BooleanProperty("Exhi Packet", true, () -> swordMode.getValue() == 18 || foodMode.getValue() == 18 || bowMode.getValue() == 18);
+    public final IntProperty grimTestMaxTicks = new IntProperty("GrimTest MaxTicks", 5, 1, 20, () -> swordMode.getValue() == 19 || foodMode.getValue() == 19 || bowMode.getValue() == 19);
+    public final BooleanProperty grimTestBuffer = new BooleanProperty("GrimTest Buffer", true, () -> swordMode.getValue() == 19 || foodMode.getValue() == 19 || bowMode.getValue() == 19);
+    public final IntProperty grimSemiInterval = new IntProperty("GrimSemi Interval", 5, 3, 20, () -> swordMode.getValue() == 20 || foodMode.getValue() == 20 || bowMode.getValue() == 20);
+    public final BooleanProperty grimSemiSwap = new BooleanProperty("GrimSemi Swap", true, () -> swordMode.getValue() == 20 || foodMode.getValue() == 20 || bowMode.getValue() == 20);
+    public final IntProperty luckyvnInterval = new IntProperty("Luckyvn Interval", 1, 1, 10, () -> swordMode.getValue() == 21 || foodMode.getValue() == 21 || bowMode.getValue() == 21);
+    public final BooleanProperty luckyvnSwap = new BooleanProperty("Luckyvn Swap", true, () -> swordMode.getValue() == 21 || foodMode.getValue() == 21 || bowMode.getValue() == 21);
+    public final IntProperty oldIntaveDelay = new IntProperty("OldIntave Delay", 10, 1, 20, () -> swordMode.getValue() == 22 || foodMode.getValue() == 22 || bowMode.getValue() == 22);
+    public final BooleanProperty oldIntavePacket = new BooleanProperty("OldIntave Packet", true, () -> swordMode.getValue() == 22 || foodMode.getValue() == 22 || bowMode.getValue() == 22);
+    public final IntProperty intave14Interval = new IntProperty("Intave14 Interval", 800, 100, 2000, () -> swordMode.getValue() == 23 || foodMode.getValue() == 23 || bowMode.getValue() == 23);
+    public final BooleanProperty intave14Sprint = new BooleanProperty("Intave14 Sprint", true, () -> swordMode.getValue() == 23 || foodMode.getValue() == 23 || bowMode.getValue() == 23);
+    public final IntProperty intaveBlinkInterval = new IntProperty("IntaveBlink Interval", 5, 1, 20, () -> swordMode.getValue() == 24 || foodMode.getValue() == 24 || bowMode.getValue() == 24);
+    public final BooleanProperty intaveBlinkPacket = new BooleanProperty("IntaveBlink Packet", true, () -> swordMode.getValue() == 24 || foodMode.getValue() == 24 || bowMode.getValue() == 24);
+    public final IntProperty oldIntaveV2Delay = new IntProperty("OldIntaveV2 Delay", 5, 1, 20, () -> swordMode.getValue() == 25 || foodMode.getValue() == 25 || bowMode.getValue() == 25);
+    public final BooleanProperty oldIntaveV2Packet = new BooleanProperty("OldIntaveV2 Packet", true, () -> swordMode.getValue() == 25 || foodMode.getValue() == 25 || bowMode.getValue() == 25);
+    public final IntProperty vulcanInterval = new IntProperty("Vulcan Interval", 4, 1, 10, () -> swordMode.getValue() == 26 || foodMode.getValue() == 26 || bowMode.getValue() == 26);
+    public final BooleanProperty vulcanPacket = new BooleanProperty("Vulcan Packet", true, () -> swordMode.getValue() == 26 || foodMode.getValue() == 26 || bowMode.getValue() == 26);
+    public final IntProperty grim19Interval = new IntProperty("Grim19 Interval", 5, 1, 20, () -> swordMode.getValue() == 27 || foodMode.getValue() == 27 || bowMode.getValue() == 27);
+    public final BooleanProperty grim19Swap = new BooleanProperty("Grim19 Swap", true, () -> swordMode.getValue() == 27 || foodMode.getValue() == 27 || bowMode.getValue() == 27);
 
     // inlined BadPacketsComponent (Miau tracks these globally)
     private boolean bpSlot, bpAttack, bpSwing, bpBlock, bpInventory;
@@ -90,9 +134,6 @@ public class NoSlow extends Module {
 
     // NewGrim state
     private int newGrimTicks;
-    /* The tick NewGrim last decided for, and what it decided. */
-    private int newGrimDecidedTick = Integer.MIN_VALUE;
-    private boolean newGrimCancel;
 
     // OpalWatchdog state
     private int opalNextCycleTick = -1;
@@ -101,11 +142,35 @@ public class NoSlow extends Module {
     private boolean opalBlocking;
     private int opalSlotChangeTick = -1;
 
+    // Raven-ported NoSlow state (Hypixel air-tick delay plus Intave first-tick edge).
+    private int ravenHypOffTicks;
+    private boolean ravenHypSend;
+    private boolean ravenLastUsing;
+
+    private int exhiTicks;
+    private final List<Packet<?>> grimTestPackets = new ArrayList<Packet<?>>();
+    private boolean grimTestHolding;
+    private boolean grimTestFake;
+    private boolean grimTestPending;
+    private int grimTestTicks;
+    private final List<Packet<?>> grimSemiPackets = new ArrayList<Packet<?>>();
+    private boolean grimSemiHolding;
+    private boolean grimSemiPendingClear;
+    private boolean grimSemiWaitSwap;
+    private int grimSemiSlot;
+    private int grimSemiTicks;
+    private int luckyvnTicks;
+    private int oldIntaveTicks;
+    private long intave14LastRelease;
+    private int oldIntaveV2Ticks;
+    private int vulcanTicks;
+    private int grim19Ticks;
+
     private int delay = 0;
     private boolean post = false;
 
     public NoSlow() {
-        super("NoSlow", false);
+        super("NoSlow", false, false, "Keeps full speed while blocking or eating.");
     }
 
     public boolean isSwordActive() {
@@ -138,30 +203,11 @@ public class NoSlow extends Module {
             return mc.thePlayer.isUsingItem() && (this.isSwordActive() || this.isFoodActive() || this.isBowActive());
         } else if (this.swordMode.getValue() == 2 && isSwordActive()) {
             KillAura killAura = (KillAura) Myau.moduleManager.getModule(KillAura.class);
-            if (!noAttack.getValue() || !this.auraAttacksThisTick(killAura)) {
+            if (!noAttack.getValue() || !((killAura.blockTick == 0 && killAura.autoBlock.getValue() == 2) || (killAura.autoBlock.getValue() == 6 && killAura.blockTick == killAura.attackTick.getValue()) || (killAura.autoBlock.getValue() != 6 && killAura.autoBlock.getValue() != 2) || (killAura.autoBlock.getValue() == 5 && killAura.blockTick == 0) && killAura.isEnabled() && killAura.isPlayerBlocking())) {
                 return delay == 0;
             }
         }
         return false;
-    }
-
-    /**
-     * Whether KillAura's autoblock is on its attack tick (for "No Attack").
-     *
-     * The old inline condition was `A || B || C || D && enabled && blocking`:
-     * `&&` binds tighter, so only D was checked against KillAura being on and
-     * blocking. With KillAura off, C (any autoblock but SPOOF/SWAP) still
-     * held, so "No Attack" switched Hypixel NoSlow off entirely (2026-10-04).
-     */
-    private boolean auraAttacksThisTick(KillAura killAura) {
-        if (killAura == null || !killAura.isEnabled() || !killAura.isPlayerBlocking()) {
-            return false;
-        }
-        int mode = killAura.autoBlock.getValue();
-        return mode == 2 && killAura.blockTick == 0
-                || mode == 6 && killAura.blockTick == killAura.attackTick.getValue()
-                || mode != 6 && mode != 2
-                || mode == 5 && killAura.blockTick == 0;
     }
 
     public boolean canSprint() {
@@ -180,7 +226,7 @@ public class NoSlow extends Module {
         }
     }
 
-    @EventTarget(whenDisabled = true)
+    @EventTarget
     public void onUpdate(UpdateEvent event) {
         // BadPacketsComponent bookkeeping: save on PRE, reset on POST (runs even while disabled).
         if (mc.thePlayer != null && mc.theWorld != null) {
@@ -205,7 +251,7 @@ public class NoSlow extends Module {
                         delay--;
                         if (delay < 0) {
                             KillAura killAura = (KillAura) Myau.moduleManager.getModule(KillAura.class);
-                            if (!noAttack.getValue() || !this.auraAttacksThisTick(killAura)) {
+                            if (!noAttack.getValue() || !((killAura.blockTick == 0 && killAura.autoBlock.getValue() == 2) || (killAura.autoBlock.getValue() == 6 && killAura.blockTick == killAura.attackTick.getValue()) || (killAura.autoBlock.getValue() != 6 && killAura.autoBlock.getValue() != 2) || (killAura.autoBlock.getValue() == 5 && killAura.blockTick == 0) && killAura.isEnabled() && killAura.isPlayerBlocking())) {
                                 int randomSlot = new Random().nextInt(9);
                                 while (randomSlot == mc.thePlayer.inventory.currentItem) {
                                     randomSlot = new Random().nextInt(9);
@@ -241,18 +287,6 @@ public class NoSlow extends Module {
 
     @EventTarget
     public void onLivingUpdate(LivingUpdateEvent event) {
-        if (this.isEnabled() && this.isMiauAnyActive()) {
-            /* The Miau modes' own multiplier (Grim 0.35), here: after
-               updatePlayerMoveState and the use-item slowdown. It used to be
-               applied from UpdateEvent, before the next tick's
-               updatePlayerMoveState wrote the input afresh, so it never
-               held and Grim mode ran at full speed (2026-10-04). */
-            float miau = this.getMiauMotionMultiplier();
-            if (miau != 1.0F) {
-                mc.thePlayer.movementInput.moveForward *= miau;
-                mc.thePlayer.movementInput.moveStrafe *= miau;
-            }
-        }
         if (this.isEnabled() && this.isAnyActive()) {
             float multiplier = (float) this.getMotionMultiplier() / 100.0F;
             mc.thePlayer.movementInput.moveForward *= multiplier;
@@ -263,7 +297,7 @@ public class NoSlow extends Module {
         }
     }
 
-    @EventTarget(value = Priority.LOW, whenDisabled = true)
+    @EventTarget(Priority.LOW)
     public void onPlayerUpdate(PlayerUpdateEvent event) {
         if (this.isEnabled() && this.isFloatMode()) {
             int item = mc.thePlayer.inventory.currentItem;
@@ -307,7 +341,7 @@ public class NoSlow extends Module {
         }
     }
 
-    @EventTarget(whenDisabled = true)
+    @EventTarget
     public void onPacket(PacketEvent event) {
         // BadPacketsComponent tracking (runs regardless of mode).
         if (event.getType() == EventType.SEND) {
@@ -350,16 +384,75 @@ public class NoSlow extends Module {
         if (this.isMiauModeUsed(MIAU_OPAL_WATCHDOG)) {
             this.opalOnPacket(event);
         }
+        if (this.isRavenModeUsed(RAVEN_GRIMAC)
+                || this.isRavenModeUsed(RAVEN_HYPIXEL)
+                || this.isRavenModeUsed(RAVEN_INTAVE)
+                || this.isRavenModeUsed(RAVEN_OLD_GRIM)
+                || this.isRavenModeUsed(RAVEN_VANILLA)) {
+            this.ravenOnPacket(event);
+        }
+        if (this.isDonorModeUsed(DONOR_EXHI)
+                || this.isDonorModeUsed(DONOR_GRIMTEST)
+                || this.isDonorModeUsed(DONOR_GRIMSEMI)
+                || this.isDonorModeUsed(DONOR_LUCKYVN)
+                || this.isDonorModeUsed(DONOR_OLDINTAVE)
+                || this.isDonorModeUsed(DONOR_INTAVE14)
+                || this.isDonorModeUsed(DONOR_INTAVEBLINK)
+                || this.isDonorModeUsed(DONOR_OLDINTAVEV2)
+                || this.isDonorModeUsed(DONOR_VULCAN)
+                || this.isDonorModeUsed(DONOR_GRIM19)) {
+            this.donorOnPacket(event);
+        }
     }
 
     @Override
     public void onEnabled() {
         this.newGrimTicks = 0;
+        this.ravenHypOffTicks = 0;
+        this.ravenHypSend = false;
+        this.ravenLastUsing = false;
+        this.exhiTicks = 0;
+        this.grimTestPackets.clear();
+        this.grimTestHolding = false;
+        this.grimTestFake = false;
+        this.grimTestPending = false;
+        this.grimTestTicks = 0;
+        this.grimSemiPackets.clear();
+        this.grimSemiHolding = false;
+        this.grimSemiPendingClear = false;
+        this.grimSemiWaitSwap = false;
+        this.grimSemiTicks = 0;
+        this.luckyvnTicks = 0;
+        this.oldIntaveTicks = 0;
+        this.intave14LastRelease = 0L;
+        this.oldIntaveV2Ticks = 0;
+        this.vulcanTicks = 0;
+        this.grim19Ticks = 0;
     }
 
     @Override
     public void onDisabled() {
         this.newGrimTicks = 0;
+        this.ravenHypOffTicks = 0;
+        this.ravenHypSend = false;
+        this.ravenLastUsing = false;
+        this.exhiTicks = 0;
+        this.flushGrimTest();
+        this.grimTestHolding = false;
+        this.grimTestFake = false;
+        this.grimTestPending = false;
+        this.grimTestTicks = 0;
+        this.flushGrimSemi();
+        this.grimSemiHolding = false;
+        this.grimSemiPendingClear = false;
+        this.grimSemiWaitSwap = false;
+        this.grimSemiTicks = 0;
+        this.luckyvnTicks = 0;
+        this.oldIntaveTicks = 0;
+        this.intave14LastRelease = 0L;
+        this.oldIntaveV2Ticks = 0;
+        this.vulcanTicks = 0;
+        this.grim19Ticks = 0;
         if (this.isMiauModeUsed(MIAU_OPAL_WATCHDOG) && mc.thePlayer != null) {
             this.opalRelease();
             this.opalResetCycle();
@@ -369,13 +462,43 @@ public class NoSlow extends Module {
     // ============ Miau Client NoSlow (ported, compacted) ============
 
     private int miauIdx(ModeProperty property) {
-        return property.getValue() >= MIAU_BASE ? property.getValue() - MIAU_BASE : -1;
+        int v = property.getValue();
+        return v >= MIAU_BASE && v <= MIAU_MAX ? v - MIAU_BASE : -1;
+    }
+
+    private int ravenIdx(ModeProperty property) {
+        int v = property.getValue();
+        return v >= RAVEN_BASE ? v - RAVEN_BASE : -1;
     }
 
     private boolean hasMiauMode() {
-        return this.swordMode.getValue() >= MIAU_BASE
-                || this.foodMode.getValue() >= MIAU_BASE
-                || this.bowMode.getValue() >= MIAU_BASE;
+        return this.miauIdx(this.swordMode) >= 0
+                || this.miauIdx(this.foodMode) >= 0
+                || this.miauIdx(this.bowMode) >= 0;
+    }
+
+    private boolean isRavenModeUsed(int mode) {
+        return this.ravenIdx(this.swordMode) == mode
+                || this.ravenIdx(this.foodMode) == mode
+                || this.ravenIdx(this.bowMode) == mode;
+    }
+
+    private boolean ravenSwordActive(int mode) {
+        return this.ravenIdx(this.swordMode) == mode && ItemUtil.isHoldingSword()
+                && (!this.onlyKillAuraAutoBlock.getValue() || this.isKillAuraAutoBlocking());
+    }
+
+    private boolean ravenFoodActive(int mode) {
+        return this.ravenIdx(this.foodMode) == mode && ItemUtil.isEating();
+    }
+
+    private boolean ravenBowActive(int mode) {
+        return this.ravenIdx(this.bowMode) == mode && ItemUtil.isUsingBow();
+    }
+
+    private boolean ravenAnyActive(int mode) {
+        return mc.thePlayer != null && mc.thePlayer.isUsingItem()
+                && (this.ravenSwordActive(mode) || this.ravenFoodActive(mode) || this.ravenBowActive(mode));
     }
 
     private boolean isMiauModeUsed(int mode) {
@@ -464,22 +587,12 @@ public class NoSlow extends Module {
                 this.newGrimTicks = 0;
                 return false;
             }
-            /* MixinEntityPlayerSP asks at every isUsingItem() in
-               onLivingUpdate -- the slowdown and the sprint checks -- so this
-               ran two or three times a tick. Counting each call meant the
-               slowdown always saw the "keep" half of the cycle and only the
-               sprint check got the "cancel" half: NewGrim never cancelled the
-               slowdown (2026-10-04). Decided once per tick now. */
-            int tick = mc.thePlayer.ticksExisted;
-            if (tick != this.newGrimDecidedTick) {
-                this.newGrimDecidedTick = tick;
-                this.newGrimTicks++;
-                this.newGrimCancel = this.newGrimTicks >= 2;
-                if (this.newGrimCancel) {
-                    this.newGrimTicks = 0;
-                }
+            this.newGrimTicks++;
+            if (this.newGrimTicks >= 2) {
+                this.newGrimTicks = 0;
+                return true;
             }
-            return this.newGrimCancel;
+            return false;
         }
         return true;
     }
@@ -542,6 +655,25 @@ public class NoSlow extends Module {
         }
         if (this.isMiauModeUsed(MIAU_OPAL_WATCHDOG)) {
             this.updateMiauOpalWatchdog(event);
+        }
+        if (this.isRavenModeUsed(RAVEN_GRIMAC)
+                || this.isRavenModeUsed(RAVEN_HYPIXEL)
+                || this.isRavenModeUsed(RAVEN_INTAVE)
+                || this.isRavenModeUsed(RAVEN_OLD_GRIM)
+                || this.isRavenModeUsed(RAVEN_VANILLA)) {
+            this.updateRaven(event);
+        }
+        if (this.isDonorModeUsed(DONOR_EXHI)
+                || this.isDonorModeUsed(DONOR_GRIMTEST)
+                || this.isDonorModeUsed(DONOR_GRIMSEMI)
+                || this.isDonorModeUsed(DONOR_LUCKYVN)
+                || this.isDonorModeUsed(DONOR_OLDINTAVE)
+                || this.isDonorModeUsed(DONOR_INTAVE14)
+                || this.isDonorModeUsed(DONOR_INTAVEBLINK)
+                || this.isDonorModeUsed(DONOR_OLDINTAVEV2)
+                || this.isDonorModeUsed(DONOR_VULCAN)
+                || this.isDonorModeUsed(DONOR_GRIM19)) {
+            this.updateDonor(event);
         }
     }
 
@@ -695,6 +827,457 @@ public class NoSlow extends Module {
         }
     }
 
+    private void updateRaven(UpdateEvent event) {
+        if (event.getType() != EventType.PRE || mc.thePlayer == null) return;
+        if (mc.thePlayer.onGround) {
+            this.ravenHypOffTicks = 0;
+        } else {
+            this.ravenHypOffTicks++;
+        }
+        if (this.isRavenModeUsed(RAVEN_HYPIXEL)) {
+            this.updateRavenHypixel();
+        }
+        if (this.isRavenModeUsed(RAVEN_INTAVE)) {
+            this.updateRavenIntave();
+        }
+        if (this.isRavenModeUsed(RAVEN_OLD_GRIM)) {
+            this.updateRavenOldGrim();
+        }
+    }
+
+    // Ported from Raven HypixelNoSlow.java: hold the place packet, jump, replay it after 4 air ticks.
+    private void updateRavenHypixel() {
+        if (this.ravenHypOffTicks == 4 && this.ravenHypSend) {
+            this.ravenHypSend = false;
+            if (mc.thePlayer.getHeldItem() != null) {
+                PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(mc.thePlayer.getHeldItem()));
+            }
+        }
+    }
+
+    // Ported from Raven IntaveNoSlow.java: sword re-place, first-tick release for food.
+    private void updateRavenIntave() {
+        if (mc.thePlayer.isUsingItem() && mc.thePlayer.getHeldItem() != null && MoveUtil.isMoving()) {
+            if (ItemUtil.isHoldingSword()) {
+                if (this.ravenSwordActive(RAVEN_INTAVE)) {
+                    PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(mc.thePlayer.getHeldItem()));
+                }
+            } else if (ItemUtil.isEating() && !this.ravenLastUsing
+                    && (this.ravenFoodActive(RAVEN_INTAVE) || this.ravenBowActive(RAVEN_INTAVE))) {
+                PacketUtil.sendPacket(new C07PacketPlayerDigging(
+                        C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.UP));
+            }
+            this.ravenLastUsing = true;
+        } else {
+            this.ravenLastUsing = false;
+        }
+    }
+
+    // Ported from Raven OldGrimNoSlow.java and Miau OMOldGrimNoSlow.java: triple slot swap.
+    private void updateRavenOldGrim() {
+        if (mc.thePlayer.isUsingItem() && this.ravenAnyActive(RAVEN_OLD_GRIM)) {
+            int currentSlot = mc.thePlayer.inventory.currentItem;
+            PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot % 8 + 1));
+            PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot % 7 + 2));
+            PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot));
+        }
+    }
+
+    private int donorIdx(ModeProperty property) {
+        int v = property.getValue();
+        return v >= DONOR_BASE && v < DONOR_BASE + 10 ? v - DONOR_BASE : -1;
+    }
+
+    private boolean isDonorModeUsed(int mode) {
+        return this.donorIdx(this.swordMode) == mode
+                || this.donorIdx(this.foodMode) == mode
+                || this.donorIdx(this.bowMode) == mode;
+    }
+
+    private boolean donorSwordActive(int mode) {
+        return this.donorIdx(this.swordMode) == mode && ItemUtil.isHoldingSword()
+                && (!this.onlyKillAuraAutoBlock.getValue() || this.isKillAuraAutoBlocking());
+    }
+
+    private boolean donorFoodActive(int mode) {
+        return this.donorIdx(this.foodMode) == mode && ItemUtil.isEating();
+    }
+
+    private boolean donorBowActive(int mode) {
+        return this.donorIdx(this.bowMode) == mode && ItemUtil.isUsingBow();
+    }
+
+    private boolean donorAnyActive(int mode) {
+        return mc.thePlayer != null && mc.thePlayer.isUsingItem()
+                && (this.donorSwordActive(mode) || this.donorFoodActive(mode) || this.donorBowActive(mode));
+    }
+
+    private void updateDonor(UpdateEvent event) {
+        if (event.getType() != EventType.PRE || mc.thePlayer == null) return;
+        if (this.isDonorModeUsed(DONOR_EXHI)) {
+            this.updateDonorExhi();
+        }
+        if (this.isDonorModeUsed(DONOR_GRIMTEST)) {
+            this.updateDonorGrimTest();
+        }
+        if (this.isDonorModeUsed(DONOR_GRIMSEMI)) {
+            this.updateDonorGrimSemi();
+        }
+        if (this.isDonorModeUsed(DONOR_LUCKYVN)) {
+            this.updateDonorLuckyvn();
+        }
+        if (this.isDonorModeUsed(DONOR_OLDINTAVE)) {
+            this.updateDonorOldIntave();
+        }
+        if (this.isDonorModeUsed(DONOR_INTAVE14)) {
+            this.updateDonorIntave14();
+        }
+        if (this.isDonorModeUsed(DONOR_INTAVEBLINK)) {
+            this.updateDonorIntaveBlink();
+        }
+        if (this.isDonorModeUsed(DONOR_OLDINTAVEV2)) {
+            this.updateDonorOldIntaveV2();
+        }
+        if (this.isDonorModeUsed(DONOR_VULCAN)) {
+            this.updateDonorVulcan();
+        }
+        if (this.isDonorModeUsed(DONOR_GRIM19)) {
+            this.updateDonorGrim19();
+        }
+    }
+
+    private void updateDonorExhi() {
+        this.exhiTicks++;
+        if (!this.donorAnyActive(DONOR_EXHI)) return;
+        int interval = Math.max(1, this.exhiInterval.getValue());
+        if (this.exhiTicks % interval != 0) return;
+        int currentSlot = mc.thePlayer.inventory.currentItem;
+        PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot % 8 + 1));
+        PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot));
+        if (this.exhiPacket.getValue()) {
+            PacketUtil.sendPacket(new C07PacketPlayerDigging(
+                    C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
+            if (mc.thePlayer.getHeldItem() != null) {
+                PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(mc.thePlayer.getHeldItem()));
+            }
+        }
+    }
+
+    private void updateDonorGrimTest() {
+        if (this.grimTestPending) {
+            this.grimTestPending = false;
+            this.grimTestFake = true;
+            PacketUtil.sendPacketNoEvent(new C07PacketPlayerDigging(
+                    C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
+            this.grimTestFake = false;
+        }
+        boolean active = this.donorAnyActive(DONOR_GRIMTEST);
+        if (!active) {
+            if (this.grimTestHolding) {
+                this.grimTestHolding = false;
+                this.flushGrimTest();
+            }
+            this.grimTestTicks = 0;
+            return;
+        }
+        if (!this.grimTestHolding) {
+            this.grimTestHolding = true;
+            this.grimTestPending = true;
+            this.grimTestTicks = 0;
+            return;
+        }
+        this.grimTestTicks++;
+        if (this.grimTestTicks >= Math.max(1, this.grimTestMaxTicks.getValue())) {
+            this.grimTestHolding = false;
+            this.grimTestTicks = 0;
+            this.flushGrimTest();
+            if (this.donorAnyActive(DONOR_GRIMTEST) && mc.thePlayer.getHeldItem() != null) {
+                PacketUtil.sendPacketNoEvent(new C08PacketPlayerBlockPlacement(
+                        new BlockPos(-1, -1, -1), 255, mc.thePlayer.getHeldItem(), 0.0F, 0.0F, 0.0F));
+            }
+        }
+    }
+
+    private void updateDonorGrimSemi() {
+        if (this.grimSemiWaitSwap) {
+            this.grimSemiWaitSwap = false;
+            PacketUtil.sendPacketNoEvent(new C09PacketHeldItemChange(this.grimSemiSlot));
+        }
+        if (this.grimSemiPendingClear) {
+            this.grimSemiPendingClear = false;
+            this.grimSemiSlot = mc.thePlayer.inventory.currentItem;
+            int other = (this.grimSemiSlot + 1) % 9;
+            PacketUtil.sendPacketNoEvent(new C09PacketHeldItemChange(other));
+            this.grimSemiWaitSwap = true;
+        }
+        boolean active = this.donorAnyActive(DONOR_GRIMSEMI);
+        if (!active) {
+            if (this.grimSemiHolding) {
+                this.grimSemiHolding = false;
+                this.flushGrimSemi();
+            }
+            this.grimSemiTicks = 0;
+            return;
+        }
+        if (!this.grimSemiHolding) {
+            this.grimSemiHolding = true;
+            this.grimSemiPendingClear = this.grimSemiSwap.getValue();
+            this.grimSemiTicks = 0;
+            return;
+        }
+        this.grimSemiTicks++;
+        if (this.grimSemiTicks >= Math.max(1, this.grimSemiInterval.getValue())) {
+            this.grimSemiTicks = 0;
+            this.flushGrimSemi();
+            if (mc.thePlayer.getHeldItem() != null) {
+                PacketUtil.sendPacketNoEvent(new C08PacketPlayerBlockPlacement(
+                        new BlockPos(-1, -1, -1), 255, mc.thePlayer.getHeldItem(), 0.0F, 0.0F, 0.0F));
+            }
+            this.grimSemiPendingClear = this.grimSemiSwap.getValue();
+        }
+    }
+
+    private void updateDonorLuckyvn() {
+        this.luckyvnTicks++;
+        if (!this.donorAnyActive(DONOR_LUCKYVN)) return;
+        if (!this.luckyvnSwap.getValue()) return;
+        int interval = Math.max(1, this.luckyvnInterval.getValue());
+        if (this.luckyvnTicks % interval != 0) return;
+        int currentSlot = mc.thePlayer.inventory.currentItem;
+        PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot == 8 ? 0 : currentSlot + 1));
+        PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot));
+    }
+
+    private void updateDonorOldIntave() {
+        this.oldIntaveTicks++;
+        if (!this.donorAnyActive(DONOR_OLDINTAVE)) return;
+        if (this.oldIntaveTicks < Math.max(1, this.oldIntaveDelay.getValue())) return;
+        int currentSlot = mc.thePlayer.inventory.currentItem;
+        PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot % 8 + 1));
+        PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot));
+        if (this.oldIntavePacket.getValue()) {
+            PacketUtil.sendPacket(new C07PacketPlayerDigging(
+                    C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
+            if (mc.thePlayer.getHeldItem() != null) {
+                PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(
+                        new BlockPos(-1, -1, -1), 255, mc.thePlayer.getHeldItem(), 0.0F, 0.0F, 0.0F));
+            }
+        }
+    }
+
+    private void updateDonorIntave14() {
+        if (!this.donorAnyActive(DONOR_INTAVE14)) return;
+        if (mc.thePlayer.getHeldItem() == null) return;
+        long now = System.currentTimeMillis();
+        if (now - this.intave14LastRelease >= Math.max(100, this.intave14Interval.getValue())) {
+            PacketUtil.sendPacket(new C07PacketPlayerDigging(
+                    C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
+            this.intave14LastRelease = now;
+        }
+        if (this.intave14Sprint.getValue()) {
+            PacketUtil.sendPacket(new C0BPacketEntityAction(mc.thePlayer,
+                    C0BPacketEntityAction.Action.START_SPRINTING));
+        }
+    }
+
+    private void updateDonorIntaveBlink() {
+        if (!this.donorAnyActive(DONOR_INTAVEBLINK)) return;
+        if (mc.thePlayer.getHeldItem() == null) return;
+        int interval = Math.max(1, this.intaveBlinkInterval.getValue());
+        if (mc.thePlayer.ticksExisted % interval != 0) return;
+        PacketUtil.sendPacket(new C07PacketPlayerDigging(
+                C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
+        if (this.intaveBlinkPacket.getValue()) {
+            PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(mc.thePlayer.getHeldItem()));
+        }
+    }
+
+    private void updateDonorOldIntaveV2() {
+        this.oldIntaveV2Ticks++;
+        if (!this.donorAnyActive(DONOR_OLDINTAVEV2)) return;
+        if (this.oldIntaveV2Ticks < Math.max(1, this.oldIntaveV2Delay.getValue())) return;
+        int currentSlot = mc.thePlayer.inventory.currentItem;
+        PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot % 8 + 1));
+        PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot % 7 + 2));
+        PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot));
+        if (this.oldIntaveV2Packet.getValue()) {
+            PacketUtil.sendPacket(new C07PacketPlayerDigging(
+                    C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
+            if (mc.thePlayer.getHeldItem() != null) {
+                PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(
+                        new BlockPos(-1, -1, -1), 255, mc.thePlayer.getHeldItem(), 0.0F, 0.0F, 0.0F));
+            }
+        }
+    }
+
+    private void updateDonorVulcan() {
+        this.vulcanTicks++;
+        if (!this.donorAnyActive(DONOR_VULCAN)) return;
+        if (this.vulcanTicks < Math.max(1, this.vulcanInterval.getValue())) return;
+        this.vulcanTicks = 0;
+        PacketUtil.sendPacket(new C07PacketPlayerDigging(
+                C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
+        if (mc.thePlayer.getHeldItem() != null) {
+            PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(
+                    new BlockPos(-1, -1, -1), 255, mc.thePlayer.getHeldItem(), 0.0F, 0.0F, 0.0F));
+        }
+    }
+
+    private void updateDonorGrim19() {
+        this.grim19Ticks++;
+        if (!this.donorAnyActive(DONOR_GRIM19)) return;
+        if (this.grim19Ticks < Math.max(1, this.grim19Interval.getValue())) return;
+        this.grim19Ticks = 0;
+        if (this.grim19Swap.getValue()) {
+            int currentSlot = mc.thePlayer.inventory.currentItem;
+            PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot % 8 + 1));
+            PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot));
+        }
+        PacketUtil.sendPacket(new C07PacketPlayerDigging(
+                C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
+        if (mc.thePlayer.getHeldItem() != null) {
+            PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(
+                    new BlockPos(-1, -1, -1), 255, mc.thePlayer.getHeldItem(), 0.0F, 0.0F, 0.0F));
+        }
+    }
+
+    private void flushGrimTest() {
+        for (Packet<?> p : new ArrayList<Packet<?>>(this.grimTestPackets)) {
+            PacketUtil.sendPacketNoEvent(p);
+        }
+        this.grimTestPackets.clear();
+    }
+
+    private void flushGrimSemi() {
+        for (Packet<?> p : new ArrayList<Packet<?>>(this.grimSemiPackets)) {
+            PacketUtil.sendPacketNoEvent(p);
+        }
+        this.grimSemiPackets.clear();
+    }
+
+    private void donorOnPacket(PacketEvent event) {
+        if (mc.thePlayer == null) return;
+        if (event.getType() != EventType.SEND) return;
+        if (this.isDonorModeUsed(DONOR_EXHI) && event.getPacket() instanceof C07PacketPlayerDigging) {
+            C07PacketPlayerDigging digging = (C07PacketPlayerDigging) event.getPacket();
+            if (digging.getStatus() == C07PacketPlayerDigging.Action.RELEASE_USE_ITEM
+                    && this.donorAnyActive(DONOR_EXHI) && this.exhiPacket.getValue()) {
+                event.setCancelled(true);
+                if (mc.thePlayer.getHeldItem() != null) {
+                    PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(mc.thePlayer.getHeldItem()));
+                }
+            }
+        }
+        if (this.isDonorModeUsed(DONOR_GRIMTEST)) {
+            Packet<?> packet = event.getPacket();
+            if (this.grimTestHolding && this.grimTestBuffer.getValue()) {
+                if (packet instanceof C00PacketKeepAlive || packet instanceof C01PacketChatMessage) {
+                    return;
+                }
+                if (!this.grimTestFake && packet instanceof C07PacketPlayerDigging) {
+                    C07PacketPlayerDigging digging = (C07PacketPlayerDigging) packet;
+                    if (digging.getStatus() == C07PacketPlayerDigging.Action.RELEASE_USE_ITEM) {
+                        event.setCancelled(true);
+                        this.grimTestHolding = false;
+                        this.flushGrimTest();
+                        return;
+                    }
+                }
+                this.grimTestPackets.add(packet);
+                event.setCancelled(true);
+            }
+        }
+        if (this.isDonorModeUsed(DONOR_GRIMSEMI)) {
+            Packet<?> packet = event.getPacket();
+            if (packet instanceof C07PacketPlayerDigging) {
+                C07PacketPlayerDigging digging = (C07PacketPlayerDigging) packet;
+                if (digging.getStatus() == C07PacketPlayerDigging.Action.RELEASE_USE_ITEM
+                        && this.donorAnyActive(DONOR_GRIMSEMI)) {
+                    event.setCancelled(true);
+                    this.grimSemiHolding = false;
+                    this.flushGrimSemi();
+                    PacketUtil.sendPacketNoEvent(packet);
+                    if (this.grimSemiWaitSwap) {
+                        this.grimSemiWaitSwap = false;
+                        PacketUtil.sendPacketNoEvent(new C09PacketHeldItemChange(this.grimSemiSlot));
+                    }
+                    return;
+                }
+            }
+            if (this.grimSemiHolding && this.grimSemiSwap.getValue()) {
+                if (!(packet instanceof C00PacketKeepAlive) && !(packet instanceof C01PacketChatMessage)) {
+                    this.grimSemiPackets.add(packet);
+                    event.setCancelled(true);
+                }
+            }
+        }
+        if ((this.isDonorModeUsed(DONOR_OLDINTAVE) || this.isDonorModeUsed(DONOR_OLDINTAVEV2))
+                && event.getPacket() instanceof C07PacketPlayerDigging) {
+            C07PacketPlayerDigging digging = (C07PacketPlayerDigging) event.getPacket();
+            if (digging.getStatus() == C07PacketPlayerDigging.Action.RELEASE_USE_ITEM) {
+                boolean active = this.donorAnyActive(DONOR_OLDINTAVE) || this.donorAnyActive(DONOR_OLDINTAVEV2);
+                boolean packetOn = (this.isDonorModeUsed(DONOR_OLDINTAVE) && this.oldIntavePacket.getValue())
+                        || (this.isDonorModeUsed(DONOR_OLDINTAVEV2) && this.oldIntaveV2Packet.getValue());
+                if (active && packetOn) {
+                    event.setCancelled(true);
+                }
+            }
+        }
+        if ((this.isDonorModeUsed(DONOR_VULCAN) || this.isDonorModeUsed(DONOR_GRIM19))
+                && event.getPacket() instanceof C07PacketPlayerDigging) {
+            C07PacketPlayerDigging digging = (C07PacketPlayerDigging) event.getPacket();
+            if (digging.getStatus() == C07PacketPlayerDigging.Action.RELEASE_USE_ITEM) {
+                boolean vulcanActive = this.donorAnyActive(DONOR_VULCAN) && this.vulcanPacket.getValue();
+                boolean grimActive = this.donorAnyActive(DONOR_GRIM19);
+                if (vulcanActive || grimActive) {
+                    event.setCancelled(true);
+                    if (mc.thePlayer.getHeldItem() != null) {
+                        PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(
+                                new BlockPos(-1, -1, -1), 255, mc.thePlayer.getHeldItem(), 0.0F, 0.0F, 0.0F));
+                    }
+                }
+            }
+        }
+    }
+
+    private void ravenOnPacket(PacketEvent event) {
+        if (mc.thePlayer == null) return;
+        // Ported from Raven GrimACNoSlow.java: food-only drop-item bypass.
+        if (this.isRavenModeUsed(RAVEN_GRIMAC)) {
+            if (event.getType() == EventType.SEND && event.getPacket() instanceof C08PacketPlayerBlockPlacement) {
+                net.minecraft.item.ItemStack held = mc.thePlayer.getHeldItem();
+                if (held != null && held.getItem() instanceof net.minecraft.item.ItemFood && held.stackSize > 2
+                        && this.ravenAnyActive(RAVEN_GRIMAC)) {
+                    event.setCancelled(true);
+                    PacketUtil.sendPacketNoEvent(event.getPacket());
+                    PacketUtil.sendPacketNoEvent(new C07PacketPlayerDigging(
+                            C07PacketPlayerDigging.Action.DROP_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
+                }
+            }
+            if (event.getType() == EventType.SEND && event.getPacket() instanceof C07PacketPlayerDigging) {
+                C07PacketPlayerDigging digging = (C07PacketPlayerDigging) event.getPacket();
+                if (digging.getStatus() == C07PacketPlayerDigging.Action.RELEASE_USE_ITEM
+                        && this.ravenAnyActive(RAVEN_GRIMAC)) {
+                    event.setCancelled(true);
+                }
+            }
+        }
+        // Ported from Raven HypixelNoSlow.java: hold consumable place until air tick 4.
+        if (this.isRavenModeUsed(RAVEN_HYPIXEL)
+                && event.getType() == EventType.SEND
+                && event.getPacket() instanceof C08PacketPlayerBlockPlacement
+                && !mc.thePlayer.isUsingItem()
+                && !ItemUtil.isHoldingSword()
+                && mc.thePlayer.getHeldItem() != null
+                && this.ravenHypOffTicks < 2) {
+            if (mc.thePlayer.onGround) {
+                mc.thePlayer.jump();
+            }
+            this.ravenHypSend = true;
+            event.setCancelled(true);
+        }
+    }
+
     // OpalWatchdog: 3-tick block/release tap-cycle (Opal's WatchdogNoSlow via Miau's 1.8.9 port).
     private void updateMiauOpalWatchdog(UpdateEvent event) {
         if (event.getType() != EventType.PRE) {
@@ -806,16 +1389,7 @@ public class NoSlow extends Module {
         }
     }
 
-    /**
-     * Lets go of the block this mode raised. Only then: it was called every
-     * tick with a screen open or no sword in hand, and sent a RELEASE_USE_ITEM
-     * each time with nothing in use -- twenty stray C07s a second while
-     * walking with blocks (2026-10-04).
-     */
     private void opalRelease() {
-        if (!this.opalBlocking) {
-            return;
-        }
         PacketUtil.sendPacket(new C07PacketPlayerDigging(
                 C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
         mc.thePlayer.stopUsingItem();

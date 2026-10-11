@@ -279,6 +279,7 @@ public final class ModuleDocs {
         d("SmartBlinker", "智慧型封包閃爍，依情況自動收發。");
         d("LeapModeHUD", "顯示跳躍模式的狀態。");
         d("BridgeAssist", "協助搭橋的轉向與放置。");
+        d("LegitBridge", "正規搭橋三合一：邊緣自動潛行加上腳下自動放置。");
         d("AutoWho", "遊戲開始與結束時自動執行 /who，並顯示線上人數。");
         d("DuelsStats", "統計本次遊戲的決鬥勝場、敗場與連勝。");
         d("StaffDetector", "偵測附近的工作人員與可疑行為並發出提醒。");

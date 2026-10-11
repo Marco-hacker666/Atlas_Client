@@ -10,7 +10,10 @@ import myau.util.*;
 import myau.property.properties.BooleanProperty;
 import myau.property.properties.FloatProperty;
 import myau.property.properties.IntProperty;
+import myau.property.properties.ModeProperty;
+import myau.property.properties.PercentProperty;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 import net.minecraft.world.WorldSettings.GameType;
@@ -25,8 +28,6 @@ public class AutoClicker extends Module {
     private long blockHitDelay = 0L;
     public final IntProperty minCPS = new IntProperty("min-cps", 8, 1, 20);
     public final IntProperty maxCPS = new IntProperty("max-cps", 12, 1, 20);
-    /* The two as one range (2026-09-28): same settings, same keys. */
-    private final myau.property.IntRange cps = myau.property.IntRange.of(this.minCPS, this.maxCPS);
     public final BooleanProperty blockHit = new BooleanProperty("block-hit", false);
     public final FloatProperty blockHitTicks = new FloatProperty("block-hit-ticks", 1.5F, 1.0F, 20.0F, this.blockHit::getValue);
     public final BooleanProperty weaponsOnly = new BooleanProperty("weapons-only", true);
@@ -35,13 +36,147 @@ public class AutoClicker extends Module {
     public final FloatProperty range = new FloatProperty("range", 3.0F, 3.0F, 8.0F, this.breakBlocks::getValue);
     public final FloatProperty hitBoxVertical = new FloatProperty("hit-box-vertical", 0.1F, 0.0F, 1.0F, this.breakBlocks::getValue);
     public final FloatProperty hitBoxHorizontal = new FloatProperty("hit-box-horizontal", 0.2F, 0.0F, 1.0F, this.breakBlocks::getValue);
+    public final ModeProperty clickMode = new ModeProperty("click-mode", 0, new String[]{"Normal", "LowCPS", "Record", "DragClick"});
+    public final ModeProperty randomization = new ModeProperty("randomization", 0, new String[]{"Normal", "Extra", "Extra+"});
+    public final IntProperty lowMaxCPS = new IntProperty("low-max-cps", 6, 1, 20, () -> this.clickMode.getValue() == 1);
+    public final BooleanProperty jitter = new BooleanProperty("jitter", false);
+    public final FloatProperty jitterStrength = new FloatProperty("jitter-strength", 0.3F, 0.0F, 2.0F, this.jitter::getValue);
+    public final PercentProperty breakChance = new PercentProperty("break-chance", 100);
+    public final BooleanProperty invFillPause = new BooleanProperty("inv-fill-pause", false);
+    public final IntProperty invFillTicks = new IntProperty("inv-fill-ticks", 4, 0, 40, this.invFillPause::getValue);
+    public final BooleanProperty clickSound = new BooleanProperty("click-sound", false);
+    public final BooleanProperty doubleClick = new BooleanProperty("double-click", false);
+    public final PercentProperty doubleChance = new PercentProperty("double-chance", 15, this.doubleClick::getValue);
+    public final IntProperty doubleGapMs = new IntProperty("double-gap-ms", 45, 20, 100, this.doubleClick::getValue);
+    public final BooleanProperty fatigue = new BooleanProperty("fatigue", false);
+    public final FloatProperty fatigueFloor = new FloatProperty("fatigue-floor", 0.75F, 0.5F, 1.0F, this.fatigue::getValue);
+    public final IntProperty fatigueSecs = new IntProperty("fatigue-secs", 120, 30, 600, this.fatigue::getValue);
+    /* Runs the plain attack-key click cycle while a container GUI is open. It
+       does not click inventory slots: the donor's inventory-fill behaviour
+       (arm a start delay, then click the hovered slot) is not implemented, so
+       the setting is named for what it does rather than for what it does not. */
+    public final BooleanProperty guiAttack = new BooleanProperty("gui-attack", false);
+    /* True for the tick in which this module pressed the attack key itself, so
+       record mode can tell a synthesized click from a real one. */
+    private boolean moduleClickThisTick = false;
+    public final IntProperty startDelayMs = new IntProperty("start-delay-ms", 0, 0, 1000);
+    private long enabledAtMs = 0L;
+    private long doubleClickAtMs = 0L;
+    private long fightStartMs = 0L;
+    private long lastClickMs = 0L;
+    private final long[] recordGaps = new long[20];
+    private int recordCount = 0;
+    private int recordPos = 0;
+    private long lastRealClick = 0L;
+    private long guiClosedAt = 0L;
+    private long driftStartMs = 0L;
+    private int clicksSinceBreak = 0;
+    private long breakUntilMs = 0L;
+    private int breakEveryClicks = 60;
+
+    private double gaussian() {
+        return (Math.random() + Math.random() + Math.random() - 1.5) * 2.0;
+    }
 
     private long getNextClickDelay() {
-        return 1000L / this.cps.random();
+        long base;
+        if (this.clickMode.getValue() == 1) {
+            // Ported from MiauMinus ghost AutoClicker.java (low CPS clamp).
+            int max = Math.min(this.maxCPS.getValue(), this.lowMaxCPS.getValue());
+            int min = Math.min(this.minCPS.getValue(), max);
+            base = 1000L / RandomUtil.nextLong(min, max);
+        } else if (this.clickMode.getValue() == 2 && this.recordCount > 4) {
+            // Ported from raven RecordAutoClicker.java (replay sampled click rhythm).
+            base = this.recordGaps[RandomUtil.nextInt(0, this.recordCount - 1)];
+        } else if (this.clickMode.getValue() == 3) {
+            int top = Math.max(this.minCPS.getValue(), this.maxCPS.getValue());
+            base = 1000L / RandomUtil.nextLong(top, top + 8);
+        } else {
+            base = 1000L / RandomUtil.nextLong(this.minCPS.getValue(), this.maxCPS.getValue());
+        }
+        return this.applyRandomization(base);
+    }
+
+    // Fatigue sags effective CPS the longer a fight runs, then recovers
+    // after 5s without clicks. Emulation only, like the tiers above.
+    private double fatigueMultiplier() {
+        if (!this.fatigue.getValue()) {
+            return 1.0;
+        }
+        long now = System.currentTimeMillis();
+        if (now - this.lastClickMs > 5000L) {
+            this.fightStartMs = now;
+            return 1.0;
+        }
+        if (this.fightStartMs == 0L) {
+            this.fightStartMs = now;
+            return 1.0;
+        }
+        double elapsedSecs = (double) (now - this.fightStartMs) / 1000.0;
+        double sag = elapsedSecs / (double) this.fatigueSecs.getValue();
+        if (sag > 1.0) {
+            sag = 1.0;
+        }
+        return 1.0 - sag * (1.0 - (double) this.fatigueFloor.getValue());
+    }
+
+    // Humanization layer only. Normal returns the base untouched so old
+    // behavior is identical. This imitates human timing, it proves nothing
+    // against model-based detection.
+    private long applyRandomization(long base) {
+        if (this.randomization.getValue() == 0) {
+            return (long) ((double) base / this.fatigueMultiplier());
+        }
+        long now = System.currentTimeMillis();
+        if (this.driftStartMs == 0L) {
+            this.driftStartMs = now;
+            this.breakEveryClicks = 40 + (int) (Math.random() * 40);
+        }
+        if (this.randomization.getValue() >= 2) {
+            if (now < this.breakUntilMs) {
+                return Math.max(base, this.breakUntilMs - now);
+            }
+            this.clicksSinceBreak++;
+            if (this.clicksSinceBreak >= this.breakEveryClicks) {
+                this.clicksSinceBreak = 0;
+                this.breakEveryClicks = 40 + (int) (Math.random() * 40);
+                long pause = 400L + (long) (Math.random() * 800L);
+                this.breakUntilMs = now + pause;
+                return Math.max(base, pause);
+            }
+            double drift = 1.0 + 0.15 * Math.sin((double) (now - this.driftStartMs) / 30000.0);
+            base = Math.max(25L, (long) ((double) base * drift));
+        }
+        double stdDev = this.randomization.getValue() >= 2 ? 0.15 : 0.12;
+        long shaped = (long) ((double) base * (1.0 + this.gaussian() * stdDev));
+        if (this.randomization.getValue() >= 1 && Math.random() < 0.08) {
+            shaped += 100L + (long) (Math.random() * 150L);
+        }
+        return Math.max(25L, shaped);
     }
 
     private long getBlockHitDelay() {
         return (long) (50.0F * this.blockHitTicks.getValue());
+    }
+
+    private boolean isInvFillPaused() {
+        // Ported from raven AutoClicker.java (inventory-fill pause).
+        return this.invFillPause.getValue()
+                && System.currentTimeMillis() - this.guiClosedAt < (long) this.invFillTicks.getValue() * 50L;
+    }
+
+    private void applyJitter() {
+        // Ported from raven AutoClicker.java (jitter nudge after clicks).
+        if (this.jitter.getValue() && mc.thePlayer != null) {
+            float j = this.jitterStrength.getValue();
+            mc.thePlayer.rotationYaw += RandomUtil.nextFloat(-j, j);
+            mc.thePlayer.rotationPitch += RandomUtil.nextFloat(-j, j);
+            if (mc.thePlayer.rotationPitch > 90.0F) {
+                mc.thePlayer.rotationPitch = 90.0F;
+            } else if (mc.thePlayer.rotationPitch < -90.0F) {
+                mc.thePlayer.rotationPitch = -90.0F;
+            }
+        }
     }
 
     private boolean isBreakingBlock() {
@@ -92,21 +227,31 @@ public class AutoClicker extends Module {
     }
 
     public AutoClicker() {
-        super("AutoClicker", false);
+        super("AutoClicker", false, false, "Automatically clicks attack with random CPS and jitter.");
     }
 
-    @EventTarget(whenDisabled = true)
+    @EventTarget
     public void onTick(TickEvent event) {
         if (event.getType() == EventType.PRE) {
+            /* Cleared every tick: a click the module synthesizes lands in this
+               same tick (vanilla turns the key press into clickMouse()), so
+               the flag never outlives the tick it was set in. */
+            this.moduleClickThisTick = false;
             if (this.clickDelay > 0L) {
                 this.clickDelay -= 50L;
             }
             if (this.blockHitDelay > 0L) {
                 this.blockHitDelay -= 50L;
             }
-            if (mc.currentScreen != null) {
+            // GUI attack: keep the normal attack-key click cycle running inside
+            // container GUIs instead of stopping at the screen. Adapted from
+            // raven inventory-fill, which arms a start delay then clicks the
+            // hovered slot; the slot-clicking itself is not ported.
+            boolean invMode = this.guiAttack.getValue() && mc.currentScreen instanceof GuiContainer;
+            if (mc.currentScreen != null && !invMode) {
                 this.clickPending = false;
                 this.blockHitPending = false;
+                this.guiClosedAt = System.currentTimeMillis();
             } else {
                 if (this.clickPending) {
                     this.clickPending = false;
@@ -116,13 +261,38 @@ public class AutoClicker extends Module {
                     this.blockHitPending = false;
                     KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
                 }
-                if (this.isEnabled() && this.canClick() && mc.gameSettings.keyBindAttack.isKeyDown()) {
-                    if (!mc.thePlayer.isUsingItem()) {
-                        while (this.clickDelay <= 0L) {
-                            this.clickPending = true;
+                // Start delay waits this long after toggle before the first click.
+                // Adapted from raven inventory start-delay arming. Default 0 = off.
+                if (this.isEnabled() && this.canClick() && mc.gameSettings.keyBindAttack.isKeyDown()
+                        && System.currentTimeMillis() - this.enabledAtMs >= (long) this.startDelayMs.getValue()) {
+                    if (!this.isInvFillPaused() && !mc.thePlayer.isUsingItem()) {
+                        // Ported from raven ClickAssist.java (per-click chance gate).
+                        if (this.breakChance.getValue() < 100 && RandomUtil.nextInt(1, 100) > this.breakChance.getValue()) {
                             this.clickDelay = this.clickDelay + this.getNextClickDelay();
+                        } else {
+                            while (this.clickDelay <= 0L) {
+                                this.clickPending = true;
+                                this.moduleClickThisTick = true;
+                                this.clickDelay = this.clickDelay + this.getNextClickDelay();
+                                KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindAttack.getKeyCode(), false);
+                                KeyBindUtil.pressKeyOnce(mc.gameSettings.keyBindAttack.getKeyCode());
+                                this.applyJitter();
+                                this.lastClickMs = System.currentTimeMillis();
+                                if (this.doubleClick.getValue()
+                                        && RandomUtil.nextInt(1, 100) <= this.doubleChance.getValue()) {
+                                    this.doubleClickAtMs = System.currentTimeMillis() + (long) this.doubleGapMs.getValue();
+                                }
+                                if (this.clickSound.getValue()) {
+                                    SoundUtil.playSound("random.click");
+                                }
+                            }
+                        }
+                        if (this.doubleClickAtMs > 0L && System.currentTimeMillis() >= this.doubleClickAtMs) {
+                            this.doubleClickAtMs = 0L;
+                            this.moduleClickThisTick = true;
                             KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindAttack.getKeyCode(), false);
                             KeyBindUtil.pressKeyOnce(mc.gameSettings.keyBindAttack.getKeyCode());
+                            this.applyJitter();
                         }
                     }
                     if (this.blockHit.getValue()
@@ -144,6 +314,19 @@ public class AutoClicker extends Module {
     @EventTarget(Priority.LOWEST)
     public void onCLick(LeftClickMouseEvent event) {
         if (this.isEnabled() && !event.isCancelled()) {
+            long now = System.currentTimeMillis();
+            /* A click this module synthesized presses the attack key, which
+               vanilla turns into clickMouse() in the same tick and lands back
+               here. Recording that would feed record mode its own output, so
+               only real clicks are recorded. */
+            if (!this.moduleClickThisTick && this.lastRealClick > 0L && this.clickMode.getValue() == 2) {
+                this.recordGaps[this.recordPos] = Math.max(1L, now - this.lastRealClick);
+                this.recordPos = (this.recordPos + 1) % this.recordGaps.length;
+                if (this.recordCount < this.recordGaps.length) {
+                    this.recordCount++;
+                }
+            }
+            this.lastRealClick = now;
             if (!this.clickPending) {
                 this.clickDelay = this.clickDelay + this.getNextClickDelay();
             }
@@ -152,8 +335,37 @@ public class AutoClicker extends Module {
 
     @Override
     public void onEnabled() {
+        this.moduleClickThisTick = false;
         this.clickDelay = 0L;
         this.blockHitDelay = 0L;
+        this.recordCount = 0;
+        this.recordPos = 0;
+        this.lastRealClick = 0L;
+        this.guiClosedAt = 0L;
+        this.driftStartMs = 0L;
+        this.clicksSinceBreak = 0;
+        this.breakUntilMs = 0L;
+        this.doubleClickAtMs = 0L;
+        this.fightStartMs = 0L;
+        this.lastClickMs = 0L;
+        this.enabledAtMs = System.currentTimeMillis();
+    }
+
+    public void onDisabled() {
+        this.moduleClickThisTick = false;
+        this.clickPending = false;
+        this.blockHitPending = false;
+        this.recordCount = 0;
+        this.recordPos = 0;
+        this.lastRealClick = 0L;
+        this.guiClosedAt = 0L;
+        this.driftStartMs = 0L;
+        this.clicksSinceBreak = 0;
+        this.breakUntilMs = 0L;
+        this.doubleClickAtMs = 0L;
+        this.fightStartMs = 0L;
+        this.lastClickMs = 0L;
+        this.enabledAtMs = 0L;
     }
 
     @Override
@@ -171,8 +383,12 @@ public class AutoClicker extends Module {
 
     @Override
     public String[] getSuffix() {
-        return Objects.equals(this.minCPS.getValue(), this.maxCPS.getValue())
-                ? new String[]{this.minCPS.getValue().toString()}
-                : new String[]{String.format("%d-%d", this.minCPS.getValue(), this.maxCPS.getValue())};
+        String cps = Objects.equals(this.minCPS.getValue(), this.maxCPS.getValue())
+                ? this.minCPS.getValue().toString()
+                : String.format("%d-%d", this.minCPS.getValue(), this.maxCPS.getValue());
+        if (this.clickMode.getValue() != 0) {
+            return new String[]{cps, this.clickMode.getModeString()};
+        }
+        return new String[]{cps};
     }
 }

@@ -155,6 +155,8 @@ public class Myau {
         moduleManager.modules.put(SmartBlinker.class, new SmartBlinker());
         moduleManager.modules.put(LeapModeHUD.class, new LeapModeHUD());
         moduleManager.modules.put(BridgeAssist.class, new BridgeAssist());
+        /* Legit bridging 3-in-1: Eagle + BridgeAssist + LegitScaffold combined. */
+        moduleManager.modules.put(LegitBridge.class, new LegitBridge());
         moduleManager.modules.put(Spider.class, new Spider());
         moduleManager.modules.put(PearlSaver.class, new PearlSaver());
         moduleManager.modules.put(ProjectileAimBot.class, new ProjectileAimBot());

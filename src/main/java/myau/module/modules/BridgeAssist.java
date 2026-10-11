@@ -46,6 +46,12 @@ public class BridgeAssist extends Module {
         super("BridgeAssist", false, false, "Automatically sneaks at block edges while bridging.");
     }
 
+    @Override
+    public void onEnabled() {
+        /* Part of LegitBridge now: one bridging helper at a time. */
+        LegitBridge.yieldTo(BridgeAssist.class);
+    }
+
     private boolean canMoveSafely() {
         double[] offset = MoveUtil.predictMovement();
         float scale = this.edgeDistance.getValue();

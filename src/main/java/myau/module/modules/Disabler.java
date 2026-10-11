@@ -27,6 +27,7 @@ import net.minecraft.network.play.client.C0EPacketClickWindow;
 import myau.util.LatePacket;
 import myau.util.MoveUtil;
 import myau.util.PacketUtil;
+import myau.util.ServerUtil;
 import myau.util.TimerUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.init.Items;
@@ -43,12 +44,15 @@ import net.minecraft.network.play.client.C0DPacketCloseWindow;
 import net.minecraft.network.play.client.C0FPacketConfirmTransaction;
 import net.minecraft.network.play.client.C13PacketPlayerAbilities;
 import net.minecraft.network.play.client.C16PacketClientStatus;
+import net.minecraft.network.play.client.C19PacketResourcePackStatus;
 import net.minecraft.network.play.client.C0BPacketEntityAction.Action;
+import net.minecraft.network.play.server.S00PacketKeepAlive;
 import net.minecraft.network.play.server.S07PacketRespawn;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.minecraft.network.play.server.S32PacketConfirmTransaction;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.ChatComponentText;
+import net.minecraft.util.EnumFacing;
 
 public class Disabler extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -130,12 +134,47 @@ public class Disabler extends Module {
     public final IntProperty verusExpVoidTPDelay = new IntProperty("exp-void-tp-delay", 1000, 0, 30000);
     private long lastVoidTP = 0L;
     private int cancelNext = 0;
+    // Preset selector. Index 0 Custom preserves every legacy toggle exactly. Others UNTESTED, need live servers.
+    private static final int PRESET_CUSTOM = 0;
+    private static final int PRESET_POLAR = 1;
+    private static final int PRESET_INTAVE = 2;
+    private static final int PRESET_GRIM_EXTREME = 3;
+    private static final int PRESET_GRIM_SPEC = 4;
+    private static final int PRESET_MINELAND = 5;
+    private static final int PRESET_HYPIXEL = 6;
+    private static final int PRESET_HYPIXEL_MOTION = 7;
+    private static final int PRESET_KKCRAFT = 8;
+    private static final int PRESET_BLOCKSMC = 9;
+    public final ModeProperty preset = new ModeProperty("preset", 0, new String[]{"Custom", "Polar", "Intave", "GrimExtreme", "GrimSpec", "Mineland", "Hypixel", "HypixelMotion", "KKCraft", "BlocksMC"});
+    public final BooleanProperty presetPolarAirline = new BooleanProperty("preset-polar-airline", false, () -> preset.getValue() == PRESET_POLAR);
+    public final BooleanProperty presetIntaveCloud = new BooleanProperty("preset-intave-cloud", false, () -> preset.getValue() == PRESET_INTAVE);
+    public final BooleanProperty presetIntaveResource = new BooleanProperty("preset-intave-resource", true, () -> preset.getValue() == PRESET_INTAVE);
+    public final FloatProperty presetGrimX = new FloatProperty("preset-grim-x", 999999.0F, -1000000.0F, 1000000.0F, () -> preset.getValue() == PRESET_GRIM_EXTREME);
+    public final FloatProperty presetGrimY = new FloatProperty("preset-grim-y", -999999.0F, -1000000.0F, 1000000.0F, () -> preset.getValue() == PRESET_GRIM_EXTREME);
+    public final FloatProperty presetGrimZ = new FloatProperty("preset-grim-z", 999999.0F, -1000000.0F, 1000000.0F, () -> preset.getValue() == PRESET_GRIM_EXTREME);
+    public final BooleanProperty presetGrim117 = new BooleanProperty("preset-grim-117", false, () -> preset.getValue() == PRESET_GRIM_SPEC);
+    public final BooleanProperty presetHypixelSprint = new BooleanProperty("preset-hypixel-cancel-sprint", false, () -> preset.getValue() == PRESET_HYPIXEL);
+    public final BooleanProperty presetKkAutoban = new BooleanProperty("preset-kk-autoban", false, () -> preset.getValue() == PRESET_KKCRAFT);
+    public final BooleanProperty presetBlocksCombat = new BooleanProperty("preset-blocksmc-combat", true, () -> preset.getValue() == PRESET_BLOCKSMC);
+    public final BooleanProperty presetBlocksWait = new BooleanProperty("preset-blocksmc-wait", true, () -> preset.getValue() == PRESET_BLOCKSMC && presetBlocksCombat.getValue());
+    public final BooleanProperty presetBlocksPlace = new BooleanProperty("preset-blocksmc-place", false, () -> preset.getValue() == PRESET_BLOCKSMC);
+    public final TextProperty customCancelPackets = new TextProperty("custom-cancel-packets", "", () -> preset.getValue() == PRESET_CUSTOM);
+    public final BooleanProperty presetIntaveReach = new BooleanProperty("preset-intave-reach", false, () -> preset.getValue() == PRESET_INTAVE);
+    public final BooleanProperty presetIntaveStrong = new BooleanProperty("preset-intave-strong", false, () -> preset.getValue() == PRESET_INTAVE);
+    public final BooleanProperty presetHypixelMotionLobby = new BooleanProperty("preset-hypixel-motion-lobby", true, () -> preset.getValue() == PRESET_HYPIXEL_MOTION);
+    private final ArrayDeque<C0FPacketConfirmTransaction> presetCloud = new ArrayDeque<>();
+    private final ArrayDeque<Packet<INetHandlerPlayClient>> presetDelayed = new ArrayDeque<>();
+    private boolean presetGrimDelayed = false;
+    private int presetMotionFlags = 0;
+    private int presetOffGround = 0;
+    private boolean presetMotionDone = false;
+    private boolean presetBlocksFlip = false;
 
     public Disabler() {
-        super("Disabler", false);
+        super("Disabler", false, false, "Bypasses anticheat checks by altering outbound packets.");
     }
 
-    @EventTarget(whenDisabled = true)
+    @EventTarget
     public void onPacket(PacketEvent event) {
         // use deobfuscated player reference
         if (this.isEnabled() && mc.thePlayer != null) {
@@ -143,6 +182,10 @@ public class Disabler extends Module {
             if (this.matrixDisabler.getValue()) {
                 this.handleMatrixPacket(event, packet);
             }
+
+            this.handlePresetPacket(event, packet);
+
+            this.handleCustomPacket(event, packet);
 
             if (this.lifeboat.getValue() && packet instanceof C0FPacketConfirmTransaction) {
                 event.setCancelled(true);
@@ -243,7 +286,7 @@ public class Disabler extends Module {
                 this.debugMessage("§cModified §aPlace §cPacket§7.");
             }
 
-            if (this.intaveFly.getValue()) {
+            if (this.intaveFly.getValue() || this.preset.getValue() == PRESET_INTAVE) {
                 if (packet instanceof S08PacketPlayerPosLook && mc.thePlayer.capabilities.isFlying) {
                     this.shouldDelay = true;
                     this.debugMessage("§cStarted Canceling IntaveFly");
@@ -370,6 +413,21 @@ public class Disabler extends Module {
                 PacketUtil.sendPacket(new C0BPacketEntityAction(mc.thePlayer, Action.STOP_SNEAKING));
             }
 
+            this.handlePresetTick();
+
+            if ((this.intaveFly.getValue() || this.preset.getValue() == PRESET_INTAVE) && this.shouldDelay) {
+                while (this.packets.size() > MAX_DELAYED_PACKETS) {
+                    PacketUtil.handlePacket(this.packets.poll());
+                }
+                if (!this.packets.isEmpty()
+                        && (!mc.thePlayer.capabilities.isFlying || mc.thePlayer.ticksExisted % 10 == 0)) {
+                    PacketUtil.handlePacket(this.packets.poll());
+                    if (this.packets.isEmpty()) {
+                        this.shouldDelay = false;
+                    }
+                }
+            }
+
             if (this.betaVerus.getValue()) {
                 this.betaVerusModified = false;
                 if (this.betaVerusLagTimer.hasTimeElapsed(490L)) {
@@ -442,6 +500,11 @@ public class Disabler extends Module {
     public void onLoadWorld(LoadWorldEvent event) {
         if (this.isEnabled()) {
             this.isOnCombat = false;
+            if (this.preset.getValue() == PRESET_HYPIXEL_MOTION) {
+                this.presetMotionFlags = 0;
+                this.presetOffGround = 0;
+                this.presetMotionDone = false;
+            }
             if (this.betaVerus.getValue()) {
                 this.betaVerus2Stat = false;
                 this.betaVerusPacketBuffer.clear();
@@ -549,6 +612,215 @@ public class Disabler extends Module {
 
     }
 
+    private void handleCustomPacket(PacketEvent event, Packet<?> packet) {
+        if (this.preset.getValue() != PRESET_CUSTOM || event.getType() != EventType.SEND) {
+            return;
+        }
+        String list = this.customCancelPackets.getValue();
+        if (list == null || list.trim().isEmpty() || packet == null) {
+            return;
+        }
+        String simple = packet.getClass().getSimpleName().toUpperCase();
+        for (String entry : list.split(",")) {
+            String clean = entry.trim().toUpperCase();
+            if (!clean.isEmpty() && (simple.equals(clean) || simple.contains(clean))) {
+                event.setCancelled(true);
+                this.debugMessage("Custom cancelled " + packet.getClass().getSimpleName());
+                return;
+            }
+        }
+    }
+
+    private boolean isLobby() {
+        if (mc.theWorld == null) {
+            return true;
+        }
+        for (String line : ServerUtil.getScoreboardLines()) {
+            String lower = line.toLowerCase();
+            if (lower.contains("lobby") || lower.contains("limbo")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void handlePresetPacket(PacketEvent event, Packet<?> packet) {
+        int p = this.preset.getValue();
+        if (p == PRESET_CUSTOM) {
+            return;
+        }
+        boolean send = event.getType() == EventType.SEND;
+        boolean receive = event.getType() == EventType.RECEIVE;
+        if (p == PRESET_POLAR) {
+            // Adapted from Raven S+ PolarDisabler. UNTESTED, needs live server.
+            if (send && packet instanceof C00PacketKeepAlive) {
+                event.setCancelled(true);
+                this.debugMessage("Polar cancelled C00");
+            } else if (receive && packet instanceof S00PacketKeepAlive) {
+                event.setCancelled(true);
+                PacketUtil.sendPacket(new C00PacketKeepAlive(0));
+                this.debugMessage("Polar spoofed keepalive");
+            }
+        } else if (p == PRESET_INTAVE) {
+            // Adapted from Raven S+ IntaveDisabler. UNTESTED, needs live server.
+            if (send && packet instanceof C19PacketResourcePackStatus && this.presetIntaveResource.getValue()) {
+                event.setCancelled(true);
+                this.debugMessage("Intave cancelled resource pack status");
+            } else if (send && packet instanceof C0FPacketConfirmTransaction && this.presetIntaveCloud.getValue()) {
+                event.setCancelled(true);
+                this.presetCloud.add((C0FPacketConfirmTransaction) packet);
+                if (this.presetCloud.size() >= 50) {
+                    PacketUtil.sendPacketNoEvent(this.presetCloud.pollFirst());
+                }
+            }
+        } else if (p == PRESET_GRIM_EXTREME) {
+            // Adapted from Raven S+ GrimExtremeDisabler, cancel plus resend since packets are read-only here. UNTESTED, needs live server.
+            if (send && (packet instanceof C03PacketPlayer.C04PacketPlayerPosition || packet instanceof C03PacketPlayer.C06PacketPlayerPosLook)) {
+                event.setCancelled(true);
+                double x = mc.thePlayer.posX + this.presetGrimX.getValue();
+                double y = mc.thePlayer.posY + this.presetGrimY.getValue();
+                double z = mc.thePlayer.posZ + this.presetGrimZ.getValue();
+                if (packet instanceof C03PacketPlayer.C06PacketPlayerPosLook) {
+                    PacketUtil.sendPacket(new C03PacketPlayer.C06PacketPlayerPosLook(x, y, z, mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch, mc.thePlayer.onGround));
+                } else {
+                    PacketUtil.sendPacket(new C03PacketPlayer.C04PacketPlayerPosition(x, y, z, mc.thePlayer.onGround));
+                }
+                this.debugMessage("GrimExtreme offset position");
+            }
+        } else if (p == PRESET_GRIM_SPEC) {
+            // Adapted from Raven S+ GrimSpecDisabler. UNTESTED, needs live server.
+            if (receive && packet instanceof S08PacketPlayerPosLook) {
+                if (mc.thePlayer.capabilities.isFlying && !this.presetGrimDelayed) {
+                    this.presetGrimDelayed = true;
+                } else if (this.presetGrimDelayed) {
+                    this.debugMessage("Flag detected, consider disabling Disabler");
+                }
+            } else if (receive && packet instanceof S32PacketConfirmTransaction && this.presetGrimDelayed) {
+                event.setCancelled(true);
+                while (this.presetDelayed.size() >= MAX_DELAYED_PACKETS) {
+                    this.presetDelayed.pollFirst();
+                }
+                this.presetDelayed.add((Packet<INetHandlerPlayClient>) packet);
+                if (this.presetGrim117.getValue()) {
+                    PacketUtil.sendPacket(new C0FPacketConfirmTransaction(0, (short) 0, true));
+                }
+            }
+        } else if (p == PRESET_MINELAND) {
+            // Adapted from Raven S+ MinelandDisabler. UNTESTED, needs live server.
+            if (send && packet instanceof C0FPacketConfirmTransaction) {
+                event.setCancelled(true);
+                this.debugMessage("Mineland cancelled C0F");
+            } else if (send && packet instanceof C03PacketPlayer && !(packet instanceof C03PacketPlayer.C04PacketPlayerPosition) && !(packet instanceof C03PacketPlayer.C05PacketPlayerLook) && !(packet instanceof C03PacketPlayer.C06PacketPlayerPosLook)) {
+                event.setCancelled(true);
+                this.debugMessage("Mineland cancelled bare C03");
+            }
+        } else if (p == PRESET_HYPIXEL) {
+            // Adapted from Raven S+ HypixelDisabler. UNTESTED, needs live server.
+            if (receive && packet instanceof S08PacketPlayerPosLook) {
+                if (mc.thePlayer.isBlocking()) {
+                    PacketUtil.sendPacket(new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.UP));
+                } else {
+                    mc.playerController.onStoppedUsingItem(mc.thePlayer);
+                }
+            }
+        } else if (p == PRESET_HYPIXEL_MOTION) {
+            // Adapted from Raven S+ HypixelMotionDisabler. UNTESTED, needs live server.
+            if (this.presetHypixelMotionLobby.getValue() && this.isLobby()) {
+                return;
+            }
+            if (receive && packet instanceof S08PacketPlayerPosLook && !this.presetMotionDone) {
+                ++this.presetMotionFlags;
+                if (this.presetMotionFlags >= 20) {
+                    this.presetMotionDone = true;
+                    this.presetMotionFlags = 0;
+                    this.debugMessage("Watchdog motion disabled");
+                }
+            }
+        } else if (p == PRESET_KKCRAFT) {
+            // KKCraft slot and chest dance has no Myau equivalent, tick burst only. UNTESTED, needs live server.
+        } else if (p == PRESET_BLOCKSMC) {
+            // Adapted from Raven S+ BlocksMCDisabler, resend replaces uid accessor writes. UNTESTED, needs live server.
+            if (send && packet instanceof C08PacketPlayerBlockPlacement && this.presetBlocksPlace.getValue()) {
+                event.setCancelled(true);
+                PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(mc.thePlayer.getHeldItem()));
+                this.debugMessage("BlocksMC resent placement");
+            } else if (send && packet instanceof C0FPacketConfirmTransaction && this.presetBlocksCombat.getValue()) {
+                if (mc.thePlayer.ticksExisted <= 20) {
+                    return;
+                }
+                if (this.presetBlocksWait.getValue() && !this.isOnCombat) {
+                    return;
+                }
+                event.setCancelled(true);
+                PacketUtil.sendPacket(new C0FPacketConfirmTransaction(this.presetBlocksFlip ? 1 : -1, (short) (this.presetBlocksFlip ? -1 : 1), this.presetBlocksFlip));
+                this.presetBlocksFlip = !this.presetBlocksFlip;
+                this.debugMessage("BlocksMC flipped C0F");
+            }
+        }
+    }
+
+    private void handlePresetTick() {
+        int p = this.preset.getValue();
+        if (p == PRESET_CUSTOM) {
+            return;
+        }
+        if (p == PRESET_INTAVE && mc.thePlayer != null && mc.thePlayer.ticksExisted > 20) {
+            // Reach/Strong bursts. UNTESTED, needs live server.
+            if (this.presetIntaveReach.getValue() && mc.thePlayer.ticksExisted % 20 == 0) {
+                PacketUtil.sendPacket(new C03PacketPlayer.C04PacketPlayerPosition(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ, mc.thePlayer.onGround));
+            }
+            if (this.presetIntaveStrong.getValue() && mc.thePlayer.ticksExisted % 20 == 10) {
+                for (int i = 0; i < 2; i++) {
+                    PacketUtil.sendPacket(new C03PacketPlayer.C04PacketPlayerPosition(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ, mc.thePlayer.onGround));
+                }
+            }
+        }
+        if (p == PRESET_POLAR && this.presetPolarAirline.getValue()) {
+            // Adapted from Raven S+ PolarDisabler airline offset. UNTESTED, needs live server.
+            PacketUtil.sendPacket(new C03PacketPlayer.C04PacketPlayerPosition(mc.thePlayer.posX + 1024.0D, mc.thePlayer.posY + 1024.0D, mc.thePlayer.posZ + 1024.0D, mc.thePlayer.onGround));
+        } else if (p == PRESET_HYPIXEL && this.presetHypixelSprint.getValue()) {
+            // Adapted from Raven S+ HypixelDisabler sprint cancel. UNTESTED, needs live server.
+            mc.thePlayer.setSprinting(false);
+        } else if (p == PRESET_HYPIXEL_MOTION && !this.presetMotionDone) {
+            // Adapted from Raven S+ HypixelMotionDisabler. UNTESTED, needs live server.
+            if (this.presetHypixelMotionLobby.getValue() && this.isLobby()) {
+                return;
+            }
+            if (mc.thePlayer.onGround) {
+                this.presetOffGround = 0;
+                if (!mc.gameSettings.keyBindJump.isKeyDown()) {
+                    mc.thePlayer.jump();
+                }
+            } else {
+                ++this.presetOffGround;
+                if (this.presetOffGround >= 9) {
+                    if (this.presetOffGround % 2 == 0) {
+                        double jitter = 0.09D + Math.random() * 0.03D;
+                        PacketUtil.sendPacket(new C03PacketPlayer.C04PacketPlayerPosition(mc.thePlayer.posX + jitter, mc.thePlayer.posY, mc.thePlayer.posZ, mc.thePlayer.onGround));
+                    }
+                    mc.thePlayer.motionX = 0.0D;
+                    mc.thePlayer.motionY = 0.0D;
+                    mc.thePlayer.motionZ = 0.0D;
+                }
+            }
+        } else if (p == PRESET_KKCRAFT && this.presetKkAutoban.getValue()) {
+            // Adapted from Raven S+ KKCraftDisabler auto ban burst. UNTESTED, needs live server.
+            for (int i = 0; i < 6; ++i) {
+                PacketUtil.sendPacket(new C03PacketPlayer.C06PacketPlayerPosLook(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ, mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch, mc.thePlayer.onGround));
+            }
+        }
+    }
+
+    private void resetPresetState() {
+        this.presetCloud.clear();
+        this.presetDelayed.clear();
+        this.presetGrimDelayed = false;
+        this.presetMotionFlags = 0;
+        this.presetOffGround = 0;
+        this.presetMotionDone = false;
+        this.presetBlocksFlip = false;
+    }
+
     private void debugMessage(String msg) {
         if (this.chatDebug.getValue()) {
             mc.thePlayer.addChatMessage(new ChatComponentText("§7[§bDisabler§7] §f" + msg));
@@ -556,8 +828,18 @@ public class Disabler extends Module {
 
     }
 
+    public void onEnabled() {
+        this.resetPresetState();
+    }
+
     public void onDisabled() {
         this.debugMessage("Disabler disabled - resetting all states");
+        if (mc.getNetHandler() != null) {
+            while (!this.presetDelayed.isEmpty()) {
+                PacketUtil.handlePacket(this.presetDelayed.pollFirst());
+            }
+        }
+        this.resetPresetState();
         this.flags = 0;
         this.execute = false;
         this.jump = false;
@@ -588,6 +870,10 @@ public class Disabler extends Module {
     }
 
     public String[] getSuffix() {
+        if (this.preset.getValue() != PRESET_CUSTOM) {
+            return new String[]{this.preset.getModeString()};
+        }
+
         int active = 0;
         if (this.basicDisabler.getValue()) {
             ++active;

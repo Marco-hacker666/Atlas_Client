@@ -7,8 +7,10 @@ import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.events.*;
 import myau.mixin.IAccessorEntity;
+import myau.mixin.IAccessorMinecraft;
 import myau.module.Module;
 import myau.property.properties.BooleanProperty;
+import myau.property.properties.FloatProperty;
 import myau.property.properties.IntProperty;
 import myau.property.properties.ModeProperty;
 import myau.property.properties.PercentProperty;
@@ -25,7 +27,9 @@ import net.minecraft.network.play.client.*;
 import net.minecraft.network.play.server.S12PacketEntityVelocity;
 import net.minecraft.network.play.server.S19PacketEntityStatus;
 import net.minecraft.network.play.server.S27PacketExplosion;
+import net.minecraft.network.play.server.S32PacketConfirmTransaction;
 import net.minecraft.potion.Potion;
+import net.minecraft.util.MovingObjectPosition;
 
 public class Velocity extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -55,7 +59,33 @@ public class Velocity extends Module {
     private boolean inventory = false;
     private boolean dig = false;
 
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"Vanilla", "Jump", "Hypixel", "Slap_Attack"});
+    private boolean intaveReduced = false;
+    private int grimPending = 0;
+    private boolean matrixReduced = false;
+    private int polarHurtTime = 8;
+    private int polarHurtCount = 0;
+    private boolean polarPending = false;
+    private double delayMotionX = 0;
+    private double delayMotionY = 0;
+    private double delayMotionZ = 0;
+    private int delayTickCounter = 0;
+    private boolean delayActive = false;
+    private int delayChanceCounter = 0;
+    // Appended splits state (10-17). Existing 0-9 fields untouched.
+    private boolean tickPending = false;
+    private int tickCounter = 0;
+    private int tickChanceCounter = 0;
+    private boolean zipHolding = false;
+    private int zipTicks = 0;
+    private double zipMotionX = 0;
+    private double zipMotionY = 0;
+    private double zipMotionZ = 0;
+    private boolean matrixFullReduced = false;
+    private int xzChanceCounter = 0;
+    private boolean oldGrimHolding = false;
+    private boolean oldGrimAttacked = false;
+
+    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"Vanilla", "Jump", "Hypixel", "Slap_Attack", "Intave", "GrimAC", "Matrix", "PolarJump", "Legit", "Delay", "Tick", "Zip", "Karhu", "MatrixReverse", "MatrixFull", "Intave14", "XZSwitch", "OldGrim", "Vulcan", "BlocksMC", "GrimC03", "IntaveTimer"});
 
     public final PercentProperty chance = new PercentProperty("chance", 100, () -> mode.getValue() <= 1);
     public final PercentProperty horizontal = new PercentProperty("horizontal", 0, () -> mode.getValue() <= 1);
@@ -88,21 +118,105 @@ public class Velocity extends Module {
     public final BooleanProperty fakeCheck = new BooleanProperty("fake-check", true);
     public final BooleanProperty debugLog = new BooleanProperty("debug-log", false);
 
+    // Ported from S+ IntaveVelocity.java: attack-time XZ scale plus optional reset jump.
+    public final FloatProperty intaveXZ = new FloatProperty("intave-xz", 0.6F, 0.0F, 1.0F, () -> mode.getValue() == 4);
+    public final FloatProperty intaveSprintXZ = new FloatProperty("intave-sprint-xz", 0.6F, 0.0F, 1.0F, () -> mode.getValue() == 4);
+    public final PercentProperty intaveChance = new PercentProperty("intave-chance", 100, () -> mode.getValue() == 4);
+    public final BooleanProperty intaveJump = new BooleanProperty("intave-jump", false, () -> mode.getValue() == 4);
+    public final PercentProperty intaveJumpChance = new PercentProperty("intave-jump-chance", 80, () -> mode.getValue() == 4 && intaveJump.getValue());
+    // Ported from S+ GrimACVelocity.java: sprint-restart plus burst attack reduces.
+    public final IntProperty grimAttacks = new IntProperty("grim-attacks", 4, 1, 10, () -> mode.getValue() == 5);
+    public final IntProperty grimTimes = new IntProperty("grim-times", 1, 1, 5, () -> mode.getValue() == 5);
+    public final BooleanProperty grimOnlyMoving = new BooleanProperty("grim-only-moving", false, () -> mode.getValue() == 5);
+    // Ported from S+ MatrixSimpleVelocity.java + MatrixVelocity.java: packet scale plus tiered attack reduce.
+    public final FloatProperty matrixScale = new FloatProperty("matrix-scale", 0.36F, 0.0F, 1.0F, () -> mode.getValue() == 6);
+    public final FloatProperty matrixGroundScale = new FloatProperty("matrix-ground-scale", 0.9F, 0.0F, 1.0F, () -> mode.getValue() == 6);
+    // Ported from S+ PolarJumpVelocity.java: jump at a randomised hurt time.
+    public final BooleanProperty polarForceChange = new BooleanProperty("polar-force-change", true, () -> mode.getValue() == 7);
+    public final IntProperty polarHurtTarget = new IntProperty("polar-hurt-count", 5, 1, 10, () -> mode.getValue() == 7 && polarForceChange.getValue());
+    // Ported from S+ LegitVelocity.java: chance-based reset jump with liquid guard.
+    public final PercentProperty legitChance = new PercentProperty("legit-chance", 80, () -> mode.getValue() == 8);
+    public final BooleanProperty legitJumpInInv = new BooleanProperty("legit-jump-in-inv", false, () -> mode.getValue() == 8);
+    public final BooleanProperty legitIgnoreLiquid = new BooleanProperty("legit-ignore-liquid", true, () -> mode.getValue() == 8);
+    // Ported from MiauMinus NewVelocity.java Delay mode: hold the packet, apply scaled motion late.
+    public final IntProperty delayTicksProp = new IntProperty("delay-ticks", 3, 1, 20, () -> mode.getValue() == 9);
+    public final PercentProperty delayChanceProp = new PercentProperty("delay-chance", 100, () -> mode.getValue() == 9);
+    public final FloatProperty delayHorizontalProp = new FloatProperty("delay-horizontal", 0.0F, -1.0F, 1.0F, () -> mode.getValue() == 9);
+    public final FloatProperty delayVerticalProp = new FloatProperty("delay-vertical", 0.0F, -1.0F, 1.0F, () -> mode.getValue() == 9);
+    // Adapted from S+ TickVelocity.java: delayed post-hurt scale (scheduler replaced by tick counter).
+    public final PercentProperty tickHorizontalProp = new PercentProperty("tick-horizontal", 0, () -> mode.getValue() == 10);
+    public final PercentProperty tickVerticalProp = new PercentProperty("tick-vertical", 100, () -> mode.getValue() == 10);
+    public final IntProperty tickDelayProp = new IntProperty("tick-delay", 2, 1, 10, () -> mode.getValue() == 10);
+    public final PercentProperty tickChanceProp = new PercentProperty("tick-chance", 100, () -> mode.getValue() == 10);
+    // Adapted from S+ ZipVelocity.java, simplified experimental: hold S12, release on attack/timeout. S32 buffering omitted.
+    public final IntProperty zipDelayProp = new IntProperty("zip-delay", 20, 4, 200, () -> mode.getValue() == 11);
+    public final BooleanProperty zipStopOnAttack = new BooleanProperty("zip-stop-on-attack", true, () -> mode.getValue() == 11);
+    public final PercentProperty zipHorizontalProp = new PercentProperty("zip-horizontal", 0, () -> mode.getValue() == 11);
+    public final PercentProperty zipVerticalProp = new PercentProperty("zip-vertical", 100, () -> mode.getValue() == 11);
+    // Adapted from S+ KarhuVelocity.java + Miau KarhuVelocity.java, experimental: hurt-windowed damp only, bounding-box part omitted.
+    public final IntProperty karhuStartProp = new IntProperty("karhu-start", 10, 1, 10, () -> mode.getValue() == 12);
+    public final IntProperty karhuStopProp = new IntProperty("karhu-stop", 0, 0, 9, () -> mode.getValue() == 12);
+    public final FloatProperty karhuFactorProp = new FloatProperty("karhu-factor", 0.6F, 0.0F, 1.0F, () -> mode.getValue() == 12);
+    // Adapted from S+ MatrixReverseVelocity.java: negative XZ scale.
+    public final FloatProperty matrixReverseXZProp = new FloatProperty("matrix-reverse-xz", -0.3F, -1.0F, 1.0F, () -> mode.getValue() == 13);
+    public final PercentProperty matrixReverseChanceProp = new PercentProperty("matrix-reverse-chance", 100, () -> mode.getValue() == 13);
+    // Adapted from S+ MatrixFullVelocity.java: pre scale plus post damp.
+    public final FloatProperty matrixFullXZProp = new FloatProperty("matrix-full-xz", 0.4F, 0.0F, 1.0F, () -> mode.getValue() == 14);
+    public final FloatProperty matrixFullGroundProp = new FloatProperty("matrix-full-ground", 0.8F, 0.0F, 1.0F, () -> mode.getValue() == 14);
+    public final FloatProperty matrixFullYProp = new FloatProperty("matrix-full-y", 0.6F, 0.0F, 1.0F, () -> mode.getValue() == 14);
+    // Adapted from S+ Intave14Velocity.java + Miau Intave14Velocity.java phased reduces, simplified: hurt-gated packet scale.
+    public final IntProperty intave14HurtProp = new IntProperty("intave14-hurt", 9, 1, 10, () -> mode.getValue() == 15);
+    public final FloatProperty intave14FactorProp = new FloatProperty("intave14-factor", 0.15F, 0.0F, 1.0F, () -> mode.getValue() == 15);
+    public final PercentProperty intave14VerticalProp = new PercentProperty("intave14-vertical", 100, () -> mode.getValue() == 15);
+    public final PercentProperty intave14ChanceProp = new PercentProperty("intave14-chance", 100, () -> mode.getValue() == 15);
+    // Adapted from Miau NewVelocity.java XZSwitch mode: swap X/Z.
+    public final PercentProperty xzChanceProp = new PercentProperty("xz-chance", 100, () -> mode.getValue() == 16);
+    public final BooleanProperty xzOnlyMoving = new BooleanProperty("xz-only-moving", true, () -> mode.getValue() == 16);
+    // Adapted from Miau OldGrimVelocity.java + NewVelocity handleOldGrim, experimental: cancel strong S12, burst on update.
+    public final IntProperty oldGrimAttacksProp = new IntProperty("oldgrim-attacks", 6, 1, 12, () -> mode.getValue() == 17);
+    public final FloatProperty oldGrimReduceProp = new FloatProperty("oldgrim-reduce", 0.5F, 0.0F, 1.0F, () -> mode.getValue() == 17);
+    public final FloatProperty oldGrimRangeProp = new FloatProperty("oldgrim-range", 3.0F, 0.0F, 6.0F, () -> mode.getValue() == 17);
+
+    private boolean vulcanTransaction = false;
+    private boolean blocksHolding = false;
+    private boolean grimC03Pending = false;
+    private int grimC03Ticks = 0;
+    public final BooleanProperty onlyWhileTargeting = new BooleanProperty("only-while-targeting", false);
+    public final BooleanProperty pauseOnS = new BooleanProperty("pause-on-S", false);
+
     public Velocity() {
-        super("Velocity", false);
+        super("Velocity", false, false, "Reduces or modifies incoming knockback velocity.");
     }
 
     private boolean isInLiquidOrWeb() {
         return mc.thePlayer.isInWater() || mc.thePlayer.isInLava() || ((IAccessorEntity) mc.thePlayer).getIsInWeb();
     }
 
-    @EventTarget(whenDisabled = true)
+    private boolean isVelocityPaused() {
+        if (mc.thePlayer == null) return true;
+        if (this.pauseOnS.getValue() && mc.gameSettings.keyBindBack.isKeyDown()) return true;
+        if (this.onlyWhileTargeting.getValue()) {
+            if (mc.objectMouseOver == null || mc.objectMouseOver.typeOfHit != MovingObjectPosition.MovingObjectType.ENTITY) return true;
+        }
+        return false;
+    }
+
+    private void resetAppendedTimer() {
+        try {
+            net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
+            if (timer != null) timer.timerSpeed = 1.0F;
+        } catch (Exception ignored) {
+        }
+    }
+
+    @EventTarget
     public void onKnockback(KnockbackEvent event) {
         if (!this.isEnabled() || event.isCancelled()) {
             this.pendingExplosion = false;
             this.allowNext = true;
             return;
         }
+        if (this.isVelocityPaused()) return;
 
         if (!this.allowNext || !this.fakeCheck.getValue()) {
             this.allowNext = true;
@@ -152,9 +266,149 @@ public class Velocity extends Module {
                         }
                     }
                     this.ticksSinceVelocity = 0;
+                    this.ShouldJump = true;
                     this.hasReceivedVelocity = true;
+                } else if (this.mode.getValue() == 4) {
+                    this.intaveReduced = false;
+                    if (this.intaveJump.getValue() && event.getY() > 0.0) {
+                        this.jumpFlag = true;
+                    }
+                } else if (this.mode.getValue() == 5) {
+                    this.grimPending = this.grimTimes.getValue();
+                } else if (this.mode.getValue() == 6) {
+                    event.setX(event.getX() * this.matrixScale.getValue());
+                    event.setZ(event.getZ() * this.matrixScale.getValue());
+                    if (mc.thePlayer != null && mc.thePlayer.onGround) {
+                        event.setX(event.getX() * this.matrixGroundScale.getValue());
+                        event.setZ(event.getZ() * this.matrixGroundScale.getValue());
+                    }
+                    this.matrixReduced = false;
+                } else if (this.mode.getValue() == 7) {
+                    this.polarPending = true;
+                    this.polarHurtTime = 7 + (int) (Math.random() * 3);
+                    this.polarHurtCount++;
+                } else if (this.mode.getValue() == 8) {
+                    if (this.legitIgnoreLiquid.getValue() && this.isInLiquidOrWeb()) return;
+                    if (Math.random() * 100.0 > this.legitChance.getValue()) return;
+                    if (mc.thePlayer != null && mc.thePlayer.onGround && (this.legitJumpInInv.getValue() || mc.currentScreen == null)) {
+                        mc.thePlayer.jump();
+                    }
+                } else if (this.mode.getValue() == 10) {
+                    // Adapted from S+ TickVelocity: arm delayed apply, applied in onTick.
+                    this.tickCounter = 0;
+                    this.tickPending = true;
+                } else if (this.mode.getValue() == 11) {
+                    // Adapted from S+ ZipVelocity, simplified experimental: hold KB here, release on attack/timeout. S32 buffering omitted.
+                    this.zipMotionX = event.getX();
+                    this.zipMotionY = event.getY();
+                    this.zipMotionZ = event.getZ();
+                    event.setX(mc.thePlayer.motionX);
+                    event.setY(mc.thePlayer.motionY);
+                    event.setZ(mc.thePlayer.motionZ);
+                    this.zipHolding = true;
+                    this.zipTicks = 0;
+                } else if (this.mode.getValue() == 17) {
+                    // Adapted from Miau OldGrimVelocity, experimental: cancel strong KB here, burst in onUpdate.
+                    if (Math.hypot(event.getX(), event.getZ()) <= 0.125) return;
+                    event.setX(mc.thePlayer.motionX);
+                    event.setY(mc.thePlayer.motionY);
+                    event.setZ(mc.thePlayer.motionZ);
+                    this.oldGrimHolding = true;
+                    this.oldGrimAttacked = false;
+                } else if (this.mode.getValue() == 13) {
+                    // Adapted from S+ MatrixReverseVelocity.
+                    if (Math.random() * 100.0 > this.matrixReverseChanceProp.getValue()) return;
+                    event.setX(event.getX() * this.matrixReverseXZProp.getValue());
+                    event.setZ(event.getZ() * this.matrixReverseXZProp.getValue());
+                } else if (this.mode.getValue() == 14) {
+                    // Adapted from S+ MatrixFullVelocity pre scale.
+                    event.setX(event.getX() * this.matrixFullXZProp.getValue());
+                    event.setZ(event.getZ() * this.matrixFullXZProp.getValue());
+                    if (mc.thePlayer != null && mc.thePlayer.onGround) {
+                        event.setX(event.getX() * this.matrixFullGroundProp.getValue());
+                        event.setZ(event.getZ() * this.matrixFullGroundProp.getValue());
+                    }
+                    event.setY(event.getY() * this.matrixFullYProp.getValue());
+                    this.matrixFullReduced = false;
+                } else if (this.mode.getValue() == 15) {
+                    // Adapted from S+ Intave14Velocity hurt gate.
+                    if (mc.thePlayer == null || mc.thePlayer.hurtTime < this.intave14HurtProp.getValue()) return;
+                    if (Math.random() * 100.0 > this.intave14ChanceProp.getValue()) return;
+                    event.setX(event.getX() * this.intave14FactorProp.getValue());
+                    event.setZ(event.getZ() * this.intave14FactorProp.getValue());
+                    if (this.intave14VerticalProp.getValue() != 100) {
+                        event.setY(event.getY() * (double) this.intave14VerticalProp.getValue() / 100.0);
+                    }
+                } else if (this.mode.getValue() == 16) {
+                    // Adapted from Miau NewVelocity XZSwitch.
+                    if (this.xzOnlyMoving.getValue() && !MoveUtil.isMoving()) return;
+                    this.xzChanceCounter = (this.xzChanceCounter % 100) + this.xzChanceProp.getValue();
+                    if (this.xzChanceCounter < 100) return;
+                    double swappedX = event.getX();
+                    event.setX(event.getZ());
+                    event.setZ(swappedX);
                 }
             }
+        }
+    }
+
+    @EventTarget
+    public void onAttack(AttackEvent event) {
+        if (!this.isEnabled() || mc.thePlayer == null) return;
+        if (!(event.getTarget() instanceof EntityLivingBase)) return;
+        if (this.mode.getValue() == 4) {
+            if (mc.thePlayer.hurtTime <= 0 || this.intaveReduced) return;
+            if (Math.random() * 100.0 > this.intaveChance.getValue()) return;
+            float factor = mc.thePlayer.isSprinting() ? this.intaveSprintXZ.getValue() : this.intaveXZ.getValue();
+            mc.thePlayer.motionX *= factor;
+            mc.thePlayer.motionZ *= factor;
+            this.intaveReduced = true;
+            if (this.debugLog.getValue()) {
+                ChatUtil.sendFormatted(Myau.clientName + "Intave reduce");
+            }
+        } else if (this.mode.getValue() == 6) {
+            if (mc.thePlayer.hurtTime <= 0 || this.matrixReduced) return;
+            if (!mc.thePlayer.isSprinting()) {
+                this.matrixReduced = true;
+                return;
+            }
+            double ax = Math.abs(mc.thePlayer.motionX);
+            double az = Math.abs(mc.thePlayer.motionZ);
+            if (ax < 0.625 && az < 0.625) {
+                mc.thePlayer.motionX *= 0.4;
+                mc.thePlayer.motionZ *= 0.4;
+            } else if (ax < 1.25 && az < 1.25) {
+                mc.thePlayer.motionX *= 0.67;
+                mc.thePlayer.motionZ *= 0.67;
+            }
+            mc.thePlayer.setSprinting(false);
+            this.matrixReduced = true;
+        } else if (this.mode.getValue() == 11) {
+            // Adapted from S+ ZipVelocity stop-on-attack, simplified: release held KB.
+            if (this.zipHolding && this.zipStopOnAttack.getValue() && mc.thePlayer.hurtTime > 0) {
+                mc.thePlayer.motionX = this.zipMotionX * (double) this.zipHorizontalProp.getValue() / 100.0;
+                mc.thePlayer.motionZ = this.zipMotionZ * (double) this.zipHorizontalProp.getValue() / 100.0;
+                mc.thePlayer.motionY = this.zipMotionY * (double) this.zipVerticalProp.getValue() / 100.0;
+                this.zipHolding = false;
+                this.zipTicks = 0;
+            }
+        } else if (this.mode.getValue() == 12) {
+            // Adapted from S+ KarhuVelocity window, experimental, no bounding box.
+            if (mc.thePlayer.hurtTime <= this.karhuStartProp.getValue() && mc.thePlayer.hurtTime > this.karhuStopProp.getValue()) {
+                mc.thePlayer.motionX *= this.karhuFactorProp.getValue();
+                mc.thePlayer.motionZ *= this.karhuFactorProp.getValue();
+            }
+        } else if (this.mode.getValue() == 14) {
+            // Adapted from S+ MatrixFullVelocity post damp.
+            if (mc.thePlayer.hurtTime <= 0 || this.matrixFullReduced) return;
+            if (mc.thePlayer.onGround) {
+                mc.thePlayer.motionX *= 0.75;
+                mc.thePlayer.motionZ *= 0.75;
+            } else {
+                mc.thePlayer.motionX *= 0.85;
+                mc.thePlayer.motionZ *= 0.85;
+            }
+            this.matrixFullReduced = true;
         }
     }
 
@@ -162,12 +416,68 @@ public class Velocity extends Module {
     public void onTick(TickEvent event) {
         if (!this.isEnabled() || event.getType() != EventType.PRE) return;
 
+        if (this.mode.getValue() == 1) {
+            this.handleJumpReset();
+        }
         if (this.ticksSinceVelocity >= 0) {
             this.ticksSinceVelocity++;
         }
         if (this.ticksSinceVelocity >= 10) {
             this.ticksSinceVelocity = -1;
             this.ShouldJump = false;
+        }
+
+        if (mc.thePlayer == null) return;
+        if (this.mode.getValue() == 7 && this.polarPending && this.polarForceChange.getValue()
+                && this.polarHurtCount >= this.polarHurtTarget.getValue()) {
+            this.polarHurtCount = 0;
+            this.polarHurtTime = 7 + (int) (Math.random() * 3);
+        }
+        if (this.mode.getValue() == 9 && this.delayActive) {
+            this.delayTickCounter++;
+            if (this.delayTickCounter >= this.delayTicksProp.getValue()) {
+                mc.thePlayer.motionX = this.delayMotionX * this.delayHorizontalProp.getValue();
+                mc.thePlayer.motionZ = this.delayMotionZ * this.delayHorizontalProp.getValue();
+                mc.thePlayer.motionY = this.delayMotionY * this.delayVerticalProp.getValue();
+                this.delayActive = false;
+                this.delayTickCounter = 0;
+            }
+        }
+        if (this.mode.getValue() == 10 && this.tickPending) {
+            // Adapted from S+ TickVelocity: tick-delayed scale instead of scheduler.
+            this.tickCounter++;
+            if (this.tickCounter >= this.tickDelayProp.getValue()) {
+                this.tickChanceCounter = (this.tickChanceCounter % 100) + this.tickChanceProp.getValue();
+                if (this.tickChanceCounter >= 100 && mc.thePlayer.hurtTime > 0) {
+                    mc.thePlayer.motionX *= (double) this.tickHorizontalProp.getValue() / 100.0;
+                    mc.thePlayer.motionZ *= (double) this.tickHorizontalProp.getValue() / 100.0;
+                    mc.thePlayer.motionY *= (double) this.tickVerticalProp.getValue() / 100.0;
+                }
+                this.tickPending = false;
+                this.tickCounter = 0;
+            }
+        }
+        if (this.mode.getValue() == 11 && this.zipHolding) {
+            // Adapted from S+ ZipVelocity timeout release, simplified.
+            this.zipTicks++;
+            if (this.zipTicks >= this.zipDelayProp.getValue()) {
+                mc.thePlayer.motionX = this.zipMotionX * (double) this.zipHorizontalProp.getValue() / 100.0;
+                mc.thePlayer.motionZ = this.zipMotionZ * (double) this.zipHorizontalProp.getValue() / 100.0;
+                mc.thePlayer.motionY = this.zipMotionY * (double) this.zipVerticalProp.getValue() / 100.0;
+                this.zipHolding = false;
+                this.zipTicks = 0;
+            }
+        }
+        if (this.mode.getValue() == 20 && this.grimC03Pending && !this.isVelocityPaused()) {
+            this.grimC03Ticks++;
+            if (mc.thePlayer.hurtTime > 0) {
+                mc.getNetHandler().addToSendQueue(new C03PacketPlayer(true));
+                this.grimC03Pending = false;
+                this.grimC03Ticks = 0;
+            } else if (this.grimC03Ticks > 40) {
+                this.grimC03Pending = false;
+                this.grimC03Ticks = 0;
+            }
         }
     }
 
@@ -189,13 +499,15 @@ public class Velocity extends Module {
         }
     }
 
-    @EventTarget(whenDisabled = true)
+    @EventTarget
     public void onLivingUpdate(LivingUpdateEvent event) {
         // 加上对 Mode 2 且开启了 hypixelJump 选项的判断
         boolean isMode1 = this.mode.getValue() == 1;
         boolean isMode2Jump = this.mode.getValue() == 2 && this.hypixelJump.getValue();
+        boolean isMode4Jump = this.mode.getValue() == 4 && this.intaveJump.getValue()
+                && Math.random() * 100.0 <= this.intaveJumpChance.getValue();
 
-        if (this.isEnabled() && this.jumpFlag && (isMode1 || isMode2Jump)) {
+        if (this.isEnabled() && this.jumpFlag && (isMode1 || isMode2Jump || isMode4Jump)) {
             this.jumpFlag = false;
             if (mc.thePlayer.onGround && mc.thePlayer.isSprinting() && !mc.thePlayer.isPotionActive(Potion.jump) && !this.isInLiquidOrWeb()) {
                 mc.thePlayer.movementInput.jump = true;
@@ -265,14 +577,12 @@ public class Velocity extends Module {
             if (this.slapReduceTicks > 0) {
                 this.slapReduceTicks--;
                 KillAura killAura = (KillAura) Myau.moduleManager.getModule(KillAura.class);
-                if (killAura != null && killAura.isEnabled() && killAura.getTarget() != null
-                        && this.canReduceHit(killAura, event)) {
+                if (killAura != null && killAura.isEnabled() && killAura.getTarget() != null) {
                     EntityLivingBase target = killAura.getTarget();
                     if (!((IAccessorEntity) mc.thePlayer).getIsInWeb() && mc.thePlayer.isSprinting() && MoveUtil.isMoving() && target != mc.thePlayer && !this.badPackets()) {
                         EventManager.call(new AttackEvent(target));
                         mc.getNetHandler().addToSendQueue(new C0APacketAnimation());
                         mc.getNetHandler().addToSendQueue(new C02PacketUseEntity(target, C02PacketUseEntity.Action.ATTACK));
-                        killAura.noteExternalAttack();
                         mc.thePlayer.motionX *= 0.6;
                         mc.thePlayer.motionZ *= 0.6;
                         mc.thePlayer.setSprinting(false);
@@ -284,11 +594,125 @@ public class Velocity extends Module {
                 }
             }
         }
+
+        if (this.mode.getValue() == 5 && event.getType() == EventType.PRE) {
+            if (this.grimPending > 0 && mc.thePlayer != null && mc.thePlayer.hurtTime > 0
+                    && (!this.grimOnlyMoving.getValue() || MoveUtil.isMoving())) {
+                Entity target = null;
+                KillAura killAura = (KillAura) Myau.moduleManager.getModule(KillAura.class);
+                if (killAura != null && killAura.isEnabled() && killAura.getTarget() != null) {
+                    target = killAura.getTarget();
+                } else if (mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY
+                        && mc.objectMouseOver.entityHit instanceof EntityLivingBase) {
+                    target = mc.objectMouseOver.entityHit;
+                }
+                if (target != null) {
+                    for (int i = 0; i < this.grimAttacks.getValue(); i++) {
+                        EventManager.call(new AttackEvent(target));
+                        mc.getNetHandler().addToSendQueue(new C0APacketAnimation());
+                        mc.getNetHandler().addToSendQueue(new C02PacketUseEntity(target, C02PacketUseEntity.Action.ATTACK));
+                        mc.thePlayer.motionX *= 0.6;
+                        mc.thePlayer.motionZ *= 0.6;
+                    }
+                    if (this.debugLog.getValue()) {
+                        ChatUtil.sendFormatted(Myau.clientName + "Grim reduce");
+                    }
+                }
+                this.grimPending--;
+            }
+        }
+
+        if (this.mode.getValue() == 7 && event.getType() == EventType.PRE) {
+            if (this.polarPending && mc.thePlayer != null && mc.thePlayer.hurtTime == this.polarHurtTime && mc.thePlayer.onGround) {
+                mc.thePlayer.jump();
+                if (this.debugLog.getValue()) {
+                    ChatUtil.sendFormatted(Myau.clientName + "Polar jump");
+                }
+                this.polarHurtTime = 7 + (int) (Math.random() * 3);
+                if (mc.thePlayer.hurtTime == 0) {
+                    this.polarPending = false;
+                }
+            }
+            if (mc.thePlayer != null && mc.thePlayer.hurtTime == 0) {
+                this.polarPending = false;
+            }
+        }
+
+        if (this.mode.getValue() == 17 && event.getType() == EventType.PRE) {
+            // Adapted from Miau OldGrimVelocity, experimental: burst after cancelled strong S12.
+            if (mc.thePlayer != null && mc.thePlayer.hurtTime == 0) {
+                this.oldGrimHolding = false;
+                this.oldGrimAttacked = false;
+            }
+            if (this.oldGrimHolding && !this.oldGrimAttacked && mc.thePlayer != null && mc.thePlayer.hurtTime > 0) {
+                Entity target = null;
+                KillAura killAura = (KillAura) Myau.moduleManager.getModule(KillAura.class);
+                if (killAura != null && killAura.isEnabled() && killAura.getTarget() != null
+                        && mc.thePlayer.getDistanceToEntity(killAura.getTarget()) <= this.oldGrimRangeProp.getValue()) {
+                    target = killAura.getTarget();
+                } else if (mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY
+                        && mc.objectMouseOver.entityHit instanceof EntityLivingBase
+                        && mc.thePlayer.getDistanceToEntity(mc.objectMouseOver.entityHit) <= this.oldGrimRangeProp.getValue()) {
+                    target = mc.objectMouseOver.entityHit;
+                }
+                if (target != null) {
+                    boolean wasSprinting = mc.thePlayer.isSprinting();
+                    for (int i = 0; i < this.oldGrimAttacksProp.getValue(); i++) {
+                        EventManager.call(new AttackEvent(target));
+                        mc.getNetHandler().addToSendQueue(new C0APacketAnimation());
+                        mc.getNetHandler().addToSendQueue(new C02PacketUseEntity(target, C02PacketUseEntity.Action.ATTACK));
+                        mc.thePlayer.motionX *= 0.6;
+                        mc.thePlayer.motionZ *= 0.6;
+                    }
+                    mc.thePlayer.motionX *= this.oldGrimReduceProp.getValue();
+                    mc.thePlayer.motionZ *= this.oldGrimReduceProp.getValue();
+                    if (!wasSprinting) {
+                        mc.thePlayer.setSprinting(false);
+                    }
+                    this.oldGrimAttacked = true;
+                    if (this.debugLog.getValue()) {
+                        ChatUtil.sendFormatted(Myau.clientName + "OldGrim reduce");
+                    }
+                }
+            }
+        }
+
+        if (this.mode.getValue() == 21 && event.getType() == EventType.PRE && !this.isVelocityPaused()) {
+            if (mc.thePlayer != null) {
+                try {
+                    net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
+                    if (timer != null) {
+                        int hurt = mc.thePlayer.hurtTime;
+                        if (hurt >= 8) timer.timerSpeed = 0.3F;
+                        else if (hurt > 2) timer.timerSpeed = 5.0F;
+                        else timer.timerSpeed = 1.0F;
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 
     @EventTarget
     public void onPacket(PacketEvent event) {
         if (!this.isEnabled() || event.isCancelled()) return;
+        if (this.isVelocityPaused()) return;
+
+        if (event.getType() == EventType.SEND) {
+            if (this.mode.getValue() == 19 && event.getPacket() instanceof C0BPacketEntityAction && this.blocksHolding) {
+                this.blocksHolding = false;
+                event.setCancelled(true);
+                return;
+            }
+            if (this.mode.getValue() == 21 && event.getPacket() instanceof C03PacketPlayer
+                    && !(event.getPacket() instanceof C03PacketPlayer.C04PacketPlayerPosition)
+                    && !(event.getPacket() instanceof C03PacketPlayer.C05PacketPlayerLook)
+                    && !(event.getPacket() instanceof C03PacketPlayer.C06PacketPlayerPosLook)
+                    && mc.thePlayer != null && mc.thePlayer.hurtTime != 0) {
+                event.setCancelled(true);
+                return;
+            }
+        }
 
         if (this.mode.getValue() == 3 && event.getType() == EventType.SEND) {
             Packet<?> packet = event.getPacket();
@@ -344,10 +768,11 @@ public class Velocity extends Module {
             if (event.getPacket() instanceof S12PacketEntityVelocity) {
                 S12PacketEntityVelocity packet = (S12PacketEntityVelocity) event.getPacket();
                 if (packet.getEntityID() == mc.thePlayer.getEntityId()) {
+                    this.ticksSinceVelocity = 0;
+                    this.ShouldJump = true;
 
                     if (this.mode.getValue() == 2) {
                         this.hasReceivedVelocity = true;
-                        this.ticksSinceVelocity = 0;
                         this.jumpFlag = packet.getMotionY() > 0;
                     }
 
@@ -355,6 +780,60 @@ public class Velocity extends Module {
                         this.slapReduceTicks = this.calculateSlapTicks(packet.getMotionX(), packet.getMotionZ());
                         if (this.debugLog.getValue()) {
                             ChatUtil.sendFormatted(Myau.clientName + "Attack reduceTicks: " + this.slapReduceTicks);
+                        }
+                    }
+
+                    if (this.mode.getValue() == 4) {
+                        this.intaveReduced = false;
+                        if (this.intaveJump.getValue() && packet.getMotionY() > 0) {
+                            this.jumpFlag = true;
+                        }
+                    }
+
+                    if (this.mode.getValue() == 5) {
+                        this.grimPending = this.grimTimes.getValue();
+                    }
+
+                    if (this.mode.getValue() == 6) {
+                        this.matrixReduced = false;
+                    }
+
+                    if (this.mode.getValue() == 7) {
+                        this.polarPending = true;
+                        this.polarHurtTime = 7 + (int) (Math.random() * 3);
+                        this.polarHurtCount++;
+                    }
+
+                    if (this.mode.getValue() == 9) {
+                        this.delayChanceCounter = (this.delayChanceCounter % 100) + this.delayChanceProp.getValue();
+                        if (this.delayChanceCounter >= 100 && mc.thePlayer.onGround) {
+                            this.delayMotionX = (double) packet.getMotionX() / 8000.0;
+                            this.delayMotionY = (double) packet.getMotionY() / 8000.0;
+                            this.delayMotionZ = (double) packet.getMotionZ() / 8000.0;
+                            this.delayTickCounter = 0;
+                            this.delayActive = true;
+                            event.setCancelled(true);
+                        } else {
+                            mc.thePlayer.motionX = ((double) packet.getMotionX() / 8000.0) * this.delayHorizontalProp.getValue();
+                            mc.thePlayer.motionZ = ((double) packet.getMotionZ() / 8000.0) * this.delayHorizontalProp.getValue();
+                            mc.thePlayer.motionY = ((double) packet.getMotionY() / 8000.0) * this.delayVerticalProp.getValue();
+                            event.setCancelled(true);
+                        }
+                        if (this.debugLog.getValue()) {
+                            ChatUtil.sendFormatted(Myau.clientName + "Delay hold");
+                        }
+                    }
+                    if (this.mode.getValue() == 19) {
+                        this.blocksHolding = true;
+                        event.setCancelled(true);
+                        mc.getNetHandler().addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.START_SNEAKING));
+                        mc.getNetHandler().addToSendQueue(new C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.STOP_SNEAKING));
+                    }
+                    if (this.mode.getValue() == 20) {
+                        if (MoveUtil.isMoving()) {
+                            this.grimC03Pending = true;
+                            this.grimC03Ticks = 0;
+                            event.setCancelled(true);
                         }
                     }
                     if (this.debugLog.getValue()) {
@@ -370,6 +849,12 @@ public class Velocity extends Module {
                         );
                     }
                 }
+            }
+
+            if (this.mode.getValue() == 18 && event.getPacket() instanceof S32PacketConfirmTransaction) {
+                event.setCancelled(true);
+                mc.getNetHandler().addToSendQueue(new C0FPacketConfirmTransaction(this.vulcanTransaction ? 1 : -1, (short) (this.vulcanTransaction ? -1 : 1), this.vulcanTransaction));
+                this.vulcanTransaction = !this.vulcanTransaction;
             }
 
             if (event.getPacket() instanceof S19PacketEntityStatus) {
@@ -450,7 +935,7 @@ public class Velocity extends Module {
         this.dig = false;
     }
 
-    @EventTarget(whenDisabled = true)
+    @EventTarget
     public void onLoadWorld(LoadWorldEvent event) {
         this.onDisabled();
     }
@@ -470,6 +955,31 @@ public class Velocity extends Module {
         this.ShouldJump = false;
         this.slapReduceTicks = 0;
         this.slapAnInt = 0;
+        this.intaveReduced = false;
+        this.grimPending = 0;
+        this.matrixReduced = false;
+        this.polarPending = false;
+        this.polarHurtTime = 8;
+        this.polarHurtCount = 0;
+        this.delayActive = false;
+        this.delayTickCounter = 0;
+        this.delayChanceCounter = 0;
+        this.tickPending = false;
+        this.tickCounter = 0;
+        this.tickChanceCounter = 0;
+        this.zipHolding = false;
+        this.zipTicks = 0;
+        this.zipMotionX = 0;
+        this.zipMotionY = 0;
+        this.zipMotionZ = 0;
+        this.matrixFullReduced = false;
+        this.xzChanceCounter = 0;
+        this.oldGrimHolding = false;
+        this.oldGrimAttacked = false;
+        this.vulcanTransaction = false;
+        this.blocksHolding = false;
+        this.grimC03Pending = false;
+        this.grimC03Ticks = 0;
         this.resetBadPackets();
     }
 
@@ -488,6 +998,32 @@ public class Velocity extends Module {
         this.ShouldJump = false;
         this.slapReduceTicks = 0;
         this.slapAnInt = 0;
+        this.intaveReduced = false;
+        this.grimPending = 0;
+        this.matrixReduced = false;
+        this.polarPending = false;
+        this.polarHurtTime = 8;
+        this.polarHurtCount = 0;
+        this.delayActive = false;
+        this.delayTickCounter = 0;
+        this.delayChanceCounter = 0;
+        this.tickPending = false;
+        this.tickCounter = 0;
+        this.tickChanceCounter = 0;
+        this.zipHolding = false;
+        this.zipTicks = 0;
+        this.zipMotionX = 0;
+        this.zipMotionY = 0;
+        this.zipMotionZ = 0;
+        this.matrixFullReduced = false;
+        this.xzChanceCounter = 0;
+        this.oldGrimHolding = false;
+        this.oldGrimAttacked = false;
+        this.vulcanTransaction = false;
+        this.blocksHolding = false;
+        this.grimC03Pending = false;
+        this.grimC03Ticks = 0;
+        this.resetAppendedTimer();
         this.resetBadPackets();
     }
 

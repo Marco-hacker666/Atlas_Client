@@ -233,6 +233,10 @@ public final class SetupDownloader {
             temp.delete();
             throw new Exception("could not save the file");
         }
+        if (entry.source == SetupEntry.Source.OPTIFINE) {
+            /* First OptiFine install by this client: Connected Textures off (OptiFineDefaults). */
+            OptiFineDefaults.applyFirstInstall(dir.getAbsoluteFile().getParentFile());
+        }
         return dest;
     }
 

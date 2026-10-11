@@ -4412,3 +4412,12 @@ Owner: remove OneConfig. Its SetupCatalog entry is gone (test renamed `optiFineI
 asserts it is absent). OneConfigPatcher stays: it only moves OneConfig's key off RightShift if a player has OneConfig
 from elsewhere. 317 tests OK, md5 5b99f4494866160e9b99a8ca423d753b, installed as `mods/Myau Atlas v2.0.0(stable).jar`
 and copied to release-assets (previous jar: backups/jars/v2.0.0-with-oneconfig.jar).
+Tag v2.0.0 moved to 3145984 (OneConfig removed) at the owner's choice; no release used it.
+
+## 2026-10-11 — First OptiFine install turns Connected Textures off
+Owner: a player getting OptiFine for the first time should have Connected Textures off. `myau.setup.OptiFineDefaults`:
+right after SetupDownloader installs OptiFine (Source.OPTIFINE), `optionsof.txt` in the game folder gets
+`ofConnectedTextures:3` (replaced or added; file created if missing). 3 = Off, confirmed from the owner's own
+optionsof.txt with the setting shown Off in OptiFine's menu (1 Fast, 2 Fancy = OptiFine's default). Only at our own
+install, so a player who turns it on later is not overridden. OptiFineDefaultsTest (2). 319 tests OK,
+md5 8ba5132e934c64c9361aa784ba2a33b4; copied to release-assets; not installed in mods yet (game running).

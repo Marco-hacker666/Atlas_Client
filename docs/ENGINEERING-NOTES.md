@@ -4421,3 +4421,20 @@ right after SetupDownloader installs OptiFine (Source.OPTIFINE), `optionsof.txt`
 optionsof.txt with the setting shown Off in OptiFine's menu (1 Fast, 2 Fancy = OptiFine's default). Only at our own
 install, so a player who turns it on later is not overridden. OptiFineDefaultsTest (2). 319 tests OK,
 md5 8ba5132e934c64c9361aa784ba2a33b4; copied to release-assets; not installed in mods yet (game running).
+
+## 2026-10-11 — Auto-send logs only when kicked or flagged a lot (no more 30-minute uploads)
+Owner: send automatically only when the player gets many flags in a short time or is kicked by the server (not when
+leaving, closing the game or losing the connection), and say why. `LogUploader` rewritten:
+- **flagged**: counts S08 corrections in a world -- not in the first 5 s after a world load, not relative ones, not
+  ones moving the player more than 8 blocks (server teleports) -- and at 8 within 60 s sends "flagged N times in 60s".
+  Counted here, not from FlagDetector (off by default unless Debug turns it on). At most one per 10 min.
+- **kicked**: a disconnect packet from the server -- play S40 ("kicked: <reason>") or login S00 ("kicked at login:
+  <reason>"); a self disconnect, closing the game or a dropped connection never receives one. At most one per 2 min.
+- The trigger plus `ActionLedger.summary(60 s, 3)` ("most active: ...") is the title (`[ver] <trigger> - server`),
+  the Discord message (`**Trigger:** ...`) and the log's first line. All redacted. Built via addScheduledTask on the
+  game thread (BugReport.sendAuto(trigger)); the S40 task is queued before vanilla's own handler, so the log is built
+  before the world closes.
+- New one-time chat notice (marker `auto-send-logs-notice-2.txt`) and Privacy text describe the new rule.
+Relay unchanged (kind auto, LOG_WEBHOOK, 4/hour). 319 tests OK, md5 e6342eb6a6bfef1738a69854d490711c, installed as
+`mods/Myau Atlas v2.0.0(stable).jar` (includes the OptiFine Connected Textures default) and copied to release-assets.
+Backups: `backups/src/pre-autolog-trigger-20261011`, `backups/src/beta2-autolog-trigger-20261011`.

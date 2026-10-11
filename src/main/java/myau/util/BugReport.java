@@ -122,10 +122,11 @@ public final class BugReport {
     }
 
     /**
-     * The 30-minute log (LogUploader): the same log and config, no dialog,
-     * nothing said in chat, nothing saved. Built on the game thread.
+     * The automatic log (LogUploader: kicked, or flagged many times): the same
+     * log and config, no dialog, nothing said in chat, nothing saved. The
+     * trigger is the title and the log's first line. Built on the game thread.
      */
-    public static void sendAuto() {
+    public static void sendAuto(String trigger) {
         String relay = relayUrl();
         if (relay.isEmpty()) {
             return;
@@ -139,9 +140,10 @@ public final class BugReport {
                1 MB each) are read on the upload thread, so a mid-fight
                upload costs no frame time. */
             redactor = redactor();
-            head = logHead(MARK_AUTO, null, null);
+            head = logHead(MARK_AUTO, trigger, null);
             config = buildConfig();
-            title = redactor.apply("[" + (Myau.version == null ? "dev" : Myau.version) + "] log - " + server());
+            String why = trigger.length() > 50 ? trigger.substring(0, 50) + "..." : trigger;
+            title = redactor.apply("[" + (Myau.version == null ? "dev" : Myau.version) + "] " + why + " - " + server());
         } catch (Throwable t) {
             return;
         }
@@ -149,10 +151,10 @@ public final class BugReport {
             try {
                 StringBuilder sb = new StringBuilder(head);
                 logFiles(sb);
-                post(relay, "auto", title, "", redactor.apply(sb.toString()), config, (ok, message) -> {
+                post(relay, "auto", title, redactor.apply("**Trigger:** " + trigger), redactor.apply(sb.toString()), config, (ok, message) -> {
                 });
             } catch (Throwable ignored) {
-                // The next one is in 30 minutes.
+                // Nothing to tell anyone: it was automatic.
             }
         }, "Myau log upload");
         thread.setDaemon(true);
@@ -260,7 +262,7 @@ public final class BugReport {
         return save(text);
     }
 
-    /** The relay checks for these: a report, or a 30-minute log. */
+    /** The relay checks for these: a report, or an automatic log. */
     private static final String MARK_REPORT = "**Myau Atlas bug report**";
     private static final String MARK_AUTO = "**Myau Atlas log**";
 
@@ -288,7 +290,8 @@ public final class BugReport {
             sb.append("Reason: ").append(reason == null || reason.isEmpty() ? "(not given)" : reason).append('\n');
             sb.append("What happened: ").append(description == null ? "" : description.trim()).append('\n');
         } else {
-            sb.append("Sent automatically every 30 minutes of play (Client Settings > auto-send-logs).\n");
+            sb.append("Sent automatically (Client Settings > auto-send-logs). Trigger: ")
+                    .append(reason == null ? "?" : reason).append('\n');
         }
         sb.append("```\n");
 

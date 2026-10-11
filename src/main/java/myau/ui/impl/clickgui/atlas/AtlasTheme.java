@@ -117,7 +117,7 @@ final class AtlasTheme {
     final BooleanProperty counts = new BooleanProperty("category-counts", true);
     final BooleanProperty stateDots = new BooleanProperty("state-dots", true);
 
-    // ---- Privacy (2026-10-08): the 30-minute log upload (management.LogUploader)
+    // ---- Privacy (2026-10-08): the automatic log upload (management.LogUploader)
     final BooleanProperty autoSendLogs = new BooleanProperty(myau.management.LogUploader.SETTING, true);
 
     /** The groups the page lists, in order, with what each is for. */
@@ -152,8 +152,8 @@ final class AtlasTheme {
         group("Text", "The typeface and its size.", this.font, this.textSize);
         group("Layout", "How tightly rows are packed, and which extras are shown.",
                 this.density, this.accountCard, this.hintBar, this.moduleStatus, this.counts, this.stateDots);
-        group("Privacy", "Every 30 minutes of play the client sends its log and config to the developers "
-                        + "to help fix bugs. Your name, other players' names, tokens and IPs are removed first.",
+        group("Privacy", "When a server kicks you, or you get flagged many times in a minute, the client sends its "
+                        + "log and config to the developers to help fix it. Your name, other players' names, tokens and IPs are removed first.",
                 this.autoSendLogs);
         load();
         this.saved = snapshot();

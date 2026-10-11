@@ -38,7 +38,7 @@ public class SetupCatalogTest {
 
     /** 2026-10-11: official sources only, each pinned to its file's SHA-1. */
     @Test
-    public void optiFineAndOneConfigAreOfficialAndPinned() {
+    public void optiFineIsOfficialAndPinnedAndOneConfigIsGone() {
         boolean optifine = false;
         boolean oneconfig = false;
         for (SetupEntry entry : SetupCatalog.mods()) {
@@ -48,12 +48,11 @@ public class SetupCatalogTest {
                 assertEquals(40, entry.sha1.length());
             } else if ("OneConfig".equals(entry.displayName())) {
                 oneconfig = true;
-                assertTrue(entry.url, entry.url.startsWith("https://cdn.modrinth.com/"));
-                assertEquals(40, entry.sha1.length());
             }
             assertFalse(entry.fileName, entry.fileName.contains("ModernF3"));
         }
-        assertTrue(optifine && oneconfig);
+        assertTrue(optifine);
+        assertFalse("OneConfig was removed (2026-10-11)", oneconfig);
     }
 
     @Test

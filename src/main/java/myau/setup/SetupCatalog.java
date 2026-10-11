@@ -26,13 +26,6 @@ public final class SetupCatalog {
                 "OptiFine_1.8.9_HD_U_M5.jar",
                 "https://optifine.net/adloadx?f=OptiFine_1.8.9_HD_U_M5.jar",
                 2585014L, true, true, "d362d58a28f5373b141b9e426e8e160638bfafcd"));
-        /* OneConfig (Polyfrost's official build, Modrinth); OneConfigPatcher moves
-           its menu key off RightShift, this client's ClickGUI key. */
-        out.add(new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.DIRECT,
-                "OneConfig", "Polyfrost's mod settings menu (official, Modrinth).",
-                "Aoneconfigbootstrap-1.8.9-forge-1.0.3.jar",
-                "https://cdn.modrinth.com/data/AibBIVmj/versions/TcuRDj1R/Aoneconfigbootstrap-1.8.9-forge-1.0.3.jar",
-                15323L, false, false, "1c3a3ca214c936037e056ae3b619ec2ba6aef5c7"));
         out.add(new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.DIRECT,
                 "3DSkinLayers", "3D skin layers on players.",
                 "3dSkinLayers-forge-mc1.8.9-1.2.0.jar",

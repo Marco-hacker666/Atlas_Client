@@ -4391,3 +4391,24 @@ Tests: AuditFixesTest (3), MyauResourcesTest (3: every font the client loads and
 through MyauResources). 317 tests OK. md5 31665fa734e693e095c7409fcc418257, installed, 62 mixins. In-game: not
 yet run with this build (the owner's last log, 19:21, predates the font fix).
 Backups: `backups/src/pre-audit-fixes-20261011`, after `backups/src/beta2-audit-fixes-20261011`.
+
+## 2026-10-11 — Published as a branch (main requires a pull request)
+GitHub main had become the collaborator's beta2.1 (PR #5, c0a665e) -- identical to the Desktop beta2.1 copy apart
+from line endings. The release repo was fast-forwarded to it and this work copy synced on top
+(`scratchpad/sync_beta2.py`: anonymised, private reports kept out: COLLABORATOR-BETA2-REVIEW, MODULE-AUDIT,
+REFERENCE-*), 96 files, built there too (317 tests OK). Commit 0b2537f. A direct push to main is refused by a repository
+rule ("Changes must be made through a pull request"), so it is on branch **merge-modules-audit** for a PR into main.
+Owner added a ruleset bypass for repository admins; pushed directly: main c0a665e..0b2537f (fast-forward, no force).
+Branch merge-modules-audit (same commit) is now redundant.
+
+## 2026-10-11 — v2.0.0 (stable)
+gradle.properties version 2.0.0 (work copy and release repo); commit "Version 2.0.0" pushed to main, tag v2.0.0.
+Release jar `release-assets/Myau Atlas v2.0.0(stable).jar`, md5 ccd918729532b8a3bee088f39cba3c7b, 317 tests OK.
+Same code as the installed 31665fa7 build apart from the version string.
+Installed as mods/Myau Atlas v2.0.0(stable).jar (old beta jar removed, backup backups/jars/pre-v2.0.0-20261011.jar), 62 mixins.
+
+## 2026-10-11 — OneConfig removed from the setup catalog
+Owner: remove OneConfig. Its SetupCatalog entry is gone (test renamed `optiFineIsOfficialAndPinnedAndOneConfigIsGone`,
+asserts it is absent). OneConfigPatcher stays: it only moves OneConfig's key off RightShift if a player has OneConfig
+from elsewhere. 317 tests OK, md5 5b99f4494866160e9b99a8ca423d753b, installed as `mods/Myau Atlas v2.0.0(stable).jar`
+and copied to release-assets (previous jar: backups/jars/v2.0.0-with-oneconfig.jar).

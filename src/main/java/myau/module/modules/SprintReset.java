@@ -20,7 +20,7 @@ public class SprintReset extends Module {
        one STOP, then one START the tick after, exactly a w-tap. PACKET and
        SILENT send STOP and START in the same tick, two sprint changes in one
        tick, which no keyboard produces and which bad-packet checks count. */
-    public final ModeProperty mode = new ModeProperty("Mode", 1, new String[]{"PACKET", "LEGIT", "SILENT"});
+    public final ModeProperty mode = new ModeProperty("Mode", 1, new String[]{"PACKET", "LEGIT", "SILENT", "SOFT"});
     private final BooleanProperty onlyWhileSprinting = new BooleanProperty("Only While Sprinting", true);
     private final BooleanProperty onlyWhileMoving = new BooleanProperty("Only While Moving", true);
     /* Sends four made-up positions (a packet critical) with the reset. That
@@ -45,9 +45,25 @@ public class SprintReset extends Module {
        LEGIT only; PACKET and SILENT keep their old behaviour. */
     private final PercentProperty chance = new PercentProperty("chance", 90);
     private final IntProperty releaseDelay = new IntProperty("release-delay", 0, 0, 5,
-            () -> this.mode.getValue() == 1);
+            () -> this.mode.getValue() == 1 || this.mode.getValue() == 3);
     private final IntProperty releaseTicks = new IntProperty("release-ticks", 1, 1, 5,
-            () -> this.mode.getValue() == 1);
+            () -> this.mode.getValue() == 1 || this.mode.getValue() == 3);
+    /* 2026-10-12, from a player's suggestion:
+       - SOFT: like LEGIT, but forward is eased to walking strength (below the
+         0.8 sprinting needs) instead of let go: sprint drops and comes back,
+         the player never stops.
+       - randomize: each reset draws its delay (setting -1..+1) and its length
+         (setting +0..+1) instead of using the same numbers every time.
+       - wait-for-damage: after the hit, nothing happens until this player is
+         hurt (their hurt time rises); the reset starts then. Given up after
+         20 ticks without being hit. */
+    private final BooleanProperty randomize = new BooleanProperty("randomize", true,
+            () -> this.mode.getValue() == 1 || this.mode.getValue() == 3);
+    private final BooleanProperty waitForDamage = new BooleanProperty("wait-for-damage", false);
+    private static final float SOFT_FORWARD = 0.5F;
+    private boolean waitingForDamage;
+    private int waitTicks;
+    private int lastHurtTime;
     private final BooleanProperty selectHits = new BooleanProperty("select-hits", true);
     private int releaseWait = 0;
     private final BooleanProperty smartReset = new BooleanProperty("Smart Reset", false);
@@ -88,6 +104,8 @@ public class SprintReset extends Module {
 
     @Override
     public void onDisabled() {
+        waitingForDamage = false;
+        waitTicks = 0;
         releaseWait = 0;
         forwardReleaseTicks = 0;
         attacked = false;
@@ -108,7 +126,7 @@ public class SprintReset extends Module {
         if (onlyWhileSprinting.getValue() && !mc.thePlayer.isSprinting()) return;
         if (onlyWhileMoving.getValue() && !isMoving()) return;
         /* One w-tap at a time: a new hit does not restart one in progress. */
-        if (releaseWait > 0 || forwardReleaseTicks > 0) return;
+        if (releaseWait > 0 || forwardReleaseTicks > 0 || waitingForDamage) return;
         if (selectHits.getValue() && ((EntityLivingBase) target).hurtTime > myau.management.HitTimer.ticks() + 1) return;
         int now = mc.thePlayer.ticksExisted;
         if (now >= lastResetTick && now - lastResetTick < minGap.getValue()) return;
@@ -126,6 +144,17 @@ public class SprintReset extends Module {
         lastTarget = target;
         attacked = true;
 
+        if (waitForDamage.getValue()) {
+            /* Held until this player is hit back (onUpdate). */
+            waitingForDamage = true;
+            waitTicks = 0;
+            lastHurtTime = mc.thePlayer.hurtTime;
+            return;
+        }
+        startReset();
+    }
+
+    private void startReset() {
         switch (mode.getValue()) {
             case 0:
                 handlePacketReset();
@@ -136,6 +165,9 @@ public class SprintReset extends Module {
             case 2:
                 handleSilentReset();
                 break;
+            case 3:
+                handleLegitReset();
+                break;
         }
     }
 
@@ -145,10 +177,26 @@ public class SprintReset extends Module {
         if (mc.thePlayer == null || mc.theWorld == null) return;
         // Once per tick: this used to count PRE and POST, two a tick.
         if (event.getType() != myau.event.types.EventType.PRE) return;
+        if (waitingForDamage) {
+            int hurt = mc.thePlayer.hurtTime;
+            if (hurt > lastHurtTime) {
+                waitingForDamage = false;
+                attacked = true;
+                ticksSinceAttack = 0;
+                startReset();
+            } else if (++waitTicks > 20) {
+                waitingForDamage = false;
+                attacked = false;
+            }
+            lastHurtTime = hurt;
+            if (waitingForDamage) {
+                return;
+            }
+        }
         if (attacked) {
             ticksSinceAttack++;
         }
-        if (mode.getValue() == 1 && needsReset && ticksSinceAttack >= 1) {
+        if ((mode.getValue() == 1 || mode.getValue() == 3) && needsReset && ticksSinceAttack >= 1) {
             needsReset = false;
             attacked = false;
             ticksSinceAttack = 0;
@@ -188,8 +236,14 @@ public class SprintReset extends Module {
     }
 
     private void handleLegitReset() {
-        releaseWait = releaseDelay.getValue();
-        forwardReleaseTicks = releaseTicks.getValue();
+        int delay = releaseDelay.getValue();
+        int length = releaseTicks.getValue();
+        if (randomize.getValue()) {
+            delay = Math.max(0, Math.min(5, delay + (int) Math.floor(Math.random() * 3.0) - 1));
+            length = Math.max(1, Math.min(5, length + (Math.random() < 0.4 ? 1 : 0)));
+        }
+        releaseWait = delay;
+        forwardReleaseTicks = length;
         needsReset = true;
         ticksSinceAttack = 0;
 
@@ -238,7 +292,14 @@ public class SprintReset extends Module {
             return;
         }
         if (forwardReleaseTicks > 0) {
-            mc.thePlayer.movementInput.moveForward = 0.0F;
+            if (mode.getValue() == 3) {
+                /* SOFT: walking pace, never standing still. */
+                if (mc.thePlayer.movementInput.moveForward > SOFT_FORWARD) {
+                    mc.thePlayer.movementInput.moveForward = SOFT_FORWARD;
+                }
+            } else {
+                mc.thePlayer.movementInput.moveForward = 0.0F;
+            }
             forwardReleaseTicks--;
         }
     }

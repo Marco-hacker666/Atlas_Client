@@ -4755,3 +4755,19 @@ Owner agreed the panorama was buried. Blur 2 passes/2.5 -> 1/1.0; grade
 alphas 0x90/0x60 -> 0x50/0x38; sun glow 0x70 -> 0x48; left darkening
 0xD8 over 62% -> 0xB8 over 55%. Installed md5 aef03104175643a40e0bcbc501eb8541
 (includes the letterbox removal).
+
+## 2026-10-12 — SprintReset: SOFT mode, randomize, wait-for-damage
+
+From a player's suggestion (owner passed it on). SprintReset already had a
+w-tap (LEGIT) with release-delay / release-ticks; added:
+- Mode SOFT (index 3): like LEGIT, but in MoveInputEvent forward is capped at
+  0.5 (below the 0.8 sprinting needs) instead of set to 0 -- sprint drops and
+  returns, the player keeps walking.
+- `randomize` (on, LEGIT/SOFT): per reset, delay = setting + {-1,0,+1}
+  (0..5) and length = setting + 1 with 40% (1..5).
+- `wait-for-damage` (off): the attack arms a wait; the reset (any mode)
+  starts on the PRE tick this player's hurtTime rises, or is dropped after
+  20 ticks. No new w-tap while waiting.
+The reset itself moved into `startReset()` (shared by attack and damage).
+Backups: backups/src/SprintReset.java.pre-soft-20261012, ...soft-20261012.
+Built md5 cae144987370931056de72a17b0b3c83 (not installed: game running).

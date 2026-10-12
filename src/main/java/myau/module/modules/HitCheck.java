@@ -343,6 +343,15 @@ public class HitCheck extends Module {
         int ping = this.ping();
         int ticks = ping > 0 ? (int) Math.ceil(ping / 50.0) : 4;
         ticks += this.windowPad.getValue();
+        /* 2026-10-12: Backtrack holds what the server sends -- the hurt that
+           answers a hit among it -- so the answer can land after a window
+           sized to the ping alone, and a hit that did land was called
+           dropped (the owner's HITS-DROPPED runs). Its hold is added. */
+        myau.module.Module backtrack = myau.Myau.moduleManager == null ? null
+                : myau.Myau.moduleManager.modules.get(BackTrack.class);
+        if (backtrack instanceof BackTrack) {
+            ticks += (int) Math.ceil(((BackTrack) backtrack).holdMs() / 50.0) + 1;
+        }
         return Math.min(Math.max(ticks, 2), HISTORY - 1);
     }
 

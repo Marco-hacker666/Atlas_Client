@@ -4771,3 +4771,40 @@ w-tap (LEGIT) with release-delay / release-ticks; added:
 The reset itself moved into `startReset()` (shared by attack and damage).
 Backups: backups/src/SprintReset.java.pre-soft-20261012, ...soft-20261012.
 Built md5 cae144987370931056de72a17b0b3c83 (not installed: game running).
+
+## 2026-10-12 — Version 2.1.0
+
+gradle.properties version 2.0.0 -> 2.1.0 (the start screen shows V2.1.0).
+Owner wants the jar named `Myau Atlas v2.1.0.jar` (replaces
+`Myau Atlas v2.0.0(stable).jar` in mods; the old jar kept in backups/jars).
+Copy in release-assets. md5 038ed6e1f04f5652d58b0744e170d0e7.
+
+## 2026-10-12 — FakeLag / Backtrack flags: logic, not only settings
+
+Owner's log (21 FlagDetector lines): LAGBACKs 0-1 t after hits blamed on
+FakeLag 60-80%, HITS-DROPPED runs (some "dist 0.00"), Backtrack 3-5%.
+Findings and fixes:
+1. FakeLag held positions but let transaction replies (C0F) out at once.
+   Polar/Grim time movement by transactions, so the server saw ticks pass
+   with no movement and then a burst larger than the time allows -> set
+   back by the distance walked in the hold (matches every push h0.6-0.9 at
+   up to 250 ms holds). New `hold-transactions` (on; DYNAMIC/LIQUID only):
+   while the queue holds anything, C0F joins it in order (`holdsReply`, the
+   keepsOrder path), so it looks like real latency. Not in LATENCY (always-
+   late replies got Pika to close the connection) or REPEL. Releases and
+   discardStalePositions already send every non-position packet.
+2. New `flag-pause` (2000 ms): after S08 no holding for max(recoil, pause).
+   The owner had recoil-time 0, so it held again right after each setback.
+3. Blame: FakeLag no longer notes "held-send" per held packet (holding moves
+   nobody server-side); only "release" at send. It was topping every combat
+   correction just for being active.
+4. HITS-DROPPED: HitCheck's verdict window was the ping only; Backtrack holds
+   incoming packets including the hurt that answers a hit, so landed hits
+   were called dropped. Window += ceil(BackTrack.holdMs()/50)+1 (new public
+   holdMs()). ("dist 0.00" itself is eye inside the target's box at point
+   blank, not a bug.)
+Config (game closed, backup backups/config/default.json.pre-fakelag-tune-20261012):
+FakeLag delay 150->90, delay-random 100->30, recoil-time 0->750,
+hold-transactions on, flag-pause 2000.
+Installed `mods/Myau Atlas v2.1.0.jar` (old v2.0.0(stable) jar moved to
+backups/jars), md5 7c17951fd2702d8cfc4338f0005f2eb8; copy in release-assets.

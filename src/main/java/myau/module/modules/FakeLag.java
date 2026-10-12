@@ -273,6 +273,23 @@ public class FakeLag extends Module {
        empties, it is redrawn every two seconds instead. */
     public final IntProperty delayRandom = new IntProperty("delay-random", 100, 0, 500);
 
+    /* 2026-10-12 (owner's log: LAGBACKs whose pull-back equals the distance
+       walked during the hold). Polar and Grim time movement with transactions:
+       the server sends one and its reply marks where the client was. Holding
+       the positions while the replies went out at once told the server
+       "these ticks have passed, but no movement for them", and the burst that
+       followed was more movement than the elapsed time allows -- set back.
+       While positions are held, the replies now wait in the same queue, in
+       order, so the server sees what real latency looks like: everything
+       late together. Never in LATENCY (its queue never empties, and a reply
+       that is always late is what got Pika to close the connection) and
+       never in REPEL (it holds no movement). */
+    public final BooleanProperty holdTransactions = new BooleanProperty("hold-transactions", true,
+            () -> this.mode.getValue() == DYNAMIC || this.mode.getValue() == LIQUID);
+    /* After a correction (S08), nothing is held for at least this long: a
+       setback says the server is watching this player's movement right now. */
+    public final IntProperty flagPause = new IntProperty("flag-pause", 2000, 0, 5000);
+
     /* Hold only with a weapon in hand -- a sword, or anything with Sharpness
        (Slinky's "holding weapon" condition). With a bow, a rod, a pearl or
        food out, the fight is not at arm's length and holding buys nothing;
@@ -480,6 +497,13 @@ public class FakeLag extends Module {
        player back four times and refused every block for three seconds.
        Queued behind what is held, in order, they are only late -- latency --
        and the queue drains at its own pace. */
+    /** A transaction reply that must stay behind the positions held before it. */
+    private boolean holdsReply(Packet<?> packet) {
+        int mode = this.mode.getValue();
+        return packet instanceof net.minecraft.network.play.client.C0FPacketConfirmTransaction
+                && this.holdTransactions.getValue() && (mode == DYNAMIC || mode == LIQUID);
+    }
+
     private static boolean keepsOrder(Packet<?> packet) {
         return packet instanceof C09PacketHeldItemChange
                 || packet instanceof C0BPacketEntityAction;
@@ -496,7 +520,8 @@ public class FakeLag extends Module {
             if (packet instanceof S08PacketPlayerPosLook || packet instanceof S07PacketRespawn) {
                 /* Deferred to the tick: this runs on the network thread. */
                 this.flushRequested = true;
-                this.recoilUntil = System.currentTimeMillis() + this.recoilTime.getValue();
+                this.recoilUntil = System.currentTimeMillis()
+                        + Math.max(this.recoilTime.getValue(), this.flagPause.getValue());
             } else if (hitsThisPlayer(packet)) {
                 /* Knockback or damage: the server now expects to see this
                    player react, and every tick the reaction sits in the queue
@@ -536,11 +561,10 @@ public class FakeLag extends Module {
             this.flushRequested = false;
             return;
         }
-        if (keepsOrder(packet)) {
+        if (keepsOrder(packet) || this.holdsReply(packet)) {
             if (!this.queue.isEmpty() && !Arbiter.catching()) {
                 event.setCancelled(true);
-                ActionLedger.note(this.getName(), "held-send");
-                this.queue.offer(new Held(packet, System.currentTimeMillis()));
+                        this.queue.offer(new Held(packet, System.currentTimeMillis()));
                 noteHeld();
                 enforceLimits();
             } else if (!this.queue.isEmpty()) {
@@ -560,8 +584,7 @@ public class FakeLag extends Module {
                positions it was made from -- late, as with latency, but
                judged exactly where it was made. */
             event.setCancelled(true);
-            ActionLedger.note(this.getName(), "held-send");
-            this.queue.offer(new Held(packet, System.currentTimeMillis()));
+                this.queue.offer(new Held(packet, System.currentTimeMillis()));
             noteHeld();
             enforceLimits();
             return;
@@ -608,8 +631,7 @@ public class FakeLag extends Module {
                         + (spread > 0 ? (long) (Math.random() * (spread + 1)) : 0L);
                 if (early > 0 && early * 50L <= window) {
                     event.setCancelled(true);
-                    ActionLedger.note(this.getName(), "held-send");
-                    this.heldHit = (C02PacketUseEntity) packet;
+                                this.heldHit = (C02PacketUseEntity) packet;
                     this.heldHitTarget = target;
                     this.heldHitAt = System.currentTimeMillis();
                     this.heldHitDeadline = this.heldHitAt + window;
@@ -655,8 +677,7 @@ public class FakeLag extends Module {
                 if (this.easing && System.currentTimeMillis() >= this.recoilUntil) {
                     /* Being let out: this one takes its place at the back. */
                     event.setCancelled(true);
-                    ActionLedger.note(this.getName(), "held-send");
-                    this.queue.offer(new Held(packet, System.currentTimeMillis()));
+                                this.queue.offer(new Held(packet, System.currentTimeMillis()));
                     noteHeld();
                     enforceLimits();
                     return;
@@ -673,11 +694,12 @@ public class FakeLag extends Module {
             return;
         }
 
-        /* Held by cancelling the event rather than inside the mixin, which is
-           what lets the ledger see it and name this module for the corrections
-           it causes. */
+        /* Held by cancelling the event rather than inside the mixin. The ledger
+           hears of it at the release (send), not here: holding moves nobody
+           on the server, and noting every held packet put this module at the
+           top of every correction in a fight just for being active
+           (2026-10-12). */
         event.setCancelled(true);
-        ActionLedger.note(this.getName(), "held-send");
         this.queue.offer(new Held(packet, System.currentTimeMillis()));
         noteHeld();
         enforceLimits();

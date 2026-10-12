@@ -242,6 +242,11 @@ public class BackTrack extends Module {
         return adaptive.getValue() ? adaptiveDelay.getValue() : normalDelay.getValue();
     }
 
+    /** The longest the hold now open can keep a packet, in ms; 0 when off. */
+    public int holdMs() {
+        return this.isEnabled() ? currentMaxDelay() : 0;
+    }
+
     /** Packets currently withheld, for whatever is reporting on causes. */
     public int heldCount() {
         return incomingQueue.size();

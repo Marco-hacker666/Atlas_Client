@@ -142,6 +142,19 @@ public class UpdaterTest {
     }
 
     @Test
+    public void secondCheckDoesNotDownloadAgain() throws Exception {
+        Fixture f = publish("2.2.0", "new client".getBytes(StandardCharsets.UTF_8), keys.getPrivate());
+        Updater u = updater("2.1.1");
+        u.check(false);
+        assertEquals(Updater.State.READY, u.getState());
+        served.remove("/r/download/v2.2.0/" + f.file); // a second download would now fail
+        List<String> said = listen(u);
+        u.check(true);
+        assertEquals(Updater.State.READY, u.getState());
+        assertTrue(said.get(0).contains("already downloaded"));
+    }
+
+    @Test
     public void sameOrOlderReleaseIsIgnored() throws Exception {
         publish("2.1.1", "same".getBytes(StandardCharsets.UTF_8), keys.getPrivate());
         Updater u = updater("2.1.1");

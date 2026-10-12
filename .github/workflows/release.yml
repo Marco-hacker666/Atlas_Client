@@ -1,0 +1,98 @@
+name: Release (online update)
+
+# Publish a release on GitHub (tag vX.Y.Z, matching `version` in
+# gradle.properties). This workflow then builds that tag, signs it, and
+# attaches two files to the release:
+#   Myau-Atlas-vX.Y.Z.jar   the client
+#   update.properties       what players' clients read to find and verify it
+# You no longer need to upload the jar by hand.
+#
+# Needs the repository secret UPDATE_SIGNING_KEY (tools/update/GenUpdateKey.java).
+
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to (re)build and sign, e.g. v2.1.2'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Check the tag matches gradle.properties
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -E '^\s*version\s*=' gradle.properties | head -1 | sed -E 's/^\s*version\s*=\s*//; s/\s*$//')
+          if [ "v$VERSION" != "$TAG" ]; then
+            echo "::error::Tag is $TAG but gradle.properties says version = $VERSION. Make them match (tag v$VERSION)."
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Check the signing key is set
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          if [ -z "$UPDATE_SIGNING_KEY" ]; then
+            echo "::error::Secret UPDATE_SIGNING_KEY is missing (see tools/update/GenUpdateKey.java)."
+            exit 1
+          fi
+          if [ ! -s src/main/resources/myau-update-key.pub ]; then
+            echo "::error::src/main/resources/myau-update-key.pub is missing; clients could not verify updates."
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            8
+            17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Apply UI update patch
+        run: |
+          if [ -f atlas-ui.patch ] && git apply --check atlas-ui.patch 2>/dev/null; then
+            git apply atlas-ui.patch
+            echo "atlas-ui.patch applied"
+          else
+            echo "no patch to apply"
+          fi
+
+      - name: Build
+        run: |
+          chmod +x gradlew
+          ./gradlew build --no-daemon --stacktrace
+
+      - name: Sign
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          JAR=$(ls build/libs/*.jar | grep -v -- '-sources' | head -1)
+          cp "$JAR" "dist/Myau-Atlas-v$VERSION.jar"
+          java tools/update/SignUpdate.java "$VERSION" "dist/Myau-Atlas-v$VERSION.jar" dist/update.properties
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/* --clobber

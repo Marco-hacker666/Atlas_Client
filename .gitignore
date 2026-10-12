@@ -42,3 +42,6 @@ logs/
 reports/
 config/Myau/
 *.txt.bak
+
+# Update signing private key (tools/update/GenUpdateKey.java). Never commit.
+update-signing-key.txt

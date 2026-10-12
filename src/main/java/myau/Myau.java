@@ -309,6 +309,7 @@ public class Myau {
         commandManager.commands.add(new myau.command.commands.SetupCommand());
         commandManager.commands.add(new myau.command.commands.AltsCommand());
         commandManager.commands.add(new myau.command.commands.ScriptCommand());
+        commandManager.commands.add(new myau.command.commands.UpdateCommand());
         for (Module module : moduleManager.modules.values()) {
             ArrayList<Property<?>> properties = new ArrayList<>();
             /* The Theme groups keep their settings in ThemeStyle, so for them
@@ -378,6 +379,15 @@ public class Myau {
             version = modInfo.get("version").getAsString();
         } catch (Exception e) {
             version = "dev";
+        }
+        /* Online updates (2026-10-13): checks the latest GitHub release in the
+           background and, in auto mode, swaps the jar after the game closes.
+           See myau.update.Updater. Never lets a failure stop the client loading. */
+        try {
+            myau.update.Updater.start(net.minecraft.client.Minecraft.getMinecraft().mcDataDir, version,
+                    myau.update.UpdateNotifier.install());
+        } catch (Throwable t) {
+            System.err.println("[Myau] updater did not start: " + t);
         }
         /* Setup: keep OneConfig's GUI key off RightShift, which is our ClickGUI key,
            and re-check it whenever a world loads. */

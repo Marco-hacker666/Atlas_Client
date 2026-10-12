@@ -333,6 +333,12 @@ public class Clutch extends Module {
        hand answers a hit in less than a few: pressing back from the tick of
        the hit is what set the 2026-09-25 Pika lagbacks off. */
     public final IntProperty counterDelay = new IntProperty("counter-delay", 6, 0, 15, this.counterKnockback::getValue);
+    /* 2026-10-12 (owner's log: blocks refused "kb 0t ago", a Clutch lagback
+       0 t after a hit). No block is clicked until this many ticks after this
+       player was hurt: the knockback is taken whole first, then caught. The
+       turn toward the block goes on meanwhile, so the click is ready. A hit
+       lifts the player (motionY ~0.4), so two or three ticks cost no catch. */
+    public final IntProperty hitSettle = new IntProperty("hit-settle", 2, 0, 6);
     /* Turn toward a face that is not clickable yet but will be in a few ticks,
        and with nothing at all to aim at, toward where the player last stood. */
     public final BooleanProperty preAim = new BooleanProperty("pre-aim", true);
@@ -2161,6 +2167,10 @@ public class Clutch extends Module {
         }
         if (this.pauseTicks > 0) {
             note("no click: waiting out a correction or refusal");
+            return;
+        }
+        if (this.tick - this.lastHurtTick < this.hitSettle.getValue()) {
+            note("no click: letting the knockback land (" + (this.tick - this.lastHurtTick) + "t after the hit)");
             return;
         }
         ItemStack held = mc.thePlayer.inventory.getCurrentItem();

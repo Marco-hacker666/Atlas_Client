@@ -4808,3 +4808,35 @@ FakeLag delay 150->90, delay-random 100->30, recoil-time 0->750,
 hold-transactions on, flag-pause 2000.
 Installed `mods/Myau Atlas v2.1.0.jar` (old v2.0.0(stable) jar moved to
 backups/jars), md5 7c17951fd2702d8cfc4338f0005f2eb8; copy in release-assets.
+
+### 2026-10-12 (later) — settings check after the first v2.1.0 session
+
+- The game saved FakeLag `delay` 150 again (delay-random 30, recoil 750,
+  hold-transactions, flag-pause kept). Nothing in code sets it; the session's
+  holds were 131-153 ms, so it was 150 in play. Set back to 90 with the game
+  closed; if it returns to 150 untouched, look at the config load path.
+- Correction to what the owner was told: Clutch `counter-knockback` does not
+  place blocks. It steers the movement input back toward the last ground
+  (after counter-delay ticks) while a hit carries the player away. The
+  REJECT / "kb 0t ago" and the Clutch LAGBACK come from the catch itself
+  placing during knockback. counter-knockback left on.
+
+## 2026-10-12 — Clutch hit-settle; Backtrack release-on-hit in ALL; owner set FakeLag delay 150
+
+- The FakeLag delay 150 was the owner's own change ("我改的"): keep 150.
+- Clutch `hit-settle` (2, 0-6): `post()` clicks no block within that many
+  ticks of this player's hurt (lastHurtTick); the turn continues. Targets the
+  "kb 0t ago" REJECTs and the Clutch lagback 0 t after a hit. Owner approved
+  touching the known-good timing for this.
+- Backtrack bug: with hold = ALL the target's S19 status 2 (hurt) and its
+  S12 were queued with everything else, so tickPre never saw the hurt time
+  rise and release-on-hit never fired inside a hold -- each hold ran its
+  full window after the hit had landed. `hitOn()` now releases the queue on
+  the target's hurt status or velocity and lets that packet through.
+- Advice given, not changed: Backtrack cooldown 0 means holds back to back
+  (a latency that never lets up); 150-300 ms suggested. With FakeLag
+  hold-transactions on and Backtrack ALL holding S32, transaction replies can
+  be late twice over -- watch for disconnects/mitigation.
+Built md5 0529d8e602cfd43de75e3e1d9278424f (not installed: game running).
+Installed md5 0529d8e602cfd43de75e3e1d9278424f; config: FakeLag delay 150
+(owner's), Backtrack cooldown 0 -> 150 (owner), Clutch hit-settle 2.

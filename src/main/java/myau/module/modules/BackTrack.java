@@ -363,6 +363,19 @@ public class BackTrack extends Module {
                 || p instanceof S40PacketDisconnect;
     }
 
+    /** The server telling us the target was hurt, or knocked back: a hit landed. */
+    private static boolean hitOn(EntityLivingBase t, Packet<?> p) {
+        if (p instanceof net.minecraft.network.play.server.S19PacketEntityStatus) {
+            net.minecraft.network.play.server.S19PacketEntityStatus status =
+                    (net.minecraft.network.play.server.S19PacketEntityStatus) p;
+            return status.getOpCode() == 2 && status.getEntity(mc.theWorld) == t;
+        }
+        if (p instanceof S12PacketEntityVelocity) {
+            return ((S12PacketEntityVelocity) p).getEntityID() == t.getEntityId();
+        }
+        return false;
+    }
+
     /** In TARGET, what is held along with the target's movement: the rest of their own packets. */
     private boolean aboutTarget(Packet<?> p) {
         EntityLivingBase t = target;
@@ -454,6 +467,15 @@ public class BackTrack extends Module {
             EntityLivingBase t = target;
             if (t == null) {
                 if (holding) releaseIncoming();
+                return;
+            }
+            if (holding && releaseOnHit.getValue() && hitOn(t, packet)) {
+                /* 2026-10-12: the target's hurt (or the knockback our hit gave
+                   them) is the hit landing. In ALL it used to be held with the
+                   rest, so tickPre never saw the hurt time rise and every hold
+                   ran its full window after a hit had already landed. Release
+                   now, ahead of it, and let it through. */
+                releaseIncoming();
                 return;
             }
             Vec3 from = holding && realPosition != null ? realPosition : serverPosition(t);

@@ -2,7 +2,6 @@ package myau.command.commands;
 
 import myau.Myau;
 import myau.command.Command;
-import myau.module.ModuleDocs;
 import myau.update.UpdateManifest;
 import myau.update.Updater;
 import myau.util.ChatUtil;
@@ -106,6 +105,6 @@ public class UpdateCommand extends Command {
     }
 
     private static void say(String zh, String en) {
-        ChatUtil.sendFormatted(Myau.clientName + (ModuleDocs.isEnglish() ? en : zh));
+        ChatUtil.sendFormatted(Myau.clientName + (myau.update.UpdateNotifier.english() ? en : zh));
     }
 }

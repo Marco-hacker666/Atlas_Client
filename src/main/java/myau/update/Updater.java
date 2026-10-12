@@ -216,6 +216,14 @@ public final class Updater {
             }
             return;
         }
+        if (state == State.READY && pendingJar != null && pendingJar.isFile()) {
+            /* Already downloaded and verified: do not fetch it a second time. */
+            if (manual) {
+                say("v" + latest.version + " 已經下載好了，關閉遊戲後會安裝。",
+                        "v" + latest.version + " is already downloaded; it installs when the game closes.");
+            }
+            return;
+        }
         state = State.CHECKING;
         UpdateManifest m;
         try {

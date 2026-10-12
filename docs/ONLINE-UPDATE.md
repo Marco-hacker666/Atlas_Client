@@ -72,4 +72,4 @@ The mode is saved in `config/Myau/updater.properties`. The installer writes a lo
 - `src/main/java/myau/command/commands/UpdateCommand.java`: the `.update` command
 - `.github/workflows/release.yml`: builds and signs releases
 - `tools/update/`: the key generator and the signing tool
-- `src/test/java/myau/update/UpdaterTest.java`: 17 tests, covering tampered files, foreign signatures, downgrades and a real jar swap
+- `src/test/java/myau/update/UpdaterTest.java`: 18 tests, covering tampered files, foreign signatures, downgrades and a real jar swap

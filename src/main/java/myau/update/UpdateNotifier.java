@@ -39,7 +39,38 @@ public final class UpdateNotifier implements Updater.Listener {
         }
         String[] m;
         while ((m = queue.poll()) != null) {
-            ChatUtil.sendFormatted(Myau.clientName + (ModuleDocs.isEnglish() ? m[1] : m[0]));
+            ChatUtil.sendFormatted(Myau.clientName + (english() ? m[1] : m[0]));
+        }
+    }
+
+    /**
+     * The menu language. ModuleDocs only learns it once the ClickGUI has been
+     * drawn, which has usually not happened yet when the startup check
+     * reports, so the saved menu settings are read as well.
+     */
+    public static boolean english() {
+        if (ModuleDocs.isEnglish()) {
+            return true;
+        }
+        java.io.File file = new java.io.File("./config/Myau/atlas-theme.json");
+        if (!file.isFile()) {
+            return false;
+        }
+        java.io.Reader reader = null;
+        try {
+            reader = new java.io.InputStreamReader(new java.io.FileInputStream(file), java.nio.charset.StandardCharsets.UTF_8);
+            com.google.gson.JsonElement json = new com.google.gson.JsonParser().parse(reader);
+            return json != null && json.isJsonObject() && json.getAsJsonObject().has("language")
+                    && "English".equals(json.getAsJsonObject().get("language").getAsString());
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (java.io.IOException ignored) {
+                }
+            }
         }
     }
 }

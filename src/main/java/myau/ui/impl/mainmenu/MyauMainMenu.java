@@ -302,7 +302,7 @@ public class MyauMainMenu extends GuiScreen implements GuiYesNoCallback {
         }
 
         float right = this.width * 0.95F;
-        float bottom = this.height * 0.92F - 28.0F;
+        float bottom = this.height - 36.0F;
         String who = this.mc.getSession() == null ? "" : this.mc.getSession().getUsername().toUpperCase();
         String lastServer = this.mc.gameSettings.lastServer;
         String last = lastServer == null || lastServer.isEmpty() ? "NONE" : lastServer.toUpperCase();
@@ -324,7 +324,7 @@ public class MyauMainMenu extends GuiScreen implements GuiYesNoCallback {
         float w = wa + wc + 6.0F;
         float x = (this.width - w) / 2.0F;
         boolean cinematic = MenuBackground.style() == MenuBackground.CINEMATIC;
-        float y = cinematic ? this.height * 0.08F + 8.0F : 10.0F;
+        float y = 10.0F;
         float h = 19.0F;
         RenderUtil.drawRoundedRect(x, y, w, h, h / 2.0F, alpha(0x8C14141C, 1.0F));
         RenderUtil.drawRoundedRectOutline(x, y, w, h, h / 2.0F, 0.5F, alpha(0x1FFFFFFF, 1.0F), true, true, true, true);

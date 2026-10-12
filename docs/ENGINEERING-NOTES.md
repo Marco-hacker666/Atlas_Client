@@ -4741,3 +4741,17 @@ panorama faces use the texture's default REPEAT wrap; with LINEAR filtering
 each border blended in the opposite edge (sky). Now GL_CLAMP_TO_EDGE on S/T
 and texture coordinates inset half a texel. Installed md5
 2e34ec7ebe9cdce6ebf4e0ad090aca2e.
+
+### 2026-10-12 (later) — cinematic: letterbox bars removed
+
+Owner (screenshot; "白邊" was a slip for "黑邊"): no black bars. The bars are
+gone from MenuBackground; the style pill goes back to y 10 and the account /
+last-server lines to height - 36. Built md5 0538935c6f1182daac98d31f8e8c178d
+(not installed: game running).
+
+### 2026-10-12 (later) — cinematic: the world shows through
+
+Owner agreed the panorama was buried. Blur 2 passes/2.5 -> 1/1.0; grade
+alphas 0x90/0x60 -> 0x50/0x38; sun glow 0x70 -> 0x48; left darkening
+0xD8 over 62% -> 0xB8 over 55%. Installed md5 aef03104175643a40e0bcbc501eb8541
+(includes the letterbox removal).

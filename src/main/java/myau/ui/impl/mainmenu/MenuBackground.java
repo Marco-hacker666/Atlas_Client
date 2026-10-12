@@ -177,15 +177,15 @@ public final class MenuBackground {
         if (myau.module.modules.RenderFixes.shouldUseShaders()) {
             myau.util.shader.BlurUtils.prepareBlur();
             rect(0.0F, 0.0F, width, height, 0xFFFFFFFF);
-            myau.util.shader.BlurUtils.blurEnd(2, 2.5F);
+            myau.util.shader.BlurUtils.blurEnd(1, 1.0F);
         }
         /* Dusk above, a warm glow below. */
-        gradient(0, 0, width, height, 0x90140A24, 0x90140A24, 0x60FF8A3C, 0x60FF8A3C);
+        gradient(0, 0, width, height, 0x50140A24, 0x50140A24, 0x38FF8A3C, 0x38FF8A3C);
         /* The sun, low and to the right: one smooth radial glow. */
-        glow(width * 0.70F, height * 0.62F, height * 0.75F, height * 0.55F, 0x70FFC888);
+        glow(width * 0.70F, height * 0.62F, height * 0.75F, height * 0.55F, 0x48FFC888);
         glow(width * 0.70F, height * 0.62F, height * 0.16F, height * 0.13F, 0x60FFF0D0);
         /* Dark on the left, where the menu reads. */
-        gradient(0, 0, width * 0.62F, height, 0xD806040A, 0x0006040A, 0xD806040A, 0x0006040A);
+        gradient(0, 0, width * 0.55F, height, 0xB806040A, 0x0006040A, 0xB806040A, 0x0006040A);
         /* Motes of light drifting up. */
         float t = seconds();
         for (int i = 0; i < 46; i++) {
@@ -195,10 +195,7 @@ public final class MenuBackground {
             float tw = MathHelper.sin(t * 1.3F + i);
             rect(px, py, px + 1.0F, py + 1.0F, ((int) ((0.3F + 0.45F * tw * tw) * 255)) << 24 | 0xFFDCAA);
         }
-        /* Letterbox. */
-        float bar = height * 0.08F;
-        rect(0.0F, 0.0F, width, bar, 0xFF000000);
-        rect(0.0F, height - bar, width, height, 0xFF000000);
+        /* No letterbox bars (owner, 2026-10-12): the picture runs to the edges. */
     }
 
     /** A filled rectangle, with texturing off (RenderUtil.drawRect leaves it as it finds it). */

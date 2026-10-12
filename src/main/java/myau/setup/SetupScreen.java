@@ -1,7 +1,7 @@
 package myau.setup;
 
 import myau.ui.UiMode;
-import myau.ui.impl.gui.BackgroundRenderer;
+import myau.ui.impl.mainmenu.MenuBackground;
 import myau.ui.impl.gui.ModernGuiButton;
 import myau.util.RenderUtil;
 import net.minecraft.client.Minecraft;
@@ -436,7 +436,7 @@ public class SetupScreen extends GuiScreen {
     @Override
     public void drawScreen(int mouseX, int mouseY, float ticks) {
         try {
-            BackgroundRenderer.draw(width, height);
+            MenuBackground.draw(width, height, width / 2.0F, height / 2.0F);
         } catch (Exception e) {
             drawDefaultBackground();
         }

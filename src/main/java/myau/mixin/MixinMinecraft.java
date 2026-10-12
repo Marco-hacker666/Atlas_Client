@@ -22,6 +22,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @SideOnly(Side.CLIENT)
 @Mixin(value = {Minecraft.class}, priority = 9999)
@@ -36,6 +37,19 @@ public abstract class MixinMinecraft {
     public EntityPlayerSP thePlayer;
     @Shadow
     public GuiScreen currentScreen;
+    @Shadow
+    public net.minecraft.client.settings.GameSettings gameSettings;
+
+    /* 2026-10-12: vanilla holds every screen without a world to 30 fps, which
+       made the animated start screen stutter. Our menu and the setup screen
+       run at the player's own frame limit (at least 60). */
+    @Inject(method = {"getLimitFramerate"}, at = {@At("HEAD")}, cancellable = true)
+    private void menuFramerate(CallbackInfoReturnable<Integer> callbackInfo) {
+        if (this.theWorld == null && (this.currentScreen instanceof MyauMainMenu
+                || this.currentScreen instanceof myau.setup.SetupScreen)) {
+            callbackInfo.setReturnValue(Math.max(60, this.gameSettings.limitFramerate));
+        }
+    }
 
     @Inject(
             method = {"displayGuiScreen"},

@@ -6,13 +6,19 @@ import myau.event.types.EventType;
 import myau.event.types.Priority;
 import myau.events.LeftClickMouseEvent;
 import myau.events.PacketEvent;
+import myau.events.TickEvent;
 import myau.events.UpdateEvent;
 import myau.module.Module;
+import myau.property.properties.BooleanProperty;
+import myau.property.properties.IntProperty;
 import myau.property.properties.ModeProperty;
 import myau.property.properties.PercentProperty;
+import myau.util.KeyBindUtil;
+import myau.util.TeamUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.projectile.EntityLargeFireball;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C0BPacketEntityAction;
@@ -46,6 +52,45 @@ public class HitSelect extends Module {
     public final PercentProperty chance = new PercentProperty("chance", 90, () -> this.mode.getValue() == 3);
     public final ModeProperty preference = new ModeProperty("preference", 0,
             new String[]{"KB_REDUCTION", "CRITICALS"}, () -> this.mode.getValue() == 3);
+
+    /* 2026-10-12 (owner, from a player's suggestions), ACTIVE only:
+
+       timing: when the target can be hurt. INVULN_TIMING asks InvulnTiming's
+       estimate (the target's hurt time minus the round trip, plus its safety
+       margin -- its own settings, whether that module is on or not), so the
+       hand and KillAura follow one clock; HIT_TIMER is the rule ACTIVE had.
+
+       burst: the opening is one tick wide and the estimate can be a tick
+       off. After clicks were dropped waiting for it, the opening click is
+       followed by up to burst-clicks - 1 more, one a tick (never two in a
+       tick: the server would refuse the second, and two attacks in one tick
+       is a pattern of its own), while the target stays under the crosshair.
+
+       reduce: a sprint hit takes 40% off this player's own motion. Knocked
+       back away from where the player is walking (the knockback against the
+       movement keys), one hit is made even without a click, once per
+       knockback, so less of it carries the player off course. Only on an
+       enemy under the crosshair, and only while fighting (a click in the
+       last second). Neither burst nor reduce runs while KillAura is on: the
+       aura makes its own hits. */
+    public final ModeProperty timing = new ModeProperty("timing", 0,
+            new String[]{"INVULN_TIMING", "HIT_TIMER"}, () -> this.mode.getValue() == 3);
+    public final BooleanProperty burst = new BooleanProperty("burst", true, () -> this.mode.getValue() == 3);
+    public final IntProperty burstClicks = new IntProperty("burst-clicks", 2, 2, 4,
+            () -> this.mode.getValue() == 3 && this.burst.getValue());
+    public final BooleanProperty reduce = new BooleanProperty("reduce", true, () -> this.mode.getValue() == 3);
+
+    /** Burst clicks still to make, one a tick, and on whom. */
+    private int burstLeft;
+    private int burstTarget = -1;
+    /** Clicks dropped since the last one let through: a burst only follows waiting. */
+    private int waited;
+    /** A click this module pressed this tick: the next click through clickMouse is it. */
+    private boolean forcing;
+    /** A forced click went through this tick: any further click this tick is dropped. */
+    private boolean forcedThisTick;
+    private boolean reducedThisKnockback;
+    private long lastClickMs;
     /** Ticks after our own knockback still treated as part of it. */
     private static final int VELOCITY_TICKS = 7;
     private volatile int velocityTicks = 0;
@@ -86,16 +131,113 @@ public class HitSelect extends Module {
 
     @EventTarget(Priority.HIGH)
     public void onClick(LeftClickMouseEvent event) {
+        if (this.forcing && event.isCancelled()) {
+            /* Something else stopped the click this module pressed. */
+            this.forcing = false;
+            return;
+        }
         if (!this.isEnabled() || this.mode.getValue() != 3 || event.isCancelled()
                 || mc.thePlayer == null || mc.theWorld == null) {
             return;
         }
+        if (this.forcing) {
+            /* The click this module pressed: it has already been decided. */
+            this.forcing = false;
+            this.forcedThisTick = true;
+            return;
+        }
+        if (this.forcedThisTick) {
+            /* One attack a tick, and this tick already has one. */
+            drop(event);
+            return;
+        }
+        this.lastClickMs = System.currentTimeMillis();
         EntityLivingBase target = mc.objectMouseOver != null
                 && mc.objectMouseOver.entityHit instanceof EntityLivingBase
                 ? (EntityLivingBase) mc.objectMouseOver.entityHit : null;
         if (this.activeDrops(target)) {
             drop(event);
+            if (target != null) {
+                this.waited++;
+            }
+        } else if (target != null) {
+            this.waited = 0;
         }
+    }
+
+    /** Burst and reduce: at most one click a tick, pressed before vanilla reads the key. */
+    @EventTarget
+    public void onTick(TickEvent event) {
+        if (event.getType() != EventType.PRE) {
+            return;
+        }
+        /* A press vanilla never turned into a click (an item in use, a screen
+           open) must not mark someone else's click as forced. */
+        this.forcing = false;
+        this.forcedThisTick = false;
+        if (!this.isEnabled() || this.mode.getValue() != 3 || mc.thePlayer == null || mc.theWorld == null
+                || mc.currentScreen != null || mc.thePlayer.isUsingItem() || this.auraOn()) {
+            this.burstLeft = 0;
+            return;
+        }
+        EntityLivingBase target = mc.objectMouseOver != null
+                && mc.objectMouseOver.entityHit instanceof EntityLivingBase
+                ? (EntityLivingBase) mc.objectMouseOver.entityHit : null;
+        boolean fighting = System.currentTimeMillis() - this.lastClickMs < 1000L;
+
+        if (this.reduce.getValue() && fighting && this.velocityTicks > 0 && !this.reducedThisKnockback
+                && this.sinceVelocity <= 3 && mc.thePlayer.isSprinting() && this.enemy(target)
+                && this.knockedOffCourse()) {
+            this.reducedThisKnockback = true;
+            this.press();
+            return;
+        }
+        if (this.burstLeft > 0) {
+            if (this.burst.getValue() && fighting && target != null && target.getEntityId() == this.burstTarget) {
+                this.burstLeft--;
+                this.press();
+            } else {
+                this.burstLeft = 0;
+            }
+        }
+    }
+
+    private void press() {
+        this.forcing = true;
+        KeyBindUtil.pressKeyOnce(mc.gameSettings.keyBindAttack.getKeyCode());
+    }
+
+    private boolean auraOn() {
+        Module aura = Myau.moduleManager.modules.get(KillAura.class);
+        return aura != null && aura.isEnabled();
+    }
+
+    /** A player worth a forced hit: not a teammate, a friend or a bot. */
+    private boolean enemy(EntityLivingBase target) {
+        if (!(target instanceof EntityPlayer) || target.deathTime > 0) {
+            return false;
+        }
+        EntityPlayer player = (EntityPlayer) target;
+        return !TeamUtil.isFriend(player) && !TeamUtil.isSameTeam(player) && !TeamUtil.isBot(player);
+    }
+
+    /** The motion carries the player against the way the movement keys point. */
+    private boolean knockedOffCourse() {
+        float forward = mc.thePlayer.movementInput.moveForward;
+        float strafe = mc.thePlayer.movementInput.moveStrafe;
+        if (forward == 0.0F && strafe == 0.0F) {
+            return false;
+        }
+        double yaw = Math.toRadians(mc.thePlayer.rotationYaw);
+        double ix = -Math.sin(yaw) * forward + Math.cos(yaw) * strafe;
+        double iz = Math.cos(yaw) * forward + Math.sin(yaw) * strafe;
+        double mx = mc.thePlayer.motionX;
+        double mz = mc.thePlayer.motionZ;
+        double speed = Math.sqrt(mx * mx + mz * mz);
+        if (speed < 0.05) {
+            return false;
+        }
+        return mx * ix + mz * iz < 0.0;
     }
 
     /**
@@ -140,18 +282,38 @@ public class HitSelect extends Module {
         }
         int expected = myau.management.HitTimer.ticks();
         int now = mc.thePlayer.ticksExisted;
-        if (target.hurtTime <= expected) {
+        /* How far from the opening, in ticks: 0 or less is open, (0, 1] is
+           the tick before it, which also goes. */
+        float until;
+        InvulnTiming invuln = InvulnTiming.instance();
+        if (this.timing.getValue() == 0 && invuln != null) {
+            until = invuln.predict(target);
+        } else {
+            until = target.hurtTime - expected;
+        }
+        if (until <= 0.0F) {
             /* The opening: the first click in it goes, and the next only
                once two round trips have passed without it being answered. */
             int spacing = Math.max(2, expected * 2);
             if (now - this.lastAllowedTick >= spacing || now < this.lastAllowedTick) {
                 this.lastAllowedTick = now;
+                this.armBurst(target);
                 return false;
             }
-        } else if (target.hurtTime == expected + 1) {
+        } else if (until <= 1.0F) {
+            this.armBurst(target);
             return false;
         }
         return true;
+    }
+
+    /** After waiting, the click that goes is followed by the rest of a burst. */
+    private void armBurst(EntityLivingBase target) {
+        if (this.burst.getValue() && this.waited > 0 && this.burstLeft == 0) {
+            this.burstLeft = this.burstClicks.getValue() - 1;
+            this.burstTarget = target.getEntityId();
+        }
+        this.waited = 0;
     }
 
     private void drop(LeftClickMouseEvent event) {
@@ -171,6 +333,7 @@ public class HitSelect extends Module {
                     == mc.thePlayer.getEntityId()) {
                 this.velocityTicks = VELOCITY_TICKS;
                 this.sinceVelocity = 0;
+                this.reducedThisKnockback = false;
             }
             return;
         }
@@ -410,6 +573,11 @@ public class HitSelect extends Module {
         this.allowedHits = 0;
         this.velocityTicks = 0;
         this.dropped = 0;
+        this.burstLeft = 0;
+        this.waited = 0;
+        this.forcing = false;
+        this.forcedThisTick = false;
+        this.reducedThisKnockback = false;
     }
 
     @Override

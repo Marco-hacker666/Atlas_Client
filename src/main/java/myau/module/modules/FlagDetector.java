@@ -218,6 +218,12 @@ public class FlagDetector extends Module {
         String context;
         /** The module whose click sent it, from the stack; null for a click by hand (2026-10-04). */
         String module;
+        /* 2026-10-12: what the click claimed, to judge it again along the
+           rotation of the movement packet after it (ray-next). */
+        BlockPos clicked;
+        net.minecraft.util.EnumFacing face;
+        net.minecraft.util.Vec3 hit;
+        boolean awaitingNext;
 
         Placement(int tick) {
             this.tick = tick;
@@ -521,6 +527,16 @@ public class FlagDetector extends Module {
                 }
                 this.sentGround = c03.isOnGround();
                 this.sentTick = this.tickCounter;
+                /* A 1.8 client sends a click before the movement packet of
+                   its tick, so a server may judge it along either rotation:
+                   the one before (ray) or this one (ray-next). */
+                for (Placement placement : this.pendingPlacements.values()) {
+                    if (placement.awaitingNext && placement.context != null) {
+                        placement.awaitingNext = false;
+                        placement.context = placement.context.replace("ray-next ?",
+                                "ray-next " + rayText(placement.clicked, placement.face, placement.hit));
+                    }
+                }
                 return;
             }
             if (event.getPacket() instanceof C02PacketUseEntity
@@ -568,6 +584,13 @@ public class FlagDetector extends Module {
                         placement.module = ActionLedger.callerModuleExcept("FlagDetector");
                         if (this.placeLog.getValue()) {
                             placement.context = placementContext(place, target);
+                            placement.clicked = place.getPosition();
+                            placement.face = net.minecraft.util.EnumFacing.getFront(place.getPlacedBlockDirection());
+                            placement.hit = new net.minecraft.util.Vec3(
+                                    place.getPosition().getX() + place.getPlacedBlockOffsetX(),
+                                    place.getPosition().getY() + place.getPlacedBlockOffsetY(),
+                                    place.getPosition().getZ() + place.getPlacedBlockOffsetZ());
+                            placement.awaitingNext = true;
                         }
                         this.lastPlaceTick = this.tickCounter;
                         this.pendingPlacements.put(target, placement);
@@ -1470,13 +1493,10 @@ public class FlagDetector extends Module {
      * last rotation sent. gap: ticks since the previous placement. The rest is
      * the player's state and what was running.
      */
-    private String placementContext(C08PacketPlayerBlockPlacement place, BlockPos target) {
-        BlockPos clicked = place.getPosition();
-        net.minecraft.util.EnumFacing face = net.minecraft.util.EnumFacing.getFront(place.getPlacedBlockDirection());
+    /** Where the rotation and position last sent reach on the clicked block: miss, another side, or the face (with the distance to the claimed point). */
+    private String rayText(BlockPos clicked, net.minecraft.util.EnumFacing face, net.minecraft.util.Vec3 hit) {
         double eyeY = this.sentY + (mc.thePlayer.isSneaking() ? 1.54 : 1.62);
         net.minecraft.util.Vec3 eyes = new net.minecraft.util.Vec3(this.sentX, eyeY, this.sentZ);
-        net.minecraft.util.Vec3 hit = new net.minecraft.util.Vec3(clicked.getX() + place.getPlacedBlockOffsetX(),
-                clicked.getY() + place.getPlacedBlockOffsetY(), clicked.getZ() + place.getPlacedBlockOffsetZ());
         float yawRad = -this.sentYaw * 0.017453292F - (float) Math.PI;
         float pitchRad = -this.sentPitch * 0.017453292F;
         float cosPitch = -net.minecraft.util.MathHelper.cos(pitchRad);
@@ -1485,8 +1505,18 @@ public class FlagDetector extends Module {
         net.minecraft.util.Vec3 far = eyes.addVector(look.xCoord * 6.0, look.yCoord * 6.0, look.zCoord * 6.0);
         net.minecraft.util.AxisAlignedBB box = new net.minecraft.util.AxisAlignedBB(clicked, clicked.add(1, 1, 1));
         net.minecraft.util.MovingObjectPosition ray = box.calculateIntercept(eyes, far);
-        String rayText = ray == null ? "miss"
+        return ray == null ? "miss"
                 : ray.sideHit == face ? String.format("face %.2f", ray.hitVec.distanceTo(hit)) : "side:" + ray.sideHit.getName();
+    }
+
+    private String placementContext(C08PacketPlayerBlockPlacement place, BlockPos target) {
+        BlockPos clicked = place.getPosition();
+        net.minecraft.util.EnumFacing face = net.minecraft.util.EnumFacing.getFront(place.getPlacedBlockDirection());
+        net.minecraft.util.Vec3 hit = new net.minecraft.util.Vec3(clicked.getX() + place.getPlacedBlockOffsetX(),
+                clicked.getY() + place.getPlacedBlockOffsetY(), clicked.getZ() + place.getPlacedBlockOffsetZ());
+        double eyeY = this.sentY + (mc.thePlayer.isSneaking() ? 1.54 : 1.62);
+        net.minecraft.util.Vec3 eyes = new net.minecraft.util.Vec3(this.sentX, eyeY, this.sentZ);
+        String rayText = rayText(clicked, face, hit) + " | ray-next ?";
         float turn = Math.abs(net.minecraft.util.MathHelper.wrapAngleTo180_float(this.sentYaw - this.sentYawBefore))
                 + Math.abs(this.sentPitch - this.sentPitchBefore);
         StringBuilder mods = new StringBuilder();

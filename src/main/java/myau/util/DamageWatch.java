@@ -66,6 +66,12 @@ public final class DamageWatch {
     private static final int BASELINE_SIZE = 12;
     /** Ticks after the flinch to wait for the health to follow it. */
     private static final int SETTLE_TICKS = 6;
+    /* 2026-10-12: health read from the tab list or the score under the name
+       is refreshed by the server's own scoreboard task, often a second or
+       more after the flinch. Six ticks resolved most hits there as 0 dealt
+       while HitCheck saw 92-97% of them land (owner's log) -- "mitigation?"
+       out of nothing. Those readings get a second to catch up. */
+    private static final int SETTLE_TICKS_SCORE = 24;
     /** Hits read before deciding health is hidden, if none moved it. */
     private static final int HIDDEN_AFTER = 5;
 
@@ -127,7 +133,7 @@ public final class DamageWatch {
                metadata can land with it or a tick after. */
             t.before = t.lastHealth;
             t.lowest = Math.min(t.lastHealth, health);
-            t.ticksLeft = SETTLE_TICKS;
+            t.ticksLeft = this.precision > 0.0F ? SETTLE_TICKS_SCORE : SETTLE_TICKS;
             t.hitAt = now;
             t.lastAttackAt = 0L;
             t.hitExpected = t.attackExpected;

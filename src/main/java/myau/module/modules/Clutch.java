@@ -817,6 +817,28 @@ public class Clutch extends Module {
      * server is sent -- so what the server re-simulates is a key press it
      * could have seen.
      */
+    /**
+     * 2026-10-12: no sprint while the view the server has points more than 90
+     * degrees away from the way the keys move the player. Facing back while
+     * sprinting forward is something no keyboard and mouse can do (846 of the
+     * owner's Clutch placements were made sprinting). Runs after vanilla's
+     * own sprint logic for the tick (LivingUpdateEvent fires just before
+     * the movement), so the state sent is the honest one; sprint comes back
+     * by itself once the view turns forward again.
+     */
+    @EventTarget
+    public void onLivingUpdate(myau.events.LivingUpdateEvent event) {
+        if (!this.isEnabled() || mc.thePlayer == null || !this.hasSent || !mc.thePlayer.isSprinting()
+                || !MoveUtil.isMoving()) {
+            return;
+        }
+        float view = this.mode.getValue() == 1 ? this.viewYaw : mc.thePlayer.rotationYaw;
+        float moving = MoveUtil.adjustYaw(view, MoveUtil.getForwardValue(), MoveUtil.getLeftValue());
+        if (Math.abs(MathHelper.wrapAngleTo180_float(this.sentYaw - moving)) > 90.0F) {
+            mc.thePlayer.setSprinting(false);
+        }
+    }
+
     @EventTarget(Priority.LOWEST)
     public void onMoveInput(MoveInputEvent event) {
         if (!this.isEnabled() || mc.thePlayer == null) {

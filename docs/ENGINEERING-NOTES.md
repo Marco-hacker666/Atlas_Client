@@ -4840,3 +4840,105 @@ backups/jars), md5 7c17951fd2702d8cfc4338f0005f2eb8; copy in release-assets.
 Built md5 0529d8e602cfd43de75e3e1d9278424f (not installed: game running).
 Installed md5 0529d8e602cfd43de75e3e1d9278424f; config: FakeLag delay 150
 (owner's), Backtrack cooldown 0 -> 150 (owner), Clutch hit-settle 2.
+
+## 2026-10-12 — "mitigation?" false alarms on tab health; FastPlace 2
+
+Owner's session 21:44: three "mitigation?" in the first minute while HitCheck
+had 34/35 and 20/20 hits landing (flinch seen). Health there comes from the
+tab list (precision 1), refreshed by the server's scoreboard task well after
+the flinch; DamageWatch resolved each hit 6 ticks after it, so it read 0
+dealt. `SETTLE_TICKS_SCORE` = 24 ticks when precision > 0 (exact metadata
+health keeps 6). Not done (owner uses Clutch to bridge/pillar): skipping
+catches while the player rises from their own jump -- the pillar REJECTs at
+y 97-101 stay to be solved another way. FastPlace delay 1 -> 2 (owner).
+Installed md5 a589911d69c6aabe41743db53830f107.
+
+## 2026-10-12 — New module TellyBridge (Vape v4-style telly)
+
+Owner telly-bridged with Clutch and drew mitigation. From 900+ Clutch
+placements in six place logs: ~50% "ray miss" (the rotation the server had
+did not reach the clicked face -- partly the 1.8 click-before-C03 order the
+detector measures against, but high), 846 placed while sprinting (facing back
+while sprinting forward), and a catch opened every jump (turn back, click,
+snap forward). TellyBridge (World, next to Scaffold) is a separate module so
+Clutch, which the owner also uses to bridge/pillar, is untouched:
+- ground: camera view, `auto-jump` when moving forward; the layer under the
+  feet becomes the bridge layer (`keep-y` holds it while jumping).
+- `telly-ticks` (2) after take-off the silent view turns (RotationEngine,
+  min/max-speed 38/52, NOISE+EASE) toward the first empty cell of the layer
+  along the motion; toward a support face it cannot see yet it turns early
+  but does not click.
+- click only when the ray along the rotation SENT LAST TICK hits the aimed
+  support face, with that ray's hit vector; the same rotation is sent again
+  on the click tick (Clutch's hold-for-the-click scheme), cell must be empty
+  and clear of the body. Swing or C0A.
+- return: starts when ticks-to-land <= ticks the turn back needs + 1, or when
+  nothing is left to place; on the ground the view is handed back at speed.
+- movement: setPervRotation(sent yaw) + keys remapped at LOWEST so the path is
+  unchanged; facing back makes moveForward < 0.8, sprint off (also set off
+  explicitly). S08 resets. auto-switch to the largest full-cube block stack.
+Untested in game at the time of writing. Installed md5 0457482bd629610da7ffc8ee224fb5b0.
+### TellyBridge v2 (owner: "根本沒有放方塊")
+The aim was worked out from this tick's eyes, but the click goes out next tick
+from where the eyes are then (+0.3 forward, +-0.3 up/down while jumping), so
+the held rotation's ray kept missing the 1x1 face and nothing was clicked.
+Aim now from eyes + motion. `debug` (on) prints one line per landing: placed,
+layer, aims/early/no-support, clicks tried and why they failed (miss, other
+block, refused). Installed md5 50522e354ca10526ff955f93017541f1.
+
+## 2026-10-12 — Telly moved into Scaffold (`vape-telly`); TellyBridge removed
+
+TellyBridge v2 still placed nothing: its debug lines showed clicks tried 2-3
+a jump, nearly all "miss" (the rotation sent had not reached the face), then
+"no-support" once the chain broke. Owner: make it a Scaffold mode. Scaffold
+already had keep-y TELLY and a working pipeline (getBlockData, the face
+raytrace loop, onUpdateClick clicking only along the look the C03 carries).
+New with keep-y TELLY/EXTRATELLY and `vape-telly` (on):
+- ground and the first `vt-telly-ticks` (2) in the air: the view steps back to
+  the camera (RotationEngine NOISE+EASE, `vt-min/max-speed` 45/60), planReady
+  false -> no click. Replaces the isTowering path there (camera*0.98 snap and a
+  random 30-80 pitch every tick).
+- air: the normal aim, then every turn stepped at vt speed before quantize.
+- return when ticks-to-land (to startY) <= ceil(turn back / speed) + 1.
+- sprint: shouldStopSprint() false while active; onLivingUpdate drops sprint
+  only while |sent yaw - key direction| > 90 (TELLY + sprint NONE used to drop
+  it always).
+TellyBridge.java deleted (registration, category, docs too). Owner config
+(game closed, backup default.json.pre-scaffold-telly-20261012): Scaffold
+rotations POLAR -> DEFAULT, keep-y NONE -> TELLY, vape-telly on (move-fix
+SILENT, sprint VANILLA as they were). Installed md5 30b4fcaecf32ccee48f40b68f8b02856.
+### vape-telly removed again (owner: "先移除")
+Scaffold.java restored from the release repo's HEAD (the only difference was
+the 90 added vape-telly lines; the pre-change backup had not been written
+because that shell call failed to parse). Owner's Scaffold config back to
+rotations POLAR, keep-y NONE. Telly is not in the client now. Installed md5
+a120fd7e3042cea548bf9246e9b75353.
+
+## 2026-10-12 — Clutch drops sprint while facing back; place log ray-next
+
+From the owner's 538 Clutch attempts today (387 saved, 135 landed on ground
+already there, 15 lost) and the earlier 846 sprinting placements:
+1. Clutch `onLivingUpdate`: while Clutch holds the view (hasSent) and the
+   player sprints and moves, sprint is set off when |sentYaw - key direction|
+   > 90 (key direction from viewYaw in REAL, rotationYaw otherwise).
+   LivingUpdateEvent fires after vanilla's sprint logic, so the state sent is
+   the honest one; sprint returns once the view faces forward.
+2. FlagDetector place log: a 1.8 click goes out before its tick's C03, so the
+   old `ray` (along the rotation before the click) could read "miss" for a
+   click aimed along the next one. Each placement now also gets `ray-next`,
+   filled in at the next C03 with that packet's rotation/position. Compare
+   the two before changing Clutch's aim.
+Not done yet (owner to decide after testing): fewer catches that end on
+existing ground (25%), pillar REJECTs.
+Installed md5 ad2c4a5f408a10aaa297dcd24b08f11a.
+
+## 2026-10-12 — Version 2.1.1
+
+gradle.properties 2.1.0 -> 2.1.1; `mods/Myau Atlas v2.1.1.jar` replaces
+v2.1.0 (old jar in backups/jars), copy in release-assets. md5
+b59f533ccb60021da59005107f2acced. Owner's test before it (22:14): no
+mitigation, hits 92-100%, Clutch 114 attempts / 91 saved / 0 lost, 4 REJECT in
+266 placements; ray miss 47%, ray-next miss 42% -- the misaim is mostly real
+but this server accepts it, so Clutch's aim is left as is for now.
+Tag v2.1.1 on the commit that adds this. gh CLI is not installed here: the
+owner publishes the GitHub Release page.

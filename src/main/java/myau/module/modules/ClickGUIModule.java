@@ -35,7 +35,7 @@ public class ClickGUIModule extends Module {
     /* Only Atlas and Normal (the backup) are left (2026-10-06): Raven B3/B4,
        Cheadle, Modern and RiseLB were removed. The style is saved by name, so
        a config naming one of the removed styles keeps this default, Atlas. */
-    public ModeProperty style = new ModeProperty("Style", 1, new String[]{"Normal", "Atlas"});
+    public ModeProperty style = new ModeProperty("Style", 1, new String[]{"Normal", "Atlas", "Panel"});
     public BooleanProperty saveGuiState = new BooleanProperty("Save GUI State", true);
     public BooleanProperty shadow = new BooleanProperty("Shadow", true);
 
@@ -70,6 +70,9 @@ public class ClickGUIModule extends Module {
     }
 
     public GuiScreen getSelectedGui() {
+        if (style.getValue() == 2) {
+            return myau.ui.impl.clickgui.panel.PanelClickGui.getInstance();
+        }
         if (style.getValue() == 1) {
             return AtlasClickGui.getInstance();
         }
@@ -78,7 +81,8 @@ public class ClickGUIModule extends Module {
 
     /** Whether the screen is one of the click menus. */
     public static boolean isClickGui(GuiScreen screen) {
-        return screen instanceof ClickGuiScreen || screen instanceof AtlasClickGui;
+        return screen instanceof ClickGuiScreen || screen instanceof AtlasClickGui
+                || screen instanceof myau.ui.impl.clickgui.panel.PanelClickGui;
     }
 
     @Override

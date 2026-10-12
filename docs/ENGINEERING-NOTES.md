@@ -4540,3 +4540,97 @@ where the fixed look lands on Myau's placement model, whose `getBlockData` targe
 under the player rather than LiquidBounce's forward target — and the tests cannot count it.
 The rule and the fixed look are what they can hold; the number to watch in game is jumps per 20
 blocks along a straight row.
+
+## 2026-10-11 — New ClickGUI style: Panel (Yuri-like)
+
+Owner request: a new click GUI, modelled on a screenshot of Yuri's menu
+(dark rounded panels side by side, accent line under each title, modules by
+name, accent when on, "+" to open settings, a Configs panel). First usable
+version; Atlas and Normal are untouched.
+
+- `ui/impl/clickgui/panel/PanelClickGui.java` (one class). Each frame lays out
+  and draws every panel and records hit boxes (`Hit`); clicks use the hits of
+  the frame that was seen. Panels clip with `RenderUtil.scissor` and scroll
+  with the wheel; positions/folded state go to `config/Myau/panelgui.txt`.
+- Controls: left click module = toggle; right click or "+" = settings;
+  title drag = move, right click title = fold. Settings: Bind (left = listen,
+  right = clear), booleans, sliders (Int/Float/Percent), modes (left next,
+  right previous), colours (hue bar), text (type, Enter), keys. Other
+  property types are shown read-only.
+- Configs panel: lists `config/Myau/*.json`; click picks a name, the Name
+  field can be typed, Load = `new Config(name,false).load()`, Save =
+  `new Config(name,true).save()`.
+- `ClickGUIModule`: Style modes Normal / Atlas / **Panel** (index 2);
+  `isClickGui` knows the new screen. Accent = ClickGUI "Color".
+- Backups: `backups/src/ClickGUIModule.java.pre-panel-20261011`,
+  `backups/src/beta2-panel-gui-20261011`. Not pushed yet (owner testing first).
+
+### 2026-10-11 (later) — Panel GUI polish ("沒有 yuri 那樣有質感")
+
+- Translucent panels (0xC8121217) over a Kawase blur of the world
+  (`BlurUtils.prepareBlur` + `RoundedUtils.drawRound` per panel, only when
+  `RenderFixes.shouldUseShaders()`), soft `ShadowShader` shadow, 0.5 px rim.
+- Screen dims with a gradient that picks up the accent at the bottom.
+- Bigger: width 132, header 24, rows 18; panels cap at 16 rows and scroll
+  (eased scroll, fade at cut edges, rounded scrollbar).
+- Animations (`ease(key, target, speed)`, frame-time based): panels drop in
+  one after another; hover glow; on/off colour fade plus an accent tick;
+  settings unroll in their own nested scissor (restored to the panel clip
+  after); the accent line grows from the middle; booleans are switches.
+- Header shows enabled-count; bottom-left info bar (client, server, FPS, time).
+- Backups: `backups/src/PanelClickGui.java.v1-20261011` (first version),
+  `...v2-polish-20261011`.
+
+## 2026-10-11 — JumpReset rewritten as one mode (owner: "一直被 silent flag")
+
+Old POLAR mode (owner's setting) jumped when nobody had hit the player
+(enemy predicted to back off), rolled `chance` every tick (70% = always),
+and pressed the jump key from the packet handler. A key press is not a
+motion change, so ActionWatch never named JumpReset: the owner's log has
+VERTICAL setbacks 0-4 t after hits, h~0.4 v1.0-1.2, attributed "unknown".
+
+New JumpReset (STANDARD/POLAR and reduce removed):
+- One decision per KnockbackEvent (y > 0, on ground), conditions
+  (sprint / forward / mouse / target in range+fov), pause-when, min-interval,
+  `chance` rolled once, and `max-streak`: each run of resets ends at a random
+  point between half the limit and the limit.
+- The jump is made in the next MoveInputEvent by `movementInput.jump = true`
+  (the jump key is never touched); only that tick can reset -- a tick later
+  knockback has lifted the player. Pending decisions expire after one tick.
+- Skipped with jump boost, in water/lava/web, on ladders, flying, inventory
+  open, Scaffold on. S08 clears the pending jump and the streak.
+- `ActionLedger.note("JumpReset", "move")` on every jump, so FlagDetector
+  names it. flag-ticks default 3 -> 10.
+- Backups: `backups/src/JumpReset.java.pre-unified-20261011`, `...unified-20261011`.
+  Jar md5 f15b9db1fd110109113a279950559ef7 (includes the Panel GUI polish).
+
+### 2026-10-11 (later) — JumpReset: rate cap (owner: mitigation only with JumpReset on)
+
+Owner: hits deal 0 ("mitigation?") only while JumpReset is on. Working
+theory: the server counts how often knockback is answered by a jump on the
+velocity tick and punishes a rate no person keeps. New `max-rate` (default
+50%): of the last 10 ground knockbacks, a reset is skipped if it would put
+the share over the cap (from the 4th knockback on). Defaults chance 80 -> 60,
+max-streak 5 -> 3. Saved configs keep their own chance (owner's is 70).
+Backups: `backups/src/JumpReset.java.pre-ratecap-20261011`, `...ratecap-20261011`.
+Built md5 1e0389fb93bc4190c12b4838eda2eb71 (not installed: game was running).
+
+### 2026-10-11 (later) — Clutch: owner's config tuned (no code change)
+
+Owner sees "mitigation?" after heavy Clutch use. From 5 clutch logs (251
+attempts): turns up to max-speed 70 deg/tick (+60 random) toward targets
+100-135 deg away, snapback 30, pitch >= 80 on 197 ticks, REJECT /
+BLOCKED-BY-BODY flags at 100% Clutch, catches while FakeLag held packets,
+edge-fall 0.5 triggering on 0.8-block drops. Kept SILENT (owner's choice).
+config/Myau/default.json (game closed): speed 40->30, max-speed 70->40,
+rotation-random 60->15, snapback-speed 30->15, edge-fall 0.5->1.0,
+extra-block true->false. Backup: backups/config/default.json.pre-clutch-tune-20261011.
+JumpReset rate-cap jar installed (md5 1e0389fb...).
+
+## 2026-10-12 — Panel GUI: slimmer panels
+
+Owner: "每個類別做瘦一點". WIDTH 132 -> 108, gap 8 -> 6. panelgui.txt now
+starts with "#w<width>"; a file saved for another width is ignored, so the
+panels lay out afresh instead of keeping the old wide spacing.
+Backup: backups/src/PanelClickGui.java.pre-slim-20261012. Installed md5
+457aa02db614df30b318ae037e115953.

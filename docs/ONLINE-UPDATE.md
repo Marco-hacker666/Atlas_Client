@@ -1,75 +1,75 @@
-# 線上更新（Online Update）
+# Online updates
 
-玩家只要手動裝過一次「有更新功能」的版本，之後每次你發新版，他們的遊戲會自己下載，關遊戲時自動換成新版。
+Players install a build with the updater once. From then on, each new release downloads in the background and replaces the jar when they close the game.
 
-## 運作方式
+## How it works
 
-1. 遊戲啟動時，去 GitHub 最新 Release 讀一個小檔案 `update.properties`（裡面寫著版本號、jar 檔名、檔案指紋和簽章）。
-2. 如果比自己新，就在背景下載 jar，然後檢查三件事：
-   - 檔案大小對不對
-   - 檔案指紋（SHA-256）對不對
-   - **簽章**是不是你的私鑰簽的（公鑰內建在 jar 裡）
+1. On startup the client reads a small file, `update.properties`, from the latest GitHub release. It holds the version, the jar's file name, its SHA-256 hash and a signature.
+2. If that release is newer, the client downloads the jar in the background and checks three things:
+   - the file size
+   - the SHA-256 hash
+   - the **signature**, made with your private key and checked against the public key built into the jar
 
-   任何一項不對就丟掉，不會安裝。
-3. 玩家進入世界後，聊天欄會顯示「v2.2.0 已下載並驗證完成，關閉遊戲後會自動更新」。
-4. 玩家關閉遊戲後，一個小程式會等遊戲完全關閉（Windows 在遊戲執行中不准換檔），把舊 jar 移到 `.minecraft/myau-update/backup/`，再把新 jar 放進 `mods`。換失敗會自動把舊的放回去。
-5. 下次啟動就是新版。
+   If any check fails, the file is discarded and nothing is installed.
+3. When the player is in a world, chat shows: "v2.2.0 is downloaded and verified; it installs when you close the game."
+4. After the game closes, a small helper process waits until the game has fully exited. Windows does not allow replacing a jar while it is in use. The helper then moves the old jar to `.minecraft/myau-update/backup/` and puts the new one in `mods`. If that second step fails, it puts the old jar back.
+5. The next launch runs the new version.
 
-## 第一次設定（只做一次）
+## One-time setup
 
-**1. 產生金鑰**：在專案資料夾執行
+**1. Generate the signing key.** From the project folder, run:
 
 ```
 java tools/update/GenUpdateKey.java
 ```
 
-會產生兩個檔案：
+This writes two files:
 
-- `src/main/resources/myau-update-key.pub` 是**公鑰**（印章的「樣本」），要 commit 上去。
-- `update-signing-key.txt` 是**私鑰**（印章本身），**絕對不能 commit**。`.gitignore` 已經擋掉它了。
+- `src/main/resources/myau-update-key.pub` is the **public key**. Commit it.
+- `update-signing-key.txt` is the **private key**. **Never commit it.** `.gitignore` already excludes it.
 
-**2. 把私鑰放進 GitHub**：打開 repo，依序點 Settings → Secrets and variables → Actions → New repository secret。
+**2. Add the private key to GitHub.** In the repository, go to Settings → Secrets and variables → Actions → New repository secret.
 
-- Name 填 `UPDATE_SIGNING_KEY`
-- Value 貼上 `update-signing-key.txt` 的全部內容
+- Name: `UPDATE_SIGNING_KEY`
+- Value: the full contents of `update-signing-key.txt`
 
-**3. 備份私鑰**：存一份到密碼管理器之類的安全地方，然後刪掉 `update-signing-key.txt`。
+**3. Back up the private key** somewhere safe, such as a password manager. Then delete `update-signing-key.txt`.
 
-> 私鑰弄丟的話，舊版 client 就再也收不到自動更新，玩家只能手動重裝一次。
-> 私鑰外流的話，別人就能做出你的 client 會相信的假更新。這時要換一把新金鑰（`--force`），並請玩家手動重裝。
+> If you lose the private key, clients already installed can no longer auto-update, and players have to reinstall once by hand.
+> If the private key leaks, someone else can sign updates your clients will trust. Generate a new key (`--force`) and ask players to reinstall by hand.
 
-## 以後每次發新版
+## Publishing a release
 
-1. 改 `gradle.properties` 的 `version`（例如 `2.1.2`），commit 並 push。
-2. 在 GitHub 建立 Release，tag 填 **`v2.1.2`**（要和 version 一樣，前面加 v），寫好更新說明後按 Publish。
-   **不用自己上傳 jar。**
-3. 等「Release (online update)」這個 Actions 跑完（大約 5～10 分鐘）。它會自動編譯、簽章，再把 `Myau-Atlas-v2.1.2.jar` 和 `update.properties` 掛到 Release 上。
-4. 完成。玩家下次開遊戲就會開始更新。
+1. Set `version` in `gradle.properties` (for example `2.1.2`), then commit and push.
+2. Create a GitHub release with the tag **`v2.1.2`**: the same version with a leading `v`. Write the notes and click Publish.
+   **You do not need to upload the jar.**
+3. Wait for the **Release (online update)** workflow to finish (about 5–10 minutes). It builds the tag, signs the jar, and attaches `Myau-Atlas-v2.1.2.jar` and `update.properties` to the release.
+4. Done. Players get the update the next time they start the game.
 
-注意事項：
+Notes:
 
-- tag 和 version 不一致的話，Actions 會直接失敗並告訴你原因，不會發出錯的版本。
-- 勾選「Set as a pre-release」的版本**不會**推給玩家，可以拿來給測試者手動下載。
-- 如果 Actions 失敗了，修好後到 Actions → Release (online update) → Run workflow，填 tag 重跑就好。
+- If the tag does not match `version`, the workflow fails with a message that says why. A mismatched release is never published to players.
+- Releases marked **pre-release** are **not** offered to players. Testers can still download them by hand.
+- If the workflow fails, fix the cause, then open Actions → Release (online update) → Run workflow and enter the tag to run it again.
 
-## 玩家可用的指令
+## In-game commands
 
-| 指令 | 作用 |
+| Command | What it does |
 |---|---|
-| `.update` | 看目前版本、最新版本、狀態 |
-| `.update check` | 立刻檢查一次 |
-| `.update download` | 「只提醒」模式下手動下載 |
-| `.update cancel` | 這次關遊戲時不要安裝 |
-| `.update mode auto` | 自動更新（預設） |
-| `.update mode notify` | 只提醒，不自動下載 |
-| `.update mode off` | 完全關閉 |
+| `.update` | Shows the current version, the latest version and the update state |
+| `.update check` | Checks for an update now |
+| `.update download` | Downloads the update by hand when the mode is `notify` |
+| `.update cancel` | Skips installing the update when the game closes this time |
+| `.update mode auto` | Installs updates automatically (default) |
+| `.update mode notify` | Only tells you about new versions |
+| `.update mode off` | Turns updates off completely |
 
-設定存在 `config/Myau/updater.properties`。安裝紀錄在 `.minecraft/myau-update/install.log`。
+The mode is saved in `config/Myau/updater.properties`. The installer writes a log to `.minecraft/myau-update/install.log`.
 
-## 程式位置
+## Where the code is
 
-- `src/main/java/myau/update/`：更新邏輯（`Updater`）、版本比較、簽章驗證、換檔程式（`UpdateInstaller`）、聊天通知
-- `src/main/java/myau/command/commands/UpdateCommand.java`：`.update` 指令
-- `.github/workflows/release.yml`：發版、簽章
-- `tools/update/`：產生金鑰、簽章工具
-- `src/test/java/myau/update/UpdaterTest.java`：17 個測試，包含竄改檔案、假簽章、降級、實際換檔
+- `src/main/java/myau/update/`: the update logic (`Updater`), version comparison, signature checks, the jar-swap helper (`UpdateInstaller`) and the chat notices
+- `src/main/java/myau/command/commands/UpdateCommand.java`: the `.update` command
+- `.github/workflows/release.yml`: builds and signs releases
+- `tools/update/`: the key generator and the signing tool
+- `src/test/java/myau/update/UpdaterTest.java`: 17 tests, covering tampered files, foreign signatures, downgrades and a real jar swap

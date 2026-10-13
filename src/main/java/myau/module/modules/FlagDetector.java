@@ -308,6 +308,12 @@ public class FlagDetector extends Module {
     private static final int TELEPORT_GRACE = 60;
     private int lastRespawnTick = Integer.MIN_VALUE / 2;
     private int lastTeleportTick = Integer.MIN_VALUE / 2;
+    /* A RELOCATE (a small move to a place never stood on) keeps the old
+       20-tick grace and only for corrections (2026-10-13): mid-fight one
+       followed a setback, and the 60-tick teleport grace then hid 7 hits in
+       a row the server ignored. */
+    private static final int RELOCATE_GRACE = 20;
+    private int lastRelocateTick = Integer.MIN_VALUE / 2;
 
     /* 2026-10-13 (owner: false flags while a ghost after death, after being
        sent to spawn, and for blocks refused when the round ends).
@@ -594,7 +600,7 @@ public class FlagDetector extends Module {
                     && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK) {
                 this.ticksSinceAttack = 0;
                 if (this.detectLowDamage.getValue() && !event.isCancelled() && mc.theWorld != null
-                        && quietReason() == null) {
+                        && hitQuietReason() == null) {
                     net.minecraft.entity.Entity attacked =
                             ((C02PacketUseEntity) event.getPacket()).getEntityFromWorld(mc.theWorld);
                     if (attacked instanceof net.minecraft.entity.EntityLivingBase && attacked != mc.thePlayer) {
@@ -886,7 +892,21 @@ public class FlagDetector extends Module {
         if (mc.thePlayer.capabilities != null && mc.thePlayer.capabilities.isFlying) {
             return "flying";
         }
+        if (this.tickCounter - this.lastRelocateTick < RELOCATE_GRACE) {
+            return "post-relocate";
+        }
         return null;
+    }
+
+    /**
+     * The quiet states for hits: as quietReason, but not the teleport grace.
+     * Hits the server ignores or cuts right after a setback are the very
+     * thing the damage checks look for (2026-10-13, owner: mitigation that
+     * was not reported).
+     */
+    private String hitQuietReason() {
+        String quiet = quietReason();
+        return "post-teleport".equals(quiet) ? null : quiet;
     }
 
     /**
@@ -1008,7 +1028,7 @@ public class FlagDetector extends Module {
                in the logs of 09-23 and 09-24 were exactly this -- and fed to
                the rate, the Brain and Adaptive as a violation. Like a
                teleport, it opens the settling grace for what follows. */
-            this.lastTeleportTick = this.tickCounter;
+            this.lastRelocateTick = this.tickCounter;
             label = "RELOCATE";
         } else if (Math.abs(dy) > horizontal * 2.0 && horizontal < 0.3) {
             label = "VERTICAL";
@@ -1174,6 +1194,18 @@ public class FlagDetector extends Module {
             if (hit == null) {
                 continue;
             }
+            if (this.logFile.getValue()) {
+                /* Every hit, so a damage cut can be judged afterwards from the
+                   numbers rather than from memory (2026-10-13). */
+                writeLog(String.format("HIT-DMG target=%s dealt=%.2f expected=%s usual=%s health=%s weapon=%s"
+                                + " armour=%d blocking=%s",
+                        living.getName(), hit.dealt,
+                        Float.isNaN(hit.expected) ? "-" : String.format("%.2f", hit.expected),
+                        Float.isNaN(hit.usual) ? "-" : String.format("%.2f", hit.usual),
+                        myau.util.HealthUtil.source(living), weaponBasis(), living.getTotalArmorValue(),
+                        living instanceof net.minecraft.entity.player.EntityPlayer
+                                && ((net.minecraft.entity.player.EntityPlayer) living).isBlocking()));
+            }
             if (this.damageChat.getValue()) {
                 ChatUtil.sendFormatted(String.format("&7[&cFlagDetector&7] &7dealt &f%.1f&7 to &f%s%s%s",
                         hit.dealt, living.getName(),
@@ -1222,7 +1254,7 @@ public class FlagDetector extends Module {
             this.damageWatch.landed();
             return;
         }
-        String quiet = quietReason();
+        String quiet = hitQuietReason();
         if (quiet != null) {
             noteIgnored(quiet);
             return;

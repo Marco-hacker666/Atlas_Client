@@ -65,8 +65,8 @@ public final class DamageWatch {
     }
 
     /* Tuning, deliberately fixed: see ENGINEERING-NOTES. */
-    /** A hit this share of the usual or less is a low one. */
-    public static final float LOW_SHARE = 0.35F;
+    /** A hit this share of the usual or less is a low one (0.35 -> 0.6, 2026-10-13: see MITIGATED_SHARE). */
+    public static final float LOW_SHARE = 0.6F;
     /** Low hits in a row before it is called. */
     public static final int STREAK = 3;
     /** Hits needed before "usual" means anything. */
@@ -310,7 +310,14 @@ public final class DamageWatch {
      * least it should have, less the health precision. Called when LOW_RUN of
      * the last RECENT hits with a known expectation are low.
      */
-    public static final float MITIGATED_SHARE = 0.5F;
+    /* 0.5 -> 0.65, and half the health precision instead of all of it
+       (2026-10-13). Owner, Pika BedFight: hits taking 2 hp where they
+       normally take 3-5 -- half -- were never called. At 0.5 plus a whole
+       point of precision a hit had to lose well over half, so a cut to half
+       could not be seen at all. A whole-number reading is off by at most one
+       point and by half on average. Each hit's numbers now go to the flag log
+       (HIT-DMG) to tune this from evidence. */
+    public static final float MITIGATED_SHARE = 0.65F;
     public static final int RECENT = 4;
     public static final int LOW_RUN = 3;
     /** Below this an expectation is too small to tell anything from. */
@@ -336,7 +343,7 @@ public final class DamageWatch {
 
     /** Whether a hit took off much less than it had to. */
     public boolean mitigated(Hit hit) {
-        return !Float.isNaN(hit.expected) && hit.dealt + this.precision <= hit.expected * MITIGATED_SHARE;
+        return !Float.isNaN(hit.expected) && hit.dealt + this.precision * 0.5F <= hit.expected * MITIGATED_SHARE;
     }
 
     /** The state of the mitigation check. */

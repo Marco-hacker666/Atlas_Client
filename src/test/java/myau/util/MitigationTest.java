@@ -41,9 +41,12 @@ public class MitigationTest {
         now[0] += 50L;
         watch.tick(1, health[0], 10, now[0], WINDOW);
         health[0] -= dealt;
-        for (int t = 9; t >= 0; t--) {
+        /* Long enough for a score reading to settle too (SETTLE_TICKS_SCORE 24):
+           until 2026-10-13 only 10 ticks, so with precision set no hit ever
+           resolved and the whole-number test passed without testing anything. */
+        for (int t = 9; t >= -20; t--) {
             now[0] += 50L;
-            DamageWatch.Hit h = watch.tick(1, health[0], t, now[0], WINDOW);
+            DamageWatch.Hit h = watch.tick(1, health[0], Math.max(0, t), now[0], WINDOW);
             if (h != null) {
                 result = h;
             }
@@ -77,16 +80,43 @@ public class MitigationTest {
         watch.setPrecision(1.0F);
         long[] now = {10_000L};
         float[] health = {20.0F};
-        /* 2.5 of 6: low with exact health, not with a score that may be off by one. */
+        /* 3.6 of 6 (limit 3.9): low with exact health, not with a score that may be off. */
         for (int i = 0; i < 4; i++) {
-            hit(watch, now, health, 6.0F, 2.5F);
+            hit(watch, now, health, 6.0F, 3.6F);
         }
         assertFalse(watch.mitigation(now[0], 20_000L).active);
         watch.setPrecision(0.0F);
         for (int i = 0; i < 4; i++) {
-            hit(watch, now, health, 6.0F, 2.5F);
+            hit(watch, now, health, 6.0F, 3.6F);
         }
         assertTrue(watch.mitigation(now[0], 20_000L).active);
+    }
+
+    @Test
+    public void halfTheDamageIsMitigationEvenWithWholeNumberHealth() {
+        /* The owner's case: about 4 expected, 2 taken, health from the score. */
+        DamageWatch watch = new DamageWatch();
+        watch.setPrecision(1.0F);
+        long[] now = {10_000L};
+        float[] health = {20.0F};
+        for (int i = 0; i < 4; i++) {
+            hit(watch, now, health, 4.0F, 2.0F);
+        }
+        assertTrue(watch.mitigation(now[0], 20_000L).active);
+    }
+
+    @Test
+    public void ordinaryHitsAreNotMitigation() {
+        /* At or a little under the vanilla floor (protection rolls, rounding): not called. */
+        DamageWatch watch = new DamageWatch();
+        watch.setPrecision(1.0F);
+        long[] now = {10_000L};
+        float[] health = {20.0F};
+        float[] dealt = {4.0F, 3.0F, 4.0F, 3.0F};
+        for (float d : dealt) {
+            hit(watch, now, health, 4.0F, d);
+        }
+        assertFalse(watch.mitigation(now[0], 20_000L).active);
     }
 
     @Test

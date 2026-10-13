@@ -5155,3 +5155,36 @@ a minute or two" (English; the Chinese-mode prefix is unchanged). The same
 text covers a 404 on the jar download. UpdaterTest 18/18 pass. Version left
 at 2.1.5; not installed, so the owner's official v2.1.4 can still test the
 auto-update to v2.1.5.
+
+## 2026-10-13 — Mitigation missed on Pika: threshold, a grace that hid it, per-hit log (2.1.6)
+
+Owner, Pika BedFight on official 2.1.5: hits took 2 hp where they normally take
+3-5, and nothing was reported. Logs (flags/hits/fights 19:55-20:05):
+- HitCheck saw 7 hits in a row with no reaction at 20:00:10-11 (`MISS dropped`)
+  -- a HITS-DROPPED run -- right after a mid-fight LAGBACK that was also filed as
+  RELOCATE (0.64 blocks). RELOCATE opened the teleport grace, which this
+  morning's change made 60 ticks and applied to hits: all 7 were ignored.
+- The damage checks could not see a cut to half: mitigation needed
+  dealt + precision <= 0.5 x vanilla minimum (2 + 1 > 2 for a 4-hp floor),
+  LOW-DAMAGE needed <= 0.35 x usual.
+- damage-chat was off, so no per-hit damage was recorded at all.
+
+Changes:
+- RELOCATE has its own 20-tick grace (RELOCATE_GRACE), for corrections only;
+  TELEPORT_GRACE (60) is set only by real teleports.
+- `hitQuietReason()` = quietReason without the teleport grace, used for the
+  attacks watched for damage and for HitCheck's dropped hits.
+- DamageWatch: MITIGATED_SHARE 0.5 -> 0.65 with half the health precision
+  (a whole-number reading is off by at most 1, by 0.5 on average);
+  LOW_SHARE 0.35 -> 0.6.
+- With log-file on, every resolved hit writes a HIT-DMG line to the flag log:
+  target, dealt, vanilla minimum, usual, health source, weapon basis, armour,
+  blocking -- to tune the thresholds from evidence.
+- MitigationTest's helper settled only 10 ticks, so with score precision no
+  hit ever resolved and `wholeNumberHealthNeedsAWiderMargin` passed without
+  testing anything. Now 30 ticks; that test uses 3.6 of 6; new tests for the
+  owner's case (2 of 4 with whole-number health: called) and for ordinary
+  hits (3-4 of 4: not called). 7/7 and the full suite pass.
+Version 2.1.6 (backup gradle.properties.pre-2.1.6-20261013). Installed; the
+official 2.1.5 moved to backups/jars/Myau-Atlas-v2.1.5-official.jar.
+Backups: backups/src/mitig-*.

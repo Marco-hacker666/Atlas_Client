@@ -53,6 +53,9 @@ public class Scaffold extends Module {
     private static final int ROTATION_THREE_FMC = 8;
     private static final int ROTATION_SNAP2 = 9;
     private static final int ROTATION_POLAR = 10;
+    /* 2026-10-13: after OpenB4's Scaffold (Strict rotations with "Jump facing
+       forward" and "Legit motion", its defaults). See b4Plan. */
+    private static final int ROTATION_B4 = 11;
     /* polar.json's GodBridge technique (LiquidBounce): the Mode index is also
        the ledge action the decision returns ({@link #polarLedgeAction}).
        Modes = [Jump], ForceSneakBelowCount = 5, SneakTime = 1..1. */
@@ -112,10 +115,12 @@ public class Scaffold extends Module {
     private int threeFmcPlaceCooldown = 0;
     private float lastSnapPlaceYaw = Float.NaN;
     private float lastSnapPlacePitch = Float.NaN;
-    public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2", "POLAR"})
+    public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2", "POLAR", "TELLY"})
             /* 2026-10-08: fewer modes in the menu; the rest still load from old configs. */
             .hide("BACKWARDS", "SIDEWAYS", "SMOOTH", "Hypixel", "3FMC", "SNAP2")
-            .alias("GODBIRGDE", "GODBRIDGE");
+            .alias("GODBIRGDE", "GODBRIDGE")
+            /* 2026-10-13: B4 renamed TELLY by the owner. */
+            .alias("B4", "TELLY");
     public final FloatProperty tellystartrotationminspeed = new FloatProperty("telly-start-rotation-min-speed", 90.0F, 1.0F, 180.0F, () -> this.keepY.getValue() == 3 || this.keepY.getValue() == 4);
     public final FloatProperty tellystartrotationmaxspeed = new FloatProperty("telly-start-rotation-max-speed", 95.0F, 1.0F, 180.0F, () -> this.keepY.getValue() == 3 || this.keepY.getValue() == 4);
     public final FloatProperty tellynormalrotationminspeed = new FloatProperty("telly-normal-rotation-min-speed", 30.0F, 1.0F, 180.0F, () -> this.keepY.getValue() == 3 || this.keepY.getValue() == 4);
@@ -189,6 +194,28 @@ public class Scaffold extends Module {
     public final IntProperty turnSpeed = new IntProperty("turn-speed", 80, 10, 180, this::turnLimited);
     public final BooleanProperty humanize = new BooleanProperty("humanize", true, this::turnLimited);
     public final BooleanProperty pauseOnCorrection = new BooleanProperty("pause-on-correction", true);
+    /* B4: on each jump off the ground, face forward for the jump and turn back
+       over a fixed few ticks before placing again (OpenB4 "Jump facing
+       forward"). */
+    public final BooleanProperty b4Telly = new BooleanProperty("telly-jump", true,
+            () -> this.rotationMode.getValue() == ROTATION_B4);
+    /* 2026-10-13 (owner: "too easy to detect, lots of low damage"): the first
+       B4 snapped like OpenB4's Strict -- 64 of 265 placements came after a
+       turn over 45 degrees in one tick, 13 over 90 -- and the hits right
+       after such a run were damage-cut. Every B4 turn is now at most this
+       many degrees a tick, through the Rotations engine (humanize applies).
+       40 matches the Clutch max-speed the owner settled on. */
+    public final IntProperty b4TurnSpeed = new IntProperty("telly-turn-speed", 40, 10, 180,
+            () -> this.rotationMode.getValue() == ROTATION_B4);
+    /* B4 state. The look the last block was placed with and when; the resting
+       pitch and yaw offset drawn per enable; the telly turn in progress. */
+    private float b4AimYaw = Float.NaN;
+    private float b4AimPitch = 0.0F;
+    private long b4PlacedAt = 0L;
+    private float b4RestPitch = 86.0F;
+    private float b4YawOffset = 0.0F;
+    private int b4Script = 0;
+    private int b4Ticks = 0;
     private final RotationEngine engine = new RotationEngine();
     private int tick = 0;
     private int pauseTicks = 0;
@@ -207,6 +234,12 @@ public class Scaffold extends Module {
     private boolean planThreeFmc = false;
 
     private boolean shouldStopSprint() {
+        if (this.rotationMode.getValue() == ROTATION_B4) {
+            /* B4: with move-fix the keys follow the look sent, so facing back
+               they move the player backwards and vanilla itself stops the
+               sprint; facing forward on a telly jump it keeps it. */
+            return false;
+        }
         if (this.isThreeFmcMode() && !this.isThreeFmcTellyMode()) {
             return true;
         }
@@ -302,6 +335,209 @@ public class Scaffold extends Module {
         boolean under = box.minX < cell.getX() + 1 && box.maxX > cell.getX()
                 && box.minZ < cell.getZ() + 1 && box.maxZ > cell.getZ();
         return under ? mop : null;
+    }
+
+    /**
+     * B4 rotations (2026-10-13), after OpenB4's Scaffold with its defaults
+     * (Strict, Jump facing forward, Legit motion). The click itself is the
+     * usual one (onUpdateClick: along the look actually sent, only where it
+     * lands on a wanted face); this decides the look:
+     *
+     *  - TELLY (b4-telly): on the tick a jump leaves the ground while moving
+     *    forward, face forward for that tick and the next (no clicks), then
+     *    turn back like any other aim, at most b4-turn-speed a tick. The jump's sprint boost goes forward because the look is
+     *    forward when it is made (move-fix); facing back, the keys move the
+     *    player backwards and vanilla drops the sprint by itself.
+     *  - HOLD: the look already sent reaches a wanted face -> keep it.
+     *  - AIM: else the point on the target face, from a 5x5 grid of points on
+     *    it (jittered), whose ray from the eyes hits that face away from its
+     *    edges, with the yaw nearest the way behind the player (in the air:
+     *    nearest the last placing look).
+     *  - KEEP: no aim found, but a block was placed within holdTime (710 ms
+     *    sprinting, 460 standing, 110 walking) -> the look it was placed
+     *    with, with a tiny jitter: no big turn between blocks.
+     *  - REST: otherwise behind the movement at a pitch drawn 84.5-87.5 --
+     *    near where the next block will need it.
+     * The first two ticks after enabling turn only part of the way (0.3,
+     * 0.55, 0.8); every turn is at most b4-turn-speed a tick through the
+     * Rotations engine; every look is on the mouse grid from the one sent.
+     */
+    private void b4Plan(UpdateEvent event, BlockData blockData) {
+        this.b4Ticks++;
+        float fromYaw = event.getYaw();
+        float fromPitch = event.getPitch();
+        float forward = this.getCurrentYaw();
+        float behind = forward + 180.0F;
+        boolean clickable = true;
+        float targetYaw;
+        float targetPitch;
+        Vec3 hitVec = null;
+
+        if (this.b4Telly.getValue() && this.b4Script == 0 && mc.thePlayer.onGround && MoveUtil.isForwardPressed()
+                && (mc.gameSettings.keyBindJump.isKeyDown() || this.stage > 0)) {
+            /* This tick's movement input jumps (the key, or keep-y's own jump). */
+            this.b4Script = 2;
+        }
+        if (this.b4Script > 0) {
+            /* The jump tick and the next face forward; after that the ordinary
+               aim below turns the look back, at most b4-turn-speed a tick
+               (until 2026-10-13 a fixed 105-120 / 33 / 30 degree script). */
+            this.b4Script--;
+            targetYaw = forward + RandomUtil.nextFloat(-0.5F, 0.5F);
+            targetPitch = RandomUtil.nextFloat(20.0F, 25.0F);
+            clickable = false;
+        } else {
+            MovingObjectPosition held = blockData != null ? this.lookHit(blockData, fromYaw, fromPitch) : null;
+            float[] aim = held == null && blockData != null
+                    ? this.b4Aim(blockData, mc.thePlayer.onGround || Float.isNaN(this.b4AimYaw) ? behind : this.b4AimYaw,
+                    fromYaw, fromPitch)
+                    : null;
+            long sincePlace = System.currentTimeMillis() - this.b4PlacedAt;
+            if (held != null) {
+                targetYaw = fromYaw;
+                targetPitch = fromPitch;
+                hitVec = held.hitVec;
+            } else if (aim != null) {
+                targetYaw = aim[0];
+                targetPitch = aim[1];
+            } else if (!Float.isNaN(this.b4AimYaw) && sincePlace < this.b4HoldTime()) {
+                targetYaw = this.b4AimYaw;
+                targetPitch = this.b4AimPitch;
+                if (sincePlace > 5L && RandomUtil.nextFloat(0.0F, 1.0F) > 0.3F) {
+                    targetYaw += RandomUtil.nextFloat(0.05F, 0.5F) * (RandomUtil.nextFloat(0.0F, 1.0F) < 0.5F ? -1.0F : 1.0F);
+                    targetPitch += RandomUtil.nextFloat(-0.5F, 0.5F);
+                }
+            } else {
+                targetYaw = behind + this.b4YawOffset;
+                targetPitch = this.b4RestPitch + RandomUtil.nextFloat(-0.5F, 0.5F);
+            }
+        }
+        targetYaw = fromYaw + MathHelper.wrapAngleTo180_float(targetYaw - fromYaw);
+        targetPitch = MathHelper.clamp_float(targetPitch, -90.0F, 90.0F);
+        if (this.b4Ticks <= 3) {
+            /* A gentle start: part of the way on the first ticks. */
+            float share = (this.b4Ticks == 1 ? 0.3F : this.b4Ticks == 2 ? 0.55F : 0.8F)
+                    + RandomUtil.nextFloat(-0.02F, 0.02F);
+            targetYaw = fromYaw + share * (targetYaw - fromYaw);
+            targetPitch = fromPitch + share * (targetPitch - fromPitch);
+        }
+        if (Math.abs(targetYaw - fromYaw) > 0.01F || Math.abs(targetPitch - fromPitch) > 0.01F) {
+            Set<RotationEngine.Feature> features = EnumSet.noneOf(RotationEngine.Feature.class);
+            if (this.humanize.getValue()) {
+                features.add(RotationEngine.Feature.NOISE);
+                features.add(RotationEngine.Feature.CURVE);
+            }
+            float speed = this.b4TurnSpeed.getValue();
+            float[] stepped = this.engine.step(fromYaw, fromPitch, targetYaw, targetPitch,
+                    speed, Math.max(10.0F, speed * 0.5F), 0, true, features);
+            targetYaw = stepped[0];
+            targetPitch = stepped[1];
+        }
+        float[] onGrid = RotationEngine.quantize(fromYaw, fromPitch, targetYaw, targetPitch);
+        float turn = Math.abs(MathHelper.wrapAngleTo180_float(onGrid[0] - fromYaw));
+        for (int guard = 0; guard < 3 && turn > 2.0F && PlaceRotations.wouldDuplicate(onGrid[0]); guard++) {
+            /* Grim DuplicateRotPlace, as in the other modes. */
+            double gcd = RotationUtil.gcd();
+            onGrid[0] += Math.signum(MathHelper.wrapAngleTo180_float(onGrid[0] - fromYaw)) * (float) (gcd > 0.0 ? gcd : 0.01);
+            turn = Math.abs(MathHelper.wrapAngleTo180_float(onGrid[0] - fromYaw));
+        }
+        if (turn > 0.5F) {
+            this.b4YawOffset = RandomUtil.nextFloat(-0.5F, 0.5F);
+        }
+        this.yaw = onGrid[0];
+        this.pitch = onGrid[1];
+        this.canRotate = true;
+        event.setRotation(onGrid[0], onGrid[1], 3);
+        if (this.moveFix.getValue() != 0) {
+            event.setPervRotation(onGrid[0], 3);
+        }
+        if (this.moveFix.getModeString().equals("REAL")) {
+            Myau.rotationManager.setRotation(onGrid[0], onGrid[1], 3, false);
+        }
+        if (!clickable) {
+            /* Turning on a telly jump: no click at all this tick. */
+            this.planReady = false;
+            return;
+        }
+        if (blockData != null && hitVec == null) {
+            /* A placeholder only: onUpdateClick clicks where the sent look
+               lands, if that is a wanted face, and nothing otherwise. */
+            hitVec = new Vec3(blockData.blockPos()).addVector(0.5, 0.5, 0.5);
+        }
+        this.planData = blockData;
+        this.planHitVec = hitVec;
+        this.planSnapCanPlace = true;
+        this.planSnapMode = false;
+        this.planThreeFmc = false;
+        this.planReady = true;
+    }
+
+    /** How long B4 keeps the last placing look when nothing is aimed (OpenB4's holdTime). */
+    private long b4HoldTime() {
+        if (mc.thePlayer.isSprinting()) {
+            return 710L;
+        }
+        return MoveUtil.isMoving() ? 110L : 460L;
+    }
+
+    /**
+     * The look at the target face nearest {@code baseYaw}: from 25 jittered
+     * points on the face, those whose ray from the eyes hits that very face
+     * at least 0.06 from its edges. Null when none does.
+     */
+    private float[] b4Aim(BlockData data, float baseYaw, float fromYaw, float fromPitch) {
+        BlockPos pos = data.blockPos();
+        EnumFacing face = data.facing();
+        double cx = pos.getX() + 0.5 + 0.5 * face.getFrontOffsetX();
+        double cy = pos.getY() + 0.5 + 0.5 * face.getFrontOffsetY();
+        double cz = pos.getZ() + 0.5 + 0.5 * face.getFrontOffsetZ();
+        double reach = mc.playerController.getBlockReachDistance();
+        float[] best = null;
+        float bestDiff = Float.MAX_VALUE;
+        for (int i = -2; i <= 2; i++) {
+            for (int j = -2; j <= 2; j++) {
+                double a = i * 0.245 + RandomUtil.nextDouble(-0.04, 0.04);
+                double b = j * 0.245 + RandomUtil.nextDouble(-0.04, 0.04);
+                double px = cx;
+                double py = cy;
+                double pz = cz;
+                if (face.getAxis() == EnumFacing.Axis.Y) {
+                    px += a;
+                    pz += b;
+                } else if (face.getAxis() == EnumFacing.Axis.Z) {
+                    px += a;
+                    py += b;
+                } else {
+                    pz += a;
+                    py += b;
+                }
+                float[] r = RotationUtil.getRotationsTo(px - mc.thePlayer.posX,
+                        py - mc.thePlayer.posY - (double) mc.thePlayer.getEyeHeight(),
+                        pz - mc.thePlayer.posZ, fromYaw, fromPitch);
+                MovingObjectPosition mop = RotationUtil.rayTrace(r[0], r[1], reach, 1.0F);
+                if (mop == null || mop.typeOfHit != MovingObjectType.BLOCK || !mop.getBlockPos().equals(pos)
+                        || mop.sideHit != face || !b4AwayFromEdge(mop.hitVec, pos)) {
+                    continue;
+                }
+                float diff = Math.abs(MathHelper.wrapAngleTo180_float(r[0] - baseYaw));
+                if (diff < bestDiff) {
+                    bestDiff = diff;
+                    best = r;
+                }
+            }
+        }
+        return best;
+    }
+
+    /** A hit point not within 0.06 of an edge of its block (OpenB4's awayFromEdge). */
+    private static boolean b4AwayFromEdge(Vec3 hit, BlockPos pos) {
+        double[] parts = {hit.xCoord - pos.getX(), hit.yCoord - pos.getY(), hit.zCoord - pos.getZ()};
+        for (double f : parts) {
+            if (f != 0.0 && f != 1.0 && (f <= 0.06 || f >= 0.94)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private boolean canPlace() {
@@ -638,6 +874,12 @@ public class Scaffold extends Module {
     @EventTarget(Priority.HIGH)
     public void onUpdate(UpdateEvent event) {
         if (this.isEnabled() && event.getType() == EventType.PRE) {
+            if (this.placedThisTick && this.rotationMode.getValue() == ROTATION_B4) {
+                /* Last tick's click was made along the look then sent (this.yaw). */
+                this.b4PlacedAt = System.currentTimeMillis();
+                this.b4AimYaw = this.yaw;
+                this.b4AimPitch = this.pitch;
+            }
             this.placedThisTick = false;
             this.planReady = false;
             this.tick++;
@@ -814,6 +1056,10 @@ public class Scaffold extends Module {
                     }
                 }
                 BlockData blockData = this.getBlockData();
+                if (this.rotationMode.getValue() == ROTATION_B4) {
+                    this.b4Plan(event, blockData);
+                    return;
+                }
 
                 boolean godBridge = this.rotationMode.getValue() == ROTATION_GODBRIDGE
                         || this.rotationMode.getValue() == ROTATION_POLAR;
@@ -1812,6 +2058,12 @@ public class Scaffold extends Module {
         this.planReady = false;
         this.planData = null;
         this.planHitVec = null;
+        this.b4AimYaw = Float.NaN;
+        this.b4PlacedAt = 0L;
+        this.b4RestPitch = RandomUtil.nextFloat(84.5F, 87.5F);
+        this.b4YawOffset = RandomUtil.nextFloat(-0.5F, 0.5F);
+        this.b4Script = 0;
+        this.b4Ticks = 0;
     }
 
     @Override

@@ -5188,3 +5188,63 @@ Changes:
 Version 2.1.6 (backup gradle.properties.pre-2.1.6-20261013). Installed; the
 official 2.1.5 moved to backups/jars/Myau-Atlas-v2.1.5-official.jar.
 Backups: backups/src/mitig-*.
+
+## 2026-10-13 — Scaffold rotation mode B4 (OpenB4's telly and held aim)
+
+Owner asked for items 1 and 2 of the OpenB4 analysis: its telly ("Jump facing
+forward" + "Legit motion", on by default there) and its held aim. A new
+rotation mode `B4` (index 11) in Scaffold; the other modes are untouched.
+
+`b4Plan` (called from onUpdate PRE right after getBlockData, returns early)
+decides only the look; the click stays onUpdateClick's (along the look
+actually sent, only where lookHit finds a wanted face):
+- TELLY (`b4-telly`, default on): on the ground tick a jump is made (jump
+  key, or keep-y's own jump) while moving forward, face forward that tick and
+  the next (pitch 20-25), then turn back 105-120 / 33-35 / 29-33 degrees
+  (pitch 40-45 / 50-55 / 65-70, random side) -- no click until done
+  (planReady false). Sprint: shouldStopSprint() is false in B4, so with
+  move-fix vanilla keeps it while facing forward and drops it facing back.
+  Unlike the removed vape-telly, nothing is clicked while turning and the
+  turn is a fixed script, not a speed-limited chase.
+- HOLD: the look already sent hits a wanted face -> no turn.
+- AIM: 25 jittered points on the target face (OpenB4's AutoBlockin grid,
+  not its 2000-ray yaw/pitch sweep); rays from the eyes (pre-move position,
+  as the click) that hit that face >= 0.06 from its edges; the yaw nearest
+  "behind" on the ground, nearest the last placing look in the air.
+- KEEP: within 710 ms (sprinting) / 460 (standing) / 110 (walking) of the
+  last placement, the look it was made with, jittered by <= 0.5 degrees.
+- REST: behind the movement + a small offset, pitch drawn 84.5-87.5.
+- First three ticks after enabling turn 0.3 / 0.55 / 0.8 of the way. All
+  looks quantised from the sent one; the DuplicateRotPlace guard applies.
+Docs: `b4-telly` help in ModuleDocs / ModuleDocsEn, in the Rotations group.
+Build OK, all tests pass; installed as 2.1.6 (previous 2.1.6 in
+backups/jars/Myau Atlas v2.1.6-pre-b4.jar). Not tested in game yet.
+Backups: backups/src/b4-scaffold-*.
+
+### 2026-10-13 (later) — B4: turn-speed cap (owner: "too easy to detect, lots of low damage")
+
+First B4 game (Pika BedFight, 21:06-21:10): 265 placements, 264 OK, 0 REJECT,
+ray-next miss 0/265 -- the clicks are right. But B4 aimed like OpenB4's
+Strict, snapping: 64 placements came after a turn over 45 degrees in one
+tick, 13 over 90 (max 163). The hits at 21:08:00-03 took 2 hp against a
+vanilla minimum of 3.6 (wooden sword, 7 armour, health from tab) right after
+a run of 45-97 degree bridging turns: LOW-DAMAGE x3. Taken as the server
+noting the snaps and cutting damage afterwards, as it did with heavy Clutch.
+
+- New `b4-turn-speed` (default 40, 10-180; Clutch's settled max-speed):
+  every B4 turn goes through RotationEngine.step at most that a tick
+  (humanize applies), before quantising.
+- Telly: the jump tick and the next face forward (no clicks); then the
+  ordinary capped aim turns back (~4-5 ticks for 180 at 40). The fixed
+  105-120 / 33 / 30 degree script is gone (b4ScriptYaw / b4TurnSign removed).
+- Docs: `b4-turn-speed` help in ModuleDocs / ModuleDocsEn.
+Build OK, all tests pass. Installed (the snapping B4 build kept as backups/jars/Myau Atlas v2.1.6-b4-snap.jar).
+Backups: backups/src/b4-speed-*.
+
+### 2026-10-13 (later) — B4 renamed TELLY
+
+Owner: name it telly. The rotation mode shows as `TELLY` (an alias keeps a
+saved "B4" loading as TELLY); its settings are `telly-jump` (was b4-telly)
+and `telly-turn-speed` (was b4-turn-speed), both under the existing
+`telly-*` docs pattern. Internal names (b4Plan etc.) unchanged. Not to be
+confused with keep-y's TELLY value, a separate setting. Installed.

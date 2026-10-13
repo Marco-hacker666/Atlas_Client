@@ -4942,3 +4942,22 @@ mitigation, hits 92-100%, Clutch 114 attempts / 91 saved / 0 lost, 4 REJECT in
 but this server accepts it, so Clutch's aim is left as is for now.
 Tag v2.1.1 on the commit that adds this. gh CLI is not installed here: the
 owner publishes the GitHub Release page.
+
+## 2026-10-13 — Online updater (PR #7/#8) brought in; signing key made; 2.1.2
+
+The owner merged PR #7 and #8 (online updates: signed update.properties on the
+latest GitHub release, background download, jar swap after exit; see
+docs/ONLINE-UPDATE.md) into GitHub main. Brought into the work copy unchanged
+(Myau.java's base matched): src/main/java/myau/update/*, UpdateCommand,
+UpdaterTest (18 tests pass), docs/ONLINE-UPDATE.md, tools/update/*.java.
+.github/ and .gitignore live only in the release repo (the sync script never
+touches them).
+Key: `java tools/update/GenUpdateKey.java` run in the work copy ->
+src/main/resources/myau-update-key.pub (committed, bundled in the jar) and
+update-signing-key.txt in the work-copy root (gitignored, never synced; never
+printed). Pair checked: SignUpdate with the private key, then the signature
+verified against the .pub -> PAIR OK. The owner adds it as the Actions secret
+UPDATE_SIGNING_KEY, keeps a backup, deletes the file.
+Version 2.1.2; `mods/Myau Atlas v2.1.2.jar` (old in backups/jars), md5
+5c7c377389f96eb4a0c4764a5e93e6e2. Next: owner publishes release v2.1.2 (the
+workflow builds and signs it), then v2.1.3 to see the auto-update.

@@ -211,9 +211,9 @@ public class MyauMainMenu extends GuiScreen implements GuiYesNoCallback {
         String[] names = demo ? new String[]{"PLAY DEMO"} : new String[]{"PLAY", "MULTIPLAYER", "ALT MANAGER", "MODS"};
         int[] actions = demo ? new int[]{DEMO} : new int[]{SINGLEPLAYER, MULTIPLAYER, ALTS, MODS};
         float size = 12.0F;
-        /* 2026-10-13 (owner: PLAY's bar never drew back): one bar only. It
-           marks the entry under the pointer, and PLAY when the pointer is on
-           none, so it slides from entry to entry and PLAY's shrinks away. */
+        /* 2026-10-13 (owner: PLAY's bar never drew back): one bar only, on
+           the entry under the pointer; with the pointer on none there is no
+           bar at all (owner, later the same day: not even on PLAY). */
         int pointed = -1;
         for (int i = 0; i < names.length; i++) {
             float w = TextImage.width(names[i], MEDIUM, size, 0.12F, 1.0F);
@@ -222,7 +222,7 @@ public class MyauMainMenu extends GuiScreen implements GuiYesNoCallback {
                 pointed = i;
             }
         }
-        int marked = pointed < 0 ? 0 : pointed;
+        int marked = pointed;
         for (int i = 0; i < names.length; i++) {
             float w = TextImage.width(names[i], MEDIUM, size, 0.12F, 1.0F);
             float lit = ease("c:" + names[i], i == marked ? 1.0F : 0.0F, 12.0F);

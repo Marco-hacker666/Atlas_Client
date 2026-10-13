@@ -32,6 +32,9 @@ import net.minecraft.network.play.server.S07PacketRespawn;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.minecraft.network.play.server.S12PacketEntityVelocity;
 import net.minecraft.network.play.server.S23PacketBlockChange;
+import net.minecraft.network.play.server.S2BPacketChangeGameState;
+import net.minecraft.network.play.server.S39PacketPlayerAbilities;
+import net.minecraft.network.play.server.S45PacketTitle;
 import net.minecraft.util.BlockPos;
 import org.lwjgl.opengl.GL11;
 
@@ -224,6 +227,12 @@ public class FlagDetector extends Module {
         net.minecraft.util.EnumFacing face;
         net.minecraft.util.Vec3 hit;
         boolean awaitingNext;
+        /* 2026-10-13: the eyes the click was made from. A 1.8 client clicks
+           before it moves, so the click is the position before the movement
+           packet with that packet's look; ray-next took the packet's new
+           position too and missed by a tick of motion on every moving
+           placement (Clutch "face 0.45-0.83" at 0.25 b/t). */
+        net.minecraft.util.Vec3 eyes;
 
         Placement(int tick) {
             this.tick = tick;
@@ -293,9 +302,35 @@ public class FlagDetector extends Module {
 
     /** Ticks a correction stays attributable to the event that caused it. */
     private static final int RESPAWN_GRACE = 60;
-    private static final int TELEPORT_GRACE = 20;
+    /* 20 -> 60 (2026-10-13, owner): a send to spawn loads new chunks, and
+       the client stutters for a second or two after it; what the server
+       objects to then belongs to the teleport. */
+    private static final int TELEPORT_GRACE = 60;
     private int lastRespawnTick = Integer.MIN_VALUE / 2;
     private int lastTeleportTick = Integer.MIN_VALUE / 2;
+
+    /* 2026-10-13 (owner: false flags while a ghost after death, after being
+       sent to spawn, and for blocks refused when the round ends).
+       STALL: a client tick that came this late means the client froze --
+       chunk loading after a teleport, a GC pause -- and its movement and
+       clicks for a while after are late in a way the server sees as wrong.
+       ROUND: a title (VICTORY!, GAME OVER!, the countdown) or a game-mode
+       change marks a round starting or ending, when servers refuse every
+       placement. REFUSED-ALL: after this many refusals in a row with no
+       placement accepted in between, the server is refusing every block
+       (a protected area, a finished round) and the rest are not counted. */
+    private static final long STALL_MS = 300L;
+    private static final int STALL_GRACE = 40;
+    private static final int ROUND_GRACE = 160;
+    private static final int REFUSED_ALL_AFTER = 3;
+    private long lastTickAt;
+    private int lastStallTick = Integer.MIN_VALUE / 2;
+    private int lastRoundTick = Integer.MIN_VALUE / 2;
+    private int rejectsInARow;
+    private boolean refusedAllSaid;
+    /* The hotbar slot the server has (the last C09 sent; -1 until one is):
+       a hit is made with that item, not with the one the client shows. */
+    private int serverSlot = -1;
     private final Map<String, Integer> ignoredReasons = new LinkedHashMap<String, Integer>();
     private int ignoredTotal;
     /** Set while building context; read when the flag's kind is keyed. */
@@ -345,6 +380,9 @@ public class FlagDetector extends Module {
         this.pendingPlacements.clear();
         this.ignoredReasons.clear();
         this.ignoredTotal = 0;
+        this.rejectsInARow = 0;
+        this.refusedAllSaid = false;
+        this.serverSlot = -1;
     }
 
     private void resetBurst() {
@@ -368,6 +406,11 @@ public class FlagDetector extends Module {
             return;
         }
         this.tickCounter++;
+        long tickAt = System.currentTimeMillis();
+        if (this.lastTickAt > 0L && tickAt - this.lastTickAt > STALL_MS) {
+            this.lastStallTick = this.tickCounter;
+        }
+        this.lastTickAt = tickAt;
         if (this.ticksSinceAttack < 999) {
             this.ticksSinceAttack++;
         }
@@ -399,6 +442,7 @@ public class FlagDetector extends Module {
             Map.Entry<BlockPos, Placement> entry = it.next();
             if (this.tickCounter - entry.getValue().tick > REJECT_WINDOW_TICKS) {
                 logPlacement(entry.getValue(), "OK");
+                this.rejectsInARow = 0;
                 it.remove();
                 continue;
             }
@@ -534,20 +578,28 @@ public class FlagDetector extends Module {
                     if (placement.awaitingNext && placement.context != null) {
                         placement.awaitingNext = false;
                         placement.context = placement.context.replace("ray-next ?",
-                                "ray-next " + rayText(placement.clicked, placement.face, placement.hit));
+                                "ray-next " + rayText(placement.eyes, placement.clicked, placement.face, placement.hit));
                     }
+                }
+                return;
+            }
+            if (event.getPacket() instanceof net.minecraft.network.play.client.C09PacketHeldItemChange) {
+                if (!event.isCancelled()) {
+                    this.serverSlot = ((net.minecraft.network.play.client.C09PacketHeldItemChange) event.getPacket())
+                            .getSlotId();
                 }
                 return;
             }
             if (event.getPacket() instanceof C02PacketUseEntity
                     && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK) {
                 this.ticksSinceAttack = 0;
-                if (this.detectLowDamage.getValue() && !event.isCancelled() && mc.theWorld != null) {
+                if (this.detectLowDamage.getValue() && !event.isCancelled() && mc.theWorld != null
+                        && quietReason() == null) {
                     net.minecraft.entity.Entity attacked =
                             ((C02PacketUseEntity) event.getPacket()).getEntityFromWorld(mc.theWorld);
                     if (attacked instanceof net.minecraft.entity.EntityLivingBase && attacked != mc.thePlayer) {
                         this.damageWatch.attack(attacked.getEntityId(), System.currentTimeMillis(),
-                                leastDamage((net.minecraft.entity.EntityLivingBase) attacked));
+                                leastDamage((net.minecraft.entity.EntityLivingBase) attacked), weaponBasis());
                     }
                 }
             } else if (event.getPacket() instanceof C07PacketPlayerDigging) {
@@ -590,6 +642,8 @@ public class FlagDetector extends Module {
                                     place.getPosition().getX() + place.getPlacedBlockOffsetX(),
                                     place.getPosition().getY() + place.getPlacedBlockOffsetY(),
                                     place.getPosition().getZ() + place.getPlacedBlockOffsetZ());
+                            placement.eyes = new net.minecraft.util.Vec3(this.sentX,
+                                    this.sentY + (mc.thePlayer.isSneaking() ? 1.54 : 1.62), this.sentZ);
                             placement.awaitingNext = true;
                         }
                         this.lastPlaceTick = this.tickCounter;
@@ -612,7 +666,8 @@ public class FlagDetector extends Module {
         final net.minecraft.network.Packet<?> received = event.getPacket();
         if (!(received instanceof S01PacketJoinGame || received instanceof S07PacketRespawn
                 || received instanceof S12PacketEntityVelocity || received instanceof S23PacketBlockChange
-                || received instanceof S08PacketPlayerPosLook)) {
+                || received instanceof S08PacketPlayerPosLook || received instanceof S45PacketTitle
+                || received instanceof S2BPacketChangeGameState || received instanceof S39PacketPlayerAbilities)) {
             return;
         }
         mc.addScheduledTask(new Runnable() {
@@ -637,6 +692,33 @@ public class FlagDetector extends Module {
                Both are followed by the server placing the player. */
             this.lastRespawnTick = this.tickCounter;
             flushBurst();
+            return;
+        }
+
+        if (packet instanceof S45PacketTitle) {
+            /* A title with words in it; the timing and clear packets carry none. */
+            net.minecraft.util.IChatComponent message = ((S45PacketTitle) packet).getMessage();
+            if (message != null && !message.getUnformattedText().trim().isEmpty()) {
+                this.lastRoundTick = this.tickCounter;
+            }
+            return;
+        }
+
+        if (packet instanceof S2BPacketChangeGameState) {
+            /* State 3: the game mode changed. */
+            if (((S2BPacketChangeGameState) packet).getGameState() == 3) {
+                this.lastRoundTick = this.tickCounter;
+            }
+            return;
+        }
+
+        if (packet instanceof S39PacketPlayerAbilities) {
+            /* Being allowed to fly outside creative: the ghost a death or the
+               end of a round makes on most minigame servers. */
+            S39PacketPlayerAbilities abilities = (S39PacketPlayerAbilities) packet;
+            if (abilities.isAllowFlying() && !abilities.isCreativeMode()) {
+                this.lastRoundTick = this.tickCounter;
+            }
             return;
         }
 
@@ -709,6 +791,8 @@ public class FlagDetector extends Module {
         }
         if (packet.getBlockState() == null || packet.getBlockState().getBlock() != Blocks.air) {
             logPlacement(placement, "OK");
+            this.rejectsInARow = 0;
+            this.refusedAllSaid = false;
             return;
         }
         /* The client places its own block immediately and waits to be
@@ -721,12 +805,35 @@ public class FlagDetector extends Module {
             logPlacement(placement, "NO-BLOCK");
             return;
         }
+        /* Refusals that say nothing about the click: a ghost, a respawn, a
+           teleport or a frozen client, a round starting or ending
+           (2026-10-13). Counted under their reason, like ignored corrections. */
+        String quiet = quietReason();
+        if (quiet == null && this.tickCounter - this.lastRoundTick < ROUND_GRACE) {
+            quiet = "round-change";
+        }
+        if (quiet == null && this.rejectsInARow >= REFUSED_ALL_AFTER) {
+            quiet = "refused-all";
+            if (!this.refusedAllSaid && this.chat.getValue()) {
+                this.refusedAllSaid = true;
+                ChatUtil.sendFormatted("&7[&cFlagDetector&7] &8the server is refusing every block here"
+                        + " (round over or a protected area); not counted until one is accepted");
+            }
+        }
+        if (quiet != null) {
+            logPlacement(placement, "IGNORED " + quiet);
+            noteIgnored(quiet);
+            return;
+        }
         /* Someone was standing where the block was going. Vanilla refuses
            that, the server judges it against where they actually are, and at
            this latency the client cannot know. Reported under its own name so
            it stops being counted against the client's behaviour. */
         boolean occupied = placement.closestOpponent <= OCCUPIED_DISTANCE;
         logPlacement(placement, occupied ? "BODY" : "REJECT");
+        if (!occupied) {
+            this.rejectsInARow++;
+        }
         String where = " &8| &7at " + pos.getX() + "," + pos.getY() + "," + pos.getZ();
         if (placement.closestOpponent < Double.MAX_VALUE) {
             where += String.format(" &8| &7body %.2f", placement.closestOpponent);
@@ -769,14 +876,9 @@ public class FlagDetector extends Module {
      *   player landed. Those belong to the teleport, not to what came next.
      */
     private String ignoreReason() {
-        if (mc.thePlayer.isSpectator()) {
-            return "spectator";
-        }
-        if (mc.thePlayer.isDead || mc.thePlayer.getHealth() <= 0.0F) {
-            return "dead";
-        }
-        if (this.tickCounter - this.lastRespawnTick < RESPAWN_GRACE) {
-            return "respawn";
+        String quiet = quietReason();
+        if (quiet != null) {
+            return quiet;
         }
         if (mc.thePlayer.ridingEntity != null) {
             return "riding";
@@ -784,10 +886,53 @@ public class FlagDetector extends Module {
         if (mc.thePlayer.capabilities != null && mc.thePlayer.capabilities.isFlying) {
             return "flying";
         }
+        return null;
+    }
+
+    /**
+     * The states in which nothing the server objects to -- a correction, a
+     * refused block, a hit that did little or nothing -- says anything about
+     * this client (2026-10-13; corrections had most of these, refusals and
+     * hits none):
+     *
+     *   GHOST. A spectator, the dead, and the ghost most minigame servers
+     *   make of a player after a death or at the end of a round: allowed to
+     *   fly though not in creative, often invisible. Its movement and clicks
+     *   are not checked as a player's, and are refused or moved freely.
+     *   RESPAWN, TELEPORT. The server placing the player, and the settling
+     *   after it (see TELEPORT_GRACE).
+     *   STALL. The client froze (a tick over STALL_MS late) a moment ago.
+     */
+    private String quietReason() {
+        if (mc.thePlayer == null) {
+            return null;
+        }
+        if (mc.thePlayer.isSpectator()) {
+            return "spectator";
+        }
+        if (mc.thePlayer.isDead || mc.thePlayer.getHealth() <= 0.0F) {
+            return "dead";
+        }
+        if (mc.thePlayer.capabilities != null && mc.thePlayer.capabilities.allowFlying
+                && !mc.thePlayer.capabilities.isCreativeMode) {
+            return "ghost";
+        }
+        if (this.tickCounter - this.lastRespawnTick < RESPAWN_GRACE) {
+            return "respawn";
+        }
         if (this.tickCounter - this.lastTeleportTick < TELEPORT_GRACE) {
             return "post-teleport";
         }
+        if (this.tickCounter - this.lastStallTick < STALL_GRACE) {
+            return "client-stall";
+        }
         return null;
+    }
+
+    private void noteIgnored(String reason) {
+        Integer seen = this.ignoredReasons.get(reason);
+        this.ignoredReasons.put(reason, seen == null ? 1 : seen + 1);
+        this.ignoredTotal++;
     }
 
     /** What the guards suppressed, so a quiet log can be told from a gagged one. */
@@ -823,9 +968,7 @@ public class FlagDetector extends Module {
     private void handlePosLook(S08PacketPlayerPosLook packet) {
         String ignored = this.ignoreReason();
         if (ignored != null) {
-            Integer seen = this.ignoredReasons.get(ignored);
-            this.ignoredReasons.put(ignored, seen == null ? 1 : seen + 1);
-            this.ignoredTotal++;
+            noteIgnored(ignored);
             /* Any burst in progress is closed rather than left open: the next
                real correction is a separate event, not a continuation of one
                interrupted by a death. */
@@ -1079,6 +1222,11 @@ public class FlagDetector extends Module {
             this.damageWatch.landed();
             return;
         }
+        String quiet = quietReason();
+        if (quiet != null) {
+            noteIgnored(quiet);
+            return;
+        }
         int run = this.damageWatch.dropped(System.currentTimeMillis());
         if (run > 0) {
             Attribution.Result attribution = attributeNow();
@@ -1106,7 +1254,7 @@ public class FlagDetector extends Module {
         if (!(target instanceof net.minecraft.entity.player.EntityPlayer) || mc.thePlayer == null) {
             return Float.NaN;
         }
-        ItemStack held = mc.thePlayer.getHeldItem();
+        ItemStack held = serverHeld();
         float weapon = 0.0F;
         int sharpness = 0;
         if (held != null) {
@@ -1128,9 +1276,50 @@ public class FlagDetector extends Module {
                         .getEnchantmentLevel(net.minecraft.enchantment.Enchantment.protection.effectId, armour));
             }
         }
+        /* Blocking with a sword halves the hit, Resistance takes 20% a level
+           (2026-10-13). Both are visible here: the use flag and the effects
+           come with the other player's entity. */
+        boolean blocking = ((net.minecraft.entity.player.EntityPlayer) target).isBlocking();
+        net.minecraft.potion.PotionEffect resistance = target.getActivePotionEffect(net.minecraft.potion.Potion.resistance);
         return myau.util.DamageModel.expected(weapon, sharpness,
                 strength == null ? 0 : strength.getAmplifier() + 1, weakness == null ? 0 : weakness.getAmplifier() + 1,
-                false, target.getTotalArmorValue(), protection)[0];
+                false, target.getTotalArmorValue(), protection, blocking,
+                resistance == null ? 0 : resistance.getAmplifier() + 1)[0];
+    }
+
+    /** The item the server thinks is in hand: the slot last sent, else the one shown. */
+    private ItemStack serverHeld() {
+        if (this.serverSlot >= 0 && this.serverSlot < 9) {
+            return mc.thePlayer.inventory.getStackInSlot(this.serverSlot);
+        }
+        return mc.thePlayer.getHeldItem();
+    }
+
+    /**
+     * What a hit is made with, for hits whose vanilla minimum is not known:
+     * the item, its sharpness, and strength and weakness. Hits are only
+     * compared with hits made the same way (DamageWatch).
+     */
+    private String weaponBasis() {
+        ItemStack held = serverHeld();
+        StringBuilder basis = new StringBuilder(held == null ? "hand"
+                : String.valueOf(net.minecraft.item.Item.itemRegistry.getNameForObject(held.getItem())));
+        if (held != null) {
+            int sharpness = net.minecraft.enchantment.EnchantmentHelper.getEnchantmentLevel(
+                    net.minecraft.enchantment.Enchantment.sharpness.effectId, held);
+            if (sharpness > 0) {
+                basis.append("/sharp").append(sharpness);
+            }
+        }
+        net.minecraft.potion.PotionEffect strength = mc.thePlayer.getActivePotionEffect(net.minecraft.potion.Potion.damageBoost);
+        net.minecraft.potion.PotionEffect weakness = mc.thePlayer.getActivePotionEffect(net.minecraft.potion.Potion.weakness);
+        if (strength != null) {
+            basis.append("/str").append(strength.getAmplifier() + 1);
+        }
+        if (weakness != null) {
+            basis.append("/weak").append(weakness.getAmplifier() + 1);
+        }
+        return basis.toString();
     }
 
     /** The mitigation check now (for the HUD); inactive when low-damage detection is off. */
@@ -1496,7 +1685,12 @@ public class FlagDetector extends Module {
     /** Where the rotation and position last sent reach on the clicked block: miss, another side, or the face (with the distance to the claimed point). */
     private String rayText(BlockPos clicked, net.minecraft.util.EnumFacing face, net.minecraft.util.Vec3 hit) {
         double eyeY = this.sentY + (mc.thePlayer.isSneaking() ? 1.54 : 1.62);
-        net.minecraft.util.Vec3 eyes = new net.minecraft.util.Vec3(this.sentX, eyeY, this.sentZ);
+        return rayText(new net.minecraft.util.Vec3(this.sentX, eyeY, this.sentZ), clicked, face, hit);
+    }
+
+    /** The same from given eyes, along the rotation last sent. */
+    private String rayText(net.minecraft.util.Vec3 eyes, BlockPos clicked, net.minecraft.util.EnumFacing face,
+                           net.minecraft.util.Vec3 hit) {
         float yawRad = -this.sentYaw * 0.017453292F - (float) Math.PI;
         float pitchRad = -this.sentPitch * 0.017453292F;
         float cosPitch = -net.minecraft.util.MathHelper.cos(pitchRad);

@@ -21,6 +21,15 @@ import java.util.Map;
  *
  * Fed once a client tick with each watched target's health and hurt time;
  * plain arithmetic, so it can be tested. Client thread.
+ *
+ * 2026-10-13 (owner: a different weapon or a bare hand does different
+ * damage, and so does the opponent's armour): "usual" is no longer one
+ * number for every hit. A hit whose vanilla minimum is known (a player
+ * target: weapon, enchantments, potions, armour, protection, blocking) is
+ * judged as a share of that minimum, against the shares of earlier such
+ * hits; any other is judged in raw health against earlier hits made with
+ * the same weapon (the basis the caller passes). Changing weapon, or
+ * moving to a better-armoured opponent, no longer reads as low damage.
  */
 public final class DamageWatch {
 
@@ -87,11 +96,18 @@ public final class DamageWatch {
         /* The least the pending attack should take off, and that of the hit being resolved. */
         float attackExpected = Float.NaN;
         float hitExpected = Float.NaN;
-        final Deque<Float> own = new ArrayDeque<Float>();
+        /* What the pending attack was made with, and the hit being resolved. */
+        String attackBasis = "";
+        String hitBasis = "";
+        /* This target's earlier hits, by kind (see kindOf). */
+        final Map<String, Deque<Float>> own = new HashMap<String, Deque<Float>>();
     }
 
     private final Map<Integer, Target> targets = new HashMap<Integer, Target>();
-    private final Deque<Float> session = new ArrayDeque<Float>();
+    /* The session's earlier hits, by kind. */
+    private final Map<String, Deque<Float>> session = new HashMap<String, Deque<Float>>();
+    /** The kind of hit judged as a share of its vanilla minimum. */
+    private static final String RATIO = "ratio";
     private int lowStreak;
     private float lowSum;
     private int resolved;
@@ -105,9 +121,24 @@ public final class DamageWatch {
 
     /** The same, with the least the hit should take off (DamageModel), for the mitigation check. */
     public void attack(int targetId, long now, float expected) {
+        attack(targetId, now, expected, "");
+    }
+
+    /**
+     * The same, with what the hit was made with ({@code basis}: the weapon,
+     * its enchantments and the attacker's potions), for hits whose minimum
+     * is not known.
+     */
+    public void attack(int targetId, long now, float expected, String basis) {
         Target t = target(targetId);
         t.lastAttackAt = now;
         t.attackExpected = expected;
+        t.attackBasis = basis == null ? "" : basis;
+    }
+
+    /** Which earlier hits a hit is compared with: RATIO when its minimum is known, else its weapon's. */
+    private static String kindOf(float expected, String basis) {
+        return !Float.isNaN(expected) && expected >= MIN_EXPECTED ? RATIO : "raw:" + basis;
     }
 
     /**
@@ -137,6 +168,7 @@ public final class DamageWatch {
             t.hitAt = now;
             t.lastAttackAt = 0L;
             t.hitExpected = t.attackExpected;
+            t.hitBasis = t.attackBasis;
         }
         t.lastHurtTime = hurtTime;
         t.lastHealth = health;
@@ -157,12 +189,18 @@ public final class DamageWatch {
         if (!this.hidden && this.resolved >= HIDDEN_AFTER && this.moved == 0) {
             this.hidden = true;
         }
-        float usual = usual(t);
-        push(t.own, dealt);
-        push(this.session, dealt);
+        String kind = kindOf(t.hitExpected, t.hitBasis);
+        boolean ratio = RATIO.equals(kind);
+        /* A share of the minimum, or health, as the kind says. */
+        float value = ratio ? dealt / t.hitExpected : dealt;
+        float usualValue = usual(t, kind);
+        push(series(t.own, kind), value);
+        push(series(this.session, kind), value);
+        /* Reported in health either way. */
+        float usual = Float.isNaN(usualValue) ? Float.NaN : ratio ? usualValue * t.hitExpected : usualValue;
         Hit hit = new Hit(targetId, dealt, usual, t.hitAt, t.hitExpected);
         noteMitigation(hit);
-        if (!Float.isNaN(usual) && dealt <= usual * LOW_SHARE) {
+        if (!Float.isNaN(usualValue) && value <= usualValue * LOW_SHARE) {
             this.lowStreak++;
             this.lowSum += dealt;
         } else {
@@ -186,15 +224,26 @@ public final class DamageWatch {
         return verdict;
     }
 
-    /** "Usual": this target's median once it has enough, else the session's. NaN until either does. */
-    private float usual(Target t) {
-        if (t.own.size() >= MIN_BASELINE) {
-            return median(t.own);
+    /** "Usual" for this kind: this target's median once it has enough, else the session's. NaN until either does. */
+    private float usual(Target t, String kind) {
+        Deque<Float> own = t.own.get(kind);
+        if (own != null && own.size() >= MIN_BASELINE) {
+            return median(own);
         }
-        if (this.session.size() >= MIN_BASELINE) {
-            return median(this.session);
+        Deque<Float> all = this.session.get(kind);
+        if (all != null && all.size() >= MIN_BASELINE) {
+            return median(all);
         }
         return Float.NaN;
+    }
+
+    private static Deque<Float> series(Map<String, Deque<Float>> byKind, String kind) {
+        Deque<Float> values = byKind.get(kind);
+        if (values == null) {
+            values = new ArrayDeque<Float>();
+            byKind.put(kind, values);
+        }
+        return values;
     }
 
     /** Whether the server looks to hide other players' health (it never moves). */

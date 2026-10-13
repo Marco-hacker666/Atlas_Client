@@ -217,6 +217,74 @@ public class DamageWatchTest {
         assertEquals("over 3 s later: a new run", 0, gap.dropped(5000L));
     }
 
+    /** One landed hit made with a given weapon (basis) and known minimum (NaN for none). */
+    private static DamageWatch.Hit hitWith(Fight f, int id, float damage, float expected, String basis) {
+        f.lastHit = null;
+        f.tick(id, 0);
+        f.watch.attack(id, f.now, expected, basis);
+        f.tick(id, 10);
+        f.health -= damage;
+        for (int t = 9; t >= 0 && f.lastHit == null; t--) {
+            f.tick(id, t);
+        }
+        return f.lastHit;
+    }
+
+    @Test
+    public void changingToAWeakerWeaponIsNotLowDamage() {
+        Fight f = new Fight();
+        for (int i = 0; i < 6; i++) {
+            f.health = 20.0F;
+            hitWith(f, 1, 7.0F, Float.NaN, "diamond_sword");
+        }
+        f.health = 20.0F;
+        hitWith(f, 1, 1.0F, Float.NaN, "hand");
+        hitWith(f, 1, 1.0F, Float.NaN, "hand");
+        hitWith(f, 1, 1.0F, Float.NaN, "hand");
+        assertNull("a bare hand is judged against bare-hand hits only", f.lastVerdict);
+    }
+
+    @Test
+    public void aBetterArmouredOpponentIsNotLowDamage() {
+        Fight f = new Fight();
+        /* Hits worth about 1.2x their vanilla minimum, on a light target... */
+        for (int i = 0; i < 6; i++) {
+            f.health = 20.0F;
+            hitWith(f, 1, 6.0F, 5.0F, "iron_sword");
+        }
+        /* ...then a heavy one: much less health, but the same share of its minimum. */
+        f.health = 20.0F;
+        hitWith(f, 2, 2.4F, 2.0F, "iron_sword");
+        hitWith(f, 2, 2.4F, 2.0F, "iron_sword");
+        hitWith(f, 2, 2.4F, 2.0F, "iron_sword");
+        assertNull("judged against what vanilla lets the hit do", f.lastVerdict);
+    }
+
+    @Test
+    public void aRealCutIsStillCalledWithKnownMinimums() {
+        Fight f = new Fight();
+        for (int i = 0; i < 6; i++) {
+            f.health = 20.0F;
+            hitWith(f, 1, 6.0F, 5.0F, "iron_sword");
+        }
+        f.health = 20.0F;
+        hitWith(f, 1, 0.5F, 5.0F, "iron_sword");
+        hitWith(f, 1, 0.5F, 5.0F, "iron_sword");
+        hitWith(f, 1, 0.5F, 5.0F, "iron_sword");
+        assertNotNull(f.lastVerdict);
+        assertEquals(6.0F, f.lastVerdict.usual, 1.0E-3F);
+    }
+
+    @Test
+    public void blockingAndResistanceLowerTheMinimum() {
+        float plain = DamageModel.expected(6.0F, 0, 0, 0, false, 0, 0)[0];
+        float blocked = DamageModel.expected(6.0F, 0, 0, 0, false, 0, 0, true, 0)[0];
+        float resisted = DamageModel.expected(6.0F, 0, 0, 0, false, 0, 0, false, 1)[0];
+        assertEquals(7.0F, plain, 1.0E-4F);
+        assertEquals(4.0F, blocked, 1.0E-4F);
+        assertEquals(5.6F, resisted, 1.0E-4F);
+    }
+
     @Test
     public void medianOfOddAndEven() {
         assertEquals(2.0F, DamageWatch.median(new ArrayDeque<Float>(Arrays.asList(3.0F, 1.0F, 2.0F))), 0.0F);

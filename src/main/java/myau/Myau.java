@@ -401,7 +401,6 @@ public class Myau {
         } catch (Throwable ignored) {
         }
         updateDisplayTitle();
-
     }
 
     public static String getDisplayTitle() {

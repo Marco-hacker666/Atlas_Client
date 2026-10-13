@@ -16,10 +16,13 @@ package myau.util;
  *             (raw+1)/2 + raw/2, capped at 20, each point 4% off.
  * The randomisation is why the answer is a range, not a number.
  *
- * Not modelled: resistance, the target blocking with a sword (halves it),
- * Bedwars-style damage changes on a modded server. Those make the real hit
- * smaller than this, so the caller only calls a hit "mitigated" when it is
- * well under the bottom of the range.
+ * 2026-10-13: the target blocking with a sword ((1 + damage) / 2, before
+ * the armour, EntityPlayer.damageEntity) and Resistance on the target (20%
+ * a level, after the armour, before the enchantments) are modelled too.
+ *
+ * Not modelled: Bedwars-style damage changes on a modded server. Those make
+ * the real hit smaller than this, so the caller only calls a hit
+ * "mitigated" when it is well under the bottom of the range.
  *
  * Pure.
  */
@@ -42,13 +45,28 @@ public final class DamageModel {
      */
     public static float[] expected(float weapon, int sharpness, int strength, int weakness, boolean crit,
                                    int armour, int protRaw) {
+        return expected(weapon, sharpness, strength, weakness, crit, armour, protRaw, false, 0);
+    }
+
+    /**
+     * The same, with the target blocking with a sword and its Resistance
+     * level (amplifier + 1, 0 for none).
+     */
+    public static float[] expected(float weapon, int sharpness, int strength, int weakness, boolean crit,
+                                   int armour, int protRaw, boolean blocking, int resistance) {
         float damage = (1.0F + weapon - 0.5F * weakness) * (1.0F + 1.3F * strength);
         if (crit) {
             damage *= 1.5F;
         }
         damage += 1.25F * sharpness;
         damage = Math.max(0.0F, damage);
+        if (blocking && damage > 0.0F) {
+            damage = (1.0F + damage) * 0.5F;
+        }
         damage = damage * (25 - clamp(armour, 0, 25)) / 25.0F;
+        if (resistance > 0) {
+            damage = damage * (25 - clamp(resistance * 5, 0, 25)) / 25.0F;
+        }
         int raw = clamp(protRaw, 0, 25);
         int least = (raw + 1) >> 1;
         int most = Math.min(20, least + (raw >> 1));

@@ -5035,3 +5035,84 @@ Owner on 2.1.4: PLAY's bar never draws back; the sun looks fake.
   haze (0x34FFB070, 0.55w x 0.60h at 72%/70%). `glow()` now draws 8 rings
   with a Gaussian-like falloff instead of one linear fan (cone + rim).
 - Version 2.1.5 (backup gradle.properties.pre-2.1.5-20261013).
+
+### 2026-10-13 (later) — no bar by default; menu frame timing
+
+- Owner: PLAY should not carry the bar by default either. `marked = pointed`:
+  the bar only shows on the entry under the pointer.
+- Owner: 3-5 s of hitching after starting the game (vanilla: under 1 s).
+  The game is still loading then (OptiFine CustomSky, sound system,
+  EuphoriaPatcher), so the cause is not known yet. `MyauMainMenu` now logs
+  to stdout for 20 s after the menu first opens: "[MyauMenu] text ready
+  after N ms" and every frame over 40 ms as outside-menu / background /
+  text milliseconds. Read logs/latest.log after one start to see whose
+  hitch it is. Remove the logging once settled.
+
+### 2026-10-13 (later) — first timing result: the freeze is Myau.init
+
+Log of one start: every slow menu frame was 0 ms background / 0 ms text;
+"text ready after 4376 ms". Timeline: resources reloaded 19:15:08, the
+start screen is set at the end of startGame, then `new Myau()` runs (at
+startGame RETURN, client thread) until 19:15:13 -- config, ViaVersion,
+OptiFine custom-texture reload all inside it -- and only then is the first
+frame drawn. So the ~4 s freeze is client init, not the menu. `Myau.init`
+now logs "[MyauInit] <phase> N ms" per phase to find the heavy part.
+
+## 2026-10-13 — ray-next measured from the click's eyes; JumpReset only-if-helps
+
+From the OpenB4 analysis (reports/OpenB4-u20-分析報告.md, outside the repo).
+
+**Placement timing (no change to Clutch/Scaffold).** UpdateEvent PRE fires
+at EntityPlayerSP.onUpdate HEAD, before the tick's movement. Clutch.post()
+and Scaffold.onUpdateClick click there with the look this tick's C03 will
+carry and the position before the move -- exactly what vanilla 1.8 does
+(the click is handled in runTick before the player ticks) and what OpenB4
+does. The 42% "ray-next miss" was FlagDetector's: it judged the next look
+from the next C03's *position*, a tick of motion away (Clutch catches at
+0.25 b/t showed "face 0.45-0.83"). Placement now keeps `eyes` (last sent
+position + eye height at the click) and ray-next is cast from there along
+the next C03's look. Expect Clutch/Scaffold placements to read
+"ray-next face 0.0x"; a miss there is now a real misaim.
+
+**JumpReset only-if-helps (default on, min-reduction 3%).** A sprint jump
+adds 0.2 along the jump yaw (RotationState's when a module holds one, as
+MixinEntityLivingBase.jump does). Jump only if that cuts the horizontal
+knockback (KnockbackEvent x/z, blocks per tick) by >= min-reduction:
+facing the hit -50%, side-on +12%, back to it +50% (checked numerically).
+A skipped one counts as a non-reset (streak 0, remember(false)).
+Backups: backups/src/jr-fd-*.
+
+### 2026-10-13 (later) — timing logs removed
+
+Owner: start-up is fine as it is. The "[MyauInit]" phase timing in
+Myau.init and the "[MyauMenu]" frame timing in MyauMainMenu are removed
+(backup backups/src/pre-rm-timing-*). Finding kept for later: the ~4 s
+freeze at start is `new Myau()` at startGame RETURN (client thread), not
+the menu (its frames measured 0 ms).
+
+## 2026-10-13 — FlagDetector false positives: ghosts, teleports, round end, damage basis
+
+Owner: false flags while a ghost after death, after being sent to spawn
+(the client stutters), for blocks the server refuses when a round ends; and
+"mitigation" must allow for the weapon/hand and the opponent's defence.
+
+- `quietReason()` (shared): spectator, dead, **ghost** (allowFlying without
+  creative -- the minigame after-death/round-end ghost), respawn grace,
+  post-teleport (TELEPORT_GRACE 20 -> 60 ticks), **client-stall** (a client
+  tick > 300 ms late opens 40 ticks). `ignoreReason()` = quiet + riding +
+  flying, as before for corrections. Now also applied to REJECTs (logged
+  "IGNORED <reason>", counted in ignoredReasons), to attacks (not watched
+  for damage while quiet) and to HitCheck's dropped hits.
+- Round change: S45 title with text, S2B state 3 (game mode), S39 allowing
+  flight outside creative -> 160 ticks in which refusals are "round-change".
+  REFUSED-ALL: after 3 refusals in a row with none accepted (OK by block
+  update or by expiry resets), further ones are not counted; said once.
+- Damage: the item is the one in the slot last sent (C09), not the one
+  shown; DamageModel adds the target blocking ((1+d)/2 before armour) and
+  Resistance (20%/level after armour). DamageWatch's LOW-DAMAGE "usual" is
+  kept per kind: a hit with a known vanilla minimum (player target) is a
+  share of it, compared with earlier shares; otherwise raw health compared
+  only with hits of the same basis (item, sharpness, strength, weakness).
+  4 new tests (weapon change, better-armoured target, real cut still
+  called, blocking/resistance arithmetic); 17/17 pass.
+Backups: backups/src/fd-falsepos-*.

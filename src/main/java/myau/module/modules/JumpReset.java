@@ -61,6 +61,12 @@ public class JumpReset extends Module {
     public final PercentProperty maxRate = new PercentProperty("max-rate", 50);
     public final IntProperty maxStreak = new IntProperty("max-streak", 3, 0, 20);
     public final BooleanProperty requireSprint = new BooleanProperty("require-sprint", true);
+    /* 2026-10-13 (after OpenB4's JumpReset.helps): a sprint jump adds 0.2
+       along the way the body faces. Facing the hit that cancels part of
+       the knockback; facing away it adds to it. Jump only when it takes at
+       least min-reduction off the horizontal knockback. */
+    public final BooleanProperty onlyIfHelps = new BooleanProperty("only-if-helps", true);
+    public final PercentProperty minReduction = new PercentProperty("min-reduction", 3, this.onlyIfHelps::getValue);
     public final BooleanProperty movingForward = new BooleanProperty("moving-forward", true);
     public final BooleanProperty mouseDown = new BooleanProperty("mouse-down", false);
     public final BooleanProperty aimingOnPlayer = new BooleanProperty("aiming-on-player", true);
@@ -95,7 +101,7 @@ public class JumpReset extends Module {
         if (event.getY() <= 0.0D || !mc.thePlayer.onGround) {
             return;
         }
-        if (!this.conditionsMet() || !this.allowed()) {
+        if (!this.conditionsMet() || !this.allowed() || !this.helps(event.getX(), event.getZ())) {
             this.streak = 0;
             this.remember(false);
             return;
@@ -186,6 +192,29 @@ public class JumpReset extends Module {
             return false;
         }
         return !this.aimingOnPlayer.getValue() || this.nearestTarget(this.range.getValue()) != null;
+    }
+
+    /**
+     * Whether the sprint jump's 0.2 push, along the yaw the jump will use
+     * (the server-side look while a module holds one, as the jump mixin
+     * does), cuts the horizontal knockback by at least min-reduction.
+     * Knockback is in blocks per tick, as setVelocity takes it.
+     */
+    private boolean helps(double kbX, double kbZ) {
+        if (!this.onlyIfHelps.getValue()) {
+            return true;
+        }
+        double kb = Math.sqrt(kbX * kbX + kbZ * kbZ);
+        if (kb < 1.0E-3) {
+            return false;
+        }
+        float yaw = myau.management.RotationState.isActived()
+                ? myau.management.RotationState.getSmoothedYaw() : mc.thePlayer.rotationYaw;
+        double rad = Math.toRadians(yaw);
+        double x = kbX - Math.sin(rad) * 0.2;
+        double z = kbZ + Math.cos(rad) * 0.2;
+        double after = Math.sqrt(x * x + z * z);
+        return (kb - after) / kb * 100.0 >= this.minReduction.getValue();
     }
 
     /** Places and states a jump would be wrong or pointless in. */

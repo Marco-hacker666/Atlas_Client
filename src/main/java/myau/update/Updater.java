@@ -490,7 +490,10 @@ public final class Updater {
             h.setInstanceFollowRedirects(true);
             int code = h.getResponseCode();
             if (code == 404) {
-                throw new IOException("no update information on the latest release (404)");
+                /* Usually a release just published: its files are attached by
+                   the release Action a minute or two later (2026-10-13). */
+                throw new IOException("not on the latest release yet (404); it may still be building,"
+                        + " try again in a minute or two");
             }
             if (code != 200) {
                 throw new IOException("HTTP " + code);

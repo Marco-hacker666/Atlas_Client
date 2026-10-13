@@ -5143,3 +5143,15 @@ AtlasClickGui, AtlasTheme, BugReport), the README's Chinese section (the
 owner's choice), and the collaborator's no-item-release.patch (its Chinese
 lines are ModuleDocs context; changing them would break the patch).
 Backup: backups/src/pre-english-20261013-1953/.
+
+### 2026-10-13 (later) — Updater: a clearer 404 message
+
+Right after a release is published, the release Action needs a minute or two
+to attach the jar and update.properties; a `.update check` in that time got
+"Update check failed: no update information on the latest release (404)",
+which reads like a broken updater (owner, v2.1.5). `Updater.open` now says
+"not on the latest release yet (404); it may still be building, try again in
+a minute or two" (English; the Chinese-mode prefix is unchanged). The same
+text covers a 404 on the jar download. UpdaterTest 18/18 pass. Version left
+at 2.1.5; not installed, so the owner's official v2.1.4 can still test the
+auto-update to v2.1.5.

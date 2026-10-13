@@ -199,14 +199,6 @@ public class Scaffold extends Module {
        forward"). */
     public final BooleanProperty b4Telly = new BooleanProperty("telly-jump", true,
             () -> this.rotationMode.getValue() == ROTATION_B4);
-    /* 2026-10-13 (owner: "too easy to detect, lots of low damage"): the first
-       B4 snapped like OpenB4's Strict -- 64 of 265 placements came after a
-       turn over 45 degrees in one tick, 13 over 90 -- and the hits right
-       after such a run were damage-cut. Every B4 turn is now at most this
-       many degrees a tick, through the Rotations engine (humanize applies).
-       40 matches the Clutch max-speed the owner settled on. */
-    public final IntProperty b4TurnSpeed = new IntProperty("telly-turn-speed", 40, 10, 180,
-            () -> this.rotationMode.getValue() == ROTATION_B4);
     /* B4 state. The look the last block was placed with and when; the resting
        pitch and yaw offset drawn per enable; the telly turn in progress. */
     private float b4AimYaw = Float.NaN;
@@ -215,6 +207,8 @@ public class Scaffold extends Module {
     private float b4RestPitch = 86.0F;
     private float b4YawOffset = 0.0F;
     private int b4Script = 0;
+    private float b4ScriptYaw = 0.0F;
+    private float b4TurnSign = 1.0F;
     private int b4Ticks = 0;
     private final RotationEngine engine = new RotationEngine();
     private int tick = 0;
@@ -344,8 +338,10 @@ public class Scaffold extends Module {
      * lands on a wanted face); this decides the look:
      *
      *  - TELLY (b4-telly): on the tick a jump leaves the ground while moving
-     *    forward, face forward for that tick and the next (no clicks), then
-     *    turn back like any other aim, at most b4-turn-speed a tick. The jump's sprint boost goes forward because the look is
+     *    forward, face forward for that tick and the next, then turn back in
+     *    three steps (105-120, 33-35, 29-33 degrees; pitch 40-45, 50-55,
+     *    65-70) -- about 180 in all -- and click nothing until the turn is
+     *    done. The jump's sprint boost goes forward because the look is
      *    forward when it is made (move-fix); facing back, the keys move the
      *    player backwards and vanilla drops the sprint by itself.
      *  - HOLD: the look already sent reaches a wanted face -> keep it.
@@ -359,8 +355,7 @@ public class Scaffold extends Module {
      *  - REST: otherwise behind the movement at a pitch drawn 84.5-87.5 --
      *    near where the next block will need it.
      * The first two ticks after enabling turn only part of the way (0.3,
-     * 0.55, 0.8); every turn is at most b4-turn-speed a tick through the
-     * Rotations engine; every look is on the mouse grid from the one sent.
+     * 0.55, 0.8). Every look is on the mouse grid from the one sent.
      */
     private void b4Plan(UpdateEvent event, BlockData blockData) {
         this.b4Ticks++;
@@ -376,15 +371,32 @@ public class Scaffold extends Module {
         if (this.b4Telly.getValue() && this.b4Script == 0 && mc.thePlayer.onGround && MoveUtil.isForwardPressed()
                 && (mc.gameSettings.keyBindJump.isKeyDown() || this.stage > 0)) {
             /* This tick's movement input jumps (the key, or keep-y's own jump). */
-            this.b4Script = 2;
+            this.b4Script = 5;
+            this.b4TurnSign = RandomUtil.nextFloat(0.0F, 1.0F) < 0.5F ? -1.0F : 1.0F;
+            this.b4ScriptYaw = forward;
         }
         if (this.b4Script > 0) {
-            /* The jump tick and the next face forward; after that the ordinary
-               aim below turns the look back, at most b4-turn-speed a tick
-               (until 2026-10-13 a fixed 105-120 / 33 / 30 degree script). */
+            switch (this.b4Script) {
+                case 5:
+                case 4:
+                    this.b4ScriptYaw = forward;
+                    targetPitch = RandomUtil.nextFloat(20.0F, 25.0F);
+                    break;
+                case 3:
+                    this.b4ScriptYaw += this.b4TurnSign * RandomUtil.nextFloat(105.0F, 120.0F);
+                    targetPitch = RandomUtil.nextFloat(40.0F, 45.0F);
+                    break;
+                case 2:
+                    this.b4ScriptYaw += this.b4TurnSign * RandomUtil.nextFloat(33.0F, 35.0F);
+                    targetPitch = RandomUtil.nextFloat(50.0F, 55.0F);
+                    break;
+                default:
+                    this.b4ScriptYaw += this.b4TurnSign * RandomUtil.nextFloat(29.0F, 33.0F);
+                    targetPitch = RandomUtil.nextFloat(65.0F, 70.0F);
+                    break;
+            }
             this.b4Script--;
-            targetYaw = forward + RandomUtil.nextFloat(-0.5F, 0.5F);
-            targetPitch = RandomUtil.nextFloat(20.0F, 25.0F);
+            targetYaw = this.b4ScriptYaw + RandomUtil.nextFloat(-0.5F, 0.5F);
             clickable = false;
         } else {
             MovingObjectPosition held = blockData != null ? this.lookHit(blockData, fromYaw, fromPitch) : null;
@@ -420,18 +432,6 @@ public class Scaffold extends Module {
                     + RandomUtil.nextFloat(-0.02F, 0.02F);
             targetYaw = fromYaw + share * (targetYaw - fromYaw);
             targetPitch = fromPitch + share * (targetPitch - fromPitch);
-        }
-        if (Math.abs(targetYaw - fromYaw) > 0.01F || Math.abs(targetPitch - fromPitch) > 0.01F) {
-            Set<RotationEngine.Feature> features = EnumSet.noneOf(RotationEngine.Feature.class);
-            if (this.humanize.getValue()) {
-                features.add(RotationEngine.Feature.NOISE);
-                features.add(RotationEngine.Feature.CURVE);
-            }
-            float speed = this.b4TurnSpeed.getValue();
-            float[] stepped = this.engine.step(fromYaw, fromPitch, targetYaw, targetPitch,
-                    speed, Math.max(10.0F, speed * 0.5F), 0, true, features);
-            targetYaw = stepped[0];
-            targetPitch = stepped[1];
         }
         float[] onGrid = RotationEngine.quantize(fromYaw, fromPitch, targetYaw, targetPitch);
         float turn = Math.abs(MathHelper.wrapAngleTo180_float(onGrid[0] - fromYaw));

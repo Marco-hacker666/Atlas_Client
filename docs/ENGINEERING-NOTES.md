@@ -5248,3 +5248,14 @@ saved "B4" loading as TELLY); its settings are `telly-jump` (was b4-telly)
 and `telly-turn-speed` (was b4-turn-speed), both under the existing
 `telly-*` docs pattern. Internal names (b4Plan etc.) unchanged. Not to be
 confused with keep-y's TELLY value, a separate setting. Installed.
+
+### 2026-10-13 (later) — TELLY turn-speed cap reverted
+
+Owner on the capped build: "worse: no jump, and still detected; go back to
+the previous version". Scaffold.java, ModuleDocs and ModuleDocsEn restored
+from backups/src/b4-speed-20261013-2112 (the snapping B4 with the fixed
+105-120 / 33 / 30 degree telly script), then the rename re-applied: mode
+`TELLY` (alias "B4"), setting `telly-jump`. `telly-turn-speed` is gone.
+The capped sources are kept in backups/src/pre-revert-speed-*.
+Open question for later: the capped telly's "no jump" was not looked into.
+Installed; the capped build kept as backups/jars/Myau Atlas v2.1.6-telly-capped.jar.

@@ -444,8 +444,7 @@ final class ModuleDocsEn {
         help(cl, "max-speed", "Most degrees per tick.");
         help("Scaffold", "turn-speed", "Most degrees turned per tick (DEFAULT to Hypixel modes). The look no longer snaps; if it is not there yet, the click waits a tick. 180 = no limit.");
         help("Scaffold", "humanize", "Turns use the Rotations engine's speed variation and curve.");
-        help("Scaffold", "telly-jump", "TELLY mode: on each jump, face forward for the jump, then turn back and place (telly bridging); no clicks on the jump ticks.");
-        help("Scaffold", "telly-turn-speed", "Most degrees TELLY turns per tick. Fast turns get noted by anticheats and punished with damage cuts later; about 40 is safer.");
+        help("Scaffold", "telly-jump", "TELLY mode: on each jump, face forward for the jump, then turn back over a few ticks and place (telly bridging); no clicks while turning.");
         help("Scaffold", "pause-on-correction", "After a setback, wait a round trip before placing; a refused block pauses too. Stops strings of ghost blocks placed from the wrong position.");
         help(cl, "pre-aim", "Turn roughly toward the spot before it is time, so less turning is left.");
         help(cl, "counter-knockback", "Walk back when knocked, cancelling part of the knockback.");

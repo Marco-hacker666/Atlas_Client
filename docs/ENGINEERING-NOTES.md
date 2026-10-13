@@ -1593,7 +1593,7 @@ The user asked for a reliability pass in six stages, stopping after each for app
   joins on one connection, a stale join then a new connection, and a reconnect after a stale join. A mutation
   check (guard removed) fails the two stale-join tests. 146 in total.
 - **Files:** `management/ServerSession.java`, `module/modules/Adaptive.java` (one call site), and the test.
-- The user stopped the pass after stage 1 ("這邊應該夠了") and asked for a Rise 6.9.5 comparison
+- The user stopped the pass after stage 1 ("this should be enough") and asked for a Rise 6.9.5 comparison
   (docs/PAID-CLIENT-GAP.md, last section). Stages 2-6 are not done.
 
 ## Packet hold leases (2026-09-28, afternoon; item 1 of the Rise comparison)
@@ -2355,7 +2355,7 @@ for Clutch. **Not measured in game yet.**
 
 ## Diagnosis: "Clutch places nothing" was a hand-patched `Myau+.jar-2.1+5.jar` (2026-10-03, ~23:30)
 
-Report: "放了新版的，方塊都沒有放出來". `mods/` held `Myau+.jar-2.1+5.jar` (md5 6906b90d…, 5939 entries).
+Report: "installed the new build, and no blocks get placed at all". `mods/` held `Myau+.jar-2.1+5.jar` (md5 6906b90d…, 5939 entries).
 **This is not a Gradle build.** It is our 07:35 jar with entries rewritten at 13:04 by someone else:
 `Clutch.class`, `myau/util/RotationProfile.class`, `myau/util/RotationStepper.class`, and a new `ClutchPatch.class`.
 None of these files exist in `src/`, and `src/` has not changed since 07:35. `mcmod.info` still reads `2.1+4`.
@@ -2383,7 +2383,7 @@ The Clutch fast/keep-y/extra-block build is now actually live, but **still not m
 
 ## Clutch: keep-y leaked through the "partly turned look" path (2026-10-03, ~23:45)
 
-Report: "keep y在跳的時候還是可能會往上放一格". Trace `config/Myau/clutch-20261003-233317.txt`, ATTEMPT 36
+Report: "keep-y can still place one block higher while jumping". Trace `config/Myau/clutch-20261003-233317.txt`, ATTEMPT 36
 (stood 70.00, so the keep-y layer is 69). From t2 the levels are capped at `L69`, so keep-y did apply to the plan.
 At t5 the plan was `catch 254,69,191 on 255,69,191 west`. But the look at that moment (pitch 87, pre-aimed)
 hit the **top** of 255,69,191, and `post()` placed `255,70,191 ... up`. post()'s fallback ("a partly turned look
@@ -2402,7 +2402,7 @@ The replaced jar (9ae58f92…) is `backups/jars/Myau+.jar-2.1+4.jar.pre-keepy-fa
 
 ## Clutch measurement after the keep-y fix (2026-10-04, ~06:50, diagnosis only)
 
-User: "可以使用". Trace `config/Myau/clutch-20261004-063557.txt` (Pika plus singleplayer, jumping off bridge edges).
+User: "it works". Trace `config/Myau/clutch-20261004-063557.txt` (Pika plus singleplayer, jumping off bridge edges).
 - 106 attempts: 93 saved, 12 landed on existing ground, 1 "ended unresolved: world changed" (a 31-block drop; it
   waited "not needed now" because the landing was beyond PLAN_TICKS).
 - 387 blocks placed, **about 4.2 per save** (1 block 13x, 4 blocks 24x, 6-9 blocks 21x). By kind: chain 198,
@@ -2417,7 +2417,7 @@ direct catch is reachable later), smaller snaps (weight turn cost more, or cap t
 
 ## Why FlagDetector blame shows "unknown ~48%" (2026-10-04, diagnosis only)
 
-User: "為什麼每次flag，unknown比率那麼高". This is by construction, not a measurement (`util/Attribution.java`).
+User: "why is the unknown share so high on every flag". This is by construction, not a measurement (`util/Attribution.java`).
 - Every flag reserves a fixed `UNKNOWN_PRIOR = 0.5`, standing for the server, the route, or vanilla movement.
 - A module's score saturates per kind at that kind's weight. A placement is 0.5 and a swing 0.05.
 - So a module that only places and swings can never exceed (0.5 + 0.05) / (0.55 + 0.5) ≈ 52%, which leaves unknown
@@ -2429,7 +2429,7 @@ and not through the generic time-window weighting.
 
 ## Clutch: `humanize` (2026-10-04, ~06:50)
 
-User asked for "數學randomize計算". Clutch only; RotationEngine (shared with KillAura/Scaffold/...) is untouched.
+User asked for "mathematical randomisation". Clutch only; RotationEngine (shared with KillAura/Scaffold/...) is untouched.
 New `humanize` (default true). Both effects scale with the existing `rotation-random`, and both are off with
 humanize off or rotation-random 0.
 1. **Aim spot**: each block gets a spot on the face drawn from N(0.5, 0.18) per axis, clamped to [0.1, 0.9]. It is
@@ -2470,7 +2470,7 @@ or limited to non-final ticks.
 
 ## RotationEngine features + `Rotations` settings module; FlagDetector direct REJECT blame (2026-10-04, ~07:05)
 
-User: "改準一點(flag detector)。先做1,2,3 ... 最後有一個可用的rotation engine，這些參數也能調整".
+User: "make it more accurate (flag detector). Do 1, 2, 3 first ... in the end a usable rotation engine, with these parameters adjustable".
 
 **FlagDetector / Attribution.**
 - `Placement.module` is now taken when the C08 is seen, via the new `ActionLedger.callerModuleExcept("FlagDetector")`.
@@ -2508,7 +2508,7 @@ Backups: `backups/src/src-before-rotation-engine-20261004`, `backups/config/defa
   FakeLag is the leading cause on Pika, as before. No rotation-type flags.
 
 **PlayTracker** (new, LEGIT category, enabled by default): a two-line HUD showing
-"遊玩 h:mm:ss (今天 …)" and "場數 N 勝W 敗L (今天 N)".
+"Play h:mm:ss (today …)" and "Games N  W-wins L-losses (today N)" (shown in Chinese in game).
 - Time counts every tick while in a world. A gap over 1 s, such as a freeze, is not counted.
 - Games are read by the new pure `util/MatchChat`, with patterns taken from the logs (39k chat lines):
   - starts: "MATCH START!", "Game starts in 1...", "The game starts in 1 second";
@@ -2541,8 +2541,8 @@ caught. Pika logs show "usual 1.50/2.00" with swords, which looks like exactly t
 - FlagDetector: `leastDamage()` at C02 (players only). The per-hit damage chat now adds "vanilla at least X".
   One chat line goes out when the check turns active. `mitigation()` / `droppedRun()` serve the HUD.
   It is not a new flag label, so flag counts and FlagResponder are unchanged.
-- PlayTracker: third line "! 減傷 dealt/expected hp (n/m 下)" while active (20 s after the last hit), or "! 打不到 N 下沒反應"
-  for a run of ≥2 ignored hits. `show-mitigation` (on); `mitigation-always` (off) also shows "減傷 無" otherwise.
+- PlayTracker: third line "! mitigation dealt/expected hp (n/m hits)" (Chinese in game) while active (20 s after the last hit), or "! no hit: N hits with no reaction"
+  for a run of ≥2 ignored hits. `show-mitigation` (on); `mitigation-always` (off) also shows "mitigation: none" otherwise.
   It needs FlagDetector on with detect-low-damage.
 Tests: `MitigationTest` (model vs hand-computed 1.8 numbers, the 3-of-4 rule, the integer-health margin, unknown
 expectations ignored). 246 pass.
@@ -2581,7 +2581,7 @@ The audit is mainly by reading the whole file. **Fixed:**
 Backups: `backups/src/src-before-killaura-audit-20261004`, `backups/config/default.json.pre-killaura-audit-20261004`.
 246 tests pass. Gradle md5 e92e8fad…. Not installed then (game running).
 
-### KillAura audit, part 2: the four open items fixed (2026-10-04, ~20:30, user: "都修")
+### KillAura audit, part 2: the four open items fixed (2026-10-04, ~20:30, user: "fix them all")
 - **SmoothBack for every rotating mode.** New `returning` state. A tick where the aura set the rotation itself
   (`!rotatedBefore && event.isRotated()`) arms it, except LockView. On later ticks where nothing rotates, `stepBack()`
   turns the sent look (event.getYaw = lastReported) toward the camera through `RotationEngine` with all features, at
@@ -2603,7 +2603,7 @@ Backups: `backups/src/src-before-killaura-audit-20261004`, `backups/config/defau
 
 ## ClickGUI tidy: descriptions for every module, headings, labels, hints (2026-10-04, ~21:00)
 
-User: "click gui 每個功能的 customization 開關都有點亂，把它整理，然後每個功能都要做說明". 110 of the 161 registered
+User: "the customisation toggles of every feature in the click gui are a bit of a mess; tidy them up, and every feature needs a description". 110 of the 161 registered
 modules had no description, and setting keys come in four styles (`release-every`, `AutoBlockCPS`, `LB-HSpeed`,
 `Color Mode`). KillAura has 94 settings in one flat list. **Presentation only. No config key changed.**
 - `Property`: added `label` (default `prettify(key)`, e.g. "AutoBlockCPS" → "Auto block CPS", "LB-HSpeed" → "LB H speed"),
@@ -2615,7 +2615,7 @@ modules had no description, and setting keys come in four styles (`release-every
   - A Chinese description for **all 161** modules.
   - Headings and order for the long lists: KillAura, Clutch, Scaffold, Velocity, HUD, NameTags, AntiBot, Disabler,
     TimerRange, BlockHit, TargetHUD, ESP2D, Blink, FlagDetector, BedwarUtils, Xray, InvManager.
-    Patterns are `x*` (prefix), `*x` (suffix) or exact, case ignored; unmatched settings go first under "一般".
+    Patterns are `x*` (prefix), `*x` (suffix) or exact, case ignored; unmatched settings go first under "General".
     Other modules keep their order, with ≥2-member runs of hud*/alerts*/macro*/raven*/bg-* gathered under a heading.
   - Hints: a shared meaning per key (range, fov, move-fix, swing, teams, …), plus per-module ones for KillAura,
     Clutch, Rotations, PlayTracker and FlagDetector.
@@ -2782,7 +2782,7 @@ jar 1b3f249d).
   the game closed and a backup `backups/config/default.json.pre-duprot-lang-20261004`. The only `"multi-place"`
   key is Scaffold's. Tower EXTRA's `targetFacing` place now uses `getPlacementMop(BlockData(below, facing), sentYaw,
   sentPitch)` for every mode but NONE, and skips when the sent look misses that face.
-- **Atlas language:** AtlasTheme has a new "Language" group, `language` = 中文 / English (saved in atlas-theme.json).
+- **Atlas language:** AtlasTheme has a new "Language" group, `language` = Chinese / English (saved in atlas-theme.json).
   Atlas sets `ModuleDocs.setEnglish()` every frame.
   - `Module.getDescription()` and `Property.getHelp()` return the chosen language, falling back to the module's
     own text.
@@ -2853,7 +2853,7 @@ test.ccbluex.net 20:34-20:37, then Pika duels 20:37:33 onward (nick `Nick1`).
     click and not in the same tick.
   - The number of blocks per jump, which is about 4. 209 of 387 went down while still rising (see the 06:50
     section). That is the next lever if mitigation continues.
-- The docs (zh/en) list `click-timing` under 放置 / Placement.
+- The docs (zh/en) list `click-timing` under Placing.
 
 Backups: `backups/src/src-before-clutch-clicktiming-20261004`, `backups/config/default.json.pre-clutch-clicktiming-20261004`,
 `backups/jars/Myau+.jar-2.1+4.jar.pre-clutch-clicktiming-20261004` (c2a0a87f). 254 tests pass. Build md5 1cec0ece…,
@@ -2865,7 +2865,7 @@ Clutch attempt in the preceding 30 s, look at FakeLag next.
 
 ## Reverted: `click-timing` (2026-10-04, ~21:15)
 
-**User:** "用回去舊版的，現在變成沒辦法連續clutch，當初設計這樣是有原因的". NEXT_TICK made the clutch unable to place
+**User:** "go back to the old version; now it cannot clutch block after block, and it was designed that way for a reason". NEXT_TICK made the clutch unable to place
 continuously: two ticks per turned block is too slow to catch a fall.
 - The jar is back to **c2a0a87f** (from `backups/jars/…pre-clutch-clicktiming-20261004`). md5 checked, one Myau
   jar in mods/, 62 mixin classes.
@@ -2882,7 +2882,7 @@ continuously: two ticks per turned block is too slow to catch a fall.
 
 ## Clutch `early-turn`: big turns a tick early, only when the fall allows (2026-10-04, ~21:30)
 
-**User:** "做提早轉頭的方法，不要降速度，不要出邏輯錯誤". This follows the revert above. The same-tick click and the
+**User:** "do it by turning early; do not lower the speed, and no logic errors". This follows the revert above. The same-tick click and the
 one-block-a-tick cadence stay; two things are added in front of them, in the plan branch of `onUpdate`.
 
 **1. Click along the look already sent.** `post()` runs first, before this tick's turn.
@@ -2917,21 +2917,21 @@ fewer `ray miss` rows in `places-*.txt`. Small-turn same-tick clicks still show 
 judges against the look sent before the click. Measure `catching true` rows: turns over 45° in the click tick and
 `ray miss` should drop. `saved with` counts and REJECTs should not get worse.
 
-The docs (zh/en) list `early-turn` under 放置 / Placement. 254 tests pass, build md5 8c5244fd…, 62 mixin classes.
+The docs (zh/en) list `early-turn` under Placing. 254 tests pass, build md5 8c5244fd…, 62 mixin classes.
 Backups: `backups/src/src-before-clutch-earlyturn-20261004`, `backups/config/default.json.pre-clutch-earlyturn-20261004`,
 `backups/jars/Myau+.jar-2.1+4.jar.pre-clutch-earlyturn-20261004` (c2a0a87f, the installed jar). **Not installed
 yet: the game was running at build time.** No config change; the key is absent, so 45 applies.
 
 ## Clutch `safe-mode` switch (2026-10-04, ~21:40)
 
-**User:** "你把這個版本做成一個開關(safe mode)".
+**User:** "make this version a toggle (safe mode)".
 - New `safe-mode` (BooleanProperty, **default off**) gates both parts of the early-turn section above:
   - the click along the look already sent;
   - the early turn.
 - `early-turn` is shown only while it is on.
 - **Off:** `clickedHeld` and `early` stay false, `aimedCell` stays null, and the final `post()` runs. That is the
   same code path as the c2a0a87f jar, which turns and clicks in the same tick.
-- Default off so nothing changes until the user turns it on (Clutch → 放置 → safe-mode).
+- Default off so nothing changes until the user turns it on (Clutch → Placing → safe-mode).
 - The docs (zh/en) give help for `safe-mode`.
 
 Backups: `backups/src/src-before-clutch-safemode-20261004` (the early-turn source), config and jar
@@ -2940,7 +2940,7 @@ Backups: `backups/src/src-before-clutch-safemode-20261004` (the early-turn sourc
 
 ## Session 21:17-21:25 with `safe-mode` on (2026-10-04, diagnosis only)
 
-**User:** "還是減傷了，我用太多". Jar 00f0895a with safe-mode on. Pika BedFight from 21:21 (nick `Nick2`). Clutch was
+**User:** "still got mitigated; I used it too much". Jar 00f0895a with safe-mode on. Pika BedFight from 21:21 (nick `Nick2`). Clutch was
 in REAL mode with speed 30, which the user changed.
 
 **Clutch with safe-mode:**
@@ -2973,7 +2973,7 @@ not-moving. A second of held movement and hits, arriving in a burst, is the stro
 
 **Conclusion:** Clutch with safe-mode is no longer the main suspect. FakeLag's long holds are. Next: find why LIQUID
 holds run 4-8 times past `delay`. The quickest confirmation is a session with FakeLag off.
-**User's verdict (same evening):** "是因為clutch，我前面用來疊橋。不用修，我單純用太兇".
+**User's verdict (same evening):** "it was because of clutch, I used it to pillar earlier. No need to fix it, I just used it too hard".
 - The user attributes the damage cut to using Clutch to build bridges heavily, which is usage and not a defect.
 - **No fix wanted.** FakeLag's long holds are recorded above for reference only; do not change FakeLag on the
   strength of this session.
@@ -2996,7 +2996,7 @@ holds run 4-8 times past `delay`. The quickest confirmation is a session with Fa
 - MatchChat comment and test names are anonymised too, and the tests still pass.
 
 **Modules:**
-- AdvancedAim and KillAura "Advanced" were first left out (Rise-derived). The user then decided to keep them ("學來的不是抄襲，是參考借鑑").
+- AdvancedAim and KillAura "Advanced" were first left out (Rise-derived). The user then decided to keep them ("learning from it is not copying, it is taking reference").
 - So all modules are identical to this tree.
 
 **State of the release folder:**
@@ -3093,7 +3093,7 @@ which are not in `src/` yet. The clean source is `backups/src/src-before-atlas-u
      between pages and the Latin sheet outside `glBegin/glEnd`.
    - A string with a character neither face has (an emoji, a surrogate pair) still falls back to the game font
      (`drawable()`).
-   - Checked offline: the font renders traditional characters (攻擊…標) cleanly.
+   - Checked offline: the font renders Traditional Chinese characters cleanly.
 5. **OptiFine "Fast Render" → white screen.**
    - OptiFine reports framebuffers as unavailable with Fast Render (and antialiasing), so `bindFramebuffer` does
      nothing. The blur/glass passes then draw their full-screen quads straight onto the screen.
@@ -3136,7 +3136,7 @@ which are not in `src/` yet. The clean source is `backups/src/src-before-atlas-u
 - Fix: blur and glass effects fall back to plain drawing when framebuffers are unavailable (OptiFine Fast Render),
   instead of whitening the screen.
 
-**GitHub (same night): not pushed, on the user's word ("github先不用").**
+**GitHub (same night): not pushed, on the user's word ("no GitHub for now").**
 - The release folder has a local commit, 1f42f94: the Atlas UI update, the three fixes and a README update. 254
   tests pass.
 - The push was rejected because the remote has two commits the local repo lacks: 6738434 (web upload of
@@ -3147,7 +3147,7 @@ which are not in `src/` yet. The clean source is `backups/src/src-before-atlas-u
 
 ## The 13 OpenSkid modules ported from source; HUD editor support (2026-10-06, ~00:20)
 
-**User:** "你趕快去加回來，我給你開權限了". The download was then allowed.
+**User:** "go and add it back, I have given you permission". The download was then allowed.
 
 **Source.**
 - https://github.com/loloshelly102-a11y/OpenSkid (GPL-3.0), `src/main/java/openskid/module/modules/`, main branch:
@@ -3337,7 +3337,7 @@ turn is as small as possible; (3) "wanted" cells include where the player will b
 
 ### 2026-10-06 22:22 — rolled back to the first Scaffold change (ff7ba658), at the user's word
 Test of a93c25ef: the player walked off the edge of a y68 bridge (last block 250,68,183, next at y62). The user had
-said beforehand to return to the version before "超爛" if this one was not as expected. The source of Scaffold.java and
+said beforehand to return to the version before the one called "terrible" if this one was not as expected. The source of Scaffold.java and
 ModuleDocs/ModuleDocsEn was rebuilt to that version (before-backup + `scaffold_edit.py` + the LOWEST comment + docs)
 and checked: its Scaffold*/ModuleDocs* classes are **byte-identical** to those in
 `backups/jars/Myau+UI_fixed.jar.pre-scaffold-held-look-20261006` (md5 ff7ba658). That jar is what gets installed.
@@ -3411,7 +3411,7 @@ ground, the box shrunk by 0.2 a side, moved by this tick's motion and one block 
 keeps crouching for a random 100-200 ms after; input ×0.3 as vanilla's sneak key does, after the SILENT strafe remap.
 `onSafeWalk` only confirms vanilla's crouch edge rule. Placement logic is unchanged (v1.2.0).
 Backups: `backups/src/Scaffold.java.pre-S1-edge-sneak-20261007`, `…S1-edge-sneak-20261007`.
-**Report rewritten LiquidBounce-first (same day), at the user's word ("看的是 liquid bounce").** Read in full: all 30
+**Report rewritten LiquidBounce-first (same day), at the user's word ("it is LiquidBounce I meant").** Read in full: all 30
 Scaffold files, all 11 KillAura files, and the aiming / clicking / target-finding layers they use. Facts worth keeping:
 - LB decides the rotation at the **start of the tick** (RotationUpdateEvent → RotationManager.update, normalised to the
   mouse GCD); interactions in that tick use it and are verified by a world raytrace from the current eye
@@ -3602,7 +3602,7 @@ only within reach.
 - **Rotation:** all rotation branches and the smooth-back / Advanced "lost target" checks use the scan range.
 - **Attack:** `attack` is forced false unless the box is within SwingRange, so nothing swings at the air from scan
   range. performAttack swings before it checks the aim. Blocking runs as before.
-- **ModuleDocs / ModuleDocsEn:** ScanExtra added to the 出手 group, with help text in both languages.
+- **ModuleDocs / ModuleDocsEn:** ScanExtra added to the Attacking group, with help text in both languages.
 
 **Files.**
 - Backups: backups/src/KillAura.java.pre-K2-20261007 and KillAura.java.K2-20261007; ModuleDocs(.En).java.pre-K2-20261007.
@@ -3630,7 +3630,7 @@ ModuleDocs and ModuleDocsEn: the CPS Mode help now explains Human.
 
 ## 2026-10-08 — Scaffold S4d (aim instead of jump), KillAura K4/K5, LEGIT auto-block fix (K6)
 **User after playing K1–K3.**
-- Auto-block "一直 block，導致速度很慢"; the user said to continue and fix it along the way.
+- Auto-block "keeps blocking, which makes it very slow"; the user said to continue and fix it along the way.
 - Scaffold should not keep jumping; it should aim at the block and place it.
 
 **S4d (Scaffold, GODBIRGDE).**
@@ -3668,7 +3668,7 @@ camera. This is LB's SNAP: `if (!clicker.willClickAt(ticks)) return`.
   - The block/unblock alternation within reach is unchanged.
 - **Other auto-block modes** are untouched.
 
-**ModuleDocs and ModuleDocsEn:** RotationTiming, LazyRotation, ShortStop and FailAim were added to the 轉頭 group, with
+**ModuleDocs and ModuleDocsEn:** RotationTiming, LazyRotation, ShortStop and FailAim were added to the Rotations group, with
 help text in both languages.
 
 **Files.**
@@ -3728,7 +3728,7 @@ K7 is therefore planned as "KillAura asks HitSelect ACTIVE before a hit", not as
 - Build: md5 fbb75829db6cb59721e535d8b35327f8. This jar includes S4d and K1–K6.
 - 2026-10-08 installed the NoItemRelease build (md5 fbb75829db6cb59721e535d8b35327f8) with the game closed; the previous jar was saved as backups/jars/Myau+UI_fixed.jar.pre-NoItemRelease-20261008. Install checks: 62 classes under myau/mixin, one Myau jar in mods.
 
-### 2026-10-08 NoItemRelease: safe-release (the user saw "NoSlow 嚴重被抓")
+### 2026-10-08 NoItemRelease: safe-release (the user saw "NoSlow getting caught badly")
 **Measured.** test.ccbluex.net legacy (Grim), 19:04:17–19:04:34: 133 × `failed NoSlow`, plus LAGBACK ×4–10 bursts at
 sprint speed. This is the predicted risk, not a defect:
 - With the vanilla release dropped, Grim keeps the item in use.
@@ -3817,7 +3817,7 @@ performAttack lets a click through up to one tick early (attackDelayMS ≤ 50) w
 
 The positive remainder is kept, so the interval after the early click is unchanged and the average CPS does not rise.
 
-**ModuleDocs and ModuleDocsEn:** both settings were added to the 出手 group, with help text in both languages.
+**ModuleDocs and ModuleDocsEn:** both settings were added to the Attacking group, with help text in both languages.
 
 **Plan status.** K1–K8, K10 and K11 are done, and K9 is deliberately skipped. Defaults chosen so the user's current
 behaviour holds:
@@ -3837,7 +3837,7 @@ behaviour holds:
 - The owner said to record it only. Do not start until asked.
 
 ## 2026-10-08 — HudGlass: the on-screen HUD in Liquid Glass with rounded panes (backlog item, now done)
-**User:** "做一下hud吧". This is the backlog request from players: HUD elements in the Atlas menu's Liquid Glass, with
+**User:** "let us do a hud". This is the backlog request from players: HUD elements in the Atlas menu's Liquid Glass, with
 round shapes.
 
 **Design.** One shared renderer, one switch, and every HUD falls back to its old drawing when the switch is off.
@@ -3908,7 +3908,7 @@ round shapes.
 - 2026-10-08 installed HudGlass CLEAN (md5 0f32595ac2959acdc9839d0f175a5a7c) with the game closed; the previous jar was saved as backups/jars/Myau+UI_fixed.jar.pre-hudclean-20261008. Install checks: 62 classes under myau/mixin, one Myau jar in mods.
 
 ## 2026-10-08 — The HUD's default look is LiquidBounce's JelloBounce theme; HudGlass removed
-**User:** "去看 liquid bounce 的 jello bounce theme 怎麼做 hud 跟 target hud 的，不要多一格 hud class，直接改預設".
+**User:** "go and see how LiquidBounce's Jello theme does the hud and target hud; do not add another hud class, change the default directly".
 
 **Source.** github.com/CCBlueX/LiquidBounce-Theme-JelloBounce, a CCBlueX-maintained fork of larryngton2/jellobounce.
 - It was shallow-cloned into the session scratchpad for reading only; nothing from it is in the jar.
@@ -3967,7 +3967,7 @@ round shapes.
 - Installed with the game closed; the previous jar is backups/jars/Myau+UI_fixed.jar.pre-jello-20261008.
 
 ### 2026-10-08 Jello follow-up: module list, watermark off, Flags/Hits lists off
-**User:** "旁邊那欄沒有變", "我不要 myau atlas 浮水印", "flags hit 也可以移除（畫面上的）", with a screenshot. A crop of the screenshot
+**User:** "the column at the side did not change", "I do not want the myau atlas watermark", "flags/hits can go too (the on-screen ones)", with a screenshot. A crop of the screenshot
 showed the rows did get the Jello slab and shadow. They still read as the old list because:
 - the text was in the owner's RAINBOW colour;
 - the white edge bar was still drawn.
@@ -3989,7 +3989,7 @@ showed the rows did get the Jello slab and shadow. They still read as the old li
 - 2026-10-08 installed the Jello follow-up (md5 1019a9b46bf32f068f7b1a78631c3ddd) with the game closed; the previous jar was saved as backups/jars/Myau+UI_fixed.jar.pre-jello2-20261008. Install checks: 62 classes under myau/mixin, one Myau jar in mods. Config backed up to backups/config/default.json.pre-jello2-20261008, then: WaterMark off, FlagDetector hud NONE, HitCheck hud NONE, HitCheck chat-summary false.
 
 ### 2026-10-08 Module-list rows rounded
-**User:** "有出現，但我要 round". The Jello rows showed, but the owner wants rounded rows.
+**User:** "it shows, but I want it rounded". The Jello rows showed, but the owner wants rounded rows.
 
 **Change.** `HudPanel.row()` now uses `SMALL_RADIUS` (3.5) instead of 0. The rows stay flush and shadowed; the theme
 itself draws them square.
@@ -4001,7 +4001,7 @@ itself draws them square.
 - Install checks: 62 classes under myau/mixin, one Myau jar in mods.
 
 ### 2026-10-08 HUD animations: module list on/off, TargetHUD
-**User:** "開關都要有動畫阿，target hud 也要有動畫".
+**User:** "the toggles all need animation, and the target hud too".
 
 **Module list (JELLO theme, MYAU interface).** This follows ArrayList.svelte (fly in from x 50px over 200ms;
 animate:flip 200ms).
@@ -4063,7 +4063,7 @@ slows it near the target, the tremor and LazyRotation/ShortStop/FailAim still
 apply after (processAim), and the mouse-grid snapping in RotationEngine.
 
 Docs: ModuleDocs / ModuleDocsEn help for both settings; both added to the
-"轉頭" group. Build 266 tests OK, md5 e3ff281df7e2e6fd55c04dfecdef3281,
+"Rotations" group. Build 266 tests OK, md5 e3ff281df7e2e6fd55c04dfecdef3281,
 installed (previous jar: backups/jars/Myau+UI_fixed.jar.pre-humanaim-20261008),
 62 mixins. Sources: backups/src/pre-humanaim-20261008 and humanaim-20261008.
 To tune: AimDrift 0 = old aim point; FlickOvershoot off = no overshoot.
@@ -4094,7 +4094,7 @@ naming a hidden mode still loads and works.
 - Scaffold `rotations`: NONE / DEFAULT / GODBRIDGE / SNAP (hidden: BACKWARDS,
   SIDEWAYS, SMOOTH, Hypixel, 3FMC, SNAP2). Typo GODBIRGDE fixed to GODBRIDGE
   (alias).
-- ModuleDocs groups: a "常用" group first. KillAura: Rotations, CPS Mode,
+- ModuleDocs groups: a "Main" group first. KillAura: Rotations, CPS Mode,
   MinCPS, MaxCPS, AttackRange, SwingRange, auto-block, Mode, MoveFix.
   Scaffold: rotations, sprint, tower, keep-y, safe-walk, move-fix, turn-speed.
   They were removed from their old groups.
@@ -4108,7 +4108,7 @@ the `.hide(...)` call.
 
 **Dialog** (AtlasClickGui `drawReportConfirm`, opened by `openReport()`): the owner wanted testers to say why.
 Six reasons as chips, one required before Send works (`BugReport.REASONS`, sent in English; `REASONS_ZH` shown
-when the menu language is 中文): Flagged / banned, Crash / freeze, Lag / low FPS, Module not working,
+when the menu language is Chinese): Flagged / banned, Crash / freeze, Lag / low FPS, Module not working,
 Visual / menu bug, Other. Below, a text box (always focused while the dialog is open): typing, Backspace,
 Ctrl+V paste, 500 characters max, wrapped to the last 4 lines. Enter sends, Esc / Cancel / a click outside
 closes. Dialog text follows the menu language. `.report [text]` still sends with no reason ("(not given)").
@@ -4142,9 +4142,9 @@ Build 271 tests OK, md5 d244423a069cbbf0b125245486ffe568, **installed** (game cl
 Backups: `backups/src/pre-report2-20261008` (incl. relay-src), `backups/src/report2-20261008`,
 `backups/jars/Myau+UI_fixed.jar.pre-report2-20261008`.
 
-## 2026-10-08 — English heading for the new "常用" settings group
-The "常用" group added to KillAura / Scaffold had no English heading, so it showed in Chinese with the menu in
-English (the owner's setting). `ModuleDocsEn`: `heading("常用", "Main")`. Built, md5 734c1c75; not installed yet
+## 2026-10-08 — English heading for the new "Main" settings group
+The "Main" (Chinese: "frequently used") group added to KillAura / Scaffold had no English heading, so it showed in Chinese with the menu in
+English (the owner's setting). `ModuleDocsEn`: `heading(<Chinese name>, "Main")`. Built, md5 734c1c75; not installed yet
 (game running). Backup: `backups/src/ModuleDocsEn.java.pre-main-heading-20261008`.
 
 ## 2026-10-08 — Real version numbers (every build said "dev")
@@ -4167,7 +4167,7 @@ AimDrift 0.5→0.4, AimLead 0.2→0.3 (220 ms ping). Everything else as before (
 Lazy / ShortStop / Raycast Enemy / ExitClick). If Polar still flags: MaxCPS 12, then MaxTurnSpeed 50.
 
 ## 2026-10-09 — LEGIT autoblock rework: block only under threat, no CPS cap
-Owner: "auto block 沒做好". Found in KillAura:
+Owner: "auto block is not done right". Found in KillAura:
 1. `getAttackDelay` used `AutoBlockCPS` (owner: 8) whenever `isBlocking`, and LEGIT set `isBlocking` for any target
    in SwingRange -- so in reach the aura dropped from MinCPS-MaxCPS to 8 CPS.
 2. LEGIT blocked on every hit whatever the target was doing, so chasing or a fleeing target meant block slowdown.
@@ -4204,7 +4204,7 @@ slot held before. Clutch: `item-spoof` (BooleanProperty, default true, shown wit
 on the first switch of a catch in `selectSlot`, cleared in `stopPlacing`; `getSpoofSlot()` returns it while
 enabled + item-spoof + slotSwapped. Mixins: MixinEntityRenderer (updateCameraAndRender, updateRenderer -- only if no
 other module already swapped the drawn slot this frame) and MixinGuiIngame.updateTick. **Placement code and timing
-untouched** (known-good Clutch of 2026-10-02). Group "物品" lists item-spoof; generic help text already existed.
+untouched** (known-good Clutch of 2026-10-02). Group "Items" lists item-spoof; generic help text already existed.
 Built 271 tests, md5 e204e1055d81c49c383171fddc7c2b08, installed (game closed, gated), 62 mixins. Backups:
 `backups/src/pre-clutch-spoof-20261009`, `backups/src/clutch-spoof-20261009`.
 
@@ -4240,7 +4240,7 @@ Predict (3) renamed "Swing" and hidden (its own note: decorative at high ping); 
 (`alias("Rhythm","Predict")`; an old config's "Predict" now loads as the rhythm one); new **Manual** (5):
 `ManualChance` (80%); on our AttackEvent with a sword (not using an item, no GUI, and not while KillAura's own
 auto-block is on) the use key is set down for one tick, then `updateKeyState` returns it to the physical state.
-Docs: descriptions and help, groups Manual / Predict / Swing（舊） (English heading "Swing (old)").
+Docs: descriptions and help, groups Manual / Predict / Swing (old).
 Built 271 tests, md5 b9fd029fa8dbd05a03cabedb545212a5, installed, 62 mixins. Owner's BlockHit mode is Helper
 (unchanged). Backups: `backups/src/pre-blockhit-20261009`, `backups/src/blockhit-20261009`.
 
@@ -4467,7 +4467,7 @@ Backup `backups/src/TargetHUD.java.pre-rounded-20261011`, after `backups/src/bet
 
 ## 2026-10-11 — Client Settings > Appearance: the group list scrolls
 
-Owner report: "client settings 沒辦法向下滾動". The Appearance page's middle
+Owner report: "client settings cannot scroll down". The Appearance page's middle
 column lists ten groups (Language ... Privacy) under the presets; at normal
 window sizes the last ones fell below the column, and `handleMouseInput`
 returned without doing anything for `appearanceView`.
@@ -4505,7 +4505,7 @@ version; Atlas and Normal are untouched.
 - Backups: `backups/src/ClickGUIModule.java.pre-panel-20261011`,
   `backups/src/beta2-panel-gui-20261011`. Not pushed yet (owner testing first).
 
-### 2026-10-11 (later) — Panel GUI polish ("沒有 yuri 那樣有質感")
+### 2026-10-11 (later) — Panel GUI polish ("not as polished as Yuri")
 
 - Translucent panels (0xC8121217) over a Kawase blur of the world
   (`BlurUtils.prepareBlur` + `RoundedUtils.drawRound` per panel, only when
@@ -4521,7 +4521,7 @@ version; Atlas and Normal are untouched.
 - Backups: `backups/src/PanelClickGui.java.v1-20261011` (first version),
   `...v2-polish-20261011`.
 
-## 2026-10-11 — JumpReset rewritten as one mode (owner: "一直被 silent flag")
+## 2026-10-11 — JumpReset rewritten as one mode (owner: "keeps getting silent-flagged")
 
 Old POLAR mode (owner's setting) jumped when nobody had hit the player
 (enemy predicted to back off), rolled `chance` every tick (70% = always),
@@ -4569,7 +4569,7 @@ JumpReset rate-cap jar installed (md5 1e0389fb...).
 
 ## 2026-10-12 — Panel GUI: slimmer panels
 
-Owner: "每個類別做瘦一點". WIDTH 132 -> 108, gap 8 -> 6. panelgui.txt now
+Owner: "make each category slimmer". WIDTH 132 -> 108, gap 8 -> 6. panelgui.txt now
 starts with "#w<width>"; a file saved for another width is ignored, so the
 panels lay out afresh instead of keeping the old wide spacing.
 Backup: backups/src/PanelClickGui.java.pre-slim-20261012. Installed md5
@@ -4688,7 +4688,7 @@ ea92ce9a02fbc5ddd88a381537ff0b51 (not installed: game running).
 
 ## 2026-10-12 — Start screen rebuilt: AURORA and CINEMATIC (old ones removed)
 
-Owner rejected the glass card ("整個大改") and four flat sketches; approved
+Owner rejected the glass card ("redo it completely") and four flat sketches; approved
 two looks from a hi-fi HTML preview (`OpenMyau/design/menu-preview.html`)
 and asked for both, everything else removed.
 - Removed: `ui/impl/gui/BackgroundRenderer` (6 backgrounds),
@@ -4728,7 +4728,7 @@ Built and installed md5 11ef3927b1500e6b7d64880ec5f20be2.
 - Fonts downloaded (owner approved) and packed: Outfit Light/Regular/Medium
   (github.com/Outfitio/Outfit-Fonts) and Bebas Neue (github.com/google/fonts),
   both SIL OFL 1.1, licences in assets/myau/font/licenses/.
-- Text larger and brighter (owner: "字體不太明顯"): subtitle 7->8.5, menu
+- Text larger and brighter (owner: "the text is not very visible"): subtitle 7->8.5, menu
   11->13 (aurora) / 10->12 (cinematic), small rows ->8-8.5, footer/meta
   6->7.5, alphas raised; shadow under the aurora title. Bebas title
   0.17 x height (40-110 GUI px), no narrowing.
@@ -4744,7 +4744,7 @@ and texture coordinates inset half a texel. Installed md5
 
 ### 2026-10-12 (later) — cinematic: letterbox bars removed
 
-Owner (screenshot; "白邊" was a slip for "黑邊"): no black bars. The bars are
+Owner (screenshot; "white edges" was a slip for "black edges"): no black bars. The bars are
 gone from MenuBackground; the style pill goes back to y 10 and the account /
 last-server lines to height - 36. Built md5 0538935c6f1182daac98d31f8e8c178d
 (not installed: game running).
@@ -4823,7 +4823,7 @@ backups/jars), md5 7c17951fd2702d8cfc4338f0005f2eb8; copy in release-assets.
 
 ## 2026-10-12 — Clutch hit-settle; Backtrack release-on-hit in ALL; owner set FakeLag delay 150
 
-- The FakeLag delay 150 was the owner's own change ("我改的"): keep 150.
+- The FakeLag delay 150 was the owner's own change ("I changed it"): keep 150.
 - Clutch `hit-settle` (2, 0-6): `post()` clicks no block within that many
   ticks of this player's hurt (lastHurtTick); the turn continues. Targets the
   "kb 0t ago" REJECTs and the Clutch lagback 0 t after a hit. Owner approved
@@ -4878,7 +4878,7 @@ Clutch, which the owner also uses to bridge/pillar, is untouched:
   unchanged; facing back makes moveForward < 0.8, sprint off (also set off
   explicitly). S08 resets. auto-switch to the largest full-cube block stack.
 Untested in game at the time of writing. Installed md5 0457482bd629610da7ffc8ee224fb5b0.
-### TellyBridge v2 (owner: "根本沒有放方塊")
+### TellyBridge v2 (owner: "it does not place blocks at all")
 The aim was worked out from this tick's eyes, but the click goes out next tick
 from where the eyes are then (+0.3 forward, +-0.3 up/down while jumping), so
 the held rotation's ray kept missing the 1x1 face and nothing was clicked.
@@ -4907,7 +4907,7 @@ TellyBridge.java deleted (registration, category, docs too). Owner config
 (game closed, backup default.json.pre-scaffold-telly-20261012): Scaffold
 rotations POLAR -> DEFAULT, keep-y NONE -> TELLY, vape-telly on (move-fix
 SILENT, sprint VANILLA as they were). Installed md5 30b4fcaecf32ccee48f40b68f8b02856.
-### vape-telly removed again (owner: "先移除")
+### vape-telly removed again (owner: "remove it for now")
 Scaffold.java restored from the release repo's HEAD (the only difference was
 the 90 added vape-telly lines; the pre-change backup had not been written
 because that shell call failed to parse). Owner's Scaffold config back to
@@ -5060,7 +5060,7 @@ now logs "[MyauInit] <phase> N ms" per phase to find the heavy part.
 
 ## 2026-10-13 — ray-next measured from the click's eyes; JumpReset only-if-helps
 
-From the OpenB4 analysis (reports/OpenB4-u20-分析報告.md, outside the repo).
+From the OpenB4 analysis (the OpenB4-u20 analysis report in reports/, outside the repo).
 
 **Placement timing (no change to Clutch/Scaffold).** UpdateEvent PRE fires
 at EntityPlayerSP.onUpdate HEAD, before the tick's movement. Clutch.post()
@@ -5116,3 +5116,30 @@ Owner: false flags while a ghost after death, after being sent to spawn
   4 new tests (weapon change, better-armoured target, real cut still
   called, blocking/resistance arithmetic); 17/17 pass.
 Backups: backups/src/fd-falsepos-*.
+
+### 2026-10-13 (later) — 2.1.5 pushed (92138b0); owner's game set back to the official 2.1.4
+
+For an in-game auto-update test of v2.1.5: mods/ now holds the Action-built
+Myau-Atlas-v2.1.4.jar (sha256 29f8de8d..., as its signed update.properties);
+the local 2.1.5 build is in backups/jars/Myau Atlas v2.1.5-local-20261013.jar.
+
+## 2026-10-13 — Notes and code comments in English
+
+Owner's rule from now on: talk to the owner in Chinese; notes, code comments,
+commit messages and everything that goes on GitHub (release descriptions
+included) in English.
+
+Translated to English: docs/BUG-AUDIT-2026-09-23.md, docs/PAID-CLIENT-GAP.md,
+docs/MODULE-AUDIT-2026-10-11.md (whole files), the Chinese quotes and group
+names left in ENGINEERING-NOTES and the two HANDOFF files, and the Chinese
+code comments in ChestAura, KeepSprint, KillAura, Stasis, Velocity,
+MyauMainMenu, ColorUtil, FontResourceManager, CharRenderer, FontRenderer,
+BlurShader and ShaderUtil (the upstream author's personal remarks in
+ChestAura reduced to the attribution they made).
+
+Kept in Chinese on purpose: text the game shows in its Chinese language
+mode (ModuleDocs, ModuleDocsEn headings, UpdateCommand, Updater, PlayTracker,
+AtlasClickGui, AtlasTheme, BugReport), the README's Chinese section (the
+owner's choice), and the collaborator's no-item-release.patch (its Chinese
+lines are ModuleDocs context; changing them would break the patch).
+Backup: backups/src/pre-english-20261013-1953/.

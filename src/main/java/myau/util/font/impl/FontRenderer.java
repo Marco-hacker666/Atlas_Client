@@ -104,32 +104,32 @@ public class FontRenderer extends CharRenderer implements IFont {
                 }
                 ++index;
             } else if (character < currentData.length) {
-                // ASCII 字符
+                // ASCII characters
                 drawLetter(x, y, currentData, character);
                 x += currentData[character].width - 8.3 + this.charOffset;
             } else {
-                // ------------------ Unicode 回退逻辑 ------------------
+                // ------------------ Unicode fallback ------------------
 
-                // 1. 退出当前的自定义渲染缩放
+                // 1. leave the custom render scale
                 GL11.glPopMatrix();
 
-                // 2. 调用原版 FontRenderer 绘制 Unicode
-                // 注意：需要将高分辨率坐标 x, y 转换回逻辑坐标
+                // 2. draw the Unicode text with vanilla's FontRenderer
+                // note: the high-resolution x, y must be turned back into GUI coordinates
                 float logicalX = (float) (x / sr.getScaleFactor());
-                float logicalY = (float) (y / sr.getScaleFactor()) + 3.0f; // 这里的 +3 是为了对齐垂直位置
+                float logicalY = (float) (y / sr.getScaleFactor()) + 3.0f; // the +3 lines it up vertically
 
                 Minecraft.getMinecraft().fontRendererObj.drawString(String.valueOf(character), logicalX, logicalY, color, false);
 
-                // 3. 重新进入自定义渲染状态
+                // 3. back into the custom render state
                 GL11.glPushMatrix();
                 GL11.glScaled((double) 1 / sr.getScaleFactor(), 1 / (double) sr.getScaleFactor(), 1 / (double) sr.getScaleFactor());
 
-                // 4. 恢复颜色和纹理（因为原版绘制会重置它们）
+                // 4. restore colour and texture (vanilla's drawing resets them)
                 GlStateManager.color(red, green, blue, (float) alpha);
                 GlStateManager.enableBlend();
-                GlStateManager.bindTexture(this.tex.getGlTextureId()); // 简单起见，回退后重置为普通纹理，暂不处理 Unicode 粗斜体状态
+                GlStateManager.bindTexture(this.tex.getGlTextureId()); // kept simple: back to the plain texture after the fallback; bold/italic Unicode is not handled
 
-                // 5. 增加宽度
+                // 5. add the width
                 x += Minecraft.getMinecraft().fontRendererObj.getCharWidth(character) * sr.getScaleFactor();
             }
         }
@@ -178,10 +178,10 @@ public class FontRenderer extends CharRenderer implements IFont {
             if (character == '§') {
                 index++;
             } else if (character < currentData.length) {
-                // 原始宽度逻辑
+                // original width logic
                 width += currentData[character].width - 8.3f + charOffset;
             } else {
-                // Unicode 宽度逻辑
+                // Unicode width logic
                 width += Minecraft.getMinecraft().fontRendererObj.getCharWidth(character) * sr.getScaleFactor();
             }
         }

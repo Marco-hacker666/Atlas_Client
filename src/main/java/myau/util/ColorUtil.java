@@ -84,14 +84,14 @@ public class ColorUtil {
         return new Color(color.getRed(), color.getGreen(), color.getBlue(), (int) (alpha * 255));
     }
 
-    // --- 新增的方法 ---
+    // --- added methods ---
 
     /**
-     * 生成彩虹色
-     * @param seconds 循环周期(秒)
-     * @param offset 偏移量
-     * @param saturation 饱和度
-     * @param brightness 亮度
+     * A rainbow colour
+     * @param seconds cycle length (seconds)
+     * @param offset offset
+     * @param saturation saturation
+     * @param brightness brightness
      */
     public static Color rainbow(int seconds, int offset, float saturation, float brightness) {
         float hue = ((System.currentTimeMillis() + offset) % (seconds * 1000)) / (float) (seconds * 1000);
@@ -99,10 +99,10 @@ public class ColorUtil {
     }
 
     /**
-     * 生成淡入淡出效果 (呼吸灯)
-     * @param color 基础颜色
-     * @param index 索引(用于列表中的波浪效果)
-     * @param count 总数(控制波浪频率)
+     * A fade in and out ("breathing" light)
+     * @param color base colour
+     * @param index index (for a wave along a list)
+     * @param count total (sets the wave frequency)
      */
     public static Color fade(Color color, int index, int count) {
         float[] hsb = new float[3];

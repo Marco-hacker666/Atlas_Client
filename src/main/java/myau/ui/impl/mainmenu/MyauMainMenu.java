@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The start screen (rewritten 2026-10-12, owner: "整個大改"; the six old
+ * The start screen (rewritten 2026-10-12, owner: "redo it completely"; the six old
  * backgrounds, their picker and the glass card are gone), from the preview
  * the owner approved (design/menu-preview.html): a sunrise-graded panorama
  * (MenuBackground), a large condensed MYAU / ATLAS on the left with the

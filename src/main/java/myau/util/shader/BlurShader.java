@@ -91,10 +91,10 @@ public class BlurShader {
 
     private static void drawFlippedQuads(float width, float height) {
         GL11.glBegin(GL11.GL_QUADS);
-        GL11.glTexCoord2f(0, 1); GL11.glVertex2f(0, 0);       // 左上 (UV V=1)
-        GL11.glTexCoord2f(0, 0); GL11.glVertex2f(0, height);  // 左下 (UV V=0)
-        GL11.glTexCoord2f(1, 0); GL11.glVertex2f(width, height); // 右下
-        GL11.glTexCoord2f(1, 1); GL11.glVertex2f(width, 0);   // 右上
+        GL11.glTexCoord2f(0, 1); GL11.glVertex2f(0, 0);       // top left (UV V=1)
+        GL11.glTexCoord2f(0, 0); GL11.glVertex2f(0, height);  // bottom left (UV V=0)
+        GL11.glTexCoord2f(1, 0); GL11.glVertex2f(width, height); // bottom right
+        GL11.glTexCoord2f(1, 1); GL11.glVertex2f(width, 0);   // top right
         GL11.glEnd();
     }
 

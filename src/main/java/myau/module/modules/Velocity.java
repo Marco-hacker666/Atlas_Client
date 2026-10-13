@@ -501,7 +501,7 @@ public class Velocity extends Module {
 
     @EventTarget
     public void onLivingUpdate(LivingUpdateEvent event) {
-        // 加上对 Mode 2 且开启了 hypixelJump 选项的判断
+        // also checks Mode 2 with the hypixelJump option on
         boolean isMode1 = this.mode.getValue() == 1;
         boolean isMode2Jump = this.mode.getValue() == 2 && this.hypixelJump.getValue();
         boolean isMode4Jump = this.mode.getValue() == 4 && this.intaveJump.getValue()

@@ -34,7 +34,7 @@ public class Stasis extends Module {
             savedMotionZ = mc.thePlayer.motionZ;
         }
         tickCounter = 0;
-        phase = 0; // 立即进入冻结状态
+        phase = 0; // freeze straight away
     }
 
     @EventTarget

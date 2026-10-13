@@ -7,13 +7,13 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * 字体资源管理器，用于管理字体资源的生命周期，防止内存泄漏
+ * Keeps track of font resources over their lifetime, so they do not leak
  */
 public class FontResourceManager {
     private static final Set<WeakReference<FontRenderer>> fontReferences = new HashSet<>();
 
     /**
-     * 注册字体渲染器引用，以便在需要时可以统一清理
+     * Registers a font renderer reference so all of them can be cleaned up together
      */
     public static void registerFont(FontRenderer fontRenderer) {
         if (fontRenderer != null) {
@@ -22,7 +22,7 @@ public class FontResourceManager {
     }
 
     /**
-     * 清理所有注册的字体资源
+     * Cleans up every registered font resource
      */
     public static void cleanupAllFonts() {
         fontReferences.removeIf(ref -> {
@@ -31,13 +31,13 @@ public class FontResourceManager {
                 font.destroy();
                 return true;
             }
-            // 如果引用为空，则从集合中移除该引用
+            // a cleared reference is removed from the set
             return true;
         });
     }
 
     /**
-     * 清理无效的引用（垃圾回收后的弱引用）
+     * Removes dead references (weak references after garbage collection)
      */
     public static void cleanupInvalidReferences() {
         fontReferences.removeIf(ref -> ref.get() == null);

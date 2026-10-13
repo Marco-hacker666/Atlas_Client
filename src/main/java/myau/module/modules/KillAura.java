@@ -287,7 +287,7 @@ public class KillAura extends Module {
         super("KillAura", false, false, "Kill +999999 Aura");
         this.lastTickProcessed = 0;
 
-        // 新增CPS模式属性
+        // CPS mode setting (added)
         this.cpsMode = new ModeProperty("CPS Mode", 0, new String[]{"Normal", "Record", "Human"});
 
         this.mode = new ModeProperty("Mode", 1, new String[]{"Single", "Switch"});
@@ -1304,7 +1304,7 @@ public class KillAura extends Module {
                                    in SwingRange, where hits happen. It blocked for
                                    anyone within AutoBlockRange (6 for the user), so
                                    chasing a target 4-6 blocks off was done blocking,
-                                   at blocking speed ("一直 block，速度很慢"). */
+                                   at blocking speed (owner: "keeps blocking, and it is very slow"). */
                                 /* 2026-10-09 rework: block only when it helps.
                                    The sword goes up right after a hit (same tick,
                                    after the attack, as a real block hit) only while

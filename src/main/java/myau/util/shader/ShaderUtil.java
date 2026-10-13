@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ShaderUtil {
-    // 默认顶点着色器 (通用)
+    // default vertex shader (general)
     private static final String DEFAULT_VERTEX_SHADER =
             "#version 120\n" +
                     "\n" +
@@ -20,8 +20,8 @@ public class ShaderUtil {
     private int programID;
 
     /**
-     * 仅使用片元着色器源代码初始化（使用默认顶点着色器）
-     * @param fragmentSource 片元着色器 GLSL 代码
+     * From a fragment shader source only (with the default vertex shader)
+     * @param fragmentSource fragment shader GLSL source
      */
     public ShaderUtil(String fragmentSource) {
         this(DEFAULT_VERTEX_SHADER, fragmentSource);
@@ -41,9 +41,9 @@ public class ShaderUtil {
     }
 
     /**
-     * 使用自定义顶点和片元着色器源代码初始化
-     * @param vertexSource 顶点着色器 GLSL 代码
-     * @param fragmentSource 片元着色器 GLSL 代码
+     * From custom vertex and fragment shader sources
+     * @param vertexSource vertex shader GLSL source
+     * @param fragmentSource fragment shader GLSL source
      */
     public ShaderUtil(String vertexSource, String fragmentSource) {
         int program = 0;

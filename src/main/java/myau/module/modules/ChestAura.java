@@ -26,8 +26,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-// 为了防止某个叫秋窈的狗来狗叫，我特定说明这个ChestAura是来自某个魔水的，而不是你那坨狗屎Eternity里面还是我搞上去的ChestAura
-// 你那个端里的ChestAura还是我弄上去的，你有什么资格来狗叫我
+// Upstream author's note (translated): this ChestAura was taken from another client (Moshui), not from Eternity;
+// the ChestAura in Eternity was contributed by the same author.
 public class ChestAura extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final DecimalFormat df = new DecimalFormat("0.0");

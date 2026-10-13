@@ -1,360 +1,360 @@
-# OpenMyau+ 與付費 client 的差距（2026-09-25）
+# The gap between OpenMyau+ and the paid clients (2026-09-25)
 
-寫在下一局之前，當作之後改進的路線圖。
+Written before the next game, as a road map for later improvements.
 
-**資料來源與限制**
-- 付費 client 是閉源的，這裡只能比對它們**公開**的東西：Slinky 的模組文件 (docs.slinky.gg)、官網，以及 Rise 的功能列表。
-- 我們這邊的依據是原始碼和這幾週的 log（flags / clutch / fakelag / perf）。
-- 「付費 client 內部怎麼做」的部分是推論，標為（推測）。
-
----
-
-## 總結：差在哪裡
-
-模組**數量**不是問題：我們有 152 個 class，Slinky 約 50+ 個。差距主要在四件事：
-
-1. **驗證迴圈。** 付費 client 有團隊和大量使用者持續對特定 anticheat 測試，壞了很快就知道（推測）。我們只有一個玩家的 log：
-   - 674 次方塊被拒，到現在還找不到原因。
-   - place-log 才剛加上，還沒有資料。
-2. **共用的底層。** Slinky 每個模組都用同一套東西：「Weapons」定義、「Conditions」啟動條件、「Randomization」、「Select blocks」、aiming（base speed / acceleration / multipoint）。
-   - 我們是每個模組各自實作。
-   - GCD 量化和加速度上限只有 Clutch 有，Scaffold、KillAura、AimAssist 各算各的。
-3. **精簡與打磨。**
-   - Slinky 約 50 個模組，每個設定都有文件說明用途和風險。
-   - 我們有 152 個，其中有重複或半成品（KillAura/PlainAura、WaterMark/WaterMark2、ClickGUIModule/RiseClickGUIModule…），使用者文件是 0。
-4. **注入與相容性。**
-   - Slinky 用注入的方式，支援 Vanilla / Forge / Lunar / Badlion。
-   - 我們是放在 mods 資料夾的 Forge mod，只能在 Forge 上跑。
+**Sources and limits**
+- The paid clients are closed source, so only what they make **public** can be compared: Slinky's module docs (docs.slinky.gg), its website, and Rise's feature list.
+- On our side the basis is the source code and these weeks' logs (flags / clutch / fakelag / perf).
+- Anything about "how a paid client does it inside" is inference, marked (inferred).
 
 ---
 
-## 逐模組對照（以 Slinky 公開文件為準）
+## Summary: where the gap is
+
+The **number** of modules is not the problem: we have 152 classes, Slinky about 50+. The gap is mainly four things:
+
+1. **The verification loop.** Paid clients have a team and many users testing continuously against particular anticheats, so they know quickly when something breaks (inferred). We have one player's logs:
+   - 674 refused blocks, and the cause is still not found.
+   - place-log was only just added and has no data yet.
+2. **A shared foundation.** Every Slinky module uses the same building blocks: "Weapons" definitions, "Conditions" for when it runs, "Randomization", "Select blocks", aiming (base speed / acceleration / multipoint).
+   - We implement these in each module separately.
+   - GCD quantisation and the acceleration cap exist only in Clutch; Scaffold, KillAura and AimAssist each compute their own.
+3. **Trimming and polish.**
+   - Slinky has about 50 modules, and every setting is documented with what it does and its risk.
+   - We have 152, some of them duplicates or half finished (KillAura/PlainAura, WaterMark/WaterMark2, ClickGUIModule/RiseClickGUIModule…), and no user documentation at all.
+4. **Injection and compatibility.**
+   - Slinky is injected and supports Vanilla / Forge / Lunar / Badlion.
+   - We are a Forge mod in the mods folder and run only on Forge.
+
+---
+
+## Module by module (going by Slinky's public docs)
 
 ### Clutch
 
-| Slinky 有 | 我們 | 差距 |
+| Slinky has | We have | Gap |
 |---|---|---|
-| Range：以「要放幾塊才接得到」計算 | `reach`（距離） | 我們用距離，不是以要放的方塊數計算 |
-| FOV 限制，只找視野內的方塊 | 無 | 缺。沒有 FOV 限制時會大角度轉頭，這可能是 flag 的來源之一 |
-| Minimum height：下方至少 N 格空氣才啟動 | `void-only` / `safe-drop` | 我們只分「是不是虛空」，沒有可調的格數 |
-| Click speed + Randomization | `place-interval`、`rotation-random` | 大致有 |
-| Select blocks：No / On depletion / Always | `auto-switch` / `switch-back` | 缺「On depletion」 |
-| Only place sideways（維持 Y 高度） | 無 | 缺 |
-| Aiming：base speed / acceleration / acceleration strength | `speed` / `max-speed`，加上 GCD 和加速度上限 | 相當；我們的加速度強度不能調 |
-| Multipoint：瞄準方塊上最近的點 | 固定的點（推測較不自然） | 待查，可能缺 |
-| Snap-back：delay / duration / keep jump direction / disable afterwards | `snapback-speed` | 缺 delay、duration 和「跳躍時立即回正」 |
-| 啟動條件：空中、剛被打、往後走 | `trigger` / `combat-window` / `counter-knockback` | 相當 |
+| Range: counted as "how many blocks to place to reach it" | `reach` (a distance) | We use distance, not the number of blocks to place |
+| FOV limit, only blocks in view | none | Missing. Without an FOV limit it turns through large angles, a possible source of flags |
+| Minimum height: at least N blocks of air below to start | `void-only` / `safe-drop` | We only tell "void or not", with no adjustable block count |
+| Click speed + Randomization | `place-interval`, `rotation-random` | Mostly there |
+| Select blocks: No / On depletion / Always | `auto-switch` / `switch-back` | Missing "On depletion" |
+| Only place sideways (keep the Y level) | none | Missing |
+| Aiming: base speed / acceleration / acceleration strength | `speed` / `max-speed`, plus GCD and the acceleration cap | Comparable; our acceleration strength is not adjustable |
+| Multipoint: aim at the closest point on the block | a fixed point (inferred less natural) | To check; possibly missing |
+| Snap-back: delay / duration / keep jump direction / disable afterwards | `snapback-speed` | Missing delay, duration and "straighten at once on a jump" |
+| Start conditions: in the air, just hit, walking backwards | `trigger` / `combat-window` / `counter-knockback` | Comparable |
 
 ### Backtrack
 
-| Slinky 有 | 我們 | 差距 |
+| Slinky has | We have | Gap |
 |---|---|---|
-| Target distance 區間（例如 1.0–4.0） | `range` | 缺下限；貼身時還 hold 沒有意義，反而增加風險 |
-| Maximum delay | `normal-delay` / `adaptive-delay` | 有，而且多了 adaptive |
-| Maximum hurt time：對手無敵幀太高就不 hold | 無 | 缺。能減少白白 hold 的時間 |
-| Cooldown：停止後要等一段時間才能再啟動 | 無 | 缺。連續不斷的延遲最容易被時間分析抓到 |
-| Real position indicator：顏色、線寬、填色、**頭部朝向** | 平滑淡出的 ESP，接 Theme | 缺頭部朝向 |
-| Disable on hit（被擊退就放） | `release-on-hit` | 有 |
-| Conditions：只在拿武器時 | 無 | 缺（要先做全域 Weapons） |
+| A target distance band (e.g. 1.0–4.0) | `range` | Missing the lower bound; holding at point-blank range is pointless and only adds risk |
+| Maximum delay | `normal-delay` / `adaptive-delay` | There, plus adaptive |
+| Maximum hurt time: no hold while the opponent's invulnerability is high | none | Missing. Would cut holding for nothing |
+| Cooldown: wait after stopping before starting again | none | Missing. Unbroken delay is the easiest to catch by timing analysis |
+| Real position indicator: colour, line width, fill, **head direction** | a smoothly fading ESP using the Theme | Missing the head direction |
+| Disable on hit (release on knockback) | `release-on-hit` | There |
+| Conditions: only while holding a weapon | none | Missing (needs global Weapons first) |
 
 ### Fake Lag
 
-| Slinky 有 | 我們 | 差距 |
+| Slinky has | We have | Gap |
 |---|---|---|
-| Static / Pulse 模式 | `mode`，加上 taper / catch-up 漸放 | 相當，漸放算是我們的優勢 |
-| **Inbound 與 outbound 延遲分開設定** | 只有 outbound | **缺 inbound 延遲** |
-| Realtime damage：inbound 延遲時，傷害封包不延遲 | 無 | 缺（跟著 inbound 一起做） |
-| Require attack：最近有攻擊才 lag | `release-on-attack` / `range` | 概念不同，可以補上 |
-| Holding weapon / In-game 條件 | 部分（screen / using-item 算 soft reason） | 缺拿武器的條件 |
+| Static / Pulse modes | `mode`, plus gradual taper / catch-up release | Comparable; the gradual release is our advantage |
+| **Inbound and outbound delay set separately** | outbound only | **Missing inbound delay** |
+| Realtime damage: damage packets are not delayed while inbound is | none | Missing (goes with inbound) |
+| Require attack: lag only after a recent attack | `release-on-attack` / `range` | A different concept; could be added |
+| Holding weapon / In-game conditions | partly (screen / using-item count as soft reasons) | Missing the weapon condition |
 
-### Bridge Assist（對應我們的 Eagle / SafeWalk / Scaffold 的 eagle）
-- Slinky 的 Bridge Assist 有這些設定：
-  - edge offset 和 unsneak delay 都能**隨機化**。
-  - Sneak on jump。
-  - **Avoid double-sneaking**：斜著搭橋時延後放置，避免一塊方塊蹲兩次。
-  - 啟動條件：按蹲、拿方塊、往下看、沒往前走。
-- 我們的 Eagle 很陽春，Scaffold 裡的 `edge-distance` / `sneak-delay` 沒有隨機化。
+### Bridge Assist (our Eagle / SafeWalk / Scaffold's eagle)
+- Slinky's Bridge Assist has these settings:
+  - edge offset and unsneak delay can both be **randomised**.
+  - Sneak on jump.
+  - **Avoid double-sneaking**: when bridging diagonally, delay the placement so one block is not sneaked on twice.
+  - Start conditions: sneak held, holding blocks, looking down, not walking forward.
+- Our Eagle is basic, and Scaffold's `edge-distance` / `sneak-delay` are not randomised.
 
-### 我們沒有的模組
-- **Movement**：Null Move（同時按左右 / 前後時的處理）、Instant Stop、Fast Accel。
-- **Utility**：Auto Rod、Auto Pot / Auto Soup（BedFight 用不太到）、Item Use Fix、No Item Release、No Use Delay、Ping Fix。
-- **Visual**：Pointers（螢幕邊緣指向對手的箭頭）、Notifications（模組開關、flag 的提示）。
-- **全域**：Weapons（什麼算武器，由所有模組共用）、Friends 已經有、Teams 已經有。
+### Modules we do not have
+- **Movement**: Null Move (handling left+right / forward+back held together), Instant Stop, Fast Accel.
+- **Utility**: Auto Rod, Auto Pot / Auto Soup (of little use in BedFight), Item Use Fix, No Item Release, No Use Delay, Ping Fix.
+- **Visual**: Pointers (arrows at the screen edge pointing at opponents), Notifications (module toggles, flag alerts).
+- **Global**: Weapons (what counts as a weapon, shared by every module); Friends and Teams we already have.
 
-### 我們有、Slinky 沒有的
-這些是我們的優勢，要保留。
-- FlagDetector + place-log + PerfLog + clutch / fakelag trace：以資料驅動的除錯工具。
-- Arbiter：模組之間的協調，避免 Clutch 在接的時候被 Blink / FakeLag 拖住。
-- Theme 分頁：14 個群組，全部可以自訂。
-- 更多 Blatant 模組（Fly、Speed、LongJump、BedNuker…）。不過 Slinky 定位是 ghost client，這些本來就不做。
-
----
-
-## 我們自己的已知問題（來自 log）
-
-1. **方塊被拒**：674 次（15 天）。
-   - 61% 附近沒有 lagback。
-   - 被拒大多發生在放置後 4–6 tick（一個來回）。
-   - 往上疊的時候最常連續被拒，接著被往下拉回。
-   - 原因未知 → 等 place-log 的資料。
-2. **Clutch 就算把 GCD、加速度都做了，仍然被拒 20%**，找不到區分因子。
-   - 可能跟上面第 1 點是同一個原因。
-   - 也可能是 FOV / 轉頭幅度（Slinky 有 FOV 限制，我們沒有）。
-3. **效能**：HUD 的 blur / glow shader 每幀約 200µs，是自己的程式裡最大的開銷。
-   - 付費 client 通常把 blur 做成可快取的 framebuffer（推測）。
-4. **Backtrack**：網路執行緒持有鎖時，會排程任務進 scheduledTasks，順序很脆弱（目前沒出事）。
+### What we have and Slinky does not
+These are our advantages and should be kept.
+- FlagDetector + place-log + PerfLog + clutch / fakelag traces: data-driven debugging tools.
+- Arbiter: coordination between modules, so Clutch is not held back by Blink / FakeLag while catching.
+- The Theme tab: 14 groups, all customisable.
+- More blatant modules (Fly, Speed, LongJump, BedNuker…). Slinky is positioned as a ghost client and does not make these anyway.
 
 ---
 
-## 建議的優先順序
+## Our own known problems (from the logs)
 
-依「對 flag / 勝率的影響 ÷ 工作量」排序：
+1. **Refused blocks**: 674 (over 15 days).
+   - 61% with no lagback nearby.
+   - Most refusals arrive 4–6 ticks after placing (one round trip).
+   - Pillaring up gets the most refusals in a row, followed by being pulled back down.
+   - Cause unknown → waiting for place-log data.
+2. **Clutch is still refused 20% of the time even with GCD and acceleration done**, with no distinguishing factor found.
+   - Possibly the same cause as point 1.
+   - Possibly the FOV / turn size (Slinky has an FOV limit, we do not).
+3. **Performance**: the HUD's blur / glow shaders take about 200 µs a frame, the largest cost in our own code.
+   - Paid clients usually cache the blur in a framebuffer (inferred).
+4. **Backtrack**: while the network thread holds a lock it schedules tasks into scheduledTasks; the ordering is fragile (no incident so far).
 
-1. **看 place-log 找出被拒的原因**（下一局後）。這是目前最大的未知，其他改動都可能被它影響。
-2. ✅（14:17 版）**共用的 RotationEngine**：把 Clutch 的 GCD、加速度上限、速度飄移抽出來，讓 Scaffold / KillAura / AimAssist 共用，再加上 multipoint 和 FOV 限制。
-3. ✅（14:17 版，snap-back duration 用 snapback-speed 代替）**Clutch 補齊**：
-   - FOV 限制
-   - minimum height（格數）
+---
+
+## Suggested priorities
+
+Ordered by "effect on flags / win rate ÷ effort":
+
+1. **Read place-log to find why blocks are refused** (after the next game). This is the biggest unknown, and it can affect every other change.
+2. ✅ (14:17 build) **A shared RotationEngine**: take Clutch's GCD, acceleration cap and speed drift out for Scaffold / KillAura / AimAssist to share, then add multipoint and an FOV limit.
+3. ✅ (14:17 build; snap-back duration replaced by snapback-speed) **Complete Clutch**:
+   - FOV limit
+   - minimum height (in blocks)
    - only sideways
-   - On-depletion 換方塊
-   - snap-back 的 delay / duration 和跳躍時立即回正
-4. ✅（14:17 版）**Backtrack 補齊**：
-   - 距離下限
+   - switch blocks on depletion
+   - snap-back delay / duration and straightening at once on a jump
+4. ✅ (14:17 build) **Complete Backtrack**:
+   - lower distance bound
    - max hurt time
    - cooldown
-   - 拿武器的條件
-   - ESP 頭部朝向
-5. **全域 Weapons + Conditions**：一次定義，所有 combat / utility 模組共用。
-6. **FakeLag 的 inbound 延遲 + realtime damage。**
-7. **Bridge Assist**：隨機化 edge offset / unsneak delay，加上 avoid double-sneak。
-8. **精簡模組**：合併或隱藏重複、壞掉的模組，替常用模組寫一頁使用說明。
-9. **HUD blur 快取**：只在內容變的時候重畫。
-10. **新增小模組**：Pointers、Notifications、Null Move、Instant Stop。
+   - weapon condition
+   - head direction in the ESP
+5. **Global Weapons + Conditions**: defined once, shared by every combat / utility module.
+6. **FakeLag inbound delay + realtime damage.**
+7. **Bridge Assist**: randomised edge offset / unsneak delay, plus avoid double-sneak.
+8. **Trim the modules**: merge or hide duplicate and broken modules; write a page of instructions for the common ones.
+9. **Cache the HUD blur**: redraw only when the content changes.
+10. **New small modules**: Pointers, Notifications, Null Move, Instant Stop.
 
-## 大概差多少（主觀估計）
+## Roughly how big the gap is (subjective)
 
-- **功能面**：常用的 combat / block 模組大約是 Slinky 的 70–80%，缺的多半是「設定的細緻度」，不是整個模組。
-- **穩定度 / 過 anticheat 的可靠度**：差距最大，但也最難估。付費 client 靠大量使用者回報來修（推測）。我們靠 log 自己找，速度慢，但每次的修正都有根據。
-- **完成度**（文件、UI 一致性、不重複）：差距明顯，而且是純工作量，不需要研究。
+- **Features**: the common combat / block modules are about 70–80% of Slinky's; what is missing is mostly "fineness of settings", not whole modules.
+- **Stability / reliability against anticheats**: the biggest gap, and the hardest to estimate. Paid clients fix things from many users' reports (inferred). We find causes ourselves from logs: slower, but every fix has evidence behind it.
+- **Completeness** (docs, consistent UI, no duplicates): a clear gap, and pure work, no research needed.
 
-來源：
+Sources:
 - [Slinky](https://slinky.gg/)
-- [Slinky 模組文件](https://docs.slinky.gg/modules/combat/velocity/)：Clutch、Backtrack、Fake Lag、Bridge Assist 各頁
+- [Slinky module docs](https://docs.slinky.gg/modules/combat/velocity/): the Clutch, Backtrack, Fake Lag and Bridge Assist pages
 - [Rise features](https://riseclient.org/features)
 
 ---
 
-# 和 Vape 的比較（2026-09-25 晚）
+# Compared with Vape (2026-09-25 evening)
 
-**來源與限制**
-- Vape 的官方文件 [docs.vape.gg](https://docs.vape.gg/features/modules/)。只看得到模組名稱和設定說明，看不到它的內部做法。
-- 網路上很多「Vape V4 下載」的 GitHub 頁面是假的或是病毒，沒有採用。
+**Sources and limits**
+- Vape's official docs, [docs.vape.gg](https://docs.vape.gg/features/modules/). Only module names and setting descriptions are visible, not how it works inside.
+- Many "Vape V4 download" GitHub pages online are fake or malware; none were used.
 
-## 戰鬥模組對照
+## Combat modules
 
-| Vape | 設定重點 | 我們 | 差距 |
+| Vape | Key settings | We have | Gap |
 |---|---|---|---|
-| AimAssist | Simple / Adaptive、**Strafe Increase**（左右移動時轉速加快）、Target Area：中心 / 最近點、Target Mode：距離 / 角度 / 護甲 / 威脅 / 血量 | AimAssist：multipoint（＝最近點）、fov、速度 | 缺 Adaptive、Strafe Increase，以及用護甲 / 威脅挑目標 |
-| AutoClicker | — | AutoClicker（左右鍵、hit-box 輔助） | 相當 |
-| BlockHit | Manual / Auto / **Predict**（預判對手出手就先格擋）/ **Lag** | BlockHit：Helper，有 Predict 相關設定 | 大致相當，缺 Lag 模式 |
-| HitSelect | Pause / **Active**（依局勢挑選出手，偏重少吃擊退或打爆擊） | HitSelect：SECOND / CRITICALS / W_TAP | 缺 Active 的動態判斷 |
-| Reach | 範圍、機率、Advanced chance、**Misplace**（讓錄影看起來合理）、垂直檢查、只在疾跑時 | Reach：範圍、機率 | 缺 Advanced chance、Misplace、垂直檢查 |
-| **WTap** | 機率、**放開延遲**、**重按延遲**、**Select Hits**（只在有利時 W-tap） | SprintReset LEGIT + min-gap（20:28 版） | 缺機率、兩個延遲、Select Hits |
-| **JumpReset** | 機率、準確度（故意偶爾失準）、只在對手在準心附近時、水中停用 | Velocity 的 Jump 模式（有沒有同時改動 motion 還沒確認） | **缺獨立、只靠跳躍的 JumpReset** |
-| Triggerbot | 準心在對手身上才自動點 | 無 | 缺 |
-| RightClicker | 右鍵連點 | AutoClicker 的 right-click | 相當 |
-| HitFlick / SilentAura / Sprint | — | Hitflick / KillAura / Sprint | 相當 |
-| Network：BackTrack / Blink / FakeLag / KnockbackDelay | 看不到設定細節 | 都有，而且有 log 可以調 | 無法比較細節 |
+| AimAssist | Simple / Adaptive, **Strafe Increase** (turns faster while strafing), Target Area: centre / closest point, Target Mode: distance / angle / armour / threat / health | AimAssist: multipoint (= closest point), fov, speed | Missing Adaptive, Strafe Increase, and picking targets by armour / threat |
+| AutoClicker | — | AutoClicker (left/right, hit-box assist) | Comparable |
+| BlockHit | Manual / Auto / **Predict** (block before the opponent swings) / **Lag** | BlockHit: Helper, with Predict-like settings | Mostly comparable, missing the Lag mode |
+| HitSelect | Pause / **Active** (picks when to hit by the situation, favouring less knockback taken or crits) | HitSelect: SECOND / CRITICALS / W_TAP | Missing Active's dynamic judgement |
+| Reach | range, chance, Advanced chance, **Misplace** (so recordings look plausible), vertical check, sprint only | Reach: range, chance | Missing Advanced chance, Misplace, the vertical check |
+| **WTap** | chance, **release delay**, **re-press delay**, **Select Hits** (W-tap only when it pays) | SprintReset LEGIT + min-gap (20:28 build) | Missing chance, both delays, Select Hits |
+| **JumpReset** | chance, accuracy (misses on purpose now and then), only with the opponent near the crosshair, off in water | Velocity's Jump mode (whether it also changes motion is not confirmed) | **Missing a separate, jump-only JumpReset** |
+| Triggerbot | clicks automatically with the crosshair on an opponent | none | Missing |
+| RightClicker | right-click spam | AutoClicker's right click | Comparable |
+| HitFlick / SilentAura / Sprint | — | Hitflick / KillAura / Sprint | Comparable |
+| Network: BackTrack / Blink / FakeLag / KnockbackDelay | setting details not visible | all present, with logs to tune them | Details cannot be compared |
 
-## 結論
-- **戰鬥模組的種類**：大約 85% 有對應。真的缺的是 **JumpReset** 和 **Triggerbot**。
-- **設定的細緻度**：差距比種類大。Vape 很多模組都有「機率」「故意失準」「只在有利時才做」這三類設定。它們是用來讓行為看起來不規則、不像機器，我們多半沒有。
-- **看不到、也最難追的差距**：Vape 針對各個反作弊有每日輪替的設定檔（它自己的宣傳說法）。我們只能靠自己的 log 一個一個調。
-- **我們有、Vape 文件裡沒提到的**：FightLog、FlagDetector、place-log 這類量化工具。
+## Conclusions
+- **Kinds of combat module**: about 85% have a counterpart. Truly missing: **JumpReset** and **Triggerbot**.
+- **Fineness of settings**: a bigger gap than the kinds. Many Vape modules have three kinds of setting — "chance", "miss on purpose" and "only when it pays" — that make behaviour look irregular rather than machine-like; we mostly lack them.
+- **The invisible gap, and the hardest to chase**: Vape has per-anticheat configs rotated daily (its own marketing claim). We can only tune one by one from our own logs.
+- **What we have that Vape's docs do not mention**: measurement tools like FightLog, FlagDetector and place-log.
 
-## 參考 Vape 4.21 之後補上的（20:48 版，還沒測）
+## Added after looking at Vape 4.21 (20:48 build, not tested yet)
 
-| 項目 | 狀態 |
+| Item | Status |
 |---|---|
-| 出手到對手受傷的延遲追蹤（HitTimer） | ✅ 新增，HitSelect / SprintReset / BlockHit 共用 |
-| WTap：機率、放開延遲、放開多久、只在有利時才做 | ✅ 加進 SprintReset |
-| HitSelect Active | ✅ 新模式 ACTIVE |
-| BlockHit Predict（照自己受傷的節奏格擋） | ✅ 新模式 Rhythm |
-| AimAssist：預判對手移動、橫移時加速 | ✅ `lead`、`strafe-increase` |
-| AimAssist：速度模型、每幀加滑鼠移動量 | ❌ 還沒做 |
-| Reach | ❌ 不做：Vape 自己的說明都叫人不要用 |
-| JumpReset、Triggerbot | ❌ 還沒做 |
+| Tracking the delay from a hit to the opponent being hurt (HitTimer) | ✅ added, shared by HitSelect / SprintReset / BlockHit |
+| WTap: chance, release delay, release length, only when it pays | ✅ added to SprintReset |
+| HitSelect Active | ✅ new ACTIVE mode |
+| BlockHit Predict (block on the rhythm of one's own hurt time) | ✅ new Rhythm mode |
+| AimAssist: predict the opponent's movement, faster while strafing | ✅ `lead`, `strafe-increase` |
+| AimAssist: a velocity model, mouse movement added every frame | ❌ not done yet |
+| Reach | ❌ not doing it: Vape's own docs tell people not to use it |
+| JumpReset, Triggerbot | ❌ not done yet |
 
-## FakeLag 對照（2026-09-25 晚）
+## FakeLag compared (2026-09-25 evening)
 
-**來源**：Vape 4.21（桌面《FakeLag模組技術分析.md》加上 jar 靜態閱讀）、LiquidBounce 原始碼 ModuleFakeLag.kt、Slinky 文件。
+**Sources**: Vape 4.21 (a FakeLag technical-analysis file on the owner's desktop plus static reading of the jar), LiquidBounce's source ModuleFakeLag.kt, Slinky's docs.
 
-**我們已經有的**：LATENCY、DYNAMIC、REPEL、LIQUID 四種模式，另外還有：
-- 慢慢放封包（taper / catch-up）
-- 被打後冷卻一段時間才能再扣（recoil）
-- 跟 Clutch 協調（Arbiter）
-- 拿方塊時不扣、放方塊的封包照順序排隊
-- 每次扣和放都有 log
+**What we already have**: four modes — LATENCY, DYNAMIC, REPEL, LIQUID — plus:
+- gradual release (taper / catch-up)
+- a cool-down after being hit before holding again (recoil)
+- coordination with Clutch (Arbiter)
+- no holding while holding blocks; placement packets queued in order
+- a log line for every hold and release
 
-**缺的（依優先度）**
-1. **每次延遲長度隨機**。LiquidBounce 每次在 300–600ms 間重抽，Vape Repel 加 0–99ms 隨機。我們固定 250ms。
-2. **延遲收到的封包，傷害即時顯示**（Slinky）。我們只有 Backtrack 延遲收到的封包。
-3. **只在拿武器時扣**（Slinky）。
-4. **Vape Repel**：扣住攻擊封包，等對手無敵時間 ≤ HitTimer 的預期 tick 才送出。我們的 REPEL 其實是 Vape Dynamic 的「位置有沒有更靠近」檢查。
-5. **Pulse 模式**（Slinky）。
-6. **閃箭**：只放出到躲得過箭的那個位置（LiquidBounce），價值低。
+**Missing (by priority)**
+1. **A random delay per hold.** LiquidBounce redraws it between 300–600 ms each time; Vape Repel adds 0–99 ms at random. Ours is a fixed 250 ms.
+2. **Delaying received packets while showing damage in real time** (Slinky). Only our Backtrack delays received packets.
+3. **Hold only while holding a weapon** (Slinky).
+4. **Vape Repel**: hold the attack packet and send it when the opponent's hurt time is ≤ the tick HitTimer expects. Our REPEL is really Vape Dynamic's "is the position getting closer" check.
+5. **Pulse mode** (Slinky).
+6. **Arrow dodge**: release only up to the position that dodges an arrow (LiquidBounce); low value.
 
 ---
 
-# 和 Rise 6.9.5 原始碼的比較（2026-09-28）
+# Compared with the Rise 6.9.5 source (2026-09-28)
 
-**來源與限制**
-- `<reference clients>\Rise\Rise-6.9.5-main`：反編譯後的原始碼，約 1300 個 Java 檔。
-  - 名稱部分是復原的，部分還是混淆名（`aEg`、`wo()`）。
-  - README 自己說可能有和原版不一致的地方。
-- 只讀原始碼，沒有執行 `Rise.jar`，也沒有複製程式碼。
-- 我們可以參考它的做法，但實作要自己寫（跟 Vape 的規則一樣）。
-- 和 Vape、Slinky 不同，這次看得到**內部做法**，所以以下都是從程式碼讀出來的，不是推測。
+**Sources and limits**
+- `<reference clients>\Rise\Rise-6.9.5-main`: decompiled source, about 1300 Java files.
+  - Some names are recovered, some still obfuscated (`aEg`, `wo()`).
+  - Its README itself says it may differ from the original.
+- Source read only; `Rise.jar` was not run, and no code was copied.
+- We may take its ideas, but the implementation is our own (the same rule as for Vape).
+- Unlike Vape and Slinky, this time the **internals** are visible, so everything below is read from code, not inferred.
 
-## 總結
+## Summary
 
-1. **可靠度、可觀察性：我們領先。**
-   - Rise 到處是 `public static` 可變欄位，沒有任何測試。
-   - 它沒有數值擁有權（Property override）、連線生命週期（ServerSession）、分階段關閉（Shutdown），也沒有 FlagDetector / Attribution / Brain / FightLog 這一類「用資料找原因」的工具。
-2. **共用底層：Rise 有三個我們沒有、值得學的設計。**
-   - 封包暫扣的「租約」。
-   - 每 tick 動作封包的守門。
-   - 數值範圍（min–max）。
-   - 細節見下一節。
-3. **戰鬥的轉頭模型：差距最大。**
-   - KillAura 的 Advanced 模式是一整套擬人的滑鼠模型，參數約 20 個。
-   - 我們的 RotationEngine 有滑鼠格點（GCD）、加速度上限、速度飄移和 multipoint，但沒有反應時間、過衝、死區、停頓。
-4. **模組種類：戰鬥和幽靈（ghost）類大致相當。**
-   - Rise 多的主要是：KeepRange（S-Tap）、AimBacktrack，以及擊退導向危險區（Knockback Displacement）。
-   - 其他多出來的是 blatant、exploit 類，或特定伺服器的東西。
+1. **Reliability and observability: we are ahead.**
+   - Rise is full of mutable `public static` fields and has no tests.
+   - It has no value ownership (Property override), connection lifecycle (ServerSession) or staged shutdown (Shutdown), and none of the "find the cause from data" tools like FlagDetector / Attribution / Brain / FightLog.
+2. **Shared foundation: Rise has three designs we lack and should learn from.**
+   - Leases for packet holds.
+   - A per-tick gate for action packets.
+   - Value ranges (min–max).
+   - Details in the next section.
+3. **The combat rotation model: the biggest gap.**
+   - KillAura's Advanced mode is a whole human-like mouse model with about 20 parameters.
+   - Our RotationEngine has the mouse grid (GCD), the acceleration cap, speed drift and multipoint, but no reaction time, overshoot, dead zone or pauses.
+4. **Kinds of module: combat and ghost modules are about even.**
+   - What Rise has in addition is mainly KeepRange (S-Tap), AimBacktrack, and knocking opponents toward hazards (Knockback Displacement).
+   - The rest are blatant, exploit or server-specific.
 
-## 底層架構對照
+## Foundations compared
 
-### 1. 封包暫扣：BlinkComponent 對上我們的六個暫扣者
+### 1. Packet holding: BlinkComponent versus our six holders
 
-**Rise 的做法**
-- 所有暫扣都進**同一條有順序的佇列**。
-- 每個呼叫的類別有一個自己的 channel，名稱從 stack trace 取得。
-- 每個被扣的封包身上記著「哪些 ticket 還要扣它」。
-  - 只要還有任一個有效的 ticket，它就不出去。
-  - 前面的封包沒放，後面的也不放，所以順序永遠正確。
-- **租約（lease）**：channel 超過 100 ms 沒被續約，就自動放掉。
-  - 模組必須每 tick 呼叫一次 `blink()` 才能繼續扣。
-  - 模組出錯、被關掉、忘了放，最多 100 ms 內也會放出來。
-- 每個 channel 有自己的最長暫扣時間。
-- 換世界、進入下載地形畫面時，全部放掉。
-- 可以按 tick 分批放：每 tick 記錄扣了幾個，之後一次放 N 個 tick 的量。
+**How Rise does it**
+- Every hold goes into **one ordered queue**.
+- Each calling class has its own channel, named from the stack trace.
+- Each held packet records "which tickets still hold it".
+  - It does not go out while any ticket is live.
+  - A packet is not released before the ones ahead of it, so the order is always right.
+- **Leases**: a channel not renewed for 100 ms is released automatically.
+  - A module must call `blink()` every tick to keep holding.
+  - A module that errors, is switched off or forgets to release lets go within 100 ms at most.
+- Each channel has its own maximum hold time.
+- Everything is released on a world change or the terrain-loading screen.
+- It can release tick by tick: it records how many were held each tick, then releases N ticks' worth at a time.
 
-**我們的做法**
-- LagManager、BlinkManager、DelayManager、BackTrack、ServerLag、KnockbackDelay 各有自己的佇列。
-- Arbiter 管先來先得，PacketHolds 只負責「看」。
+**How we do it**
+- LagManager, BlinkManager, DelayManager, BackTrack, ServerLag and KnockbackDelay each have their own queue.
+- Arbiter decides first come, first served; PacketHolds only "watches".
 
-**差距**
-- **沒有租約。** 一個暫扣者要是沒走到釋放的程式，封包就會一直卡著。
-  - 這正是 reliability pass 裡「每個模組要保證自己放」那一類問題的根源。
-- 兩個模組不能同時扣同一個封包。現在是第二個被拒絕，而且不同暫扣者之間的順序沒有保證。
+**The gap**
+- **No leases.** A holder that never reaches its release code leaves its packets stuck.
+  - That is exactly the root of the reliability pass's "every module must guarantee its own release" class of problems.
+- Two modules cannot hold the same packet at once. Today the second is refused, and the order between different holders is not guaranteed.
 
-**不該學的地方**
-- Rise 把送出和收到的封包放在同一條佇列，一個方向卡住會擋到另一個方向。
-- 它每扣一個封包就取一次 stack trace，成本高。我們只在 `setDelay` 時取一次 `callerModule`，比較好。
+**What not to copy**
+- Rise puts sent and received packets in the same queue, so one direction stuck blocks the other.
+- It takes a stack trace for every held packet, which is costly. We take `callerModule` once at `setDelay`, which is better.
 
-**建議**
-- 不必把六個暫扣者合併成一個（那是重寫架構）。
-- 在現有的 manager 加上**租約**就能拿到大部分好處：沒被續約就自動釋放，並且記一筆「lease-expired」到 log。
+**Suggestion**
+- No need to merge the six holders into one (that is an architecture rewrite).
+- Adding **leases** to the existing managers gets most of the benefit: release automatically when not renewed, and log a "lease-expired" entry.
 
-### 2. 轉頭：RotationComponent
+### 2. Rotations: RotationComponent
 
-**Rise 的做法**
-- 轉頭也是租約制：這個 tick 沒人設定目標角度，就開始回到玩家真正的視角。
-  - 回去的時候會對齊滑鼠格點（`applySensitivityPatch`），不會瞬間跳回。
-- 移動修正有三種：NORMAL、TRADITIONAL、BACKWARDS_SPRINT。
-  - BACKWARDS_SPRINT 的意思是：轉頭後的方向和移動方向差超過 45° 就不疾跑。
-- **有驗證的雜訊**：瞄準點在 hitbox 上隨機漫步，每一步都用 raycast 檢查還打不打得到。打不到就換方向，還是打不到才回中心。
-  - 這樣雜訊永遠不會讓攻擊落空。
+**How Rise does it**
+- Rotations are leased too: if nobody sets a target angle this tick, it starts returning to the player's real view.
+  - The return is snapped to the mouse grid (`applySensitivityPatch`), not a jump.
+- Three movement fixes: NORMAL, TRADITIONAL, BACKWARDS_SPRINT.
+  - BACKWARDS_SPRINT means: no sprint when the turned direction and the movement direction differ by more than 45°.
+- **Verified noise**: the aim point random-walks over the hitbox, each step checked by raycast that it still hits. If not, it changes direction, and if still not, it returns to the centre.
+  - So the noise never makes an attack miss.
 
-**我們的做法**
-- RotationEngine 有 GCD、加速度、飄移、multipoint、FOV。
-- RotationManager / RotationState 管優先權。
+**How we do it**
+- RotationEngine has GCD, acceleration, drift, multipoint and FOV.
+- RotationManager / RotationState handle priorities.
 
-**缺的**
-- 有驗證的雜訊。
-- 平滑地回到真實視角。
-- 疾跑的方向修正。
+**Missing**
+- Verified noise.
+- A smooth return to the real view.
+- The sprint direction fix.
 
-### 3. 每 tick 動作封包的守門：BadPacketsComponent
+### 3. A per-tick gate for action packets: BadPacketsComponent
 
-**Rise 的做法**
-- 記錄這個 tick 已經送過哪些封包：換格（C09）、攻擊（C02）、放置（C08）、挖掘（C07）、點擊視窗。
-- 下一個 C03 移動封包送出時歸零。
-- 模組在送之前先問一聲。例如 TickBase 在這個 tick 已經攻擊過，就不 blink。
+**How Rise does it**
+- Records which packets were already sent this tick: slot change (C09), attack (C02), placement (C08), digging (C07), window clicks.
+- Reset when the next C03 movement packet is sent.
+- Modules ask before sending. For example, TickBase does not blink if an attack was already made this tick.
 
-**我們的做法**
-- 沒有集中管理，只有 NoSlow 和 Velocity 各自檢查。
+**How we do it**
+- Not centralised; only NoSlow and Velocity check for themselves.
 
-**為什麼重要**
-- 很多反作弊的 BadPackets 檢查，抓的就是「同一 tick 出現不該同時出現的動作」。
-- 這個守門的工作量很小，而且 FlagDetector 可以直接驗證它有沒有效。
+**Why it matters**
+- Many anticheats' BadPackets checks catch exactly "actions in the same tick that should not be together".
+- The gate is little work, and FlagDetector can verify directly whether it helps.
 
-### 4. 數值範圍（BoundsNumberValue）
+### 4. Value ranges (BoundsNumberValue)
 
-- Rise 很多設定本身就是一個範圍，每次使用時在範圍內隨機取值。
-  - 例如 CPS 8–14、轉頭速度 5–10、Blink 延遲、放置延遲。
-- 我們大多是單一數值，只有 AutoClicker 的 min / max-cps 例外。其他隨機化是各模組自己寫的。
-- 這和之前 Slinky、Vape 的比較是同一個結論：「隨機化」應該是共用的底層，而不是每個模組各自做。
+- Many Rise settings are ranges, with a random value drawn inside the range each time they are used.
+  - For example CPS 8–14, rotation speed 5–10, Blink delay, placement delay.
+- Ours are mostly single values, AutoClicker's min / max-cps being the exception; other randomisation is written by each module itself.
+- The same conclusion as the Slinky and Vape comparisons: "randomisation" should be a shared foundation, not done by each module separately.
 
-## 戰鬥模組對照（Hypixel 相關）
+## Combat modules compared (Hypixel-related)
 
-| Rise | 做法 | 我們 | 差距 |
+| Rise | How it works | We have | Gap |
 |---|---|---|---|
-| KillAura **Advanced** 轉頭 | 類似 WindMouse 的滑鼠模型。重力、風、減速距離、最大和最小步長；**過衝**（機率 77%、比例、上限 17°）；**反應時間** 180 ms ± 44；**死區** 1°；**停頓** 2 tick；**Flick Guard**（單 tick 最大轉角 29°）；pace jitter / burst | RotationEngine：GCD、加速度、飄移 | **最大差距**。反應時間、過衝、死區、停頓都沒有 |
-| Velocity：23 種模式 | 針對各反作弊。Hypixel 相關的有三種：Watchdog（取消或疊加擊退，加上扣住 transaction）、**Watchdog Reduce**（扣住自己的 S12 和 transaction，直到你攻擊或落地才放）、Watchdog Prediction（放行一部分擊退） | Vanilla / Jump / Hypixel / Slap_Attack | Watchdog Reduce 基本上就是我們失敗多次的 KnockbackDelay，**不建議再試**。扣住 transaction 風險高 |
-| Legit / Jump Reset | 在地上收到 S12 且 motionY > 0 時下一個 input 跳；有機率、「只在揮手時」和 Legit Timing | Velocity Jump 模式：要在地上、疾跑中、沒有跳躍藥水、不在液體裡 | 相當。Rise 多了「只在揮手時」，也就是自己也在打的時候才跳 |
-| **KeepRange（S-Tap）** | **自己在 combo 對手時**（對手連續受傷、自己沒被打），距離小於設定值就停下或往後退，保持距離。附近是懸崖邊時停用。combo 要持續幾拍才啟動 | 無 | **缺**。能延長自己的 combo，減少被反打。可以用 FightLog 的 combo 長度驗證 |
-| **AimBacktrack** | 保留最近 N 個 tick 的視角。目前的視角打不到、但之前某個打得到時，就用那個 | 無 | 缺。對手突然橫移時很有用 |
-| **Knockback Displacement** / ManualKBDisplacement | 出手後，在打得到的前提下調整 server 端視角，讓對手的擊退方向朝向虛空、岩漿或火。為每個候選方向打分數（hazard, score），只有分數 ≥ 45 才做 | 無 | 缺。對 BedWars、邊緣戰有用 |
-| LagBreak | 接近目標時 blink，攻擊時放（dispatch on attack）；最多扣 9 tick；對手沒看你時隨機放；有進度條、圓圈、文字三種顯示 | FakeLag（LIQUID 等 4 種模式） | 大致相當。缺「還扣多少」的畫面提示 |
-| Reach / KeepSprint「Buffer Abuse」 | 只在前 N 下啟用，之後照反作弊的 buffer 衰減速度慢慢恢復 | Reach：只有 chance | 缺。概念是「把違規壓在反作弊的容許額度裡」，要有 FlagDetector 的資料才能調 |
-| TickBase | Post / Legit，很短 | PAST / FUTURE，有 balance、pause-on-flag | **我們比較完整** |
-| AimAssist | speed、sticky、require swinging、require mouse movement | 有 lead、strafe-increase、multipoint；只在點擊後一段時間才輔助 | 相當。只缺「滑鼠有動才輔助」 |
-| WTap | Legit（對手 hurtTime ≥ 6 時放開 W）、Silent（對手 hurtTime == 9 時那個 tick 不疾跑） | SprintReset：機率、兩個延遲、有利時才做 | **我們比較細** |
-| CheatDetector | 在客戶端檢查**別的玩家**：AutoBlock A/B、VelocityCancel、FlightPrediction、SpeedLimit、TowerWatchdog | 無 | 價值低。可以在 FightLog 標記對手是不是外掛，統計時排除 |
-| Mimic | 模仿對手的視角和點擊 | 無 | 噱頭，不做 |
+| KillAura **Advanced** rotations | A WindMouse-like mouse model. Gravity, wind, slow-down distance, max and min step; **overshoot** (77% chance, a ratio, at most 17°); **reaction time** 180 ms ± 44; **dead zone** 1°; **pauses** 2 ticks; **Flick Guard** (at most 29° in one tick); pace jitter / burst | RotationEngine: GCD, acceleration, drift | **The biggest gap.** No reaction time, overshoot, dead zone or pauses |
+| Velocity: 23 modes | Per anticheat. Three relate to Hypixel: Watchdog (cancel or stack knockback, plus holding transactions), **Watchdog Reduce** (hold its own S12 and transactions until you attack or land), Watchdog Prediction (let part of the knockback through) | Vanilla / Jump / Hypixel / Slap_Attack | Watchdog Reduce is basically our KnockbackDelay that failed many times; **not recommended again**. Holding transactions is high risk |
+| Legit / Jump Reset | On the ground, an S12 with motionY > 0 → jump on the next input; chance, "only while swinging" and Legit Timing | Velocity's Jump mode: on the ground, sprinting, no jump boost, not in liquid | Comparable. Rise adds "only while swinging", i.e. jump only when also attacking |
+| **KeepRange (S-Tap)** | **While comboing the opponent** (they keep getting hurt, you are not hit), stop or back off when closer than a set distance to keep the spacing. Off near a cliff edge. The combo must last a few hits before it starts | none | **Missing.** Extends one's own combos and cuts counter-hits. Can be verified with FightLog's combo length |
+| **AimBacktrack** | Keeps the views of the last N ticks. If the current view cannot hit but an earlier one could, use that | none | Missing. Useful when the opponent strafes suddenly |
+| **Knockback Displacement** / ManualKBDisplacement | After a hit, adjust the server-side view (while still hitting) so the opponent's knockback points at the void, lava or fire. Each candidate direction gets a score (hazard, score); only done at a score ≥ 45 | none | Missing. Useful in BedWars and fights near edges |
+| LagBreak | Blink while closing on the target, release on attack (dispatch on attack); at most 9 ticks held; random release when the opponent is not looking at you; progress bar, circle and text displays | FakeLag (4 modes incl. LIQUID) | Mostly comparable. Missing an on-screen "how much is still held" |
+| Reach / KeepSprint "Buffer Abuse" | Active only for the first N hits, then recovers at the anticheat's buffer decay rate | Reach: chance only | Missing. The idea is "keep violations within the anticheat's allowance"; needs FlagDetector data to tune |
+| TickBase | Post / Legit, very short | PAST / FUTURE, with balance and pause-on-flag | **Ours is more complete** |
+| AimAssist | speed, sticky, require swinging, require mouse movement | lead, strafe-increase, multipoint; assists only for a while after a click | Comparable. Missing only "assist only when the mouse moves" |
+| WTap | Legit (release W while the opponent's hurtTime ≥ 6), Silent (no sprint on the tick the opponent's hurtTime == 9) | SprintReset: chance, two delays, only when it pays | **Ours is finer** |
+| CheatDetector | Checks **other players** client-side: AutoBlock A/B, VelocityCancel, FlightPrediction, SpeedLimit, TowerWatchdog | none | Low value. Could mark opponents as cheating in FightLog and leave them out of the statistics |
+| Mimic | Copies the opponent's view and clicks | none | A gimmick; not doing it |
 
-## 不採用的
-- Crasher、ComboOneHit（一次送 50–1000 個攻擊封包）、Disabler、TeleportAura、GodMode 這類 exploit。
-  - 不是 ghost PvP，等於直接送封號。
-- 遠端腳本、IRC、Spotify、帳號服務這類和戰鬥無關的功能。
+## Not adopted
+- Exploits such as Crasher, ComboOneHit (sends 50–1000 attack packets at once), Disabler, TeleportAura, GodMode.
+  - Not ghost PvP; equivalent to asking for a ban.
+- Remote scripts, IRC, Spotify, account services and other features unrelated to fighting.
 
-## 建議的優先順序
+## Suggested priorities
 
-依「可靠度 / 被 flag 的風險 / 勝率」的影響除以工作量排序，並且符合「先打穩底層」的原則：
+Ordered by effect on reliability / flag risk / win rate divided by effort, following the "foundations first" principle:
 
-1. **暫扣租約**（改在現有的 manager，不合併）。
-   - 沒續約就自動放，並且記一筆 log。
-   - 這直接屬於 reliability pass 的範圍：state corruption resistance。
-2. **每 tick 動作封包守門**（BadPackets）。
-   - 工作量很小，可以用 FlagDetector 驗證。
-3. **RotationEngine 補上反應時間、過衝、死區、停頓，加上有驗證的雜訊。**
-   - KillAura、AimAssist、Clutch 共用。
-   - 用 FlagDetector 的 rotation 類 flag 做 A/B。
-4. **KeepRange（S-Tap）。**
-   - 用 FightLog 的 combo 長度和「THEY FELL / WE FELL」驗證。
-5. **數值範圍（min–max）變成共用的 Property 型別。**
-6. AimBacktrack。
-7. Knockback Displacement。
+1. **Hold leases** (in the existing managers, not merged).
+   - Release automatically when not renewed, and log an entry.
+   - This belongs directly to the reliability pass: state corruption resistance.
+2. **A per-tick gate for action packets** (BadPackets).
+   - Little work, verifiable with FlagDetector.
+3. **RotationEngine gets reaction time, overshoot, dead zone and pauses, plus verified noise.**
+   - Shared by KillAura, AimAssist and Clutch.
+   - A/B with FlagDetector's rotation flags.
+4. **KeepRange (S-Tap).**
+   - Verified with FightLog's combo length and "THEY FELL / WE FELL".
+5. **Value ranges (min–max) as a shared Property type.**
+6. AimBacktrack.
+7. Knockback Displacement.
 
-原本排定的 JumpReset：Rise 的版本很陽春，我們的 Velocity Jump 已經相當，只差「只在揮手時」這個條件。
+The JumpReset that was planned: Rise's version is basic and our Velocity Jump is already comparable, missing only the "only while swinging" condition.
 
-### 進度（2026-09-28）
-- ✅ 1. 暫扣租約（PacketHolds leases）
-- ✅ 2. 每 tick 動作封包守門（TickActions；KillAura 已經接上）
-- ✅ 3. KillAura Rotations「Advanced」：做法和 Rise 一樣（util/AdvancedAim）
-- ✅ 4. KeepRange（S-Tap）
-- ✅ 5. 數值範圍：IntRange / FloatRange，KillAura 和 AutoClicker 的 CPS 已經改用
+### Progress (2026-09-28)
+- ✅ 1. Hold leases (PacketHolds leases)
+- ✅ 2. Per-tick action packet gate (TickActions; KillAura already wired in)
+- ✅ 3. KillAura Rotations "Advanced": the same approach as Rise (util/AdvancedAim)
+- ✅ 4. KeepRange (S-Tap)
+- ✅ 5. Value ranges: IntRange / FloatRange; KillAura's and AutoClicker's CPS already use them
 - ✅ 6. AimBacktrack
-- ✅ 7. 擊退導向：KBDisplacement 模組，加上 KillAura 的 KBDisplace（OFF / SAFE / FULL）
+- ✅ 7. Knockback direction: the KBDisplacement module, plus KillAura's KBDisplace (OFF / SAFE / FULL)

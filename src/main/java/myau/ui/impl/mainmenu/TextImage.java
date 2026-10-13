@@ -7,7 +7,6 @@ import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.WorldRenderer;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
-import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 
 import java.awt.Font;
@@ -22,6 +21,11 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Large, crisp text for the main menu (2026-10-12).
@@ -33,21 +37,41 @@ import java.util.Map;
  * kept as a texture. Tinted white, so one picture serves every colour.
  * The menu shows a dozen strings at most; the cache drops the oldest past
  * 64 and everything when the GUI scale changes.
+ *
+ * 2026-10-13 (menu hitch on opening): loading the fonts, starting Java2D's
+ * text pipeline and rasterising every string all happened in the first
+ * frame of the menu, on the render thread -- a visible freeze that also ate
+ * the fade-in. Now the fonts are loaded and Java2D warmed up on a worker
+ * thread while the game starts ({@link #warmUp()}), strings are rasterised
+ * on that worker, and only the texture upload stays on the render thread.
+ * A string not rasterised yet is simply not drawn; the menu waits for
+ * {@link #ready()} and {@link #busy()} before it fades in.
  */
-final class TextImage {
-    private static final Map<String, Font> FONTS = new HashMap<>();
+public final class TextImage {
+    /** The faces the menu uses, warmed up at start. */
+    private static final String[] MENU_FONTS = {"outfit-regular.ttf", "outfit-medium.ttf", "bebas-neue.ttf"};
+    private static final Map<String, Font> FONTS = new ConcurrentHashMap<>();
     private static final Map<String, Entry> CACHE = new LinkedHashMap<>();
+    private static final AtomicInteger PENDING = new AtomicInteger();
+    private static final ExecutorService WORKER = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "Myau-TextImage");
+        thread.setDaemon(true);
+        thread.setPriority(Thread.MIN_PRIORITY + 1);
+        return thread;
+    });
+    private static volatile Future<?> warm;
     private static int cachedScale;
 
     private static final class Entry {
-        final DynamicTexture texture;
         final int width;
         final int height;
         final float advance;
         final float ascent;
+        /* Filled in by the worker; turned into the texture on the render thread. */
+        volatile BufferedImage image;
+        DynamicTexture texture;
 
-        Entry(DynamicTexture texture, int width, int height, float advance, float ascent) {
-            this.texture = texture;
+        Entry(int width, int height, float advance, float ascent) {
             this.width = width;
             this.height = height;
             this.advance = advance;
@@ -58,11 +82,44 @@ final class TextImage {
     private TextImage() {
     }
 
+    /** Loads the menu fonts and starts Java2D's text pipeline off the render thread. Safe to call more than once. */
+    public static synchronized void warmUp() {
+        if (warm != null) {
+            return;
+        }
+        warm = WORKER.submit(() -> {
+            for (String file : MENU_FONTS) {
+                Font font = base(file);
+                /* One small string drawn: the first TextLayout and the first
+                   anti-aliased draw are what take the time. */
+                BufferedImage image = new BufferedImage(64, 32, BufferedImage.TYPE_INT_ARGB);
+                Graphics2D g = image.createGraphics();
+                g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                new TextLayout("MYAU", font.deriveFont(16.0F), new FontRenderContext(null, true, true))
+                        .draw(g, 2.0F, 20.0F);
+                g.dispose();
+            }
+        });
+    }
+
+    /** The fonts are loaded (starts the warm-up if nothing did). */
+    static boolean ready() {
+        if (warm == null) {
+            warmUp();
+        }
+        return warm.isDone();
+    }
+
+    /** Strings still being rasterised. */
+    static boolean busy() {
+        return PENDING.get() > 0;
+    }
+
     private static Font base(String file) {
         Font font = FONTS.get(file);
         if (font == null) {
-            try (InputStream in = Minecraft.getMinecraft().getResourceManager()
-                    .getResource(new ResourceLocation("myau:font/" + file)).getInputStream()) {
+            /* From the jar directly: the resource manager is not for other threads. */
+            try (InputStream in = TextImage.class.getResourceAsStream("/assets/myau/font/" + file)) {
                 font = Font.createFont(Font.TRUETYPE_FONT, in);
             } catch (Exception e) {
                 font = new Font("SansSerif", Font.PLAIN, 12);
@@ -100,31 +157,43 @@ final class TextImage {
         int pad = Math.max(2, px / 8);
         int w = (int) Math.ceil(advance) + pad * 2;
         int h = (int) Math.ceil(ascent + descent) + pad * 2;
-        BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = image.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
-        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-        g.setColor(java.awt.Color.WHITE);
-        if (!text.isEmpty()) {
-            layout.draw(g, pad, pad + ascent);
-        }
-        g.dispose();
-        entry = new Entry(new DynamicTexture(image), w, h, advance, ascent + pad);
-        CACHE.put(key, entry);
+        Entry created = new Entry(w, h, advance, ascent + pad);
+        CACHE.put(key, created);
+        PENDING.incrementAndGet();
+        WORKER.execute(() -> {
+            try {
+                BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+                Graphics2D g = image.createGraphics();
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+                g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                g.setColor(java.awt.Color.WHITE);
+                if (!text.isEmpty()) {
+                    layout.draw(g, pad, pad + ascent);
+                }
+                g.dispose();
+                created.image = image;
+            } finally {
+                PENDING.decrementAndGet();
+            }
+        });
         if (CACHE.size() > 64) {
             Iterator<Map.Entry<String, Entry>> it = CACHE.entrySet().iterator();
             Entry old = it.next().getValue();
-            old.texture.deleteGlTexture();
+            if (old.texture != null) {
+                old.texture.deleteGlTexture();
+            }
             it.remove();
         }
-        return entry;
+        return created;
     }
 
     static void clear() {
         for (Entry entry : CACHE.values()) {
-            entry.texture.deleteGlTexture();
+            if (entry.texture != null) {
+                entry.texture.deleteGlTexture();
+            }
         }
         CACHE.clear();
     }
@@ -145,6 +214,15 @@ final class TextImage {
         Entry e = entry(text, file, size, tracking);
         float sf = scale();
         float advance = e.advance / sf * xScale;
+        if (e.texture == null) {
+            BufferedImage image = e.image;
+            if (image == null) {
+                /* Still on the worker: drawn from the next frame on. */
+                return advance;
+            }
+            e.texture = new DynamicTexture(image);
+            e.image = null;
+        }
         if (alpha <= 2) {
             return advance;
         }

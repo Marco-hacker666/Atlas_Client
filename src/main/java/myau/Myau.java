@@ -355,6 +355,9 @@ public class Myau {
             targetManager.load();
         }
         FontManager.initializeFonts();
+        /* Menu fonts and Java2D warmed up on a worker while the game loads,
+           so the start screen does not freeze opening (2026-10-13). */
+        myau.ui.impl.mainmenu.TextImage.warmUp();
         ClickGuiScreen.getInstance();
 
         /* On exit the configuration is saved to the profile in use, not

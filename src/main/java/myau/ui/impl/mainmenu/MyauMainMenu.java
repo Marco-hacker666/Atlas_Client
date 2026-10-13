@@ -23,30 +23,26 @@ import java.util.Map;
 
 /**
  * The start screen (rewritten 2026-10-12, owner: "整個大改"; the six old
- * backgrounds, their picker and the glass card are gone). Two looks, from
- * the preview the owner approved (design/menu-preview.html), switched with
- * the pill at the top and remembered (MenuBackground):
+ * backgrounds, their picker and the glass card are gone), from the preview
+ * the owner approved (design/menu-preview.html): a sunrise-graded panorama
+ * (MenuBackground), a large condensed MYAU / ATLAS on the left with the
+ * menu under it; a hovered entry slides right behind an orange bar.
  *
- * AURORA -- the title spaced wide and thin in the middle of an aurora
- * sky, the menu as plain words below it; a hovered word brightens and a
- * glowing line opens under it from the centre.
- *
- * CINEMATIC -- a sunrise-graded panorama with letterbox bars, a large
- * condensed MYAU / ATLAS on the left with the menu under it; a hovered
- * entry slides right behind an orange bar. The account and the last server
- * sit at the bottom right.
+ * 2026-10-13 (owner, from player feedback): the AURORA look and the pill
+ * that switched to it are gone, and so is the "SIGNED IN AS / LAST SERVER"
+ * block at the bottom right ("looks AI-made"). The menu now fades in only
+ * once its text is rasterised (TextImage works off the render thread),
+ * so opening it no longer freezes a frame and skips the fade.
  *
  * Every text is a TextImage (crisp at any size). Clicks are matched to the
  * boxes drawn in the frame the player saw.
  */
 public class MyauMainMenu extends GuiScreen implements GuiYesNoCallback {
     /* Outfit and Bebas Neue (SIL OFL 1.1, licences in assets/myau/font/licenses). */
-    private static final String LIGHT = "outfit-light.ttf";
     private static final String REGULAR = "outfit-regular.ttf";
     private static final String MEDIUM = "outfit-medium.ttf";
     private static final String BOLD = "bebas-neue.ttf";
     private static final int ORANGE = 0xFFFFB46B;
-    private static final int GLOW = 0xFF8AFFD8;
 
     private static final int SINGLEPLAYER = 1;
     private static final int MULTIPLAYER = 2;
@@ -56,8 +52,6 @@ public class MyauMainMenu extends GuiScreen implements GuiYesNoCallback {
     private static final int DEMO = 11;
     private static final int ALTS = 14;
     private static final int SETUP = 16;
-    private static final int STYLE_AURORA = 100;
-    private static final int STYLE_CINEMATIC = 101;
 
     private static final class Hit {
         final int action;
@@ -75,6 +69,8 @@ public class MyauMainMenu extends GuiScreen implements GuiYesNoCallback {
     private final List<Hit> hits = new ArrayList<>();
     private final Map<String, Float> anims = new HashMap<>();
     private long openedAt;
+    /* The text is ready and the fade-in has started. */
+    private boolean shown;
     private long lastFrame;
     private float dt = 0.016F;
     private float fade;
@@ -97,6 +93,7 @@ public class MyauMainMenu extends GuiScreen implements GuiYesNoCallback {
     public void initGui() {
         myau.setup.SetupHook.onMainMenu(this);
         this.openedAt = System.currentTimeMillis();
+        this.shown = false;
         this.lastFrame = 0L;
         this.mc.setConnectedToRealms(false);
         if (Minecraft.getMinecraft().gameSettings.getOptionOrdinalValue(GameSettings.Options.REALMS_NOTIFICATIONS)
@@ -162,17 +159,29 @@ public class MyauMainMenu extends GuiScreen implements GuiYesNoCallback {
         long now = System.nanoTime();
         this.dt = this.lastFrame == 0L ? 0.016F : Math.min(0.05F, (now - this.lastFrame) / 1.0E9F);
         this.lastFrame = now;
-        float t = Math.min(1.0F, (System.currentTimeMillis() - this.openedAt) / 700.0F);
-        this.fade = 1.0F - (1.0F - t) * (1.0F - t) * (1.0F - t);
+        long millis = System.currentTimeMillis();
         this.hits.clear();
-
         MenuBackground.draw(this.width, this.height, mouseX, mouseY);
-        if (MenuBackground.style() == MenuBackground.CINEMATIC) {
-            this.drawCinematic(mouseX, mouseY);
-        } else {
-            this.drawAurora(mouseX, mouseY);
+        if (!this.shown) {
+            /* Wait (black) for the fonts, then lay the menu out unseen once so
+               every string goes to the worker, and fade in when they are all
+               back; never longer than 1.5 s. */
+            long waited = millis - this.openedAt;
+            if (TextImage.ready() || waited > 1500L) {
+                this.fade = 0.0F;
+                this.drawCinematic(mouseX, mouseY);
+                if (!TextImage.busy() || waited > 1500L) {
+                    this.shown = true;
+                    this.openedAt = millis;
+                }
+            }
+            this.hits.clear();
+            MenuBackground.rect(0.0F, 0.0F, (float) this.width, (float) this.height, 0xFF000000);
+            return;
         }
-        this.drawStyleSwitch(mouseX, mouseY);
+        float t = Math.min(1.0F, (millis - this.openedAt) / 700.0F);
+        this.fade = 1.0F - (1.0F - t) * (1.0F - t) * (1.0F - t);
+        this.drawCinematic(mouseX, mouseY);
         /* Black lifting off as the screen opens. */
         if (this.fade < 1.0F) {
             MenuBackground.rect(0.0F, 0.0F, (float) this.width, (float) this.height,
@@ -182,75 +191,6 @@ public class MyauMainMenu extends GuiScreen implements GuiYesNoCallback {
         if (this.realmsShown()) {
             this.realmsNotice.drawScreen(mouseX, mouseY, partialTicks);
         }
-    }
-
-    private void drawAurora(float mx, float my) {
-        float cx = this.width / 2.0F;
-        float title = Math.max(24.0F, Math.min(58.0F, this.height * 0.085F));
-        float rise = (1.0F - this.fade) * 10.0F;
-        float y = this.height * 0.30F + rise;
-        /* A soft shadow first, so the name reads over the brightest aurora. */
-        TextImage.draw("MYAU ATLAS", LIGHT, title, 0.42F, cx + title * 0.21F + 1.0F, y + 1.5F, alpha(0x70000814, 1.0F), 1, 1.0F);
-        /* Tracking adds space after the last letter too: half of it shifts the centre back. */
-        TextImage.draw("MYAU ATLAS", LIGHT, title, 0.42F, cx + title * 0.21F, y, alpha(0xFFFFFFFF, 1.0F), 1, 1.0F);
-        y += title * 0.72F + 14.0F;
-        TextImage.draw(version() + "  ·  STABLE", REGULAR, 8.5F, 0.5F, cx + 2.1F, y, alpha(0xC0D2FFF4, 1.0F), 1, 1.0F);
-        y += 36.0F;
-
-        boolean demo = this.mc.isDemo();
-        y = this.auroraItem(demo ? "PLAY DEMO" : "SINGLEPLAYER", demo ? DEMO : SINGLEPLAYER, cx, y, 13.0F, true, mx, my);
-        if (!demo) {
-            y = this.auroraItem("MULTIPLAYER", MULTIPLAYER, cx, y, 13.0F, false, mx, my);
-        }
-        y += 12.0F;
-
-        String[] names = demo ? new String[]{"SETTINGS", "SETUP", "QUIT"}
-                : new String[]{"ALTS", "MODS", "SETTINGS", "SETUP", "QUIT"};
-        int[] actions = demo ? new int[]{OPTIONS, SETUP, QUIT} : new int[]{ALTS, MODS, OPTIONS, SETUP, QUIT};
-        float size = 8.5F;
-        float gap = 20.0F;
-        float total = -gap;
-        for (String name : names) {
-            total += TextImage.width(name, REGULAR, size, 0.22F, 1.0F) + gap;
-        }
-        float x = cx - total / 2.0F;
-        for (int i = 0; i < names.length; i++) {
-            float w = TextImage.width(names[i], REGULAR, size, 0.22F, 1.0F);
-            boolean hovered = over(mx, my, x - 4, y - 5, x + w + 4, y + size + 5);
-            float lit = ease("a:" + names[i], hovered ? 1.0F : 0.0F, 12.0F);
-            TextImage.draw(names[i], REGULAR, size, 0.22F, x, y, alpha(mix(0xB0DCEBFF, 0xFFFFFFFF, lit), 1.0F), 0, 1.0F);
-            this.underline(x + w / 2.0F, y + size + 3.0F, w, lit);
-            this.hits.add(new Hit(actions[i], x - 4, y - 5, x + w + 4, y + size + 5));
-            x += w + gap;
-        }
-
-        float foot = this.height - 14.0F;
-        String who = this.mc.getSession() == null ? "" : this.mc.getSession().getUsername().toUpperCase();
-        TextImage.draw(who, REGULAR, 7.5F, 0.15F, 14.0F, foot - 2.0F, alpha(0x99DCEBFF, 1.0F), 0, 1.0F);
-        TextImage.draw("MINECRAFT 1.8.9", REGULAR, 7.5F, 0.15F, this.width - 14.0F, foot - 2.0F, alpha(0x99DCEBFF, 1.0F), 2, 1.0F);
-    }
-
-    /** One centred aurora menu word; returns the y of the next. */
-    private float auroraItem(String text, int action, float cx, float y, float size, boolean primary, float mx, float my) {
-        String font = primary ? MEDIUM : REGULAR;
-        float w = TextImage.width(text, font, size, 0.18F, 1.0F);
-        boolean hovered = over(mx, my, cx - w / 2.0F - 16, y - 6, cx + w / 2.0F + 16, y + size + 6);
-        float lit = ease("a:" + text, hovered ? 1.0F : 0.0F, 10.0F);
-        int colour = mix(primary ? 0xFFFFFFFF : 0xC8EBF5FF, 0xFFFFFFFF, lit);
-        TextImage.draw(text, font, size, 0.18F, cx + size * 0.09F, y, alpha(colour, 1.0F), 1, 1.0F);
-        this.underline(cx, y + size + 4.0F, w + 20.0F, lit);
-        this.hits.add(new Hit(action, cx - w / 2.0F - 16, y - 6, cx + w / 2.0F + 16, y + size + 6));
-        return y + size + 16.0F;
-    }
-
-    /** The glowing line that opens from the centre under a hovered word. */
-    private void underline(float cx, float y, float width, float lit) {
-        if (lit < 0.01F) {
-            return;
-        }
-        float half = width / 2.0F * lit;
-        MenuBackground.rect(cx - half, y - 1.0F, cx + half, y + 2.0F, alpha(0x228AFFD8, lit));
-        MenuBackground.rect(cx - half, y, cx + half, y + 0.7F, alpha(GLOW, lit));
     }
 
     private void drawCinematic(float mx, float my) {
@@ -300,43 +240,6 @@ public class MyauMainMenu extends GuiScreen implements GuiYesNoCallback {
             this.hits.add(new Hit(smallActions[i], sx - 3, y - 4, sx + w + 3, y + 12));
             sx += w + 18.0F;
         }
-
-        float right = this.width * 0.95F;
-        float bottom = this.height - 36.0F;
-        String who = this.mc.getSession() == null ? "" : this.mc.getSession().getUsername().toUpperCase();
-        String lastServer = this.mc.gameSettings.lastServer;
-        String last = lastServer == null || lastServer.isEmpty() ? "NONE" : lastServer.toUpperCase();
-        float w1 = TextImage.width(who, MEDIUM, 7.5F, 0.25F, 1.0F);
-        TextImage.draw(who, MEDIUM, 7.5F, 0.25F, right, bottom, alpha(0xFFFFFFFF, 1.0F), 2, 1.0F);
-        TextImage.draw("SIGNED IN AS  ", REGULAR, 7.5F, 0.25F, right - w1, bottom, alpha(0xA6FFFFFF, 1.0F), 2, 1.0F);
-        float w2 = TextImage.width(last, MEDIUM, 7.5F, 0.25F, 1.0F);
-        TextImage.draw(last, MEDIUM, 7.5F, 0.25F, right, bottom + 14.0F, alpha(0xFFFFFFFF, 1.0F), 2, 1.0F);
-        TextImage.draw("LAST SERVER  ", REGULAR, 7.5F, 0.25F, right - w2, bottom + 14.0F, alpha(0xA6FFFFFF, 1.0F), 2, 1.0F);
-    }
-
-    /** The pill at the top that switches between the two looks. */
-    private void drawStyleSwitch(float mx, float my) {
-        String a = "AURORA";
-        String c = "CINEMATIC";
-        float size = 7.0F;
-        float wa = TextImage.width(a, MEDIUM, size, 0.2F, 1.0F) + 20.0F;
-        float wc = TextImage.width(c, MEDIUM, size, 0.2F, 1.0F) + 20.0F;
-        float w = wa + wc + 6.0F;
-        float x = (this.width - w) / 2.0F;
-        boolean cinematic = MenuBackground.style() == MenuBackground.CINEMATIC;
-        float y = 10.0F;
-        float h = 19.0F;
-        RenderUtil.drawRoundedRect(x, y, w, h, h / 2.0F, alpha(0x8C14141C, 1.0F));
-        RenderUtil.drawRoundedRectOutline(x, y, w, h, h / 2.0F, 0.5F, alpha(0x1FFFFFFF, 1.0F), true, true, true, true);
-        float pos = ease("pill", cinematic ? 1.0F : 0.0F, 14.0F);
-        float px = x + 3.0F + pos * wa;
-        float pw = wa + (wc - wa) * pos;
-        RenderUtil.drawRoundedRect(px, y + 2.5F, pw, h - 5.0F, (h - 5.0F) / 2.0F, alpha(0x24FFFFFF, 1.0F));
-        float ty = y + (h - size * 0.74F) / 2.0F;
-        TextImage.draw(a, MEDIUM, size, 0.2F, x + 3.0F + wa / 2.0F, ty, alpha(cinematic ? 0x99CFD0DC : 0xFFFFFFFF, 1.0F), 1, 1.0F);
-        TextImage.draw(c, MEDIUM, size, 0.2F, x + 3.0F + wa + wc / 2.0F, ty, alpha(cinematic ? 0xFFFFFFFF : 0x99CFD0DC, 1.0F), 1, 1.0F);
-        this.hits.add(new Hit(STYLE_AURORA, x, y, x + 3.0F + wa, y + h));
-        this.hits.add(new Hit(STYLE_CINEMATIC, x + 3.0F + wa, y, x + w, y + h));
     }
 
     // ---- input ---------------------------------------------------------
@@ -385,12 +288,6 @@ public class MyauMainMenu extends GuiScreen implements GuiYesNoCallback {
                 break;
             case DEMO:
                 this.mc.launchIntegratedServer("Demo_World", "Demo_World", DemoWorldServer.demoWorldSettings);
-                break;
-            case STYLE_AURORA:
-                MenuBackground.setStyle(MenuBackground.AURORA);
-                break;
-            case STYLE_CINEMATIC:
-                MenuBackground.setStyle(MenuBackground.CINEMATIC);
                 break;
             default:
                 break;

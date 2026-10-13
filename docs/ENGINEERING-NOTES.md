@@ -4970,3 +4970,52 @@ UPDATE_SIGNING_KEY secret holds the right key. The local file was deleted by
 the owner (checked: not on disk, never in git history).
 Version 2.1.3 pushed but NOT installed locally: the installed v2.1.2 should
 download, verify and swap it in by itself after the owner publishes v2.1.3.
+
+## 2026-10-13 — Start screen: CINEMATIC only, no bottom-right block, no opening hitch (2.1.4)
+
+Owner, passing on player feedback: drop the AURORA menu, remove the
+"SIGNED IN AS / LAST SERVER" text at the bottom right of CINEMATIC ("looks
+AI-made"), and fix the hitch when the menu loads.
+
+- `MenuBackground`: AURORA shader, `style()`/`setStyle()` and the
+  menu-style.txt file removed; `draw()` is always the cinematic panorama.
+  SetupScreen keeps calling `draw()` unchanged.
+- `MyauMainMenu`: drawAurora/auroraItem/underline, the style pill and the
+  bottom-right block removed. `outfit-light.ttf` (aurora title only) deleted
+  from resources (copy in backups/src/menu-pre-cinematic-only-*).
+- Hitch cause: on the first frame, on the render thread, TextImage loaded
+  the TTFs (`Font.createFont`), started Java2D's text pipeline and
+  rasterised ~15 strings, then made the textures -- one long frame, and the
+  700 ms fade (wall-clock) was already over when the next frame came.
+- Fix: `TextImage.warmUp()` (called from `Myau.init` after
+  FontManager) loads the three menu fonts from the jar and draws one string
+  per face on a daemon worker while the game loads. `entry()` still measures
+  synchronously (cheap once the font is loaded) but rasterises on the worker;
+  `draw()` uploads the texture when the image is back and draws nothing
+  until then. `MyauMainMenu` shows black until `TextImage.ready()`, lays the
+  menu out unseen once (queues every string), and starts the fade when
+  `!TextImage.busy()` -- at most 1.5 s.
+- Version 2.1.4 (backup gradle.properties.pre-2.1.4-20261013). Not pushed
+  until the v2.1.3 auto-update test is confirmed; 2.1.4 then doubles as a
+  second auto-update test.
+
+### 2026-10-13 (later) — v2.1.3 from the Action did not load: jar inside a jar
+
+The auto-update itself worked (download, signature, swap on exit; see
+myau-update/install.log), but the game then came up vanilla. The Action's
+`Myau-Atlas-v2.1.3.jar` held 3 entries: the manifest and the shadow jar
+`Myau+.jar-2.1.3-non-obfuscated-with-deps.jar`, nested -- no
+mixins.myau.json, no classes ("Error encountered reading mixin config",
+"FML has found a non-mod file"). The Action built with the wrapper's
+Gradle 8.14.6; every local 8.8 build is correct.
+
+- `.github/workflows/release.yml` (release repo only): setup-gradle with
+  `gradle-version: '8.8'` and `gradle build` instead of `./gradlew`; a new
+  step "Check the jar is the client" fails the run unless the jar has
+  mixins.myau.json, mcmod.info, >= 50 top-level myau/mixin classes and no
+  nested jar -- a broken jar can no longer be signed and offered.
+- Owner's game: broken jar moved to backups/jars/BROKEN-CI-Myau-Atlas-v2.1.3.jar,
+  v2.1.2 put back from myau-update/backup (md5 5c7c3773...), the stale
+  myau-update/pending/pending.properties moved to backups/config.
+- The v2.1.3 release must be deleted (or made a pre-release) so 2.1.2
+  clients stop downloading it; 2.1.4 is the next auto-update test.

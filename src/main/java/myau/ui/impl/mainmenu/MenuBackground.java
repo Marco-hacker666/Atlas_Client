@@ -1,7 +1,6 @@
 package myau.ui.impl.mainmenu;
 
 import myau.util.RenderUtil;
-import myau.util.shader.ShaderUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
@@ -10,35 +9,21 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.ResourceLocation;
 
-import java.io.File;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-
 /**
- * The two main-menu backgrounds (2026-10-12; they replace the six of
+ * The main-menu background (2026-10-12; it replaces the six of
  * BackgroundRenderer and its picker, removed at the owner's request).
  *
- * AURORA: one fragment shader -- a night sky, twinkling stars, four
- * curtains of aurora (green, blue, purple, teal) drifting on sines and
- * noise, leaning a little with the pointer, dark toward the horizon.
+ * Vanilla's title panorama sliding slowly, blurred (when shaders are
+ * allowed), graded to a sunrise -- dusk purple above, orange glow below, a
+ * sun bloom, dark on the left where the menu is -- with drifting motes of
+ * light. SetupScreen draws the same background as the menu.
  *
- * CINEMATIC: vanilla's title panorama turning slowly, blurred (when shaders
- * are allowed), graded to a sunrise -- dusk purple above, orange glow
- * below, a sun bloom, dark on the left where the menu is -- with drifting
- * motes of light and letterbox bars.
- *
- * The choice is kept in config/Myau/menu-style.txt. SetupScreen draws the
- * same background as the menu.
+ * 2026-10-13: the AURORA look (a fragment shader) and the pill that chose
+ * between the two were removed at the owner's request; CINEMATIC is the
+ * only one, and config/Myau/menu-style.txt is no longer read.
  */
 public final class MenuBackground {
-    public static final int AURORA = 0;
-    public static final int CINEMATIC = 1;
-    private static final File FILE = new File("./config/Myau/menu-style.txt");
     private static final long START = System.currentTimeMillis();
-
-    private static int style = -1;
-    private static ShaderUtil aurora;
-    private static boolean auroraFailed;
 
     private static final ResourceLocation[] PANORAMA = {
             new ResourceLocation("textures/gui/title/background/panorama_0.png"),
@@ -49,125 +34,16 @@ public final class MenuBackground {
             new ResourceLocation("textures/gui/title/background/panorama_5.png")
     };
 
-    private static final String AURORA_SHADER =
-            "#version 120\n"
-            + "uniform float time;\n"
-            + "uniform vec2 resolution;\n"
-            + "uniform vec2 mouse;\n"
-            + "float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n"
-            + "float noise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);\n"
-            + "  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y); }\n"
-            + "float fbm(vec2 p){ float v = 0.0; float a = 0.5; for (int i = 0; i < 4; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; } return v; }\n"
-            + "vec3 curtain(vec2 uv, float x, float fi, vec3 c){\n"
-            + "  float t = time;\n"
-            + "  float y0 = 0.63 - 0.055 * fi + (mouse.y - 0.5) * 0.03;\n"
-            + "  float cv = y0 + 0.075 * sin(x * 1.6 + t * 0.16 * (1.0 + fi * 0.35) + fi * 1.7)\n"
-            + "    + 0.03 * sin(x * 4.1 - t * 0.23 + fi * 2.1) + 0.05 * (fbm(vec2(x * 1.3 + t * 0.04, fi * 3.0)) - 0.5);\n"
-            + "  float d = uv.y - cv;\n"
-            + "  float band = exp(-max(d, 0.0) * 7.5) * smoothstep(-0.02, 0.0, d);\n"
-            + "  float rays = 0.45 + 0.55 * fbm(vec2(x * 16.0 + fi * 7.0, t * 0.12 + fi));\n"
-            + "  return c * band * rays;\n"
-            + "}\n"
-            + "void main(){\n"
-            + "  vec2 uv = gl_FragCoord.xy / resolution.xy;\n"
-            + "  float asp = resolution.x / resolution.y;\n"
-            + "  vec3 col = mix(vec3(0.028, 0.080, 0.150), vec3(0.006, 0.010, 0.036), smoothstep(0.0, 1.0, uv.y));\n"
-            + "  vec2 sp = floor(gl_FragCoord.xy / 2.0);\n"
-            + "  float h = hash(sp);\n"
-            + "  float star = step(0.9975, h) * (0.45 + 0.55 * sin(time * 1.7 + h * 80.0));\n"
-            + "  col += star * vec3(0.85, 0.9, 1.0) * smoothstep(0.25, 0.7, uv.y);\n"
-            + "  float x = uv.x * asp;\n"
-            + "  vec3 a = vec3(0.0);\n"
-            + "  a += curtain(uv, x + (mouse.x - 0.5) * 0.05, 0.0, vec3(0.20, 1.00, 0.70)) * 0.62;\n"
-            + "  a += curtain(uv, x + (mouse.x - 0.5) * 0.08, 1.0, vec3(0.30, 0.50, 1.00)) * 0.45;\n"
-            + "  a += curtain(uv, x + (mouse.x - 0.5) * 0.11, 2.0, vec3(0.70, 0.32, 1.00)) * 0.34;\n"
-            + "  a += curtain(uv, x + (mouse.x - 0.5) * 0.14, 3.0, vec3(0.15, 0.90, 0.85)) * 0.26;\n"
-            + "  col += a;\n"
-            + "  col *= mix(0.30, 1.0, smoothstep(0.0, 0.38, uv.y));\n"
-            + "  vec2 v = (uv - 0.5) * vec2(1.0, 1.25);\n"
-            + "  col *= 1.0 - 0.42 * dot(v, v);\n"
-            + "  gl_FragColor = vec4(col, 1.0);\n"
-            + "}\n";
-
     private MenuBackground() {
-    }
-
-    public static int style() {
-        if (style < 0) {
-            style = AURORA;
-            try {
-                if (FILE.isFile()) {
-                    String s = new String(Files.readAllBytes(FILE.toPath()), StandardCharsets.UTF_8).trim();
-                    style = "cinematic".equalsIgnoreCase(s) ? CINEMATIC : AURORA;
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return style;
-    }
-
-    public static void setStyle(int next) {
-        style = next == CINEMATIC ? CINEMATIC : AURORA;
-        try {
-            FILE.getParentFile().mkdirs();
-            Files.write(FILE.toPath(), (style == CINEMATIC ? "cinematic" : "aurora").getBytes(StandardCharsets.UTF_8));
-        } catch (Exception ignored) {
-        }
     }
 
     /** The background for a screen of {@code width} x {@code height} GUI pixels. */
     public static void draw(int width, int height, float mouseX, float mouseY) {
-        if (style() == CINEMATIC) {
-            drawCinematic(width, height);
-        } else {
-            drawAurora(width, height, mouseX, mouseY);
-        }
+        drawCinematic(width, height);
     }
 
     private static float seconds() {
         return (System.currentTimeMillis() - START) / 1000.0F;
-    }
-
-    // ---- aurora --------------------------------------------------------
-
-    private static void drawAurora(int width, int height, float mouseX, float mouseY) {
-        if (aurora == null && !auroraFailed) {
-            try {
-                aurora = new ShaderUtil(AURORA_SHADER);
-                if (aurora.getProgramID() == 0) {
-                    aurora = null;
-                    auroraFailed = true;
-                }
-            } catch (Exception e) {
-                aurora = null;
-                auroraFailed = true;
-            }
-        }
-        if (aurora == null) {
-            RenderUtil.drawGradientRect(0, 0, width, height, 0xFF05081A, 0xFF071526);
-            return;
-        }
-        Minecraft mc = Minecraft.getMinecraft();
-        GlStateManager.disableCull();
-        GlStateManager.disableAlpha();
-        try {
-            aurora.init();
-            aurora.setUniformf("time", seconds());
-            aurora.setUniformf("resolution", (float) mc.displayWidth, (float) mc.displayHeight);
-            aurora.setUniformf("mouse", width <= 0 ? 0.5F : mouseX / width, height <= 0 ? 0.5F : 1.0F - mouseY / height);
-            Tessellator tessellator = Tessellator.getInstance();
-            WorldRenderer wr = tessellator.getWorldRenderer();
-            wr.begin(7, DefaultVertexFormats.POSITION);
-            wr.pos(0.0D, height, 0.0D).endVertex();
-            wr.pos(width, height, 0.0D).endVertex();
-            wr.pos(width, 0.0D, 0.0D).endVertex();
-            wr.pos(0.0D, 0.0D, 0.0D).endVertex();
-            tessellator.draw();
-        } finally {
-            aurora.unload();
-            GlStateManager.enableAlpha();
-            GlStateManager.enableCull();
-        }
     }
 
     // ---- cinematic -----------------------------------------------------

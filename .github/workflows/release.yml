@@ -66,7 +66,13 @@ jobs:
             8
             17
 
+      # Gradle 8.8, the version the owner builds with. With the wrapper's
+      # 8.14.6 remapJar wrote a jar holding only the shadow jar, nested
+      # (v2.1.3, 2026-10-13): Forge found no mixins.myau.json and the client
+      # did not load at all.
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.8'
 
       - name: Apply UI update patch
         run: |
@@ -79,8 +85,22 @@ jobs:
 
       - name: Build
         run: |
-          chmod +x gradlew
-          ./gradlew build --no-daemon --stacktrace
+          gradle build --no-daemon --stacktrace
+
+      - name: Check the jar is the client
+        run: |
+          set -euo pipefail
+          JAR=$(ls build/libs/*.jar | grep -v -- '-sources' | head -1)
+          python3 - "$JAR" <<'PY'
+          import sys, zipfile
+          names = zipfile.ZipFile(sys.argv[1]).namelist()
+          mixins = [n for n in names if n.startswith('myau/mixin/') and n.count('/') == 2 and n.endswith('.class')]
+          nested = [n for n in names if n.endswith('.jar')]
+          print(sys.argv[1], len(names), 'entries,', len(mixins), 'mixin classes, nested jars:', nested)
+          if 'mixins.myau.json' not in names or 'mcmod.info' not in names or len(mixins) < 50 or nested:
+              print('::error::The built jar is not a loadable client; not publishing it.')
+              sys.exit(1)
+          PY
 
       - name: Sign
         env:

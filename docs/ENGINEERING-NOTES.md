@@ -4961,3 +4961,12 @@ UPDATE_SIGNING_KEY, keeps a backup, deletes the file.
 Version 2.1.2; `mods/Myau Atlas v2.1.2.jar` (old in backups/jars), md5
 5c7c377389f96eb4a0c4764a5e93e6e2. Next: owner publishes release v2.1.2 (the
 workflow builds and signs it), then v2.1.3 to see the auto-update.
+
+### 2026-10-13 — v2.1.2 release signed by the Action; 2.1.3 for the auto-update test
+The Release (online update) workflow ran green for v2.1.2: assets
+Myau-Atlas-v2.1.2.jar (25,794,851 B) and update.properties; its signature
+verifies against src/main/resources/myau-update-key.pub (PAIR OK), so the
+UPDATE_SIGNING_KEY secret holds the right key. The local file was deleted by
+the owner (checked: not on disk, never in git history).
+Version 2.1.3 pushed but NOT installed locally: the installed v2.1.2 should
+download, verify and swap it in by itself after the owner publishes v2.1.3.

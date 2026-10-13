@@ -5019,3 +5019,19 @@ Gradle 8.14.6; every local 8.8 build is correct.
   myau-update/pending/pending.properties moved to backups/config.
 - The v2.1.3 release must be deleted (or made a pre-release) so 2.1.2
   clients stop downloading it; 2.1.4 is the next auto-update test.
+
+## 2026-10-13 — Auto-update confirmed (2.1.2 -> 2.1.4); menu bar and sun (2.1.5)
+
+v2.1.4 from the fixed Action (Gradle 8.8, jar check) verified locally
+(6049 entries, 53 mixins, sha256 matches, PAIR OK); the owner's 2.1.2
+downloaded it, swapped it on exit (install.log 19:02:59) and came up as
+V2.1.4 with the new menu. Note: the first v2.1.4 tag pointed at the old
+commit (Target not main) -- the Action's version check stopped it.
+
+Owner on 2.1.4: PLAY's bar never draws back; the sun looks fake.
+- `MyauMainMenu.drawCinematic`: one bar, on the entry under the pointer, or
+  PLAY when none -- PLAY's bar shrinks while another entry is hovered.
+- `MenuBackground`: the small bright sun disc removed; one broad faint warm
+  haze (0x34FFB070, 0.55w x 0.60h at 72%/70%). `glow()` now draws 8 rings
+  with a Gaussian-like falloff instead of one linear fan (cone + rim).
+- Version 2.1.5 (backup gradle.properties.pre-2.1.5-20261013).

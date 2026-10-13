@@ -57,9 +57,10 @@ public final class MenuBackground {
         }
         /* Dusk above, a warm glow below. */
         gradient(0, 0, width, height, 0x50140A24, 0x50140A24, 0x38FF8A3C, 0x38FF8A3C);
-        /* The sun, low and to the right: one smooth radial glow. */
-        glow(width * 0.70F, height * 0.62F, height * 0.75F, height * 0.55F, 0x48FFC888);
-        glow(width * 0.70F, height * 0.62F, height * 0.16F, height * 0.13F, 0x60FFF0D0);
+        /* Warm light low on the right, wide and faint (2026-10-13, owner: the
+           sun disc looked fake -- it was a bright ellipse with a hard rim).
+           No disc any more: a broad haze that fades out smoothly. */
+        glow(width * 0.72F, height * 0.70F, width * 0.55F, height * 0.60F, 0x34FFB070);
         /* Dark on the left, where the menu reads. */
         gradient(0, 0, width * 0.55F, height, 0xB806040A, 0x0006040A, 0xB806040A, 0x0006040A);
         /* Motes of light drifting up. */
@@ -83,7 +84,11 @@ public final class MenuBackground {
         GlStateManager.enableTexture2D();
     }
 
-    /** An elliptical glow: {@code color} at the centre fading to nothing at the rim. */
+    /**
+     * An elliptical glow: {@code color} at the centre fading to nothing at
+     * the rim along a smooth (Gaussian-like) curve, in rings -- a single fan
+     * fades linearly and shows a cone and a rim.
+     */
     private static void glow(float cx, float cy, float rx, float ry, int color) {
         GlStateManager.disableTexture2D();
         GlStateManager.enableBlend();
@@ -91,13 +96,24 @@ public final class MenuBackground {
         GlStateManager.shadeModel(7425);
         Tessellator tessellator = Tessellator.getInstance();
         WorldRenderer wr = tessellator.getWorldRenderer();
-        wr.begin(6, DefaultVertexFormats.POSITION_COLOR);
-        vertex(wr, cx, cy, color);
-        for (int i = 0; i <= 64; i++) {
-            double a = Math.PI * 2.0 * i / 64.0;
-            vertex(wr, (float) (cx + Math.cos(a) * rx), (float) (cy + Math.sin(a) * ry), color & 0xFFFFFF);
+        int alpha = color >>> 24;
+        int rgb = color & 0xFFFFFF;
+        int rings = 8;
+        for (int r = 0; r < rings; r++) {
+            float f0 = (float) r / rings;
+            float f1 = (float) (r + 1) / rings;
+            int a0 = Math.round(alpha * (float) Math.exp(-4.0 * f0 * f0) * (1.0F - f0));
+            int a1 = Math.round(alpha * (float) Math.exp(-4.0 * f1 * f1) * (1.0F - f1));
+            wr.begin(5, DefaultVertexFormats.POSITION_COLOR);
+            for (int i = 0; i <= 64; i++) {
+                double a = Math.PI * 2.0 * i / 64.0;
+                float cos = (float) Math.cos(a);
+                float sin = (float) Math.sin(a);
+                vertex(wr, cx + cos * rx * f0, cy + sin * ry * f0, a0 << 24 | rgb);
+                vertex(wr, cx + cos * rx * f1, cy + sin * ry * f1, a1 << 24 | rgb);
+            }
+            tessellator.draw();
         }
-        tessellator.draw();
         GlStateManager.shadeModel(7424);
         GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
         GlStateManager.enableTexture2D();

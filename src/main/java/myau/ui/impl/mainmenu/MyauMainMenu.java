@@ -211,19 +211,29 @@ public class MyauMainMenu extends GuiScreen implements GuiYesNoCallback {
         String[] names = demo ? new String[]{"PLAY DEMO"} : new String[]{"PLAY", "MULTIPLAYER", "ALT MANAGER", "MODS"};
         int[] actions = demo ? new int[]{DEMO} : new int[]{SINGLEPLAYER, MULTIPLAYER, ALTS, MODS};
         float size = 12.0F;
+        /* 2026-10-13 (owner: PLAY's bar never drew back): one bar only. It
+           marks the entry under the pointer, and PLAY when the pointer is on
+           none, so it slides from entry to entry and PLAY's shrinks away. */
+        int pointed = -1;
         for (int i = 0; i < names.length; i++) {
             float w = TextImage.width(names[i], MEDIUM, size, 0.12F, 1.0F);
-            boolean hovered = over(mx, my, x - 4, y - 5, x + 40 + w, y + size + 5);
-            float lit = ease("c:" + names[i], hovered ? 1.0F : 0.0F, 12.0F);
-            /* The first entry keeps its bar; the others grow one under the pointer. */
-            float bar = i == 0 ? 1.0F : lit;
+            float iy = y + i * 25.0F;
+            if (over(mx, my, x - 4, iy - 5, x + 40 + w, iy + size + 5)) {
+                pointed = i;
+            }
+        }
+        int marked = pointed < 0 ? 0 : pointed;
+        for (int i = 0; i < names.length; i++) {
+            float w = TextImage.width(names[i], MEDIUM, size, 0.12F, 1.0F);
+            float lit = ease("c:" + names[i], i == marked ? 1.0F : 0.0F, 12.0F);
+            float bar = lit;
             if (bar > 0.01F) {
                 float by = y + size * 0.36F;
                 MenuBackground.rect(x, by - 1.5F, x + 14.0F * bar, by + 2.5F, alpha(0x30FF9A3C, bar));
                 MenuBackground.rect(x, by, x + 14.0F * bar, by + 1.0F, alpha(ORANGE, bar));
             }
             float tx = x + 21.0F * bar + lit * 6.0F;
-            int colour = mix(i == 0 ? 0xFFFFFFFF : 0xB8FFFFFF, 0xFFFFFFFF, lit);
+            int colour = mix(0xB8FFFFFF, 0xFFFFFFFF, lit);
             TextImage.draw(names[i], MEDIUM, size, 0.12F, tx, y, alpha(colour, 1.0F), 0, 1.0F);
             this.hits.add(new Hit(actions[i], x - 4, y - 5, x + 40 + w, y + size + 5));
             y += 25.0F;

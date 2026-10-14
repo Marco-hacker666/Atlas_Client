@@ -196,16 +196,16 @@ public class MyauMainMenu extends GuiScreen implements GuiYesNoCallback {
     private void drawCinematic(float mx, float my) {
         float title = Math.max(40.0F, Math.min(110.0F, this.height * 0.17F));
         float slide = (1.0F - this.fade) * -14.0F;
-        float blockH = 15.0F + title * 0.86F + title * 0.72F + 26.0F + 4 * 25.0F + 20.0F;
+        float blockH = 15.0F + title * 0.86F + 26.0F + 4 * 25.0F + 20.0F;
         float y = Math.max(this.height * 0.1F, (this.height - blockH) / 2.0F);
         float x = this.width * 0.06F + slide;
 
         TextImage.draw("MINECRAFT 1.8.9  ·  " + version(), MEDIUM, 7.5F, 0.45F, x, y, alpha(ORANGE, 1.0F), 0, 1.0F);
         y += 15.0F;
+        /* One word since the rename to Atlas (2026-10-14); it was two lines,
+           the old name over "ATLAS", and both lines said ATLAS after the rename. */
         TextImage.draw("ATLAS", BOLD, title, 0.02F, x - 2.0F, y, alpha(0xFFFFFFFF, 1.0F), 0, 1.0F);
-        y += title * 0.86F;
-        TextImage.draw("ATLAS", BOLD, title, 0.02F, x - 2.0F, y, alpha(ORANGE, 1.0F), 0, 1.0F);
-        y += title * 0.72F + 26.0F;
+        y += title * 0.86F + 26.0F;
 
         boolean demo = this.mc.isDemo();
         String[] names = demo ? new String[]{"PLAY DEMO"} : new String[]{"PLAY", "MULTIPLAYER", "ALT MANAGER", "MODS"};

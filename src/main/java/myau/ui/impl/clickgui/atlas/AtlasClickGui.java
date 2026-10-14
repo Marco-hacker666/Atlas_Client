@@ -1217,14 +1217,12 @@ public class AtlasClickGui extends GuiScreen {
         float cy = y + HEADER / 2.0F;
         int accent = accent();
 
-        /* The mark: the Atlas logo (the A with the orbit) and the name
-           in the banner's style -- MYAU in the text colour, ATLAS in lime
-           (2026-10-06; it was a bead of the accent colour and the old name). */
+        /* The mark: the Atlas logo (the A with the orbit) and the name.
+           One word since the rename (2026-10-14); before, the old name in the
+           text colour and ATLAS in lime. */
         Liquid.shadow(x + 11, cy - 9, x + 29, cy + 9, 5.0F, 5.0F, 0x55000000, 0.0F);
         drawLogo(x + 11, cy - 9, 18.0F);
-        float brand = font(12.5F, true).draw("ATLAS", x + 35, cy, TEXT);
-        float brandEnd = x + 35 + brand + 4
-                + font(12.5F, true).draw("ATLAS", x + 35 + brand + 4, cy, myau.ui.UiMode.isLight() ? 0xFF5E8000 : 0xFFC6FF00);
+        float brandEnd = x + 35 + font(12.5F, true).draw("ATLAS", x + 35, cy, TEXT);
 
         /* One row: the page tabs after the brand, the HUD editor and the
            dark/light switch on the right, and the search box filling the rest. */

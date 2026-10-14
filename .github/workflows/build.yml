@@ -3,7 +3,7 @@ name: Build
 on:
   workflow_dispatch:
   push:
-    branches: [ main-2 ]
+    branches: [ main ]
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -39,11 +39,11 @@ jobs:
             17
 
       # Caches Gradle dependencies + build outputs. Biggest build-time win for Loom/Forge.
-      # Read-only on anything other than main-2 so PRs don't poison the shared cache.
+      # Read-only on anything other than main so PRs don't poison the shared cache.
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v6
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main-2' }}
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       # Applies atlas-ui.patch when it is in the repository and not applied yet.
       - name: Apply UI update patch

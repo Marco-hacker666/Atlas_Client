@@ -1,0 +1,11 @@
+[
+  {
+    "name": "Atlas",
+    "version": "${version}",
+    "mcversion": "1.8.9",
+    "authorList": [
+      "Marco-hacker666"
+    ],
+    "credits": "Based on Myau by nespola001, licensed under GPL-3.0."
+  }
+]

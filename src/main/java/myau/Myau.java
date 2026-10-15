@@ -206,6 +206,8 @@ public class Myau {
         moduleManager.modules.put(ServerProfiles.class, new ServerProfiles());
         moduleManager.modules.put(HitBox.class, new HitBox());
         moduleManager.modules.put(KillAura.class, new KillAura());
+        /* The rewrite, side by side until it replaces KillAura (2026-10-14). */
+        moduleManager.modules.put(KillAura2.class, new KillAura2());
         moduleManager.modules.put(LagRange.class, new LagRange());
         moduleManager.modules.put(LightningTracker.class, new LightningTracker());
         moduleManager.modules.put(LongJump.class, new LongJump());

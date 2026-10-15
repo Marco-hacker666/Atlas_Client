@@ -164,8 +164,7 @@ public class AutoWeapon extends Module {
     }
 
     private boolean isKillAuraActive() {
-        KillAura killAura = (KillAura) Myau.moduleManager.getModule(KillAura.class);
-        return killAura != null && killAura.isEnabled();
+        return myau.util.Auras.anyEnabled();
     }
 
     @Override

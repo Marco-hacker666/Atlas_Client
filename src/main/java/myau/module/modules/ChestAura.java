@@ -113,8 +113,7 @@ public class ChestAura extends Module {
         if (!isEnabled()) return;
         if (event.getType() != EventType.PRE) return;
 
-        KillAura killAura = (KillAura) Myau.moduleManager.getModule(KillAura.class);
-        if (killAura != null && killAura.isEnabled() && killAura.getTarget() != null) {
+        if (myau.util.Auras.target() != null) {
             targetChest = null;
             isRotating = false;
             return;
@@ -172,8 +171,7 @@ public class ChestAura extends Module {
     public void onMove(MoveInputEvent event) {
         if (!isEnabled()) return;
 
-        KillAura killAura = (KillAura) Myau.moduleManager.getModule(KillAura.class);
-        if (killAura != null && killAura.isEnabled() && killAura.getTarget() != null) return;
+        if (myau.util.Auras.target() != null) return;
 
         if (isRotating && targetChest != null) {
             if (this.moveFix.getValue() == 1 && MoveUtil.isForwardPressed()) {

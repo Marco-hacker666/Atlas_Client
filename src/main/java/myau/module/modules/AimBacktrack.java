@@ -77,8 +77,7 @@ public class AimBacktrack extends Module {
         }
         /* KillAura picks its own hits, and its Advanced mode swings at the
            air on purpose: those misses are not this module's to fill in. */
-        Module aura = Myau.moduleManager.modules.get(KillAura.class);
-        if (aura != null && aura.isEnabled()) {
+        if (myau.util.Auras.anyEnabled()) {
             return;
         }
         if (mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit != MovingObjectPosition.MovingObjectType.MISS) {

@@ -76,7 +76,7 @@ public class ProjectileAimBot extends Module {
         }
 
         double distance = mc.thePlayer.getDistanceToEntity(target);
-        float meleeRange = killAura != null ? killAura.attackRange.getValue() : 3.0F;
+        float meleeRange = myau.util.Auras.attackRange(3.0F);
         float min = Math.max(meleeRange, this.minDistance.getValue());
         if (distance <= min || distance > this.maxRange.getValue()) {
             return;
@@ -121,10 +121,10 @@ public class ProjectileAimBot extends Module {
 
     private EntityLivingBase resolveTarget(KillAura killAura) {
         if (this.mode.getValue() == 0) {
-            if (killAura == null || !killAura.isEnabled()) {
+            if (!myau.util.Auras.anyEnabled()) {
                 return null;
             }
-            EntityLivingBase auraTarget = killAura.getTarget();
+            EntityLivingBase auraTarget = myau.util.Auras.target();
             if (!(auraTarget instanceof EntityPlayer)) {
                 return null;
             }

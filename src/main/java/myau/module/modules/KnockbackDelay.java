@@ -552,6 +552,10 @@ public class KnockbackDelay extends Module {
      * where the aura is off and the player is swinging by hand.
      */
     private Entity findTarget() {
+        KillAura2 aura2 = (KillAura2) Myau.moduleManager.modules.get(KillAura2.class);
+        if (aura2 != null && aura2.isEnabled() && aura2.getTarget() != null) {
+            return aura2.getTarget();
+        }
         KillAura killAura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
         if (killAura != null && killAura.isEnabled() && killAura.target != null) {
             try {

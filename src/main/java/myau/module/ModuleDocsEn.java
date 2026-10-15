@@ -37,6 +37,7 @@ final class ModuleDocsEn {
 
     static {
         // ------------------------------------------------------------ COMBAT
+        d("KillAura2", "KillAura rewritten: turns like a hand, clicks like a human, hits only when the look really lands; with InvulnTiming it hits the tick the target's hurt window ends, and it blocks by itself. Cannot run together with KillAura.");
         d("KillAura", "Attacks targets in range: picks a target, turns to it (several modes, silent or not), clicks at your CPS and can block for you.");
         d("AimAssist", "Nudges your aim toward a nearby target while you attack, like a small hand correction; never clicks by itself.");
         d("AutoClicker", "Clicks for you while the attack key is held, at a random CPS within your range; can block-hit or break blocks.");
@@ -133,7 +134,7 @@ final class ModuleDocsEn {
         d("ChestAura", "Opens nearby chests.");
         d("ChestStealer", "Takes the useful items when a chest opens.");
         d("FastPlace", "Places blocks faster.");
-        d("SpeedMine", "Mines blocks faster.");
+        d("SpeedMine", "Mines faster. BreakSpeed: sets the dig speed (wool 4, bed 3, end stone and planks 1.56, others x1.39). FinishEarly: ends the dig early; speed 100% is the fastest a vanilla server accepts (70% of vanilla time).");
         d("AntiObbyTrap", "When your head is stuck in an obsidian trap, treats that block as air so you can see and get out.");
         // ------------------------------------------------------------ RENDER
         d("ESP", "Draws outlines or glow on other players, visible through walls.");
@@ -378,6 +379,37 @@ final class ModuleDocsEn {
         help("multi-place", "Place up to four blocks in one tick. Grim flags this (MultiPlace); off by default.");
 
         // ======================================================= MODULE HELP
+        String ka2 = "KillAura2";
+        help(ka2, "mode", "Single keeps one target until it is gone, or leaves reach while someone else is in it; Switch moves to the next one in reach every switch-delay.");
+        help(ka2, "sort", "Target order (anyone in attack range always comes first): distance, health, angle from the crosshair, hurt time.");
+        help(ka2, "switch-delay", "Time between switches in Switch mode (ms).");
+        help(ka2, "attack-range", "Hit distance, eyes to hitbox. A hit goes out only when the look reaches the target within it; vanilla is 3.0.");
+        help(ka2, "scan-extra", "Blocks beyond attack range where the aim already starts turning.");
+        help(ka2, "fov", "Only targets within this angle of the crosshair.");
+        help(ka2, "through-walls", "Pick and hit through blocks. Off: no hit while a block is in the way.");
+        help(ka2, "players", "Attack players.");
+        help(ka2, "mobs", "Attack monsters (iron golems and bosses included).");
+        help(ka2, "animals", "Attack animals.");
+        help(ka2, "teams", "Skip your own team.");
+        help(ka2, "bot-check", "Skip players judged to be bots.");
+        help(ka2, "min-cps", "Lowest clicks per second. Each combo draws a rate between the two, with irregular, human-like gaps.");
+        help(ka2, "max-cps", "Highest clicks per second.");
+        help(ka2, "max-per-tick", "Most hits in one tick. 1 is safest; 2 allows two quick clicks in one tick, as vanilla does.");
+        help(ka2, "min-turn", "Fewest degrees turned per tick near the target (the old MinTurnSpeed; your tuned value is 14).");
+        help(ka2, "max-turn", "Most degrees turned per tick 60 degrees or more from the target (the old MaxTurnSpeed, 60); a smooth curve in between.");
+        help(ka2, "turn-accel", "How much the turn speed may grow per tick (the old TurnAccel, 30); 0 for no limit.");
+        help(ka2, "aim-drift", "How much the aim point wanders inside the hitbox (the old AimDrift, 0.4), so it is not the same spot.");
+        help(ka2, "flick-overshoot", "Big turns sometimes go a little past the target and come back, like a human flick.");
+        help(ka2, "short-stop", "Now and then pause for 1-2 ticks, turning only a little, like a human hesitation.");
+        help(ka2, "lazy", "Do not turn while the crosshair already lands, as a still hand would.");
+        help(ka2, "move-fix", "FollowAim (recommended): movement turns with the aim, keys unchanged; the server can always simulate it, fewest setbacks. KeepDirection: keys remapped to keep walking the camera's way; sprint drops when the remapped keys are not forward. None: off.");
+        help(ka2, "require-press", "Attack only while the left button is held.");
+        help(ka2, "weapons-only", "Attack only while holding a sword.");
+        help(ka2, "inventory-check", "No attacks while a chest or inventory is open.");
+        help(ka2, "ignored-backoff", "After 3 hits in a row with no reaction (lobby, spawn protection, server not taking them), pause attacking that target for 1.5 s; aim only. The wait for a reaction follows your ping (300 ms when unknown), so a high ping is not taken for ignored hits.");
+        help(ka2, "swing-range", "A click that cannot land (look not on yet, target just out of attack range) still swings at the air while the target is this close, like a hand closing in; the sword is only raised within it too.");
+        help(ka2, "raycast", "As a vanilla crosshair: the first entity along the look takes the hit. Another enemy in front becomes the target; a teammate or anything else in front means no hit.");
+        help(ka2, "auto-block", "Legit (recommended, the old LEGIT): 1-2 ticks after a hit (about four windows in five), the sword goes up while the target is in its hurt window and can hit you (you were just hit, or it faces you swinging), and comes down 1-2 ticks before the window ends, so the next hit lands. Always: up whenever the target is in its window, no threat check. None: no blocking. Never while Clutch is catching or a block is being placed. When to hit is InvulnTiming's call (with hold-fire on, no clicks while the target cannot be hurt; the next click after that is the hit).");
         String ka = "KillAura";
         help(ka, "Mode", "Single keeps one target; Switch moves to the next one every SwitchDelay.");
         help(ka, "Sort", "Target priority: distance, health, hurt time, or nearest the crosshair.");

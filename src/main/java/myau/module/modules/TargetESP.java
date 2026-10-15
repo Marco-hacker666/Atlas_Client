@@ -105,10 +105,7 @@ public class TargetESP extends Module {
     public void onRender(Render3DEvent event) {
         if (!this.isEnabled()) return;
 
-        KillAura ka = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-        if (ka == null || ka.target == null) return;
-
-        EntityLivingBase target = ka.target.getEntity();
+        EntityLivingBase target = myau.util.Auras.target();
         if (target == null || !TeamUtil.isEntityLoaded(target)) return;
 
         tickFade();

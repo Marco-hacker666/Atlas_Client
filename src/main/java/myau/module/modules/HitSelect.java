@@ -208,8 +208,7 @@ public class HitSelect extends Module {
     }
 
     private boolean auraOn() {
-        Module aura = Myau.moduleManager.modules.get(KillAura.class);
-        return aura != null && aura.isEnabled();
+        return myau.util.Auras.anyEnabled();
     }
 
     /** A player worth a forced hit: not a teammate, a friend or a bot. */

@@ -27,9 +27,7 @@ public class AutoTool extends Module {
     }
 
     public boolean isKillAura() {
-        KillAura killAura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-        if (!killAura.isEnabled()) return false;
-        return TeamUtil.isEntityLoaded(killAura.getTarget()) && killAura.isAttackAllowed();
+        return TeamUtil.isEntityLoaded(myau.util.Auras.attackingTarget());
     }
 
     @EventTarget

@@ -48,6 +48,34 @@ public class DamageWatchTest {
     }
 
     @Test
+    public void twoHitsInOneScoreWindowAreTwoHitsNotOneBigOne() {
+        // 2026-10-15: tab health settles over 24 ticks, room for a combo's next hit.
+        Fight f = new Fight();
+        f.watch.setPrecision(1.0F);
+        f.tick(1, 0);
+        f.watch.attack(1, f.now);
+        f.tick(1, 10);
+        f.health -= 4.0F;
+        for (int t = 9; t >= 0; t--) {
+            f.tick(1, t);
+        }
+        f.watch.attack(1, f.now);
+        f.tick(1, 10);
+        f.health -= 4.0F;
+        for (int t = 9; t >= 0; t--) {
+            f.tick(1, t);
+        }
+        for (int i = 0; i < 6; i++) {
+            f.tick(1, 0);
+        }
+        DamageWatch.Hit hit = f.lastHit;
+        assertNotNull(hit);
+        assertEquals(2, hit.hits);
+        assertEquals(8.0F, hit.total, 1.0E-5F);
+        assertEquals(4.0F, hit.dealt, 1.0E-5F);
+    }
+
+    @Test
     public void aLandedHitIsTheHealthItTookOff() {
         Fight f = new Fight();
         DamageWatch.Hit hit = f.hit(1, 1.5F);

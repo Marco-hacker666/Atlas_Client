@@ -505,8 +505,7 @@ public class BlockHit extends Module {
         if (this.manualTicks > 0 || mc.thePlayer.isUsingItem() || mc.currentScreen != null) {
             return;
         }
-        KillAura aura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-        if (aura != null && aura.isEnabled() && aura.autoBlock.getValue() != 0) {
+        if (myau.util.Auras.blocksByItself()) {
             return;
         }
         if (Math.random() * 100.0 >= this.manualChance.getValue()) {

@@ -576,9 +576,8 @@ public class Velocity extends Module {
         if (this.mode.getValue() == 3 && this.slapReduce.getValue() && event.getType() == EventType.PRE) {
             if (this.slapReduceTicks > 0) {
                 this.slapReduceTicks--;
-                KillAura killAura = (KillAura) Myau.moduleManager.getModule(KillAura.class);
-                if (killAura != null && killAura.isEnabled() && killAura.getTarget() != null) {
-                    EntityLivingBase target = killAura.getTarget();
+                if (myau.util.Auras.target() != null) {
+                    EntityLivingBase target = myau.util.Auras.target();
                     if (!((IAccessorEntity) mc.thePlayer).getIsInWeb() && mc.thePlayer.isSprinting() && MoveUtil.isMoving() && target != mc.thePlayer && !this.badPackets()) {
                         EventManager.call(new AttackEvent(target));
                         mc.getNetHandler().addToSendQueue(new C0APacketAnimation());
@@ -599,9 +598,8 @@ public class Velocity extends Module {
             if (this.grimPending > 0 && mc.thePlayer != null && mc.thePlayer.hurtTime > 0
                     && (!this.grimOnlyMoving.getValue() || MoveUtil.isMoving())) {
                 Entity target = null;
-                KillAura killAura = (KillAura) Myau.moduleManager.getModule(KillAura.class);
-                if (killAura != null && killAura.isEnabled() && killAura.getTarget() != null) {
-                    target = killAura.getTarget();
+                if (myau.util.Auras.target() != null) {
+                    target = myau.util.Auras.target();
                 } else if (mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY
                         && mc.objectMouseOver.entityHit instanceof EntityLivingBase) {
                     target = mc.objectMouseOver.entityHit;
@@ -646,10 +644,10 @@ public class Velocity extends Module {
             }
             if (this.oldGrimHolding && !this.oldGrimAttacked && mc.thePlayer != null && mc.thePlayer.hurtTime > 0) {
                 Entity target = null;
-                KillAura killAura = (KillAura) Myau.moduleManager.getModule(KillAura.class);
-                if (killAura != null && killAura.isEnabled() && killAura.getTarget() != null
-                        && mc.thePlayer.getDistanceToEntity(killAura.getTarget()) <= this.oldGrimRangeProp.getValue()) {
-                    target = killAura.getTarget();
+                EntityLivingBase auraTarget = myau.util.Auras.target();
+                if (auraTarget != null
+                        && mc.thePlayer.getDistanceToEntity(auraTarget) <= this.oldGrimRangeProp.getValue()) {
+                    target = auraTarget;
                 } else if (mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY
                         && mc.objectMouseOver.entityHit instanceof EntityLivingBase
                         && mc.thePlayer.getDistanceToEntity(mc.objectMouseOver.entityHit) <= this.oldGrimRangeProp.getValue()) {

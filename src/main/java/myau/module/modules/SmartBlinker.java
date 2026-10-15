@@ -95,9 +95,8 @@ public class SmartBlinker extends Module {
     }
 
     private EntityLivingBase resolveTarget() {
-        KillAura killAura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-        if (killAura != null && killAura.isEnabled() && killAura.getTarget() != null) {
-            EntityLivingBase aura = killAura.getTarget();
+        if (myau.util.Auras.target() != null) {
+            EntityLivingBase aura = myau.util.Auras.target();
             if (aura != null && !aura.isDead && TeamUtil.isEntityLoaded(aura)) {
                 return aura;
             }

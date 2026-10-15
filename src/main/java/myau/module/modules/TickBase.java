@@ -319,8 +319,7 @@ public class TickBase extends Module {
     }
 
     private boolean isKillAuraActive() {
-        Module module = Myau.moduleManager.modules.get(KillAura.class);
-        return module != null && module.isEnabled();
+        return myau.util.Auras.anyEnabled();
     }
 
     private boolean isBlinkEnabled() {

@@ -670,9 +670,7 @@ public class Displace extends Module {
         EntityPlayer target = null;
         boolean attacking =
                 mc.gameSettings.keyBindAttack.isKeyDown()
-                        || (Myau.moduleManager.modules.get(KillAura.class) != null
-                        && Myau.moduleManager.modules.get(KillAura.class).isEnabled()
-                        && ((KillAura) Myau.moduleManager.modules.get(KillAura.class)).getTarget() != null);
+                        || myau.util.Auras.target() != null;
         if (attacking) {
             target = CombatTargeting.findClosestTarget(9.0, ignoreTeammates.getValue());
         }

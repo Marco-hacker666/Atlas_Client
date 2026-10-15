@@ -115,8 +115,7 @@ public class EntityCulling extends Module {
         if (Myau.moduleManager == null) {
             return null;
         }
-        KillAura killAura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-        return killAura == null ? null : killAura.getTarget();
+        return myau.util.Auras.target();
     }
 
     private static final class CachedVis {

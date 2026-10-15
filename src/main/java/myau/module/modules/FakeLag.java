@@ -863,6 +863,7 @@ public class FakeLag extends Module {
      */
     private void liquidTick() {
         long now = System.currentTimeMillis();
+        this.drainingAhead = false;
         boolean hold = false;
         double taperFactor = 1.0;
         /* The target is looked up whether or not the player is eligible, so
@@ -894,7 +895,19 @@ public class FakeLag extends Module {
                     taperFactor = Math.max(0.0, Math.min(1.0,
                             (serverDistance - this.meleeDistance.getValue()) / span));
                 }
+                double closingPerTick = this.closingSpeed(target, serverDistance);
+                if (hold && mustDrain(serverDistance, this.meleeDistance.getValue(),
+                        closingPerTick, heldPositions(), this.catchUp.getValue())) {
+                    /* Not enough ticks left before melee distance to let the
+                       queue out at catch-up: start now, so it is empty when the
+                       fight starts instead of dumped in one tick. */
+                    taperFactor = 0.0;
+                    this.drainingAhead = true;
+                }
             }
+        }
+        if (target == null || blocked != null) {
+            this.lastDistanceTarget = null;
         }
         if (hold && now < this.recoilUntil) {
             blocked = "recoil";
@@ -918,8 +931,62 @@ public class FakeLag extends Module {
         long cutoff = now - (long) (holdDelay() * taperFactor);
         releaseDue(cutoff, taperFactor < 1.0 ? this.catchUp.getValue() : Integer.MAX_VALUE);
         if (taperFactor < 1.0) {
-            closeEpisode("tapered");
+            closeEpisode(this.drainingAhead ? "ahead of melee" : "tapered");
         }
+        this.drainingAhead = false;
+    }
+
+    /*
+     * 2026-10-15: the fixed taper (1.5 blocks) was too short for two players
+     * running at each other. They close ~0.4-0.6 blocks a tick, so it lasted
+     * about three ticks, while catch-up 2 lets the queue out only one position
+     * a tick faster than it fills: holds of 6-12 packets were still there at
+     * melee distance or at the first attack and went out in one tick. Over
+     * 10-12..10-15, 11-12 % of those releases ("melee", "attack") were
+     * followed by a setback within 2 s, against 5 % for the ones let out.
+     */
+    private double lastServerDistance = -1.0;
+    private EntityPlayer lastDistanceTarget;
+    private double closing;
+    private boolean drainingAhead;
+
+    /** Blocks a tick the server-side distance to this target is shrinking, smoothed. */
+    private double closingSpeed(EntityPlayer target, double serverDistance) {
+        if (target != this.lastDistanceTarget || this.lastServerDistance < 0.0) {
+            this.closing = 0.0;
+        } else {
+            double now = this.lastServerDistance - serverDistance;
+            this.closing = this.closing * 0.5 + now * 0.5;
+        }
+        this.lastDistanceTarget = target;
+        this.lastServerDistance = serverDistance;
+        return this.closing;
+    }
+
+    /** Positions in the queue. */
+    private int heldPositions() {
+        int count = 0;
+        for (Held held : this.queue) {
+            if (held.packet instanceof C03PacketPlayer) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Whether the queue has to start going out now to be empty by melee
+     * distance: at catch-up positions a tick, it shrinks by catch-up - 1 a
+     * tick, and the target closes {@code closingPerTick} blocks a tick.
+     */
+    static boolean mustDrain(double serverDistance, double meleeDistance, double closingPerTick,
+                             int heldPositions, int catchUp) {
+        if (heldPositions <= 0 || closingPerTick <= 0.02) {
+            return false;
+        }
+        double ticksLeft = (serverDistance - meleeDistance) / closingPerTick;
+        double ticksToEmpty = heldPositions / (double) Math.max(1, catchUp - 1);
+        return ticksToEmpty + 1.0 >= ticksLeft;
     }
 
     /** Reasons to stop holding that the server has no need to hear about this tick. */

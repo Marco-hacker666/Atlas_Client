@@ -36,18 +36,29 @@ public final class DamageWatch {
     /** One landed hit, resolved. */
     public static final class Hit {
         public final int targetId;
+        /** What one hit took off: the health lost in the window over the hits in it. */
         public final float dealt;
         public final float usual;
         public final long at;
         /** The least vanilla would have taken off (DamageModel); NaN when not known. */
         public final float expected;
+        /** Health lost over the whole window. */
+        public final float total;
+        /** Flinches in the window: this hit and any that landed before it settled. */
+        public final int hits;
 
         Hit(int targetId, float dealt, float usual, long at, float expected) {
+            this(targetId, dealt, usual, at, expected, dealt, 1);
+        }
+
+        Hit(int targetId, float dealt, float usual, long at, float expected, float total, int hits) {
             this.targetId = targetId;
             this.dealt = dealt;
             this.usual = usual;
             this.at = at;
             this.expected = expected;
+            this.total = total;
+            this.hits = hits;
         }
     }
 
@@ -92,6 +103,8 @@ public final class DamageWatch {
         float before = Float.NaN;
         float lowest;
         int ticksLeft;
+        /* Flinches since the one being resolved began, itself included. */
+        int flinches;
         long hitAt;
         /* The least the pending attack should take off, and that of the hit being resolved. */
         float attackExpected = Float.NaN;
@@ -151,13 +164,21 @@ public final class DamageWatch {
     public Hit tick(int targetId, float health, int hurtTime, long now, long window) {
         Target t = target(targetId);
         Hit hit = null;
+        boolean flinched = hurtTime > t.lastHurtTime;
         if (t.ticksLeft > 0) {
             t.lowest = Math.min(t.lowest, health);
+            if (flinched) {
+                /* 2026-10-15: with tab health the window is 24 ticks, room for
+                   two more hits of a combo. Their damage was all put on the
+                   first: the old aura "dealt" 7.3 a hit and KillAura2 4.3 --
+                   two hits a window against one, not a damage cut. */
+                t.flinches++;
+                flinched = false;
+            }
             if (--t.ticksLeft == 0) {
                 hit = resolve(targetId, t);
             }
         }
-        boolean flinched = hurtTime > t.lastHurtTime;
         if (flinched && t.ticksLeft == 0 && t.lastAttackAt > 0L && now - t.lastAttackAt <= window
                 && !Float.isNaN(t.lastHealth) && t.lastHealth > 0.0F) {
             /* The health before the flinch: the tick before, since the
@@ -165,6 +186,7 @@ public final class DamageWatch {
             t.before = t.lastHealth;
             t.lowest = Math.min(t.lastHealth, health);
             t.ticksLeft = this.precision > 0.0F ? SETTLE_TICKS_SCORE : SETTLE_TICKS;
+            t.flinches = 1;
             t.hitAt = now;
             t.lastAttackAt = 0L;
             t.hitExpected = t.attackExpected;
@@ -176,7 +198,9 @@ public final class DamageWatch {
     }
 
     private Hit resolve(int targetId, Target t) {
-        float dealt = Math.max(0.0F, t.before - t.lowest);
+        float total = Math.max(0.0F, t.before - t.lowest);
+        int hits = Math.max(1, t.flinches);
+        float dealt = total / hits;
         t.before = Float.NaN;
         if (t.lowest <= 0.0F) {
             /* Dead: the last hit's damage is capped by what was left. */
@@ -198,7 +222,7 @@ public final class DamageWatch {
         push(series(this.session, kind), value);
         /* Reported in health either way. */
         float usual = Float.isNaN(usualValue) ? Float.NaN : ratio ? usualValue * t.hitExpected : usualValue;
-        Hit hit = new Hit(targetId, dealt, usual, t.hitAt, t.hitExpected);
+        Hit hit = new Hit(targetId, dealt, usual, t.hitAt, t.hitExpected, total, hits);
         noteMitigation(hit);
         if (!Float.isNaN(usualValue) && value <= usualValue * LOW_SHARE) {
             this.lowStreak++;

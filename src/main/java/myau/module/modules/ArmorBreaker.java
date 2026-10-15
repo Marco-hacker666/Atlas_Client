@@ -103,8 +103,7 @@ public class ArmorBreaker extends Module {
     }
 
     private boolean isTargetInRange() {
-        KillAura killAura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-        EntityLivingBase target = killAura == null ? null : killAura.getTarget();
+        EntityLivingBase target = myau.util.Auras.target();
         if (target != null) {
             return mc.thePlayer.getDistanceToEntity(target) <= RANGE;
         }

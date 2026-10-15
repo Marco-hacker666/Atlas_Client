@@ -135,9 +135,9 @@ public class TargetHUD extends Module {
     }
 
     private EntityLivingBase resolveTarget() {
-        KillAura killAura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-        if (killAura != null && killAura.isEnabled() && killAura.isAttackAllowed() && TeamUtil.isEntityLoaded(killAura.getTarget())) {
-            return killAura.getTarget();
+        EntityLivingBase auraTarget = myau.util.Auras.attackingTarget();
+        if (TeamUtil.isEntityLoaded(auraTarget)) {
+            return auraTarget;
         } else if (!this.kaOnly.getValue()
                 && !this.lastAttackTimer.hasTimeElapsed(1500L)
                 && TeamUtil.isEntityLoaded(this.lastTarget)) {

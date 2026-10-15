@@ -269,8 +269,7 @@ public class AntiBot extends Module {
     }
 
     private void handleSpawnPlayerPacket(S0CPacketSpawnPlayer packet) {
-        KillAura killAura = (KillAura) Myau.moduleManager.getModule(KillAura.class);
-        if (killAura != null && killAura.target != null && !hasRemovedEntities.contains(packet.getEntityID())) {
+        if (myau.util.Auras.target() != null && !hasRemovedEntities.contains(packet.getEntityID())) {
             spawnedInCombat.add(packet.getEntityID());
         }
     }

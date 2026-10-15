@@ -84,8 +84,7 @@ public class KBDisplacement extends Module {
 
     @EventTarget
     public void onAttack(AttackEvent event) {
-        Module aura = Myau.moduleManager.modules.get(KillAura.class);
-        if (aura != null && aura.isEnabled()) {
+        if (myau.util.Auras.anyEnabled()) {
             return;
         }
         if (!event.isCancelled() && event.getTarget() instanceof EntityLivingBase) {

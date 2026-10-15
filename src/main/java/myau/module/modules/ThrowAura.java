@@ -39,14 +39,13 @@ public class ThrowAura extends Module {
         if (event.getType() != EventType.PRE) return;
         moveYaw = Float.NaN;
 
-        KillAura killAura = (KillAura) myau.Myau.moduleManager.modules.get(KillAura.class);
-        if (killAura == null || !killAura.isEnabled()) return;
+        if (!myau.util.Auras.anyEnabled()) return;
 
-        EntityLivingBase target = killAura.getTarget();
+        EntityLivingBase target = myau.util.Auras.target();
         if (target == null) return;
 
         double distance = mc.thePlayer.getDistanceToEntity(target);
-        if (distance > killAura.attackRange.getValue() && distance <= maxRange.getValue()) {
+        if (distance > myau.util.Auras.attackRange(3.0F) && distance <= maxRange.getValue()) {
             int projectileCount = ItemUtil.findInventorySlot(ItemUtil.ItemType.Projectile);
             if (projectileCount > 0 && timer.hasTimeElapsed(cooldown.getValue().longValue())) {
                 int projectileSlot = findProjectileHotbarSlot();

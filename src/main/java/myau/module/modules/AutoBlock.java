@@ -194,9 +194,9 @@ public class AutoBlock extends Module {
 
     private EntityLivingBase resolveTarget() {
         try {
-            KillAura killAura = (KillAura) Myau.moduleManager.getModule(KillAura.class);
-            if (killAura != null && killAura.isEnabled() && killAura.getTarget() != null) {
-                return killAura.getTarget();
+            EntityLivingBase auraTarget = myau.util.Auras.target();
+            if (auraTarget != null) {
+                return auraTarget;
             }
         } catch (Exception ignored) {
         }

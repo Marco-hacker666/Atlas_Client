@@ -637,8 +637,8 @@ public class BackTrack extends Module {
     // -------------------------------------------------------------- targets
 
     private EntityLivingBase resolveTarget() {
-        KillAura ka = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-        if (ka != null && ka.isEnabled() && ka.getTarget() != null) return ka.getTarget();
+        EntityLivingBase auraTarget = myau.util.Auras.target();
+        if (auraTarget != null) return auraTarget;
         if (lastAttacked != null && !lastAttacked.isDead
                 && System.currentTimeMillis() - lastAttackTime <= COMBAT_LOCK_MS
                 && mc.thePlayer.getDistanceToEntity(lastAttacked) <= range.getValue() * 2.0F) {

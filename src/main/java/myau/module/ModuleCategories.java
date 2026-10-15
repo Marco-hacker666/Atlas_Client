@@ -31,7 +31,7 @@ public final class ModuleCategories {
 
     static {
         put(Category.COMBAT,
-                NoDelay.class, AimAssist.class, AutoClicker.class, KillAura.class, PlainAura.class, Criticals.class,
+                NoDelay.class, AimAssist.class, AutoClicker.class, KillAura.class, KillAura2.class, PlainAura.class, Criticals.class,
                 JumpReset.class, Velocity.class, HitBox.class, Reach.class, BackTrack.class, TickBase.class, TimerRange.class,
                 FakeLag.class, LagRange.class, KnockbackDelay.class, ServerLag.class, MoreKB.class, Freeze.class,
                 SprintReset.class, Wtap.class, KeepSprint.class, BlockHit.class, HitSelect.class,

@@ -285,6 +285,7 @@ public final class ModuleDocs {
         d("AutoReconnect", "被踢出或斷線後自動重新連線到同一個伺服器。");
         d("AutoGG", "遊戲結束時自動發送訊息（預設是 gg）。");
         // ------------------------------------------------------------ COMBAT
+        d("KillAura2", "重寫的 KillAura：轉頭像真手、點擊像真人，只在視角真的打得到時出手；配合 InvulnTiming 在對方無敵時間結束那一刻出手，並會自動格擋。和 KillAura 不能同時開。");
         d("KillAura", "自動攻擊範圍內的目標：選目標、轉頭（多種模式，可靜默）、依 CPS 出手，並可自動格擋。");
         d("AimAssist", "攻擊時把準心輕微往附近目標拉，手感接近真人微調，不會自己出手。");
         d("AutoClicker", "按住左鍵時自動連點，CPS 在設定範圍內隨機，可順便格擋或挖方塊。");
@@ -381,7 +382,7 @@ public final class ModuleDocs {
         d("ChestAura", "自動打開附近的箱子。");
         d("ChestStealer", "打開箱子時自動把有用的東西拿走。");
         d("FastPlace", "加快放方塊的速度。");
-        d("SpeedMine", "加快挖方塊的速度。");
+        d("SpeedMine", "加快挖方塊。BreakSpeed：直接改挖掘速度（羊毛 4、床 3、終界石和木板 1.56、其他 x1.39）。FinishEarly：挖到一定進度就提早完成，speed 100% 是原版伺服器能接受的最快（原版時間的 70%）。");
         d("AntiObbyTrap", "頭卡在黑曜石等陷阱方塊裡時，把那格當成空氣，讓你看得到、出得去。");
         // ------------------------------------------------------------ RENDER
         d("ESP", "在其他玩家身上畫外框或光暈，隔牆也看得到。");
@@ -483,6 +484,13 @@ public final class ModuleDocs {
         d("EffectColors", "主題群組：打擊粒子的顏色。");
 
         // ============================================================ GROUPS
+        g("KillAura2",
+                h("常用", "mode", "min-cps", "max-cps", "attack-range", "auto-block", "move-fix"),
+                h("目標", "sort", "switch-delay", "scan-extra", "fov", "players", "mobs", "animals", "teams",
+                        "bot-check", "through-walls", "raycast"),
+                h("轉頭", "min-turn", "max-turn", "turn-accel", "aim-drift", "flick-overshoot", "lazy", "short-stop"),
+                h("出手", "swing-range", "max-per-tick", "require-press", "weapons-only", "inventory-check",
+                        "ignored-backoff"));
         g("KillAura",
                 h("常用", "Rotations", "CPS Mode", "MinCPS", "MaxCPS", "AttackRange", "SwingRange", "auto-block",
                         "Mode", "MoveFix"),
@@ -683,6 +691,37 @@ public final class ModuleDocs {
         help("multi-place", "同一個 tick 最多放 4 格。Grim 會抓（MultiPlace），預設關。");
 
         // ======================================================= MODULE HELP
+        String ka2 = "KillAura2";
+        help(ka2, "mode", "Single 一直打同一個人，直到他失效或離開攻擊範圍而有別人在範圍內；Switch 每過 switch-delay 換下一個範圍內的人。");
+        help(ka2, "sort", "選目標的順序（攻擊範圍內的人永遠優先）：距離、血量、離準心的角度、受傷時間。");
+        help(ka2, "switch-delay", "Switch 模式換人的間隔（毫秒）。");
+        help(ka2, "attack-range", "出手距離（眼睛到碰撞箱）。視角射線要在這個距離內打到對方才會出手；原版是 3.0。");
+        help(ka2, "scan-extra", "比出手距離多看幾格：對方還沒進入攻擊範圍就先開始轉頭。");
+        help(ka2, "fov", "只選在準心這個角度以內的人。");
+        help(ka2, "through-walls", "隔著方塊也選、也打。關掉時視線被擋就不出手。");
+        help(ka2, "players", "攻擊玩家。");
+        help(ka2, "mobs", "攻擊怪物（含鐵傀儡、Boss）。");
+        help(ka2, "animals", "攻擊動物。");
+        help(ka2, "teams", "不打同隊的人。");
+        help(ka2, "bot-check", "不打判定為機器人的玩家。");
+        help(ka2, "min-cps", "每秒點擊下限。每輪連擊在上下限間抽一個速度，間隔像真人一樣不規則。");
+        help(ka2, "max-cps", "每秒點擊上限。");
+        help(ka2, "max-per-tick", "一個 tick 最多出手幾次。1 最安全；2 和原版一樣允許快速連點擠在同一 tick。");
+        help(ka2, "min-turn", "接近目標時每 tick 最少轉幾度（舊版 MinTurnSpeed，你調好的值是 14）。");
+        help(ka2, "max-turn", "離目標 60 度以上時每 tick 最多轉幾度（舊版 MaxTurnSpeed，60）。中間依平滑曲線變化。");
+        help(ka2, "turn-accel", "轉速每 tick 最多能增加多少（舊版 TurnAccel，30）；0 為不限制。");
+        help(ka2, "aim-drift", "瞄準點在碰撞箱裡慢慢飄移的比重（舊版 AimDrift，0.4），不會一直瞄同一點。");
+        help(ka2, "flick-overshoot", "大角度轉頭時偶爾轉過頭一點再拉回來，像真人甩槍。");
+        help(ka2, "short-stop", "偶爾停頓 1～2 tick，只轉一小段，像真人的猶豫。");
+        help(ka2, "lazy", "準心已經能打到時就不轉頭，像真人一樣手不亂動。");
+        help(ka2, "move-fix", "FollowAim（建議）：移動跟著瞄準方向轉，按鍵不變，伺服器一定能模擬，最不容易被拉回。KeepDirection：重新對應按鍵，維持往鏡頭方向走；對應後不是往前時會取消疾跑。None：不處理。");
+        help(ka2, "require-press", "按住左鍵時才攻擊。");
+        help(ka2, "weapons-only", "只有拿劍時才攻擊。");
+        help(ka2, "inventory-check", "開著箱子或背包時不攻擊。");
+        help(ka2, "ignored-backoff", "連續 3 下打出去對方都沒反應（大廳、出生保護、伺服器不收）時，暫停攻擊他 1.5 秒，只瞄不打。等反應的時間依延遲算（延遲未知時當 300ms），不會因為延遲高就誤判。");
+        help(ka2, "swing-range", "點擊打不到時（視角還沒對上、對方剛好在攻擊範圍外），對方在這個距離內就照樣揮空，像真人邊靠近邊點；格擋也只在這個距離內舉劍。");
+        help(ka2, "raycast", "照原版準心：視線上第一個碰到的實體才吃這一下。前面擋著另一個敵人就改打他；擋著的是隊友等其他東西就不出手。");
+        help(ka2, "auto-block", "Legit（建議，舊版 LEGIT 的做法）：打中後 1～2 tick（大約五次裡四次），對方還在無敵時間、而且他打得到你（你剛被打，或他面向你在揮）時舉劍，對方無敵時間結束前 1～2 tick 放下，下一下照常打中。Always：不看威脅，只要對方在無敵時間內就舉劍。None：不格擋。Clutch 墊方塊或正在放方塊時不舉劍。出手時機看 InvulnTiming 模組（hold-fire 開著時，對方無敵時間內不點擊，結束後下一次點擊才出手）。");
         String ka = "KillAura";
         help(ka, "Mode", "Single 一直打同一個人；Switch 每過 SwitchDelay 換下一個目標。");
         help(ka, "Sort", "選目標的優先順序：距離、血量、受傷時間、或離準心最近。");

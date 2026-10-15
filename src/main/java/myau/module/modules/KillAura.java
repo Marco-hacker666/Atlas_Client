@@ -2186,6 +2186,11 @@ public class KillAura extends Module {
 
     @Override
     public void onEnabled() {
+        /* Never both auras at once (KillAura2, 2026-10-14). */
+        Module rewrite = Myau.moduleManager.modules.get(KillAura2.class);
+        if (rewrite != null && rewrite.isEnabled()) {
+            rewrite.setEnabled(false);
+        }
         if (!this.wantsToDisable) {
             this.target = null;
             this.switchTick = 0;

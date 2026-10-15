@@ -69,8 +69,7 @@ public class Speed extends Module {
 
     private boolean canBoostLegit() {
         if (!canBoost()) return false;
-        KillAura killAura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-        if (killAura.isEnabled() && killAura.target != null) return false;
+        if (myau.util.Auras.target() != null) return false;
         if (this.onlyJumping.getValue()) {
             return mc.gameSettings.keyBindJump.isKeyDown();
         }

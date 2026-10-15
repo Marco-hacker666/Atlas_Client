@@ -191,6 +191,10 @@ public class NoSlow extends Module {
     }
 
     private boolean isKillAuraAutoBlocking() {
+        KillAura2 aura2 = (KillAura2) Myau.moduleManager.modules.get(KillAura2.class);
+        if (aura2 != null && aura2.isBlocking()) {
+            return true;
+        }
         KillAura aura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
         if (!aura.isPlayerBlocking() || !aura.isEnabled()) {
             return false;

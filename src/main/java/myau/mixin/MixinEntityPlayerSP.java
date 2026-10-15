@@ -64,6 +64,11 @@ public abstract class MixinEntityPlayerSP extends MixinEntityPlayer {
             if (aura != null) {
                 aura.afterRotations(event);
             }
+            myau.module.modules.KillAura2 aura2 = (myau.module.modules.KillAura2)
+                    myau.Myau.moduleManager.modules.get(myau.module.modules.KillAura2.class);
+            if (aura2 != null) {
+                aura2.afterRotations(event);
+            }
             RotationState.applyState(event.isRotated() && !this.isRiding(), event.getNewYaw(), event.getNewPitch(), event.getPreYaw(), event.isRotating());
             if (event.isRotated()) {
                 this.pendingYaw = this.rotationYaw;

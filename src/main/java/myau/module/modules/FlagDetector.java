@@ -1197,9 +1197,11 @@ public class FlagDetector extends Module {
             if (this.logFile.getValue()) {
                 /* Every hit, so a damage cut can be judged afterwards from the
                    numbers rather than from memory (2026-10-13). */
-                writeLog(String.format("HIT-DMG target=%s dealt=%.2f expected=%s usual=%s health=%s weapon=%s"
+                /* dealt is per hit since 2026-10-15: the window's loss over the
+                   flinches in it (hits=, total=). */
+                writeLog(String.format("HIT-DMG target=%s dealt=%.2f hits=%d total=%.2f expected=%s usual=%s health=%s weapon=%s"
                                 + " armour=%d blocking=%s",
-                        living.getName(), hit.dealt,
+                        living.getName(), hit.dealt, hit.hits, hit.total,
                         Float.isNaN(hit.expected) ? "-" : String.format("%.2f", hit.expected),
                         Float.isNaN(hit.usual) ? "-" : String.format("%.2f", hit.usual),
                         myau.util.HealthUtil.source(living), weaponBasis(), living.getTotalArmorValue(),
@@ -1747,7 +1749,7 @@ public class FlagDetector extends Module {
                 + Math.abs(this.sentPitch - this.sentPitchBefore);
         StringBuilder mods = new StringBuilder();
         for (Class<?> type : new Class<?>[]{FastPlace.class, Clutch.class, Scaffold.class, AutoBlockIn.class,
-                KillAura.class, FakeLag.class, BackTrack.class, Blink.class, AntiVoid.class, SafeWalk.class, Eagle.class}) {
+                KillAura.class, KillAura2.class, FakeLag.class, BackTrack.class, Blink.class, AntiVoid.class, SafeWalk.class, Eagle.class}) {
             myau.module.Module module = myau.Myau.moduleManager.modules.get(type);
             if (module != null && module.isEnabled()) {
                 mods.append(mods.length() == 0 ? "" : ",").append(module.getName());

@@ -495,7 +495,7 @@ public final class ModuleDocs {
 
         // ============================================================ GROUPS
         g("KillAura2",
-                h("常用", "mode", "min-cps", "max-cps", "attack-range", "auto-block", "move-fix"),
+                h("常用", "mode", "min-cps", "max-cps", "attack-range", "auto-block", "legit-threat", "legit-tolerance", "move-fix"),
                 h("目標", "sort", "switch-delay", "scan-extra", "fov", "players", "mobs", "animals", "teams",
                         "bot-check", "through-walls", "raycast"),
                 h("轉頭", "min-turn", "max-turn", "turn-accel", "aim-drift", "flick-overshoot", "lazy", "short-stop"),
@@ -702,6 +702,8 @@ public final class ModuleDocs {
 
         // ======================================================= MODULE HELP
         String ka2 = "KillAura2";
+        help(ka2, "legit-threat", "Legit 格擋什麼時候算「有危險」。Look（建議，參考 LiquidBounce NextGen）：有敵人的準心真的對著你（他的視線在攻擊距離內打到你、中間沒有牆）才舉劍，擋得少、衝刺斷得少。Swing：舊的判斷，你剛被打，或對方在 3.6 格內面向你（60 度內）在揮手；打架時幾乎一直成立。");
+        help(ka2, "legit-tolerance", "Look 判斷時把你的身體放大幾格。越大越容易舉劍；0.3 是 NextGen 的預設。");
         help(ka2, "mode", "Single 一直打同一個人，直到他失效或離開攻擊範圍而有別人在範圍內；Switch 每過 switch-delay 換下一個範圍內的人。");
         help(ka2, "sort", "選目標的順序（攻擊範圍內的人永遠優先）：距離、血量、離準心的角度、受傷時間。");
         help(ka2, "switch-delay", "Switch 模式換人的間隔（毫秒）。");

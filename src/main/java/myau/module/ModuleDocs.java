@@ -364,6 +364,16 @@ public final class ModuleDocs {
         d("BlockESP", "標出箱子、床或自訂方塊的位置。");
         d("AutoMessage", "遊戲結束或擊殺後自動發送訊息。");
         d("NoItemRelease", "放開右鍵時不送出「停止使用物品」封包，伺服器仍當你在使用；本機照常停止（來源：Slinky）。");
+        help("KeepSprint", "motion-min", "打中人時保留多少速度（%，每下從 min～max 之間隨機）。100＝完全不減速，60＝原版。參考 LiquidBounce NextGen。");
+        help("KeepSprint", "motion-max", "同上，範圍的上限。");
+        help("KeepSprint", "motion-when-hurt-min", "自己在被打狀態（hurt-time 範圍內）時，打中人保留多少速度（%）。");
+        help("KeepSprint", "motion-when-hurt-max", "同上，範圍的上限。");
+        help("KeepSprint", "hurt-time-min", "自己的受傷 tick 在這個範圍內時，改用 motion-when-hurt。");
+        help("KeepSprint", "hurt-time-max", "同上，範圍的上限。");
+        help("KeepSprint", "chance", "KeepSprint 生效的機率；沒生效的那一下就是原版（減速、斷衝刺）。");
+        help("KeepSprint", "hit-control", "進階：打中人的那個 tick 額外調整速度與衝刺（下面幾個 Hit 選項）。預設關；舊版這段每個 tick 都在跑，會一直減速、斷衝刺。");
+        help("NoSlow", "NG Timing", "NG-Reuse／NG-Switch 送封包的時機：PreAndPost＝移動封包前放開、之後再用；Pre／Post＝都在那一邊送。");
+        help("NoSlow", "NG Blink MaxTicks", "NG-Blink 格擋時最多把移動封包扣住幾個 tick，到了就先送出去。");
         help("NoItemRelease", "safe-release", "一移動或疾跑，就在該 tick 的移動封包前補送放開封包（避免 Grim NoSlow）；關掉則一直不送。");
         d("NoJumpDelay", "移除連續跳躍之間的延遲。");
         d("SafeWalk", "走到方塊邊緣時不會掉下去（像一直按著潛行）。");
@@ -498,7 +508,7 @@ public final class ModuleDocs {
                         "Silverfish", "Teams", "BotCheck", "ThroughWalls"),
                 h("出手", "ScanExtra", "Raycast", "ExitClick", "RequirePress",
                         "AllowMining", "WeaponsOnly", "AllowTools", "InventoryCheck"),
-                h("格擋", "AttackTick", "AutoBlockRequirePress", "AutoBlockCPS", "AutoBlockRange"),
+                h("格擋", "AttackTick", "LegitThreat", "LegitTolerance", "LegitSameTick", "AutoBlockRequirePress", "AutoBlockCPS", "AutoBlockRange"),
                 h("轉頭", "SmoothBack", "AimMode", "MinTurnSpeed", "MaxTurnSpeed",
                         "Multipoint", "AimDrift", "FlickOvershoot", "TurnAccel", "Smoothing", "AngleStep", "AimLead", "AimLeadCap",
                         "RotationTiming", "LazyRotation", "ShortStop", "FailAim"),
@@ -742,6 +752,9 @@ public final class ModuleDocs {
         help(ka, "AllowMining", "準心對著方塊且按住左鍵時，讓你挖方塊而不是打人。");
         help(ka, "InventoryCheck", "開著背包、箱子等畫面時不攻擊。");
         help(ka, "auto-block", "自動格擋方式。LEGIT：只在對方面向你、正在揮劍（或你剛被打）時才 block hit——打完立刻舉劍、下一下之前放下，不降 CPS；對方沒威脅就不格擋，跑得快。SameTick：要點的那 tick 先放下、打、立刻再舉，其餘時間舉著；離開揮手距離就放下。");
+        help(ka, "LegitThreat", "LEGIT 什麼時候算「有危險」才舉劍。Look（建議，參考 LiquidBounce NextGen）：敵人的準心真的對著你（他的視線在攻擊距離內打到你、中間沒有牆）才擋，擋得少、跑得快。Swing：舊的判斷，你剛被打，或敵人在 3.6 格內面向你（60 度內）在揮手；打架時幾乎一直成立。");
+        help(ka, "LegitTolerance", "Look 判斷時把你的身體放大幾格。越大越早舉劍、擋得越多；0.3 是 NextGen 的預設。");
+        help(ka, "LegitSameTick", "開：要出手的那個 tick 先放下、打、立刻再舉（同 SameTick），不浪費 tick。關：舊做法，出手前一個 tick 先放下，每下多花一個 tick。部分反作弊可能在意放下和出手在同一個 tick，被抓再關掉。");
         help(ka, "AutoBlockCPS", "格擋時的攻擊速度（LEGIT、SameTick 不用，照 MinCPS～MaxCPS）。");
         help(ka, "AutoBlockRange", "目標在這個距離內就舉劍格擋。");
         help(ka, "AutoBlockRequirePress", "只有按住右鍵時才自動格擋。");

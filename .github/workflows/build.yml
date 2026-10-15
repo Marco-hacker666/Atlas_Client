@@ -40,9 +40,13 @@ jobs:
 
       # Caches Gradle dependencies + build outputs. Biggest build-time win for Loom/Forge.
       # Read-only on anything other than main so PRs don't poison the shared cache.
-      - name: Set up Gradle cache
+      # Gradle 8.8, the same as release.yml. With the wrapper's 8.14.6, remapJar
+      # writes a jar holding only the shadow jar, nested: no mixins.myau.json,
+      # no mcmod.info, no classes. Forge cannot load it, yet the build is green.
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
+          gradle-version: '8.8'
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       # Applies atlas-ui.patch when it is in the repository and not applied yet.
@@ -57,8 +61,23 @@ jobs:
 
       - name: Build
         run: |
-          chmod +x gradlew
-          ./gradlew build --no-daemon --stacktrace
+          gradle build --no-daemon --stacktrace
+
+      # Same check as release.yml: fail instead of uploading a jar Forge cannot load.
+      - name: Check the jar is the client
+        run: |
+          set -euo pipefail
+          JAR=$(ls build/libs/*.jar | grep -v -- '-sources' | head -1)
+          python3 - "$JAR" <<'PY'
+          import sys, zipfile
+          names = zipfile.ZipFile(sys.argv[1]).namelist()
+          mixins = [n for n in names if n.startswith('myau/mixin/') and n.count('/') == 2 and n.endswith('.class')]
+          nested = [n for n in names if n.endswith('.jar')]
+          print(sys.argv[1], len(names), 'entries,', len(mixins), 'mixin classes, nested jars:', nested)
+          if 'mixins.myau.json' not in names or 'mcmod.info' not in names or len(mixins) < 50 or nested:
+              print('::error::The built jar is not a loadable client.')
+              sys.exit(1)
+          PY
 
       - name: Upload jar
         uses: actions/upload-artifact@v7

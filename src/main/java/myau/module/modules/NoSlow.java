@@ -37,6 +37,7 @@ import net.minecraft.network.play.client.C0APacketAnimation;
 import net.minecraft.network.play.client.C0BPacketEntityAction;
 import net.minecraft.network.play.client.C0DPacketCloseWindow;
 import net.minecraft.network.play.client.C0EPacketClickWindow;
+import net.minecraft.network.play.client.C0FPacketConfirmTransaction;
 import net.minecraft.network.play.client.C16PacketClientStatus;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.minecraft.network.play.server.S19PacketEntityStatus;
@@ -806,7 +807,14 @@ public class NoSlow extends Module {
             }
             return;
         }
-        if (packet instanceof C00PacketKeepAlive || packet instanceof C01PacketChatMessage) {
+        if (!"Client thread".equals(Thread.currentThread().getName())) {
+            /* Replies the network thread sends (transactions, keep-alives)
+               pass and do not touch the queue, which the client thread owns
+               (BlinkManager draws the same line). */
+            return;
+        }
+        if (packet instanceof C00PacketKeepAlive || packet instanceof C01PacketChatMessage
+                || packet instanceof C0FPacketConfirmTransaction) {
             return;
         }
         if (packet instanceof C03PacketPlayer && this.ngIdx(this.swordMode) == NG_BLINK && this.ngBlocking()

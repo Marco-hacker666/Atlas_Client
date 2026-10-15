@@ -116,6 +116,14 @@ final class ModuleDocsEn {
         d("BlockESP", "Marks chests, beds or chosen blocks.");
         d("AutoMessage", "Sends a message after a game or a kill.");
         d("NoItemRelease", "Does not send the release-use-item packet when you let go of right click; the server still sees the item in use, the client stops as usual (from Slinky).");
+        help("KeepSprint", "motion-min", "How much speed a hit leaves, in percent, drawn between min and max on each hit. 100 keeps all of it, 60 is vanilla. After LiquidBounce NextGen.");
+        help("KeepSprint", "motion-max", "The top of the same range.");
+        help("KeepSprint", "motion-when-hurt-min", "How much speed a hit leaves while you are hurt (your hurt time inside hurt-time), in percent.");
+        help("KeepSprint", "motion-when-hurt-max", "The top of the same range.");
+        help("KeepSprint", "hurt-time-min", "While your hurt ticks are inside this range, motion-when-hurt is used.");
+        help("KeepSprint", "hurt-time-max", "The top of the same range.");
+        help("KeepSprint", "chance", "How often KeepSprint acts; a hit it skips is a vanilla hit (slowed, sprint dropped).");
+        help("KeepSprint", "hit-control", "Advanced: extra speed and sprint handling on the tick of a hit (the Hit options below). Off by default; it used to run on every tick and kept slowing you and dropping the sprint.");
         help("NoSlow", "NG Timing", "When NG-Reuse and NG-Switch send: PreAndPost lets go before the movement packet and uses again after it; Pre or Post sends both on that side.");
         help("NoSlow", "NG Blink MaxTicks", "The longest NG-Blink holds movement packets while blocking, in ticks, before sending them.");
         help("NoItemRelease", "safe-release", "Send the withheld release before the movement packet of the first tick you move or sprint (avoids Grim NoSlow); off = never send it.");

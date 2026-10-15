@@ -390,6 +390,8 @@ final class ModuleDocsEn {
 
         // ======================================================= MODULE HELP
         String ka2 = "KillAura2";
+        help(ka2, "legit-threat", "When Legit blocking counts as threatened. Look (recommended, after LiquidBounce NextGen): only while an enemy's look actually lands on you within its reach with no wall between, so fewer blocks and fewer broken sprints. Swing: the old rule, you were just hit or the target within 3.6 faces you (within 60 degrees) swinging, which holds nearly the whole fight.");
+        help(ka2, "legit-tolerance", "How far your box is grown for the Look test. Larger blocks more readily; 0.3 is NextGen's default.");
         help(ka2, "mode", "Single keeps one target until it is gone, or leaves reach while someone else is in it; Switch moves to the next one in reach every switch-delay.");
         help(ka2, "sort", "Target order (anyone in attack range always comes first): distance, health, angle from the crosshair, hurt time.");
         help(ka2, "switch-delay", "Time between switches in Switch mode (ms).");

@@ -160,6 +160,16 @@ public class KillAura2 extends Module {
     /* Default None since 2026-10-15: without NoSlow a raised sword walks at 20 % and drops the sprint, so the
        next hit lands unsprinted (sprint hits 0-1 of 5 in the 19:48/19:52 games, 42-78 % with the old aura). */
     public final ModeProperty autoBlock = new ModeProperty("auto-block", 0, new String[]{"None", "Legit", "Always"});
+    /* Legit's threat test (2026-10-16), as KillAura's LegitThreat, after
+       LiquidBounce NextGen's KillAuraAutoBlock.OnlyWhenInDanger. Look: an
+       enemy's look ray, within its reach and with line of sight, lands on
+       our box grown by legit-tolerance. Swing: the old rule (just hit, or
+       within 3.6 facing us within 60 degrees and swinging), true for nearly
+       the whole fight. */
+    public final ModeProperty legitThreat = new ModeProperty("legit-threat", 0, new String[]{"Look", "Swing"},
+            () -> this.autoBlock.getValue() == 1);
+    public final FloatProperty legitTolerance = new FloatProperty("legit-tolerance", 0.3F, 0.0F, 1.0F,
+            () -> this.autoBlock.getValue() == 1 && this.legitThreat.getValue() == 0);
 
     // Conditions
     public final BooleanProperty requirePress = new BooleanProperty("require-press", false);
@@ -954,6 +964,9 @@ public class KillAura2 extends Module {
         if (this.autoBlock.getValue() == 2) {
             return true;
         }
+        if (this.legitThreat.getValue() == 0) {
+            return this.lookThreat();
+        }
         if (mc.thePlayer.hurtTime > 0) {
             return true;
         }
@@ -964,6 +977,47 @@ public class KillAura2 extends Module {
         double dz = mc.thePlayer.posZ - entity.posZ;
         float toUs = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
         return Math.abs(MathHelper.wrapAngleTo180_float(toUs - entity.rotationYawHead)) < 60.0F;
+    }
+
+    /**
+     * legit-threat Look: some enemy player within reach is looking at us --
+     * the ray from its eyes along its look, 3 blocks long, lands on our box
+     * grown by legit-tolerance, with no block in the way. Any enemy counts,
+     * not only the target, and not filtered by fov or through-walls: those
+     * are about whether we can hit it, and an enemy behind us is exactly the
+     * one to block against.
+     */
+    private boolean lookThreat() {
+        double reach = 3.0;
+        double tolerance = this.legitTolerance.getValue();
+        AxisAlignedBB ours = mc.thePlayer.getEntityBoundingBox().expand(tolerance, tolerance, tolerance);
+        for (EntityPlayer enemy : mc.theWorld.playerEntities) {
+            if (!this.isThreatCandidate(enemy) || mc.thePlayer.getDistanceSqToEntity(enemy) > 36.0) {
+                continue;
+            }
+            Vec3 eyes = enemy.getPositionEyes(1.0F);
+            if (ours.isVecInside(eyes)) {
+                return true;
+            }
+            Vec3 look = enemy.getLook(1.0F);
+            Vec3 end = eyes.addVector(look.xCoord * reach, look.yCoord * reach, look.zCoord * reach);
+            MovingObjectPosition mop = ours.calculateIntercept(eyes, end);
+            if (mop != null && mc.theWorld.rayTraceBlocks(eyes, mop.hitVec, false, true, false) == null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isThreatCandidate(EntityPlayer enemy) {
+        if (!(enemy instanceof EntityOtherPlayerMP) || enemy.isDead || enemy.deathTime > 0
+                || enemy.worldObj != mc.theWorld) {
+            return false;
+        }
+        return TargetFilter.accepts(enemy)
+                && !TeamUtil.isFriend(enemy)
+                && (!this.teams.getValue() || !TeamUtil.isSameTeam(enemy))
+                && (!this.botCheck.getValue() || !TeamUtil.isBot(enemy));
     }
 
     // ------------------------------------------------------------- targets

@@ -364,6 +364,14 @@ public final class ModuleDocs {
         d("BlockESP", "標出箱子、床或自訂方塊的位置。");
         d("AutoMessage", "遊戲結束或擊殺後自動發送訊息。");
         d("NoItemRelease", "放開右鍵時不送出「停止使用物品」封包，伺服器仍當你在使用；本機照常停止（來源：Slinky）。");
+        help("KeepSprint", "motion-min", "打中人時保留多少速度（%，每下從 min～max 之間隨機）。100＝完全不減速，60＝原版。參考 LiquidBounce NextGen。");
+        help("KeepSprint", "motion-max", "同上，範圍的上限。");
+        help("KeepSprint", "motion-when-hurt-min", "自己在被打狀態（hurt-time 範圍內）時，打中人保留多少速度（%）。");
+        help("KeepSprint", "motion-when-hurt-max", "同上，範圍的上限。");
+        help("KeepSprint", "hurt-time-min", "自己的受傷 tick 在這個範圍內時，改用 motion-when-hurt。");
+        help("KeepSprint", "hurt-time-max", "同上，範圍的上限。");
+        help("KeepSprint", "chance", "KeepSprint 生效的機率；沒生效的那一下就是原版（減速、斷衝刺）。");
+        help("KeepSprint", "hit-control", "進階：打中人的那個 tick 額外調整速度與衝刺（下面幾個 Hit 選項）。預設關；舊版這段每個 tick 都在跑，會一直減速、斷衝刺。");
         help("NoSlow", "NG Timing", "NG-Reuse／NG-Switch 送封包的時機：PreAndPost＝移動封包前放開、之後再用；Pre／Post＝都在那一邊送。");
         help("NoSlow", "NG Blink MaxTicks", "NG-Blink 格擋時最多把移動封包扣住幾個 tick，到了就先送出去。");
         help("NoItemRelease", "safe-release", "一移動或疾跑，就在該 tick 的移動封包前補送放開封包（避免 Grim NoSlow）；關掉則一直不送。");

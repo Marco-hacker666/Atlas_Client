@@ -26,7 +26,7 @@ public abstract class MixinEntityPlayer extends MixinEntityLivingBase {
         } else {
             KeepSprint keepSprint = (KeepSprint) Myau.moduleManager.modules.get(KeepSprint.class);
             return keepSprint.isEnabled() && keepSprint.shouldKeepSprint()
-                    ? speed + (1.0 - speed) * (1.0 - keepSprint.slowdown.getValue().doubleValue() / 100.0)
+                    ? keepSprint.hitMotionForAxis()
                     : speed;
         }
     }
@@ -41,7 +41,7 @@ public abstract class MixinEntityPlayer extends MixinEntityLivingBase {
     private void setSprinnt(EntityPlayer entityPlayer, boolean boolean2) {
         if (Myau.moduleManager != null) {
             KeepSprint keepSprint = (KeepSprint) Myau.moduleManager.modules.get(KeepSprint.class);
-            if (!keepSprint.isEnabled() || !keepSprint.shouldKeepSprint()) {
+            if (!keepSprint.isEnabled() || !keepSprint.shouldKeepSprint() || !keepSprint.shouldKeepThisHitSprint()) {
                 entityPlayer.setSprinting(boolean2);
             }
         }

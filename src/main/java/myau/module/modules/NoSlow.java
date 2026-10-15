@@ -29,6 +29,7 @@ import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C00PacketKeepAlive;
 import net.minecraft.network.play.client.C01PacketChatMessage;
 import net.minecraft.network.play.client.C02PacketUseEntity;
+import net.minecraft.network.play.client.C03PacketPlayer;
 import net.minecraft.network.play.client.C07PacketPlayerDigging;
 import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
 import net.minecraft.network.play.client.C09PacketHeldItemChange;
@@ -50,7 +51,7 @@ import java.util.Random;
 public class NoSlow extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19"});
+    public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "NG-Reuse", "NG-Switch", "NG-Interact", "NG-Blink", "NG-Grim2364", "NG-Grim2371"});
     public final IntProperty swapDelay = new IntProperty("Swap Delay", 0, 0, 3, () -> swordMode.getValue() == 2);
     public final BooleanProperty noAttack = new BooleanProperty("No Attack", false, () -> swordMode.getValue() == 2);
     public final PercentProperty swordMotion = new PercentProperty("Sword Motion", 100, () -> this.swordMode.getValue() != 0);
@@ -94,6 +95,32 @@ public class NoSlow extends Module {
     private static final int DONOR_OLDINTAVEV2 = 7;
     private static final int DONOR_VULCAN = 8;
     private static final int DONOR_GRIM19 = 9;
+
+    /* LiquidBounce NextGen's blocking modes (2026-10-16), ported from
+       features/module/modules/movement/noslow/modes (GPL-3.0, as this client).
+       Sword only: NextGen groups them under "Blocking". Left out: Grim2360 and
+       InvalidHand need an offhand (1.9+), and Intave14 is here already (donor).
+       Timings map NextGen's PlayerNetworkMovementTickEvent onto UpdateEvent:
+       PRE is before this tick's movement packet, POST after it. */
+    private static final int NG_BASE = 28;
+    private static final int NG_REUSE = 0;
+    private static final int NG_SWITCH = 1;
+    private static final int NG_INTERACT = 2;
+    private static final int NG_BLINK = 3;
+    private static final int NG_GRIM2364 = 4;
+    private static final int NG_GRIM2371 = 5;
+    private static final int NG_COUNT = 6;
+
+    public final ModeProperty ngTiming = new ModeProperty("NG Timing", 0, new String[]{"PreAndPost", "Pre", "Post"},
+            () -> this.ngIdx(this.swordMode) == NG_REUSE || this.ngIdx(this.swordMode) == NG_SWITCH);
+    public final IntProperty ngBlinkMaxTicks = new IntProperty("NG Blink MaxTicks", 10, 1, 20,
+            () -> this.ngIdx(this.swordMode) == NG_BLINK);
+
+    private final List<Packet<?>> ngBlinkPackets = new ArrayList<Packet<?>>();
+    private int ngBlinkTicks;
+    private boolean ngFlushing;
+    private int ng2371Tick;
+    private boolean ng2371Prevent;
 
     public final BooleanProperty antiSwitch = new BooleanProperty("Anti-Switch", false, () -> this.hasMiauMode());
 
@@ -199,10 +226,18 @@ public class NoSlow extends Module {
         if (!aura.isPlayerBlocking() || !aura.isEnabled()) {
             return false;
         }
-        return aura.isBlocking();
+        /* isBlocking() is the fake-block state, never set by LEGIT or
+           SameTick: with "Only Kill Aura Auto Block" on, NoSlow never ran
+           for them and every aura block slowed the player (2026-10-16).
+           isAuraBlocking() is the block the aura raised itself. */
+        return aura.isBlocking() || aura.isAuraBlocking();
     }
 
     public boolean isAnyActive() {
+        if (this.ng2371Prevent && this.ngIdx(this.swordMode) == NG_GRIM2371 && ItemUtil.isHoldingSword()) {
+            /* NG-Grim2371: every third tick is taken slowed. */
+            return false;
+        }
         if (this.swordMode.getValue() != 2) {
             return mc.thePlayer.isUsingItem() && (this.isSwordActive() || this.isFoodActive() || this.isBowActive());
         } else if (this.swordMode.getValue() == 2 && isSwordActive()) {
@@ -247,6 +282,9 @@ public class NoSlow extends Module {
         if (!this.isEnabled()) return;
         if (mc.thePlayer != null && mc.theWorld != null) {
             this.updateMiau(event);
+            if (this.ngIdx(this.swordMode) >= 0) {
+                this.updateNextGen(event);
+            }
         }
         if (ItemUtil.isHoldingSword() && mc.thePlayer.isUsingItem()) {
             if (isSwordActive()) {
@@ -368,6 +406,9 @@ public class NoSlow extends Module {
         if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null) {
             return;
         }
+        if (this.ngIdx(this.swordMode) == NG_BLINK || !this.ngBlinkPackets.isEmpty()) {
+            this.ngBlinkOnPacket(event);
+        }
         if (event.getType() == EventType.RECEIVE && event.getPacket() instanceof S08PacketPlayerPosLook) {
             if (this.isMiauModeUsed(MIAU_NEW_NCP)) {
                 this.newNcpDisable = 0;
@@ -417,11 +458,14 @@ public class NoSlow extends Module {
      */
     @EventTarget
     public void onLoadWorld(LoadWorldEvent event) {
+        /* NG-Blink's held movement belongs to the old world: drop it, do not send it. */
+        this.ngBlinkPackets.clear();
         this.onDisabled();
     }
 
     @Override
     public void onEnabled() {
+        this.ngReset();
         this.newGrimTicks = 0;
         this.ravenHypOffTicks = 0;
         this.ravenHypSend = false;
@@ -447,6 +491,7 @@ public class NoSlow extends Module {
 
     @Override
     public void onDisabled() {
+        this.ngReset();
         this.newGrimTicks = 0;
         this.ravenHypOffTicks = 0;
         this.ravenHypSend = false;
@@ -631,6 +676,173 @@ public class NoSlow extends Module {
         this.savedSwing = false;
         this.savedBlock = false;
         this.savedInventory = false;
+    }
+
+    // ---- LiquidBounce NextGen blocking modes (2026-10-16) ----
+
+    private int ngIdx(ModeProperty property) {
+        int v = property.getValue();
+        return v >= NG_BASE && v < NG_BASE + NG_COUNT ? v - NG_BASE : -1;
+    }
+
+    /** NextGen's blockingHand != null: blocking with a sword right now. */
+    private boolean ngBlocking() {
+        return this.isEnabled() && ItemUtil.isHoldingSword() && mc.thePlayer.isUsingItem()
+                && (!this.onlyKillAuraAutoBlock.getValue() || this.isKillAuraAutoBlocking());
+    }
+
+    private void ngSendRelease() {
+        PacketUtil.sendPacket(new C07PacketPlayerDigging(
+                C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
+    }
+
+    private void ngSendUse() {
+        if (mc.thePlayer.getHeldItem() != null) {
+            PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(mc.thePlayer.getHeldItem()));
+        }
+    }
+
+    private void ngSendSlot(int slot) {
+        PacketUtil.sendPacket(new C09PacketHeldItemChange(slot));
+    }
+
+    private void updateNextGen(UpdateEvent event) {
+        int mode = this.ngIdx(this.swordMode);
+        boolean pre = event.getType() == EventType.PRE;
+        boolean blocking = this.ngBlocking();
+        if (mode == NG_GRIM2371) {
+            /* Two ticks: use the item again, keep full speed. Third tick: slowed. */
+            if (pre) {
+                if (blocking) {
+                    this.ng2371Tick = (this.ng2371Tick + 1) % 3;
+                    this.ng2371Prevent = this.ng2371Tick == 2;
+                    if (!this.ng2371Prevent) {
+                        this.ngSendUse();
+                    }
+                } else {
+                    this.ng2371Tick = 0;
+                    this.ng2371Prevent = false;
+                }
+            }
+            return;
+        }
+        this.ng2371Prevent = false;
+        if (mode == NG_BLINK) {
+            if (pre) {
+                if (blocking && this.ngBlinkTicks < this.ngBlinkMaxTicks.getValue()) {
+                    this.ngBlinkTicks++;
+                } else {
+                    this.ngBlinkFlush();
+                }
+            }
+            return;
+        }
+        if (!blocking) {
+            return;
+        }
+        int slot = mc.thePlayer.inventory.currentItem;
+        int timing = this.ngTiming.getValue(); // 0 PreAndPost, 1 Pre, 2 Post
+        switch (mode) {
+            case NG_REUSE:
+                /* Let go before the movement packet, use again after it. */
+                if (timing == 0) {
+                    if (pre) {
+                        this.ngSendRelease();
+                    } else {
+                        this.ngSendUse();
+                    }
+                } else if ((timing == 1) == pre) {
+                    this.ngSendRelease();
+                    this.ngSendUse();
+                }
+                break;
+            case NG_SWITCH:
+                /* Another slot before the movement packet, back (and use) after it. */
+                if (timing == 0) {
+                    if (pre) {
+                        this.ngSendSlot((slot + 1) % 8);
+                    } else {
+                        this.ngSendSlot(slot);
+                        this.ngSendUse();
+                    }
+                } else if ((timing == 1) == pre) {
+                    this.ngSendSlot((slot + 1) % 8);
+                    this.ngSendSlot(slot);
+                }
+                break;
+            case NG_INTERACT:
+                if (!pre) {
+                    this.ngSendSlot(slot);
+                    this.ngSendUse();
+                }
+                break;
+            case NG_GRIM2364:
+                /* Grim exempts noslow after a slot switch (Grim issue #874). */
+                if (pre) {
+                    this.ngSendSlot(slot % 8 + 1);
+                    this.ngSendSlot(slot % 7 + 2);
+                    this.ngSendSlot(slot);
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    /**
+     * NG-Blink: while blocking, the movement packets wait; anything else that
+     * goes out (an attack, a release, a use, a slot change) first sends what
+     * waited, in order. Also let go when the block ends, after NG Blink
+     * MaxTicks, and on a server correction.
+     */
+    private void ngBlinkOnPacket(PacketEvent event) {
+        if (this.ngFlushing) {
+            return;
+        }
+        Packet<?> packet = event.getPacket();
+        if (event.getType() == EventType.RECEIVE) {
+            if (packet instanceof S08PacketPlayerPosLook) {
+                this.ngBlinkFlush();
+            }
+            return;
+        }
+        if (packet instanceof C00PacketKeepAlive || packet instanceof C01PacketChatMessage) {
+            return;
+        }
+        if (packet instanceof C03PacketPlayer && this.ngIdx(this.swordMode) == NG_BLINK && this.ngBlocking()
+                && this.ngBlinkTicks < this.ngBlinkMaxTicks.getValue()) {
+            this.ngBlinkPackets.add(packet);
+            event.setCancelled(true);
+            return;
+        }
+        this.ngBlinkFlush();
+    }
+
+    private void ngBlinkFlush() {
+        this.ngBlinkTicks = 0;
+        if (this.ngBlinkPackets.isEmpty()) {
+            return;
+        }
+        this.ngFlushing = true;
+        try {
+            for (Packet<?> p : new ArrayList<Packet<?>>(this.ngBlinkPackets)) {
+                PacketUtil.sendPacketNoEvent(p);
+            }
+        } finally {
+            this.ngBlinkPackets.clear();
+            this.ngFlushing = false;
+        }
+    }
+
+    private void ngReset() {
+        if (mc.thePlayer != null && mc.getNetHandler() != null) {
+            this.ngBlinkFlush();
+        } else {
+            this.ngBlinkPackets.clear();
+        }
+        this.ngBlinkTicks = 0;
+        this.ng2371Tick = 0;
+        this.ng2371Prevent = false;
     }
 
     private void miauApplyMotion() {

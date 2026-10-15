@@ -67,6 +67,22 @@ public class KillAura extends Module {
     public ModeProperty autoBlock;
     /* Read by NoSlow ("No Attack" with SWAP autoblock): the block tick on which no hit goes out. */
     public final IntProperty attackTick = new IntProperty("AttackTick", 0, 1, 5, () -> this.autoBlock.getValue() == 6);
+    /* LEGIT autoblock (2026-10-16), after LiquidBounce NextGen's KillAuraAutoBlock:
+       - LegitThreat "Look": block only while an enemy's look ray, within its
+         reach and with line of sight, lands on our box (NextGen's
+         OnlyWhenInDanger). "Swing" is the old test (just hit, or an enemy
+         within 3.6 swinging while facing us within 60 degrees), which held
+         nearly the whole fight, so nearly every hit cost a slowed tick.
+       - LegitSameTick: on a click, release, hit and block again in the same
+         tick (NextGen's defaults: Reblock 0, StopUsingItem), as SameTick
+         does. Off keeps the old timing: release the tick before the click,
+         so a release and a hit never share a tick, at a tick per hit. */
+    public final ModeProperty legitThreat = new ModeProperty("LegitThreat", 0, new String[]{"Look", "Swing"},
+            () -> this.autoBlock.getValue() == 7);
+    public final FloatProperty legitTolerance = new FloatProperty("LegitTolerance", 0.3F, 0.0F, 1.0F,
+            () -> this.autoBlock.getValue() == 7 && this.legitThreat.getValue() == 0);
+    public final BooleanProperty legitSameTick = new BooleanProperty("LegitSameTick", false,
+            () -> this.autoBlock.getValue() == 7);
     public final BooleanProperty autoBlockRequirePress;
     public final FloatProperty autoBlockCPS;
     public final FloatProperty autoBlockRange;
@@ -621,6 +637,9 @@ public class KillAura extends Module {
         if (this.target == null) {
             return false;
         }
+        if (this.legitThreat.getValue() == 0) {
+            return this.lookThreat();
+        }
         if (mc.thePlayer.hurtTime > 0) {
             return true;
         }
@@ -632,6 +651,57 @@ public class KillAura extends Module {
         double dz = mc.thePlayer.posZ - entity.posZ;
         float toUs = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
         return Math.abs(MathHelper.wrapAngleTo180_float(toUs - entity.rotationYawHead)) < 60.0F;
+    }
+
+    /**
+     * LegitThreat "Look" (2026-10-16), after LiquidBounce NextGen's
+     * KillAuraAutoBlock.OnlyWhenInDanger: some valid enemy within reach is
+     * looking at us -- the ray from its eyes along its look, as long as its
+     * reach, lands on our box grown by LegitTolerance, and no block is in the
+     * way. Facing us within 60 degrees and swinging was true for nearly every
+     * tick of a fight; a look that actually lands is not.
+     */
+    private boolean lookThreat() {
+        double reach = 3.0;
+        double tolerance = this.legitTolerance.getValue();
+        AxisAlignedBB ours = mc.thePlayer.getEntityBoundingBox().expand(tolerance, tolerance, tolerance);
+        for (EntityPlayer enemy : mc.theWorld.playerEntities) {
+            if (!this.isThreatCandidate(enemy) || mc.thePlayer.getDistanceSqToEntity(enemy) > 36.0) {
+                continue;
+            }
+            Vec3 eyes = enemy.getPositionEyes(1.0F);
+            Vec3 look = enemy.getLook(1.0F);
+            Vec3 end = eyes.addVector(look.xCoord * reach, look.yCoord * reach, look.zCoord * reach);
+            if (ours.isVecInside(eyes)) {
+                return true;
+            }
+            MovingObjectPosition mop = ours.calculateIntercept(eyes, end);
+            if (mop == null) {
+                continue;
+            }
+            if (mc.theWorld.rayTraceBlocks(eyes, mop.hitVec, false, true, false) == null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * An enemy player that could hit us. Not isValidTarget: that one also asks
+     * whether we can hit it (FOV, ThroughWalls), and an enemy behind us or
+     * outside our FOV is exactly the one to block against. Walls are judged
+     * by lookThreat's own line of sight.
+     */
+    private boolean isThreatCandidate(EntityPlayer enemy) {
+        if (!(enemy instanceof EntityOtherPlayerMP) || enemy.isDead || enemy.deathTime > 0
+                || enemy.worldObj != mc.theWorld) {
+            return false;
+        }
+        if (!TargetFilter.accepts(enemy) || TeamUtil.isFriend(enemy)) {
+            return false;
+        }
+        return (!this.teams.getValue() || !TeamUtil.isSameTeam(enemy))
+                && (!this.botCheck.getValue() || !TeamUtil.isBot(enemy));
     }
 
     private static double distanceTo(AxisAlignedBB box, Vec3 point) {
@@ -1044,6 +1114,11 @@ public class KillAura extends Module {
         return this.fakeBlockState && ItemUtil.isHoldingSword();
     }
 
+    /** The block this aura raised itself (its own use packet), not the player's right click. */
+    public boolean isAuraBlocking() {
+        return this.blockingState && ItemUtil.isHoldingSword();
+    }
+
     public boolean isPlayerBlocking() {
         return (mc.thePlayer.isUsingItem() || this.blockingState) && ItemUtil.isHoldingSword();
     }
@@ -1318,7 +1393,24 @@ public class KillAura extends Module {
                                 if (this.hasValidTarget() && this.target != null
                                         && this.isBoxInSwingRange(this.target.getBox())) {
                                     boolean threat = this.legitBlockThreat();
-                                    if (!Myau.playerStateManager.digging && !Myau.playerStateManager.placing) {
+                                    if (this.legitSameTick.getValue()) {
+                                        /* LegitSameTick: as SameTick (case 10), but
+                                           only while threatened. Due click while
+                                           blocking: release, and the hit goes out this
+                                           tick; finishAttack blocks again after it. */
+                                        if (!Myau.playerStateManager.digging && !Myau.playerStateManager.placing) {
+                                            if (this.isPlayerBlocking()) {
+                                                if (!threat) {
+                                                    this.stopBlock();
+                                                } else if (this.attackDelayMS <= 0L) {
+                                                    this.stopBlock();
+                                                    swap = true;
+                                                }
+                                            } else if (threat) {
+                                                swap = true;
+                                            }
+                                        }
+                                    } else if (!Myau.playerStateManager.digging && !Myau.playerStateManager.placing) {
                                         if (this.isPlayerBlocking()) {
                                             if (!threat || this.attackDelayMS <= 50L) {
                                                 this.stopBlock();

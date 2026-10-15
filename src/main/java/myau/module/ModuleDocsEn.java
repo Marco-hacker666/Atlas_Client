@@ -116,6 +116,8 @@ final class ModuleDocsEn {
         d("BlockESP", "Marks chests, beds or chosen blocks.");
         d("AutoMessage", "Sends a message after a game or a kill.");
         d("NoItemRelease", "Does not send the release-use-item packet when you let go of right click; the server still sees the item in use, the client stops as usual (from Slinky).");
+        help("NoSlow", "NG Timing", "When NG-Reuse and NG-Switch send: PreAndPost lets go before the movement packet and uses again after it; Pre or Post sends both on that side.");
+        help("NoSlow", "NG Blink MaxTicks", "The longest NG-Blink holds movement packets while blocking, in ticks, before sending them.");
         help("NoItemRelease", "safe-release", "Send the withheld release before the movement packet of the first tick you move or sprint (avoids Grim NoSlow); off = never send it.");
         d("NoJumpDelay", "Removes the delay between consecutive jumps.");
         d("SafeWalk", "Stops you walking off block edges, as if sneaking.");
@@ -430,6 +432,9 @@ final class ModuleDocsEn {
         help(ka, "AllowMining", "With the crosshair on a block and the attack key held, mine instead of attacking.");
         help(ka, "InventoryCheck", "No attacks while an inventory or chest screen is open.");
         help(ka, "auto-block", "How it blocks. LEGIT: block hits only while the target can hit back (facing you and swinging, or you were just hit): raised right after a hit, lowered before the next, CPS unchanged; no threat, no blocking, full speed. SameTick: on a click tick lower, hit and raise again at once; blocking between clicks; lowered out of swing range.");
+        help(ka, "LegitThreat", "When LEGIT counts as threatened and blocks. Look (recommended, after LiquidBounce NextGen): only while an enemy's look actually lands on you within its reach with no wall between, so fewer blocks and more speed. Swing: the old test, you were just hit or an enemy within 3.6 faces you (within 60 degrees) swinging, which holds nearly the whole fight.");
+        help(ka, "LegitTolerance", "How far your box is grown for the Look test. Larger blocks earlier and more often; 0.3 is NextGen's default.");
+        help(ka, "LegitSameTick", "On: on a click tick, lower, hit and raise again at once (as SameTick), losing no tick. Off: the old timing, lowered the tick before the click, a tick per hit. Some anticheats may mind a release and a hit in one tick; turn it off if flagged.");
         help(ka, "AutoBlockCPS", "Attack speed while blocking (not used by LEGIT and SameTick, which keep MinCPS-MaxCPS).");
         help(ka, "AutoBlockRange", "Raise the sword when the target is within this distance.");
         help(ka, "AutoBlockRequirePress", "Only block while the use key is held.");

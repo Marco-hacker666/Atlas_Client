@@ -300,6 +300,10 @@ public final class ModuleDocs {
         d("Criticals", "讓攻擊判定為爆擊（多 50% 傷害），以封包或小跳實現。");
         d("FastBow", "加快拉弓射箭的速度。");
         d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Helper / Auto / Lag：其他方式。");
+        d("AntiBounce", "卡在方塊裡時把你推出來：身體跟方塊重疊 2 tick 以上，就往最短的出口（優先你在走的方向）慢慢移出去，速度接近原版。Clutch 接方塊時不動作。");
+        help("AntiBounce", "speed", "每 tick 最多推多遠。原版自己推出方塊是 0.1；太快可能被當成穿牆。");
+        help("AntiBounce", "max-escape", "最多找多遠的出口。超過就不推，只記錄。");
+        help("AntiBounce", "log", "每次卡住寫一行到 config/Atlas/stuck-*.txt：卡在哪個方塊、是不是自己剛放的、離上次被拉回多久、延遲、怎麼出來的。");
         help("BlockHit", "ManualChance", "每次打中後舉劍一下的機率（每秒格擋次數 = CPS × 機率）。KillAura 自己有格擋時不作用。");
         d("ThrowAura", "自動把雪球、蛋等投擲物丟向敵人。");
         d("Displace", "攻擊瞬間轉向，把對手的擊退方向導向虛空或指定方向。");
@@ -501,7 +505,7 @@ public final class ModuleDocs {
 
         // ============================================================ GROUPS
         g("KillAura2",
-                h("常用", "mode", "min-cps", "max-cps", "attack-range", "auto-block", "legit-threat", "legit-tolerance", "move-fix"),
+                h("常用", "mode", "min-cps", "max-cps", "attack-range", "auto-block", "legit-threat", "legit-tolerance", "block-min-ticks", "block-stop-sprint", "block-release", "block-log", "move-fix"),
                 h("目標", "sort", "switch-delay", "scan-extra", "fov", "players", "mobs", "animals", "teams",
                         "bot-check", "through-walls", "raycast"),
                 h("轉頭", "min-turn", "max-turn", "turn-accel", "aim-drift", "flick-overshoot", "lazy", "short-stop"),
@@ -710,6 +714,10 @@ public final class ModuleDocs {
         String ka2 = "KillAura2";
         help(ka2, "legit-threat", "Legit 格擋什麼時候算「有危險」。Look（建議，參考 LiquidBounce NextGen）：有敵人的準心真的對著你（他的視線在攻擊距離內打到你、中間沒有牆）才舉劍，擋得少、衝刺斷得少。Swing：舊的判斷，你剛被打，或對方在 3.6 格內面向你（60 度內）在揮手；打架時幾乎一直成立。");
         help(ka2, "legit-tolerance", "Look 判斷時把你的身體放大幾格。越大越容易舉劍；0.3 是 NextGen 的預設。");
+        help(ka2, "block-min-ticks", "劍舉起後至少維持幾 tick，放下後至少隔 2 tick 才能再舉（Rise 的反作弊會抓 1-2 tick 就切換的格擋）。");
+        help(ka2, "block-stop-sprint", "舉劍前一 tick 先停疾跑、舉劍時不疾跑，放下後等疾跑恢復才出手，讓那一下是疾跑攻擊（邊疾跑邊擋是不可能的狀態，會被抓）。");
+        help(ka2, "block-release", "怎麼放下劍。Slot：這 tick 切到下一格、下一 tick 切回來（1.8 伺服器要中間隔一個移動封包才會放開）。Release：一般的放開封包。");
+        help(ka2, "block-log", "每次被打寫一行到 config/Atlas/ka2block-*.txt：用扣血量判斷伺服器有沒有算到格擋，加上被打前 13 tick 的舉劍和疾跑狀態。");
         help(ka2, "mode", "Single 一直打同一個人，直到他失效或離開攻擊範圍而有別人在範圍內；Switch 每過 switch-delay 換下一個範圍內的人。");
         help(ka2, "sort", "選目標的順序（攻擊範圍內的人永遠優先）：距離、血量、離準心的角度、受傷時間。");
         help(ka2, "switch-delay", "Switch 模式換人的間隔（毫秒）。");

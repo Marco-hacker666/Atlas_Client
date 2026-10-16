@@ -170,6 +170,26 @@ public class KillAura2 extends Module {
             () -> this.autoBlock.getValue() == 1);
     public final FloatProperty legitTolerance = new FloatProperty("legit-tolerance", 0.3F, 0.0F, 1.0F,
             () -> this.autoBlock.getValue() == 1 && this.legitThreat.getValue() == 0);
+    /* 2026-10-16, after Rise 6.9.5 (its own AutoBlockA/B checks flag what our
+       earlier blocks did: use state toggled within a tick or two, and
+       sprinting with the sword up). block-min-ticks: once up, the sword stays
+       up this long, and goes up again no sooner than 2 ticks after it came
+       down. block-stop-sprint: sprint is ended a tick before the block (the
+       C0B reaches the server before the C08), kept off while it is up, and the
+       next hit waits for the sprint to be back. block-release Slot: the block
+       ends by a slot change instead of a C07 -- away in one tick, back the
+       next, with a movement between, because a 1.8 server only drops the use
+       when it updates the player and finds another item in hand (switching
+       away and back before that leaves the block up). block-log: every hit
+       taken, with the server's verdict from the damage (config/Atlas/ka2block-*.txt). */
+    public final IntProperty blockMinTicks = new IntProperty("block-min-ticks", 3, 2, 6,
+            () -> this.autoBlock.getValue() != 0);
+    public final BooleanProperty blockStopSprint = new BooleanProperty("block-stop-sprint", true,
+            () -> this.autoBlock.getValue() != 0);
+    public final ModeProperty blockRelease = new ModeProperty("block-release", 0, new String[]{"Slot", "Release"},
+            () -> this.autoBlock.getValue() != 0);
+    public final BooleanProperty blockLog = new BooleanProperty("block-log", true,
+            () -> this.autoBlock.getValue() != 0);
 
     // Conditions
     public final BooleanProperty requirePress = new BooleanProperty("require-press", false);
@@ -223,6 +243,31 @@ public class KillAura2 extends Module {
     private boolean blockThisWindow = true;
     private int blockFrom = NONE;
     private int releaseLead = 1;
+    /* 2026-10-16 (Rise-style block): when the sword went up and came down,
+       a block waiting for the sprint to end, the slot the release switched
+       away from (to switch back to next tick), and whether the block ended
+       a sprint (the next hit waits for it to be back). */
+    private int blockedAt = NONE;
+    private int unblockedAt = NONE;
+    private int blockPendingUntil = NONE;
+    private int slotBackAt = NONE;
+    private int slotBack = -1;
+    private boolean sprintStopped;
+    private boolean sprintAtSend;
+    /* block-log: per tick, the block as the server has it and the sprint. */
+    private final boolean[] blockTrace = new boolean[64];
+    private final boolean[] sprintTrace = new boolean[64];
+    private int lastOwnHurt;
+    private float lastOwnHealth = Float.NaN;
+    private int logPending;
+    private float logBefore;
+    private float logLowest;
+    private float[][] logRanges;
+    private String logLine = "";
+    private int logReduced;
+    private int logFull;
+    private final java.util.Map<String, Integer> logVerdicts = new java.util.TreeMap<String, Integer>();
+    private java.io.File logFile;
 
     public KillAura2() {
         super("KillAura2", false, false, "Attacks enemies around you: careful aim, human click timing, hits timed to the hurt window, auto-block");
@@ -262,13 +307,18 @@ public class KillAura2 extends Module {
 
     @Override
     public void onDisabled() {
-        this.stopBlock();
+        this.stopBlock(false);
+        this.finishSlotBack();
         this.resetState();
     }
 
     @EventTarget
     public void onWorld(LoadWorldEvent event) {
+        if (this.blocking) {
+            KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
+        }
         this.blocking = false;
+        this.slotBackAt = NONE;
         this.resetState();
     }
 
@@ -288,6 +338,13 @@ public class KillAura2 extends Module {
         this.blockThisWindow = true;
         this.blockFrom = NONE;
         this.releaseLead = 1;
+        this.blockedAt = NONE;
+        this.unblockedAt = NONE;
+        this.blockPendingUntil = NONE;
+        this.slotBackAt = NONE;
+        this.slotBack = -1;
+        this.sprintStopped = false;
+        this.logPending = 0;
     }
 
     // ------------------------------------------------------------- PRE: target, block release, turn
@@ -306,6 +363,19 @@ public class KillAura2 extends Module {
         this.clicks.tick(System.currentTimeMillis());
         this.attackPending = false;
         this.tick++;
+        int last = (this.tick - 1) & 63;
+        this.blockTrace[last] = this.blocking;
+        this.sprintTrace[last] = this.sprintAtSend;
+        if (this.slotBackAt != NONE && this.tick >= this.slotBackAt) {
+            this.finishSlotBack();
+        }
+        if (this.blockStopSprint.getValue() && (this.blocking
+                || this.blockPendingUntil != NONE && this.tick <= this.blockPendingUntil)) {
+            /* Up, or about to be: no sprint goes out (vanilla does not start
+               one with an item in use; NoSlow's sword-sprint keeps one going). */
+            mc.thePlayer.setSprinting(false);
+        }
+        this.watchOwnHurt();
 
         Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
         this.eyesAtPre = new double[]{eyes.xCoord, eyes.yCoord, eyes.zCoord};
@@ -622,6 +692,19 @@ public class KillAura2 extends Module {
             // The server is not taking hits on this target: aim, but no swings.
             return;
         }
+        this.sprintAtSend = mc.thePlayer.isSprinting();
+        if (presses > 0 && this.sprintStopped && this.releasedAt != NONE && this.tick == this.releasedAt + 1
+                && mc.thePlayer.isSprinting()) {
+            /* The sprint the block ended is back this tick, its C0B after this
+               attack would be: the hit waits one tick so it lands sprinting. */
+            this.carry(2);
+            return;
+        }
+        if (presses > 0 && this.slotBackAt != NONE) {
+            // The server holds the other slot until the switch back.
+            this.carry(2);
+            return;
+        }
         if (presses > 0 && (this.releasedAt == this.tick || mc.thePlayer.isUsingItem())) {
             /* Vanilla 1.8 handles no attack in the tick an item is let go, nor
                while one is in use: the press waits for the next tick. */
@@ -868,19 +951,22 @@ public class KillAura2 extends Module {
         if (!mc.thePlayer.isUsingItem()) {
             // Ended elsewhere: a slot change, a death, a window.
             this.blocking = false;
+            KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
             return;
         }
-        if (mc.gameSettings.keyBindUseItem.isKeyDown()) {
+        if (useHeldByHand()) {
             // The player holds it now; theirs to let go.
             this.blocking = false;
             return;
         }
         EntityLivingBase t = this.target;
-        boolean keep = t != null && this.autoBlock.getValue() != 0 && ItemUtil.isHoldingSword()
-                && !myau.management.Arbiter.catching()
-                && this.inSwing(t) && this.threat(t) && this.opensIn(t) > this.releaseLead;
+        boolean hard = t == null || this.autoBlock.getValue() == 0 || !ItemUtil.isHoldingSword()
+                || myau.management.Arbiter.catching();
+        boolean young = this.blockedAt != NONE && this.tick - this.blockedAt < this.blockMinTicks.getValue();
+        boolean keep = !hard && (young
+                || this.inSwing(t) && this.threat(t) && this.opensIn(t) > this.releaseLead);
         if (!keep) {
-            this.stopBlock();
+            this.stopBlock(true);
         }
     }
 
@@ -891,7 +977,7 @@ public class KillAura2 extends Module {
      */
     private void maybeBlock(boolean attacked) {
         if (this.autoBlock.getValue() == 0 || this.blocking || attacked || this.target == null
-                || !ItemUtil.isHoldingSword() || mc.thePlayer.isUsingItem() || mc.gameSettings.keyBindUseItem.isKeyDown()
+                || !ItemUtil.isHoldingSword() || mc.thePlayer.isUsingItem() || useHeldByHand()
                 || this.releasedAt == this.tick || mc.currentScreen instanceof GuiContainer) {
             return;
         }
@@ -904,7 +990,20 @@ public class KillAura2 extends Module {
                 && (!this.blockThisWindow || this.blockFrom != NONE && this.tick < this.blockFrom)) {
             return;
         }
-        if (!this.inSwing(this.target) || !this.threat(this.target) || this.opensIn(this.target) < this.releaseLead + 2) {
+        if (!this.inSwing(this.target) || !this.threat(this.target)
+                || this.opensIn(this.target) < this.releaseLead + this.blockMinTicks.getValue()) {
+            return;
+        }
+        if (this.unblockedAt != NONE && this.tick - this.unblockedAt < 2 || this.slotBackAt != NONE) {
+            // Down for under two ticks, or the release's switch is not back: too quick a toggle.
+            return;
+        }
+        if (this.blockStopSprint.getValue() && mc.thePlayer.isSprinting()) {
+            /* Sprint off now (its C0B goes with this tick's movement); the
+               block follows next tick, after it. */
+            mc.thePlayer.setSprinting(false);
+            this.sprintStopped = true;
+            this.blockPendingUntil = this.tick + 2;
             return;
         }
         if (TickActions.any(TickActions.USE | TickActions.INVENTORY | TickActions.DIG)) {
@@ -912,6 +1011,10 @@ public class KillAura2 extends Module {
             return;
         }
         this.startBlock();
+        if (this.blocking) {
+            this.blockedAt = this.tick;
+            this.blockPendingUntil = NONE;
+        }
     }
 
     /**
@@ -938,17 +1041,131 @@ public class KillAura2 extends Module {
             mc.entityRenderer.itemRenderer.resetEquippedProgress2();
         }
         this.blocking = mc.thePlayer.isUsingItem();
+        if (this.blocking) {
+            /* Held as a hand holds it (2026-10-16): with the key up, vanilla's
+               runTick lets go the very next tick (onStoppedUsingItem, a C07),
+               so every block lasted one tick -- block-min-ticks and the slot
+               release never ran (ka2block 22:29-22:33: 0 of 27, traces
+               1010100000000). */
+            KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), true);
+        }
     }
 
-    private void stopBlock() {
+    /** The physical right button (or use key): the player blocking by hand, not this module's hold. */
+    private static boolean useHeldByHand() {
+        int code = mc.gameSettings.keyBindUseItem.getKeyCode();
+        return code < 0 ? org.lwjgl.input.Mouse.isButtonDown(code + 100) : org.lwjgl.input.Keyboard.isKeyDown(code);
+    }
+
+    /** @param slot allow block-release Slot (not on disable: nothing may be left pending) */
+    private void stopBlock(boolean slot) {
         if (!this.blocking) {
             return;
         }
         this.blocking = false;
+        this.blockedAt = NONE;
+        this.unblockedAt = this.tick;
+        /* The key back to what the hand holds first, so vanilla does not
+           right-click again once the use has ended. */
+        KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
         if (mc.thePlayer != null && mc.thePlayer.isUsingItem()) {
-            mc.playerController.onStoppedUsingItem(mc.thePlayer);
+            if (slot && this.blockRelease.getValue() == 0 && mc.getNetHandler() != null) {
+                /* Away now, back next tick: the server's player update in
+                   between finds another item in hand and drops the use. */
+                int current = mc.thePlayer.inventory.currentItem;
+                this.slotBack = current;
+                this.slotBackAt = this.tick + 1;
+                mc.getNetHandler().addToSendQueue(new net.minecraft.network.play.client.C09PacketHeldItemChange((current + 1) % 9));
+                mc.thePlayer.stopUsingItem();
+            } else {
+                mc.playerController.onStoppedUsingItem(mc.thePlayer);
+            }
             this.releasedAt = this.tick;
         }
+    }
+
+    /** The switch back after a slot release, to the slot the player has. */
+    private void finishSlotBack() {
+        if (this.slotBackAt == NONE) {
+            return;
+        }
+        this.slotBackAt = NONE;
+        if (mc.thePlayer != null && mc.getNetHandler() != null) {
+            mc.getNetHandler().addToSendQueue(new net.minecraft.network.play.client.C09PacketHeldItemChange(
+                    mc.thePlayer.inventory.currentItem));
+        }
+        this.slotBack = -1;
+    }
+
+    /**
+     * block-log: each hit taken, the server's verdict from the damage
+     * (BlockVerdict), with the block and the sprint for the 13 ticks before.
+     */
+    private void watchOwnHurt() {
+        float health = mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount();
+        int hurt = mc.thePlayer.hurtTime;
+        if (this.autoBlock.getValue() != 0 && this.blockLog.getValue() && hurt > this.lastOwnHurt
+                && this.logPending == 0 && !Float.isNaN(this.lastOwnHealth)) {
+            EntityPlayer attacker = null;
+            for (EntityPlayer player : mc.theWorld.playerEntities) {
+                if (player == mc.thePlayer || player.isDead || TeamUtil.isSameTeam(player)) {
+                    continue;
+                }
+                if (mc.thePlayer.getDistanceToEntity(player) <= 6.0F && (attacker == null
+                        || mc.thePlayer.getDistanceToEntity(player) < mc.thePlayer.getDistanceToEntity(attacker))) {
+                    attacker = player;
+                }
+            }
+            if (attacker != null) {
+                StringBuilder up = new StringBuilder();
+                StringBuilder sprint = new StringBuilder();
+                for (int lag = 1; lag <= 13; lag++) {
+                    int at = (this.tick - lag) & 63;
+                    up.append(this.blockTrace[at] ? '1' : '0');
+                    sprint.append(this.blockTrace[at] && this.sprintTrace[at] ? 'S' : this.sprintTrace[at] ? 's' : '.');
+                }
+                this.logRanges = myau.combat.BlockVerdict.ranges(attacker, mc.thePlayer);
+                ItemStack held = attacker.getHeldItem();
+                this.logLine = String.format("up[1..13t ago] %s sprint %s  by %s with %s  rtt %d",
+                        up, sprint, attacker.getName(), held == null ? "hand"
+                                : String.valueOf(net.minecraft.item.Item.itemRegistry.getNameForObject(held.getItem()))
+                                .replace("minecraft:", ""), this.roundTripTicks());
+                this.logBefore = this.lastOwnHealth;
+                this.logLowest = health;
+                this.logPending = 3;
+            }
+        }
+        if (this.logPending > 0) {
+            this.logLowest = Math.min(this.logLowest, health);
+            if (--this.logPending == 0) {
+                this.writeBlockLog();
+            }
+        }
+        this.lastOwnHurt = hurt;
+        this.lastOwnHealth = health;
+    }
+
+    private void writeBlockLog() {
+        float lost = Math.max(0.0F, this.logBefore - this.logLowest);
+        String verdict = myau.combat.BlockVerdict.classify(lost, this.logRanges, 0.15F);
+        Integer seen = this.logVerdicts.get(verdict);
+        this.logVerdicts.put(verdict, seen == null ? 1 : seen + 1);
+        if ("REDUCED".equals(verdict)) {
+            this.logReduced++;
+        } else if ("FULL".equals(verdict)) {
+            this.logFull++;
+        }
+        if (this.logFile == null) {
+            this.logFile = new java.io.File("./config/Atlas/", "ka2block-"
+                    + new java.text.SimpleDateFormat("yyyyMMdd-HHmmss").format(new java.util.Date()) + ".txt");
+        }
+        myau.util.AsyncLog.append(this.logFile, String.format("%s  %-7s lost %.2f (full %.2f/crit %.2f, blocked %.2f/crit %.2f or half %.2f/crit %.2f)  %s"
+                        + "  release %s min %d stop-sprint %s | server blocked %d of %d %s",
+                new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date()), verdict, lost,
+                this.logRanges[0][0], this.logRanges[1][0], this.logRanges[2][0], this.logRanges[3][0],
+                this.logRanges[4][0], this.logRanges[5][0], this.logLine,
+                this.blockRelease.getModeString(), this.blockMinTicks.getValue(), this.blockStopSprint.getValue(),
+                this.logReduced, this.logReduced + this.logFull, this.logVerdicts));
     }
 
     private boolean inSwing(EntityLivingBase entity) {

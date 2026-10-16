@@ -242,6 +242,7 @@ public class Myau {
         moduleManager.modules.put(RenderFixes.class, new RenderFixes());
         moduleManager.modules.put(Refill.class, new Refill());
         moduleManager.modules.put(SafeWalk.class, new SafeWalk());
+        moduleManager.modules.put(AntiBounce.class, new AntiBounce());
         moduleManager.modules.put(DynamicIsland.class, new DynamicIsland());
         moduleManager.modules.put(Scaffold.class, new Scaffold());
         /* Ported from OpenSkid (GPL-3.0), 2026-10-05: registered in source, where the

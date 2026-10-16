@@ -53,6 +53,10 @@ final class ModuleDocsEn {
         d("FastBow", "Draws and shoots the bow faster.");
         help("BlockHit", "ManualChance", "Chance that a hit is followed by a one-tick block (blocks per second = CPS x chance). Idle while KillAura blocks by itself.");
         d("BlockHit", "Blocks with the sword between hits. Manual: after your hits, one-tick block. Predict: raised just before you can be hit again, lowered when you are. Helper / Auto / Lag: other ways.");
+        d("AntiBounce", "Moves you out of a block you are stuck in: after 2 ticks overlapping a solid block, along the shortest way out (the way you walk first), at about vanilla speed. Idle during a Clutch catch.");
+        help("AntiBounce", "speed", "Furthest it moves you a tick. Vanilla pushes a stuck player 0.1; much faster can look like phasing.");
+        help("AntiBounce", "max-escape", "Furthest exit it looks for. Beyond it, nothing is moved, only logged.");
+        help("AntiBounce", "log", "One line per time stuck in config/Atlas/stuck-*.txt: which block, whether you just placed it, time since the last correction, ping, and the way out.");
         d("ThrowAura", "Throws snowballs and eggs at enemies.");
         d("Displace", "Turns at the moment of a hit to aim the target's knockback at the void or a chosen direction.");
         d("KeepSprint", "Keeps sprinting after an attack instead of slowing down.");
@@ -398,6 +402,10 @@ final class ModuleDocsEn {
         String ka2 = "KillAura2";
         help(ka2, "legit-threat", "When Legit blocking counts as threatened. Look (recommended, after LiquidBounce NextGen): only while an enemy's look actually lands on you within its reach with no wall between, so fewer blocks and fewer broken sprints. Swing: the old rule, you were just hit or the target within 3.6 faces you (within 60 degrees) swinging, which holds nearly the whole fight.");
         help(ka2, "legit-tolerance", "How far your box is grown for the Look test. Larger blocks more readily; 0.3 is NextGen's default.");
+        help(ka2, "block-min-ticks", "Ticks the sword stays up at least, and at least 2 ticks down before the next block (block toggles of 1-2 ticks are what Rise's own check flags).");
+        help(ka2, "block-stop-sprint", "Sprint ends a tick before the block and stays off while it is up; the next hit waits for the sprint to be back, so it lands sprinting (sprinting with the sword up is an impossible state).");
+        help(ka2, "block-release", "How the sword comes down. Slot: next slot this tick, back the next (a 1.8 server only drops the use with a movement in between). Release: the usual release packet.");
+        help(ka2, "block-log", "One line per hit taken in config/Atlas/ka2block-*.txt: the server's verdict on the block from the damage, with the block and sprint for the 13 ticks before.");
         help(ka2, "mode", "Single keeps one target until it is gone, or leaves reach while someone else is in it; Switch moves to the next one in reach every switch-delay.");
         help(ka2, "sort", "Target order (anyone in attack range always comes first): distance, health, angle from the crosshair, hurt time.");
         help(ka2, "switch-delay", "Time between switches in Switch mode (ms).");

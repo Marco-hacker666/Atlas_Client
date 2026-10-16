@@ -219,6 +219,12 @@ public class AtlasClickGui extends GuiScreen {
     private float dropX;
     private float dropY;
     private float dropRight;
+    /* 2026-10-16: long lists (NoSlow's 34 sword modes) ran off the window.
+       The list is capped at DROP_ROWS rows and scrolls with the wheel. */
+    private static final int DROP_ROWS = 12;
+    private int dropScroll;
+    private int dropMaxScroll;
+    private boolean dropScrollInit;
     private boolean dropAnchored;
 
     /** What the pointer is over, shown along the bottom. */
@@ -2810,7 +2816,10 @@ public class AtlasClickGui extends GuiScreen {
             widest = Math.max(widest, itemBold.width(mode));
         }
         int rowHeight = 16;
-        float height = modes.length * rowHeight + 8;
+        int fit = Math.max(3, (int) ((windowHeight - 16) / (float) rowHeight));
+        int rows = Math.min(modes.length, Math.min(DROP_ROWS, fit));
+        this.dropMaxScroll = modes.length - rows;
+        float height = rows * rowHeight + 8;
         float width = Math.max(this.dropRight - this.dropX, widest + 34);
         float right = this.dropRight;
         float left = right - width;
@@ -2852,9 +2861,25 @@ public class AtlasClickGui extends GuiScreen {
                 current = v;
             }
         }
+        if (this.dropScrollInit) {
+            /* Opened with the current mode in view, a little below the top. */
+            this.dropScrollInit = false;
+            this.dropScroll = current < 0 ? 0 : current - rows / 3;
+        }
+        this.dropScroll = Math.max(0, Math.min(this.dropMaxScroll, this.dropScroll));
         int accent = accent();
-        for (int i = 0; i < modes.length; i++) {
-            float rowY = top + 4 + i * rowHeight;
+        if (this.dropMaxScroll > 0) {
+            /* Where the visible rows sit in the whole list. */
+            float trackTop = top + 6;
+            float trackBottom = top + height - 6;
+            float thumb = Math.max(10.0F, (trackBottom - trackTop) * rows / modes.length);
+            float thumbTop = trackTop + (trackBottom - trackTop - thumb) * this.dropScroll / this.dropMaxScroll;
+            Liquid.rect(right - 5, trackTop, right - 3, trackBottom, 1.0F, alpha(ink(0x14), content));
+            Liquid.rect(right - 5, thumbTop, right - 3, thumbTop + thumb, 1.0F, alpha(ink(0x55), content));
+        }
+        for (int r = 0; r < rows; r++) {
+            int i = r + this.dropScroll;
+            float rowY = top + 4 + r * rowHeight;
             float cy = rowY + rowHeight / 2.0F;
             boolean hovered = mx >= left && mx <= right && my >= rowY && my <= rowY + rowHeight;
             hit("pick", Integer.valueOf(i), left, rowY, right, rowY + rowHeight);
@@ -2865,7 +2890,7 @@ public class AtlasClickGui extends GuiScreen {
                 Liquid.ring(left + 12, cy, 3.5F, 0.8F, alpha(ink(0x40), content));
             }
             if (i == current) {
-                Liquid.rect(left + 4, rowY + 1, right - 4, rowY + rowHeight - 1, 7.0F,
+                Liquid.rect(left + 4, rowY + 1, right - 8, rowY + rowHeight - 1, 7.0F,
                         alpha(accent, 0.24F * content));
                 if (swatch == 0) {
                     icon("check", left + 12, cy, alpha(accent, content));
@@ -2873,7 +2898,7 @@ public class AtlasClickGui extends GuiScreen {
                     Liquid.ring(left + 12, cy, 5.2F, 1.0F, alpha(TEXT, content));
                 }
             } else if (hovered) {
-                Liquid.rect(left + 4, rowY + 1, right - 4, rowY + rowHeight - 1, 7.0F,
+                Liquid.rect(left + 4, rowY + 1, right - 8, rowY + rowHeight - 1, 7.0F,
                         alpha(ink(0x1A), content));
             }
             (i == current ? itemBold : item).draw(modes[i], left + 22, cy,
@@ -3371,6 +3396,7 @@ public class AtlasClickGui extends GuiScreen {
             Spring grow = new Spring(0.0F, 420.0F, 22.0F);
             this.springs.put("drop:" + mode.getName(), grow);
             this.dropdown = mode;
+            this.dropScrollInit = true;
             return;
         }
         if ("type".equals(target.kind)) {
@@ -3601,9 +3627,14 @@ public class AtlasClickGui extends GuiScreen {
         if (wheel == 0) {
             return;
         }
+        int step = wheel > 0 ? -1 : 1;
+        if (this.dropdown != null) {
+            /* An open list takes the wheel: it scrolls its options. */
+            this.dropScroll = Math.max(0, Math.min(this.dropMaxScroll, this.dropScroll + step));
+            return;
+        }
         ScaledResolution sr = new ScaledResolution(mc);
         float mouseX = layoutX(org.lwjgl.input.Mouse.getEventX() * sr.getScaledWidth() / (float) mc.displayWidth);
-        int step = wheel > 0 ? -1 : 1;
         int width = windowWidth(sr);
         if (mouseX > left(sr) + width - detailWidth(width)) {
             /* Bounded by the content, measured when it was last drawn, so the

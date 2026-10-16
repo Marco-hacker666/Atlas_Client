@@ -45,7 +45,7 @@ public final class ModuleCategories {
                 InvManager.class, Refill.class, AntiAFK.class, AntiFireball.class, AutoAnduril.class,
                 InventoryClicker.class, FastUse.class);
         put(Category.MOVEMENT,
-                Fly.class, Speed.class, LongJump.class, Jesus.class, NoSlow.class, NoItemRelease.class, SafeWalk.class, Eagle.class, InvWalk.class, TargetStrafe.class, MoveFix.class,
+                Fly.class, Speed.class, LongJump.class, Jesus.class, NoSlow.class, NoItemRelease.class, SafeWalk.class, AntiBounce.class, Eagle.class, InvWalk.class, TargetStrafe.class, MoveFix.class,
                 Stasis.class, Parkour.class, NoWeb.class, Tower.class);
         put(Category.RENDER,
                 BlockESP.class, ESP.class, Chams.class, NameTags.class, Tracers.class,
@@ -88,7 +88,19 @@ public final class ModuleCategories {
                 EffectColors.class);
     }
 
+    /* Modules being tested (2026-10-16): registered and categorised, so the
+       table stays complete, but left out of the menus (modulesIn) -- the
+       owner tests them with .toggle / .bind before they are shown. */
+    private static final java.util.Set<Class<? extends Module>> TESTING =
+            new java.util.HashSet<Class<? extends Module>>(java.util.Arrays.<Class<? extends Module>>asList(
+                    KillAura2.class));
+
     private ModuleCategories() {
+    }
+
+    /** Whether a module is kept out of the menus while it is tested. */
+    public static boolean testing(Class<?> type) {
+        return TESTING.contains(type);
     }
 
     @SafeVarargs
@@ -125,7 +137,7 @@ public final class ModuleCategories {
         List<Module> out = new ArrayList<Module>();
         for (Class<? extends Module> type : typesIn(category)) {
             Module module = registered.get(type);
-            if (module != null) {
+            if (module != null && !TESTING.contains(type)) {
                 out.add(module);
             }
         }

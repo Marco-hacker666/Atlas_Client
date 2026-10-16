@@ -138,6 +138,8 @@ final class ModuleDocsEn {
         // ------------------------------------------------------------- WORLD
         d("Scaffold", "Places blocks under you to bridge: towering, keep-Y and several rotation modes.");
         d("AutoBlockIn", "Walls you in with blocks: the ring around your body first, then the roof.");
+        help("AutoBlockIn", "debug", "For troubleshooting: writes each step to config/Atlas/placedebug-*.txt, on a background thread, so frames are not affected. Not needed for normal play.");
+        help("AutoBlockIn", "debug-chat", "Also print debug lines to chat (up to 4 a second). With chat mods installed this can cost a lot of fps; turn it on only when you need to watch live.");
         d("AutoBedDef", "Places blocks around your own bed to defend it.");
         d("AutoHeadHitter", "Keeps head-hitter jumps going when a block is above you.");
         d("BedNuker", "Breaks nearby enemy beds (and the blocks protecting them).");

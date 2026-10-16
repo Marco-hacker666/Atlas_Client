@@ -407,8 +407,12 @@ public final class PlaceUtil {
     /**
      * Stage-by-stage trace, only while the module's debug switch is on.
      *
-     * Every line goes to config/Atlas/placedebug-<time>.txt. Chat gets at most
-     * CHAT_PER_SECOND lines a second. A stage repeating the same message is
+     * Every line goes to config/Atlas/placedebug-<time>.txt, written on the
+     * log thread. Chat gets at most CHAT_PER_SECOND lines a second, and only
+     * while the module's debug-chat switch is on (2026-10-16): chat lines
+     * cost real frames with chat mods installed (Patcher, compact chat and
+     * the like re-lay out the whole chat for each line), and a player
+     * reported 200 -> 90 fps with AutoBlockIn's debug on. A stage repeating the same message is
      * written again only after REPEAT_TICKS, so a module sitting in one state
      * leaves one line every two seconds, not twenty.
      */
@@ -421,6 +425,8 @@ public final class PlaceUtil {
 
         private final String tag;
         private final BooleanProperty enabled;
+        /** Also to chat; null or off: the file only. */
+        private final BooleanProperty chat;
         private final Map<String, String> lastMessage = new HashMap<String, String>();
         private final Map<String, Integer> lastTick = new HashMap<String, Integer>();
         private File target;
@@ -428,8 +434,13 @@ public final class PlaceUtil {
         private int chatLines;
 
         public Trace(String tag, BooleanProperty enabled) {
+            this(tag, enabled, null);
+        }
+
+        public Trace(String tag, BooleanProperty enabled, BooleanProperty chat) {
             this.tag = tag;
             this.enabled = enabled;
+            this.chat = chat;
         }
 
         public boolean on() {
@@ -452,6 +463,9 @@ public final class PlaceUtil {
                 this.target = new File(LOG_DIR, "placedebug-" + FILE_STAMP.format(new Date()) + ".txt");
             }
             AsyncLog.append(this.target, LINE_STAMP.format(new Date()) + "  t" + tick + "  " + line);
+            if (this.chat == null || !this.chat.getValue()) {
+                return;
+            }
             if (tick - this.chatWindow >= 20) {
                 this.chatWindow = tick;
                 this.chatLines = 0;

@@ -82,6 +82,10 @@ public class AutoBlockIn extends Module {
     public final BooleanProperty itemSpoof = new BooleanProperty("item-spoof", true);
     public final BooleanProperty showProgress = new BooleanProperty("show-progress", true);
     public final BooleanProperty debug = new BooleanProperty("debug", false);
+    /* 2026-10-16: debug writes its file only; chat is this separate switch.
+       Up to four chat lines a second cost a player with chat mods more than
+       half their frames (200 -> 90 fps). */
+    public final BooleanProperty debugChat = new BooleanProperty("debug-chat", false, this.debug::getValue);
 
     /** Placements sent and not yet answered: cell -> tick sent. */
     private final Map<BlockPos, Integer> pending = new ConcurrentHashMap<BlockPos, Integer>();
@@ -93,7 +97,7 @@ public class AutoBlockIn extends Module {
     private final Map<PlaceUtil.FaceKey, Integer> failedFaces = new ConcurrentHashMap<PlaceUtil.FaceKey, Integer>();
 
     private final PlaceUtil.Stats stats = new PlaceUtil.Stats();
-    private final PlaceUtil.Trace trace = new PlaceUtil.Trace("[AB]", this.debug);
+    private final PlaceUtil.Trace trace = new PlaceUtil.Trace("[AB]", this.debug, this.debugChat);
 
     private volatile int tick;
     private volatile int pauseTicks;

@@ -56,6 +56,18 @@ public abstract class MixinEntityRenderer {
                     this.mc.thePlayer.inventory.currentItem = slot;
                 }
             }
+            /* 2026-10-16: AutoBlockIn's item-spoof was applied in updateRenderer
+               (each tick) but not here (each frame), unlike Scaffold's: the hand
+               showed the blocks on frames and the spoofed item on ticks, and the
+               equip animation restarted over and over. */
+            AutoBlockIn autoBlockIn = (AutoBlockIn) Myau.moduleManager.modules.get(AutoBlockIn.class);
+            if (this.slot == null && autoBlockIn.isEnabled() && autoBlockIn.itemSpoof.getValue()) {
+                int abSlot = autoBlockIn.getSlot();
+                if (abSlot >= 0) {
+                    this.slot = new Box<>(this.mc.thePlayer.inventory.currentItem);
+                    this.mc.thePlayer.inventory.currentItem = abSlot;
+                }
+            }
             myau.module.modules.Clutch clutch = (myau.module.modules.Clutch) Myau.moduleManager.modules.get(myau.module.modules.Clutch.class);
             int clutchSlot = clutch == null ? -1 : clutch.getSpoofSlot();
             if (clutchSlot >= 0 && this.slot == null) {
@@ -106,7 +118,8 @@ public abstract class MixinEntityRenderer {
         }
 
         AutoBlockIn autoBlockIn = (AutoBlockIn) Myau.moduleManager.modules.get(AutoBlockIn.class);
-        if (autoBlockIn.isEnabled() && autoBlockIn.itemSpoof.getValue()) {
+        if (this.slot == null && autoBlockIn.isEnabled() && autoBlockIn.itemSpoof.getValue()) {
+            /* Not over Scaffold's spoof: overwriting this.slot lost the real slot. */
             int slot = autoBlockIn.getSlot();
             if (slot >= 0) {
                 this.slot = new Box<>(this.mc.thePlayer.inventory.currentItem);

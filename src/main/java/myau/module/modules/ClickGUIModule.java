@@ -95,6 +95,27 @@ public class ClickGUIModule extends Module {
         }
     }
 
+    /**
+     * The key with the menu already closed by Escape (2026-10-17): Atlas does
+     * not switch this module off when it closes, so the key used to switch it
+     * off and the legacy "ClickGui" opener on the same key opened it again --
+     * a second open over the first whenever the menu was really closed (the
+     * 110 ms per press). With that opener stood down, the first press after
+     * Escape only switched this off. Now a press with no menu showing opens
+     * it, whatever this module's state.
+     */
+    @Override
+    public boolean toggle() {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (this.isEnabled() && mc.theWorld != null && mc.currentScreen == null) {
+            myau.ui.GuiPerf.open();
+            openSelectedGui();
+            myau.ui.GuiPerf.opened();
+            return false;
+        }
+        return super.toggle();
+    }
+
     @Override
     public void onEnabled() {
         super.onEnabled();
@@ -102,7 +123,9 @@ public class ClickGUIModule extends Module {
             this.setEnabled(false);
             return;
         }
+        myau.ui.GuiPerf.open();
         openSelectedGui();
+        myau.ui.GuiPerf.opened();
     }
 
     @Override

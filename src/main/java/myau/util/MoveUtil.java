@@ -7,6 +7,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.potion.Potion;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.MathHelper;
+import net.minecraft.util.MovementInput;
 
 public class MoveUtil {
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -154,54 +155,69 @@ public class MoveUtil {
         return new double[]{0.0, 0.0};
     }
 
+    /* fixStrafe's once-a-tick guard: the tick and the yaw it last turned the input to. */
+    private static int fixedTick = Integer.MIN_VALUE;
+    private static float fixedYaw;
+
+    /**
+     * Turns this tick's movement input from the camera's yaw to the yaw the
+     * server is told, as the nearest of the eight key directions at the same
+     * strength.
+     *
+     * 2026-10-17 (a player: "your movement fix is broken, you're not moving
+     * properly"): this used to REBUILD the input from the raw W/A/S/D keys and
+     * overwrite movementInput, so whatever another module had done to it this
+     * tick was lost -- SprintReset's released forward, a soft forward, a
+     * module's own steering -- and the strength was reset to 1. Now it takes
+     * the input as it stands. It runs once a tick: called again (MoveFix and a
+     * rotating module both call it) it would turn an input already turned.
+     */
     public static void fixStrafe(float targetYaw) {
-        float angle = MathHelper.wrapAngleTo180_float(MoveUtil.adjustYaw(MoveUtil.mc.thePlayer.rotationYaw, MoveUtil.getForwardValue(), MoveUtil.getLeftValue()) - targetYaw + 22.5f);
-        switch ((int) (angle + 180.0f) / 45 % 8) {
-            case 0: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = -1.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = 0.0f;
-                break;
-            }
-            case 1: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = -1.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = 1.0f;
-                break;
-            }
-            case 2: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = 0.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = 1.0f;
-                break;
-            }
-            case 3: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = 1.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = 1.0f;
-                break;
-            }
-            case 4: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = 1.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = 0.0f;
-                break;
-            }
-            case 5: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = 1.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = -1.0f;
-                break;
-            }
-            case 6: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = 0.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = -1.0f;
-                break;
-            }
-            case 7: {
-                MoveUtil.mc.thePlayer.movementInput.moveForward = -1.0f;
-                MoveUtil.mc.thePlayer.movementInput.moveStrafe = -1.0f;
-                break;
-            }
+        MovementInput input = MoveUtil.mc.thePlayer.movementInput;
+        int tick = MoveUtil.mc.thePlayer.ticksExisted;
+        if (tick == fixedTick && MathHelper.wrapAngleTo180_float(targetYaw - fixedYaw) == 0.0F) {
+            return;
         }
-        if (MoveUtil.mc.thePlayer.movementInput.sneak) {
-            MoveUtil.mc.thePlayer.movementInput.moveForward *= 0.3f;
-            MoveUtil.mc.thePlayer.movementInput.moveStrafe *= 0.3f;
+        fixedTick = tick;
+        fixedYaw = targetYaw;
+        TargetStrafe targetStrafe = (TargetStrafe) Myau.moduleManager.modules.get(TargetStrafe.class);
+        float[] out;
+        if (targetStrafe != null && targetStrafe.isEnabled() && !Float.isNaN(targetStrafe.getTargetYaw())
+                && (input.moveForward != 0.0F || input.moveStrafe != 0.0F)) {
+            float strength = Math.max(Math.abs(input.moveForward), Math.abs(input.moveStrafe));
+            out = keysToward(targetStrafe.getTargetYaw(), targetYaw, strength);
+        } else {
+            out = turnInput(MoveUtil.mc.thePlayer.rotationYaw, targetYaw, input.moveForward, input.moveStrafe);
         }
+        input.moveForward = out[0];
+        input.moveStrafe = out[1];
+    }
+
+    /**
+     * {forward, strafe} that move toward the same world direction as
+     * {@code forward}/{@code strafe} do at {@code cameraYaw}, but at
+     * {@code moveYaw}: the nearest of the eight key directions, at the
+     * input's strength (the larger of the two magnitudes, so a sneak's 0.3 or
+     * a soft forward stays). No input, no movement.
+     */
+    public static float[] turnInput(float cameraYaw, float moveYaw, float forward, float strafe) {
+        if (forward == 0.0F && strafe == 0.0F) {
+            return new float[]{0.0F, 0.0F};
+        }
+        float strength = Math.max(Math.abs(forward), Math.abs(strafe));
+        /* World direction of the input (moveFlying: strafe to the left turns it by -90). */
+        float world = cameraYaw - (float) Math.toDegrees(Math.atan2(strafe, forward));
+        return keysToward(world, moveYaw, strength);
+    }
+
+    /** Keys, at {@code strength}, that move toward {@code worldYaw} when moving by {@code moveYaw}. */
+    static float[] keysToward(float worldYaw, float moveYaw, float strength) {
+        float relative = MathHelper.wrapAngleTo180_float(worldYaw - moveYaw);
+        int sector = Math.round(relative / 45.0F);
+        double angle = Math.toRadians(sector * 45.0);
+        float forward = (float) Math.round(Math.cos(angle));
+        float strafe = (float) -Math.round(Math.sin(angle));
+        return new float[]{forward * strength, strafe * strength};
     }
 
     public static boolean isMoving() {

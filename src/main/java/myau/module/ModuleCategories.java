@@ -93,7 +93,11 @@ public final class ModuleCategories {
        owner tests them with .toggle / .bind before they are shown. */
     private static final java.util.Set<Class<? extends Module>> TESTING =
             new java.util.HashSet<Class<? extends Module>>(java.util.Arrays.<Class<? extends Module>>asList(
-                    KillAura2.class));
+                    KillAura2.class,
+                    /* The old "ClickGui" opener (2026-10-17): a second entry
+                       beside ClickGUI that does the same thing, listed twice
+                       in the Client column. Still bindable with .bind. */
+                    GuiModule.class));
 
     private ModuleCategories() {
     }

@@ -54,6 +54,7 @@ final class ModuleDocsEn {
         help("BlockHit", "ManualChance", "Chance that a hit is followed by a one-tick block (blocks per second = CPS x chance). Idle while KillAura blocks by itself.");
         d("BlockHit", "Blocks with the sword between hits. Manual: after your hits, one-tick block. Predict: raised just before you can be hit again, lowered when you are. Helper / Auto / Lag: other ways.");
         d("AntiBounce", "Moves you out of a block you are stuck in: after 2 ticks overlapping a solid block, along the shortest way out (the way you walk first), at about vanilla speed. Idle during a Clutch catch.");
+        help("Scaffold", "rotation-random", "Degrees the aim wanders, smoothly, from placement to placement, so it is not the same look every time; where the wandered look would miss the block, the exact one is used. 0 = off.");
         help("AntiBounce", "speed", "Furthest it moves you a tick. Vanilla pushes a stuck player 0.1; much faster can look like phasing.");
         help("AntiBounce", "max-escape", "Furthest exit it looks for. Beyond it, nothing is moved, only logged.");
         help("AntiBounce", "log", "One line per time stuck in config/Atlas/stuck-*.txt: which block, whether you just placed it, time since the last correction, ping, and the way out.");

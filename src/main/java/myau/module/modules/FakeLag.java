@@ -490,6 +490,15 @@ public class FakeLag extends Module {
                 || packet instanceof C08PacketPlayerBlockPlacement;
     }
 
+    /** An item use (not a placement) and the release that ends it: ordered, not judged by position. */
+    private static boolean queuesBehind(Packet<?> packet) {
+        if (packet instanceof C08PacketPlayerBlockPlacement) {
+            return ((C08PacketPlayerBlockPlacement) packet).getPlacedBlockDirection() == 255;
+        }
+        return packet instanceof C07PacketPlayerDigging
+                && ((C07PacketPlayerDigging) packet).getStatus() == C07PacketPlayerDigging.Action.RELEASE_USE_ITEM;
+    }
+
     /* A slot change or a sprint/sneak toggle is not judged against a
        position, only against the order of the movement around it. Until
        2026-09-25 they emptied the queue at once like a click: 14:36:07 a
@@ -585,6 +594,23 @@ public class FakeLag extends Module {
                judged exactly where it was made. */
             event.setCancelled(true);
                 this.queue.offer(new Held(packet, System.currentTimeMillis()));
+            noteHeld();
+            enforceLimits();
+            return;
+        }
+        if (queuesBehind(packet) && !this.queue.isEmpty() && !Arbiter.catching()) {
+            /* 2026-10-17, owner: "FakeLag, please stop getting flagged". Of the
+               holds since 10-16, those ended by a right-click were followed by
+               a FakeLag-blamed setback within 2 s 51 % of the time (23/45),
+               and by an item in use 56 % (28/50), against 3-13 % for every
+               gradual release: a sword block (BlockHit Manual after a hit),
+               food, a bow or a pearl emptied 8-19 held positions in one tick.
+               A use (face 255) and its release are not judged against where
+               the player stands, so like a block placement they take their
+               place behind the held positions, in order -- late, as with
+               latency -- and "using-item" then lets the queue out gradually. */
+            event.setCancelled(true);
+            this.queue.offer(new Held(packet, System.currentTimeMillis()));
             noteHeld();
             enforceLimits();
             return;

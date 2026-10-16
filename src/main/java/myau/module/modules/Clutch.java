@@ -1290,6 +1290,16 @@ public class Clutch extends Module {
             double closest = Double.MAX_VALUE;
             boolean traced = false;
             boolean seen = false;
+            /* Planar multipoint (2026-10-17, owner after a player's advice):
+               every reachable sample of the face first, then the one nearest
+               this block's drawn spot among those within a turn slack of the
+               cheapest -- not the cheapest, which was nearly always the edge
+               nearest the crosshair: rotation-random 15 weighed only 3.6
+               degrees per face against the turn. The slack (rotation-random x
+               0.5 degrees, with humanize) is cut so an urgent catch still
+               turns in time; blocked samples fall through to the next. */
+            List<double[]> samples = new ArrayList<double[]>();
+            double cheapest = Double.MAX_VALUE;
             for (int i = 0; i <= FACE_GRID; i++) {
                 double u = FACE_INSET + (1.0 - 2.0 * FACE_INSET) * i / FACE_GRID;
                 for (int j = 0; j <= FACE_GRID; j++) {
@@ -1313,20 +1323,41 @@ public class Clutch extends Module {
                     if (cost >= bound) {
                         continue;
                     }
-                    double score = cost + spread * Math.hypot(u - this.aimU, v - this.aimV);
-                    if (score >= bestScore) {
-                        continue;
-                    }
-                    traced = true;
-                    MovingObjectPosition hit = ray(eyes, yaw, pitch);
-                    if (hit == null || hit.typeOfHit != MovingObjectType.BLOCK
-                            || !support.equals(hit.getBlockPos()) || hit.sideHit != side) {
-                        continue;
-                    }
-                    seen = true;
-                    bestScore = score;
-                    best = new Plan(cell, support, side, yaw, pitch, cost, catchTick);
+                    cheapest = Math.min(cheapest, cost);
+                    samples.add(new double[]{yaw, pitch, cost, Math.hypot(u - this.aimU, v - this.aimV)});
                 }
+            }
+            double slack = 0.0;
+            if (spread > 0.0 && !samples.isEmpty()) {
+                slack = this.randomization.getValue() * 0.5;
+                if (catchTick >= 0) {
+                    double room = this.maxSpeed.getValue() * Math.max(1, catchTick) - cheapest;
+                    slack = Math.max(0.0, Math.min(slack, room * 0.5));
+                }
+            }
+            final double limit = cheapest + slack;
+            /* Within the slack, nearest the drawn spot first; then the rest by turn. */
+            samples.sort((a, b) -> {
+                boolean inA = a[2] <= limit;
+                boolean inB = b[2] <= limit;
+                if (inA != inB) {
+                    return inA ? -1 : 1;
+                }
+                return inA ? Double.compare(a[3], b[3]) : Double.compare(a[2], b[2]);
+            });
+            for (double[] sample : samples) {
+                traced = true;
+                float yaw = (float) sample[0];
+                float pitch = (float) sample[1];
+                MovingObjectPosition hit = ray(eyes, yaw, pitch);
+                if (hit == null || hit.typeOfHit != MovingObjectType.BLOCK
+                        || !support.equals(hit.getBlockPos()) || hit.sideHit != side) {
+                    continue;
+                }
+                seen = true;
+                bestScore = sample[2];
+                best = new Plan(cell, support, side, yaw, pitch, sample[2], catchTick);
+                break;
             }
             if (!inReach) {
                 this.facesFar++;

@@ -839,7 +839,9 @@ public class AtlasClickGui extends GuiScreen {
         followDrag(sr, mouseX, mouseY);
         /* Before anything of the menu is drawn: the copy it blurs has to be
            of the world alone. */
+        long blurStart = System.nanoTime();
         Liquid.beginFrame();
+        long blurNanos = System.nanoTime() - blurStart;
 
         int width = windowWidth(sr);
         int height = windowHeight(sr);
@@ -979,6 +981,7 @@ public class AtlasClickGui extends GuiScreen {
 
         this.theme.autosave();
         this.perfMillis += ((System.nanoTime() - frameStart) / 1.0E6F - this.perfMillis) * 0.05F;
+        myau.ui.GuiPerf.frame((System.nanoTime() - frameStart) / 1.0E6, blurNanos / 1.0E6);
         if (this.perf) {
             String readout = String.format("%.2f ms  ·  %d draws  ·  %d fps", this.perfMillis, Liquid.draws,
                     net.minecraft.client.Minecraft.getDebugFPS());
@@ -3808,6 +3811,7 @@ public class AtlasClickGui extends GuiScreen {
                    filter is a smaller surprise than losing the menu. */
                 this.search = "";
                 this.listScroll = 0;
+                alignCategory();
                 return;
             }
             mc.displayGuiScreen(null);
@@ -3817,6 +3821,7 @@ public class AtlasClickGui extends GuiScreen {
             if (!this.search.isEmpty()) {
                 this.search = this.search.substring(0, this.search.length() - 1);
                 this.listScroll = 0;
+                alignCategory();
             }
             return;
         }
@@ -3838,8 +3843,11 @@ public class AtlasClickGui extends GuiScreen {
 
     @Override
     public void initGui() {
+        myau.ui.GuiPerf.step("before-init");
         loadState();
+        myau.ui.GuiPerf.step("load");
         build();
+        myau.ui.GuiPerf.step("build");
         this.binding = null;
         this.keyEditing = null;
         this.colorDrag = null;
@@ -3861,6 +3869,8 @@ public class AtlasClickGui extends GuiScreen {
         this.open.snap(0.92F);
         applyTheme();
         paintPalette();
+        myau.ui.GuiPerf.step("theme");
+        alignCategory();
         this.lastFrame = 0L;
         this.lit.clear();
         this.springs.clear();
@@ -3873,6 +3883,32 @@ public class AtlasClickGui extends GuiScreen {
                 {9.0F, 0}, {9.5F, 0}, {9.5F, 1}, {12.5F, 0}, {12.5F, 1}, {14.0F, 1}, {15.0F, 1}};
         for (float[] face : faces) {
             LiquidFont.of(face[0], face[1] > 0.5F);
+        }
+        myau.ui.GuiPerf.step("fonts");
+    }
+
+    /**
+     * The middle list and the detail pane show the same category (2026-10-17).
+     * A module picked from search results, or the one remembered from last
+     * time, could stay in the detail pane while the sidebar showed another
+     * category: KeepRange's settings under "Exploit". The sidebar follows the
+     * selection instead of dropping it.
+     */
+    private void alignCategory() {
+        if (this.selected == null || !this.search.trim().isEmpty() || this.profilesView || this.appearanceView) {
+            return;
+        }
+        Map<String, List<Module>> lists = "Legit".equals(this.page) ? this.legitGroups : this.byCategory;
+        List<Module> here = lists.get(this.category);
+        if (here != null && here.contains(this.selected)) {
+            return;
+        }
+        for (Map.Entry<String, List<Module>> entry : lists.entrySet()) {
+            if (entry.getValue().contains(this.selected) && !("Modules".equals(this.page) && "Legit".equals(entry.getKey()))) {
+                this.category = entry.getKey();
+                this.listScroll = 0;
+                return;
+            }
         }
     }
 

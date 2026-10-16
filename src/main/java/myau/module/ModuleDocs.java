@@ -301,6 +301,7 @@ public final class ModuleDocs {
         d("FastBow", "加快拉弓射箭的速度。");
         d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Helper / Auto / Lag：其他方式。");
         d("AntiBounce", "卡在方塊裡時把你推出來：身體跟方塊重疊 2 tick 以上，就往最短的出口（優先你在走的方向）慢慢移出去，速度接近原版。Clutch 接方塊時不動作。");
+        help("Scaffold", "rotation-random", "每次放方塊時視角在幾度內緩慢飄移，不會每次都看同一個角度；飄移後放不到方塊時就用準確的角度。0 = 關。");
         help("AntiBounce", "speed", "每 tick 最多推多遠。原版自己推出方塊是 0.1；太快可能被當成穿牆。");
         help("AntiBounce", "max-escape", "最多找多遠的出口。超過就不推，只記錄。");
         help("AntiBounce", "log", "每次卡住寫一行到 config/Atlas/stuck-*.txt：卡在哪個方塊、是不是自己剛放的、離上次被拉回多久、延遲、怎麼出來的。");

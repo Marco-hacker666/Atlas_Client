@@ -193,6 +193,19 @@ public class Scaffold extends Module {
     private static final int[] TURNING_MODES = {1, 2, 3, 4, 5, 6};
     public final IntProperty turnSpeed = new IntProperty("turn-speed", 80, 10, 180, this::turnLimited);
     public final BooleanProperty humanize = new BooleanProperty("humanize", true, this::turnLimited);
+    /* 2026-10-17 (a player: "your scaffold rotations need randomization"):
+       SNAP and the fixed-target modes aimed at the same yaw and pitch for every
+       placement (exactly back, pitch 85). The aim now wanders within
+       rotation-random degrees (pitch half that), smoothly, toward a new random
+       goal every few ticks -- and only where the look still puts the block
+       where it is wanted (lookHit); otherwise the exact aim is used. */
+    public final FloatProperty rotationRandom = new FloatProperty("rotation-random", 2.5F, 0.0F, 8.0F,
+            () -> this.rotationMode.getValue() != 0);
+    private float wanderYaw;
+    private float wanderPitch;
+    private float wanderGoalYaw;
+    private float wanderGoalPitch;
+    private int wanderTicks;
     public final BooleanProperty pauseOnCorrection = new BooleanProperty("pause-on-correction", true);
     /* B4: on each jump off the ground, face forward for the jump and turn back
        over a fixed few ticks before placing again (OpenB4 "Jump facing
@@ -243,6 +256,23 @@ public class Scaffold extends Module {
             boolean stage = this.keepY.getValue() == 1 || this.keepY.getValue() == 2 || this.keepY.getValue() == 4;
             return (!stage || this.stage <= 0) && this.sprintMode.getValue() == 0;
         }
+    }
+
+    /**
+     * The aim with this placement's wander added: a smooth drift toward a goal
+     * drawn every 4-9 ticks within rotation-random (yaw) and half of it (pitch).
+     */
+    private float[] wander(float yaw, float pitch) {
+        float range = this.rotationRandom.getValue();
+        if (--this.wanderTicks <= 0) {
+            this.wanderTicks = 4 + (int) (Math.random() * 6);
+            this.wanderGoalYaw = (float) ((Math.random() * 2.0 - 1.0) * range);
+            this.wanderGoalPitch = (float) ((Math.random() * 2.0 - 1.0) * range * 0.5);
+        }
+        float pull = 0.25F + (float) Math.random() * 0.2F;
+        this.wanderYaw += (this.wanderGoalYaw - this.wanderYaw) * pull;
+        this.wanderPitch += (this.wanderGoalPitch - this.wanderPitch) * pull;
+        return new float[]{yaw + this.wanderYaw, MathHelper.clamp_float(pitch + this.wanderPitch, -90.0F, 90.0F)};
     }
 
     private boolean turnLimited() {
@@ -1220,6 +1250,13 @@ public class Scaffold extends Module {
                 if (this.rotationMode.getValue() != 0 && (!snapMode || this.snapRotating || towerRotating)) {
                     float targetYaw = this.yaw;
                     float targetPitch = this.pitch;
+                    if (this.rotationRandom.getValue() > 0.0F && blockData != null && !towerRotating) {
+                        float[] wandered = this.wander(targetYaw, targetPitch);
+                        if (this.lookHit(blockData, wandered[0], wandered[1]) != null) {
+                            targetYaw = wandered[0];
+                            targetPitch = wandered[1];
+                        }
+                    }
                     if ((!threeFmcMode || threeFmcTelly) && this.towering && (mc.thePlayer.motionY > 0.0 || mc.thePlayer.posY > (double) (this.startY + 1))) {
                         float yawDiff = MathHelper.wrapAngleTo180_float(this.yaw - event.getYaw());
                         float tolerance = this.rotationTick >= 2 ? RandomUtil.nextFloat(tellystartrotationminspeed.getValue(), tellystartrotationmaxspeed.getValue()) : RandomUtil.nextFloat(tellynormalrotationminspeed.getValue(), tellynormalrotationmaxspeed.getValue());

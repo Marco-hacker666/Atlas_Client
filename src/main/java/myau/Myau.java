@@ -64,6 +64,8 @@ public class Myau {
         commandManager = new CommandManager();
         /* Before any font or image: the jar's "myau:" resources (MyauResources). */
         myau.util.MyauResources.register();
+        /* On the client thread with the display up: read the GL strings once (mobile-safe, 2026-10-15). */
+        myau.util.render.MobileSafe.detect();
         fontManagers = new FontManagers();
         fontManagers.load();
         EventManager.register(rotationManager);

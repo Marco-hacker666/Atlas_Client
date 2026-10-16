@@ -323,6 +323,11 @@ final class Liquid {
      * compile every frame.
      */
     private static boolean compile() {
+        /* Mobile-safe (2026-10-15): the old geometry, and no compile at all
+           -- not even marked as tried, so turning the mode off compiles then. */
+        if (myau.util.render.MobileSafe.active()) {
+            return false;
+        }
         if (tried) {
             return compiled;
         }
@@ -362,11 +367,11 @@ final class Liquid {
 
     /** Shapes need only the shaders; the pane and lenses also need this frame's copies. */
     static boolean shapes() {
-        return compiled;
+        return compiled && !myau.util.render.MobileSafe.active();
     }
 
     static boolean glass() {
-        return compiled && frameReady;
+        return compiled && frameReady && !myau.util.render.MobileSafe.active();
     }
 
     // ---- per frame ----------------------------------------------------

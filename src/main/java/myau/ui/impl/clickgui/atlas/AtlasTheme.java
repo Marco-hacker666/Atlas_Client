@@ -120,6 +120,10 @@ final class AtlasTheme {
     // ---- Privacy (2026-10-08): the automatic log upload (management.LogUploader)
     final BooleanProperty autoSendLogs = new BooleanProperty(myau.management.LogUploader.SETTING, true);
 
+    // ---- Performance (2026-10-15): phones on gl4es / Krypton Wrapper (util.render.MobileSafe)
+    final ModeProperty mobileSafe = new ModeProperty(myau.util.render.MobileSafe.SETTING, 0,
+            myau.util.render.MobileSafe.MODES);
+
     /** The groups the page lists, in order, with what each is for. */
     final Map<String, List<Property<?>>> groups = new LinkedHashMap<String, List<Property<?>>>();
     final Map<String, String> descriptions = new LinkedHashMap<String, String>();
@@ -155,9 +159,14 @@ final class AtlasTheme {
         group("Privacy", "When a server kicks you, or you get flagged many times in a minute, the client sends its "
                         + "log and config to the developers to help fix it. Your name, other players' names, tokens and IPs are removed first.",
                 this.autoSendLogs);
+        group("Performance", "Mobile-safe drawing for phones (PojavLauncher and its forks on gl4es or Krypton Wrapper): "
+                        + "no blur, glass shaders or glow, plain rounded shapes. Auto turns it on only when such a "
+                        + "renderer is found; it changes nothing on a PC.",
+                this.mobileSafe);
         load();
         this.saved = snapshot();
         myau.management.LogUploader.setEnabled(this.autoSendLogs.getValue());
+        myau.util.render.MobileSafe.setSetting(this.mobileSafe.getValue());
     }
 
     private void group(String name, String description, Property<?>... properties) {
@@ -299,6 +308,9 @@ final class AtlasTheme {
         if ("Motion".equals(group)) {
             return this.animations.getValue() ? this.opening.getModeString() : "off";
         }
+        if ("Performance".equals(group)) {
+            return this.mobileSafe.getModeString() + "  ·  " + (myau.util.render.MobileSafe.active() ? "on" : "off");
+        }
         if ("Text".equals(group)) {
             return this.font.getModeString();
         }
@@ -313,8 +325,8 @@ final class AtlasTheme {
     void reset() {
         int keepMode = this.mode.getValue();
         for (Property<?> property : all()) {
-            /* A look preset never changes the privacy choice. */
-            if (property != this.autoSendLogs) {
+            /* A look preset never changes the privacy or performance choice. */
+            if (property != this.autoSendLogs && property != this.mobileSafe) {
                 resetOne(property);
             }
         }
@@ -419,6 +431,7 @@ final class AtlasTheme {
 
     void save() {
         myau.management.LogUploader.setEnabled(this.autoSendLogs.getValue());
+        myau.util.render.MobileSafe.setSetting(this.mobileSafe.getValue());
         String now = snapshot();
         if (now.equals(this.saved)) {
             return;

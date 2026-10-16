@@ -117,15 +117,27 @@ public class ESP extends Module {
         if (this.framebuffer != null) {
             this.framebuffer.deleteFramebuffer();
         }
-        this.framebuffer = new Framebuffer(mc.displayWidth, mc.displayHeight, false);
+        /* Mobile-safe: OUTLINE never draws, so no framebuffer is kept (made again on use). */
+        this.framebuffer = myau.util.render.MobileSafe.active()
+                ? null : new Framebuffer(mc.displayWidth, mc.displayHeight, false);
+    }
+
+    /**
+     * The mode drawn this frame. OUTLINE renders every player again into an
+     * extra framebuffer through a shader; in mobile-safe mode (gl4es /
+     * Krypton Wrapper, 2026-10-15) it draws as 3D boxes instead.
+     */
+    private int drawMode() {
+        int value = this.mode.getValue();
+        return value == 3 && myau.util.render.MobileSafe.active() ? 2 : value;
     }
 
     @EventTarget(Priority.HIGH)
     public void onRender(Render2DEvent event) {
-        if (this.isEnabled() && (this.mode.getValue() == 1 || this.mode.getValue() == 3 || this.healthBar.getValue() == 1)) {
+        if (this.isEnabled() && (this.drawMode() == 1 || this.drawMode() == 3 || this.healthBar.getValue() == 1)) {
             List<EntityPlayer> renderedEntities = TeamUtil.getLoadedEntitiesSorted().stream().filter(entity -> entity instanceof EntityPlayer && this.shouldRenderPlayer((EntityPlayer) entity)).map(EntityPlayer.class::cast).collect(Collectors.toList());
             if (!renderedEntities.isEmpty()) {
-                if (this.mode.getValue() == 3) {
+                if (this.drawMode() == 3) {
                     GlStateManager.pushMatrix();
                     GlStateManager.pushAttrib();
                     if (this.framebuffer == null) {
@@ -161,7 +173,7 @@ public class ESP extends Module {
                     GlStateManager.popAttrib();
                     GlStateManager.popMatrix();
                 }
-                if (this.mode.getValue() == 1 || this.healthBar.getValue() == 1) {
+                if (this.drawMode() == 1 || this.healthBar.getValue() == 1) {
                     RenderUtil.enableRenderState();
                     double scaleFactor = new ScaledResolution(mc).getScaleFactor();
                     double scale = scaleFactor / Math.pow(scaleFactor, 2.0);
@@ -176,7 +188,7 @@ public class ESP extends Module {
                             float y = (float) screenPosition.y;
                             float z = (float) screenPosition.z;
                             float w = (float) screenPosition.w;
-                            if (this.mode.getValue() == 1) {
+                            if (this.drawMode() == 1) {
                                 int color = this.getEntityColor(player).getRGB();
                                 RenderUtil.drawOutlineRect(x, y, z, w, lineWidth(1.5F) * 2.0F, 0, (color & 16579836) >> 2 | color & 0xFF000000);
                                 RenderUtil.drawOutlineRect(x, y, z, w, lineWidth(1.5F), 0, color);
@@ -200,21 +212,21 @@ public class ESP extends Module {
 
     @EventTarget
     public void onRender(Render3DEvent event) {
-        if (this.isEnabled() && (this.mode.getValue() == 2 || this.mode.getValue() == 4 || this.mode.getValue() == 5 || this.healthBar.getValue() == 2)) {
+        if (this.isEnabled() && (this.drawMode() == 2 || this.drawMode() == 4 || this.drawMode() == 5 || this.healthBar.getValue() == 2)) {
             RenderUtil.enableRenderState();
             for (EntityPlayer player : TeamUtil.getLoadedEntitiesSorted().stream().filter(entity -> entity instanceof EntityPlayer && this.shouldRenderPlayer((EntityPlayer) entity)).map(EntityPlayer.class::cast).collect(Collectors.toList())) {
                 if (player.ignoreFrustumCheck || RenderUtil.isInViewFrustum(player.getEntityBoundingBox(), 0.1F)) {
-                    if (this.mode.getValue() == 2) {
+                    if (this.drawMode() == 2) {
                         Color color = this.getEntityColor(player);
                         RenderUtil.drawEntityBoundingBox(player, color.getRed(), color.getGreen(), color.getBlue(), color.getAlpha(), lineWidth(1.5F), 0.1F);
                         GlStateManager.resetColor();
                     }
-                    if (this.mode.getValue() == 4) {
+                    if (this.drawMode() == 4) {
                         Color color = this.getEntityColor(player);
                         // is it me or this fucking line looks cursed
                         RenderUtil.drawCornerESP(player, color.getRed() / 255.0F, color.getGreen() / 255.0F, color.getBlue() / 255.0F);
                     }
-                    if (this.mode.getValue() == 5) {
+                    if (this.drawMode() == 5) {
                         Color color = this.getEntityColor(player);
                         RenderUtil.drawFake2DESP(player, color.getRed() / 255.0F, color.getGreen() / 255.0F, color.getBlue() / 255.0F);
                     }

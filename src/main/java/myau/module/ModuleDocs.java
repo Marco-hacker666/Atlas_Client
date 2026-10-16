@@ -359,6 +359,10 @@ public final class ModuleDocs {
         d("Jesus", "可以在水面上行走。");
         d("NoSlow", "使用物品（格擋、吃東西、拉弓）時不減速。");
         help("HUD", "hud-theme", "所有 HUD 的外觀。JELLO：LiquidBounce JelloBounce 主題（黑 45%、柔和陰影、圓角卡片、模組清單貼齊）。CLASSIC：各 HUD 原本的畫法。");
+        // 手機安全模式（2026-10-15，util.render.MobileSafe）：Client Settings > Performance > mobile-safe
+        help("HUD", "blur", "背景模糊。手機安全模式（Client Settings > Performance > mobile-safe，手機 gl4es / Krypton Wrapper 自動開啟）下不畫。");
+        help("HUD", "glow", "背景光暈。手機安全模式下不畫。");
+        help("ESP", "mode", "畫法。OUTLINE 用著色器和額外畫面緩衝；手機安全模式（Client Settings > Performance > mobile-safe）下改畫 3D 框。");
         d("NoDelay", "移除各種延遲：攻擊、點擊、跳躍。");
         d("MLG", "墜落時用水或梯子自救。");
         d("BlockESP", "標出箱子、床或自訂方塊的位置。");
@@ -394,7 +398,7 @@ public final class ModuleDocs {
         d("ChestAura", "自動打開附近的箱子。");
         d("ChestStealer", "打開箱子時自動把有用的東西拿走。");
         d("FastPlace", "加快放方塊的速度。");
-        d("SpeedMine", "加快挖方塊。BreakSpeed：直接改挖掘速度（羊毛 4、床 3、終界石和木板 1.56、其他 x1.39）。FinishEarly：挖到一定進度就提早完成，speed 100% 是原版伺服器能接受的最快（原版時間的 70%）。");
+        d("SpeedMine", "加快挖方塊。BreakSpeed：工具原本的挖掘速度乘上 multiplier（1.4 約快 40%）。FinishEarly：挖到一定進度就提早完成，speed 100% 是原版伺服器能接受的最快（原版時間的 70%）。");
         d("AntiObbyTrap", "頭卡在黑曜石等陷阱方塊裡時，把那格當成空氣，讓你看得到、出得去。");
         // ------------------------------------------------------------ RENDER
         d("ESP", "在其他玩家身上畫外框或光暈，隔牆也看得到。");

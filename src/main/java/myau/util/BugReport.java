@@ -303,6 +303,7 @@ public final class BugReport {
         line(sb, "OS", System.getProperty("os.name") + " " + System.getProperty("os.version") + " " + System.getProperty("os.arch"));
         line(sb, "Memory", (Runtime.getRuntime().maxMemory() >> 20) + " MB max");
         line(sb, "GPU", safe(() -> GL11.glGetString(GL11.GL_RENDERER)) + " | GL " + safe(() -> GL11.glGetString(GL11.GL_VERSION)));
+        line(sb, "Mobile-safe", safe(myau.util.render.MobileSafe::describe));
         line(sb, "OptiFine", optifine() ? "installed, Fast Render " + (FramebufferCompat.optifineFastRender() ? "ON" : "off") : "not installed");
         line(sb, "Framebuffers", (OpenGlHelper.isFramebufferEnabled() ? "on" : "off")
                 + ", shaders " + (OpenGlHelper.shadersSupported ? "supported" : "unsupported"));

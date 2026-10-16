@@ -1028,6 +1028,11 @@ public class TargetHUD extends Module {
     }
 
     private boolean shouldUseHudBlur() {
+        /* Mobile-safe (2026-10-15): the blur and glow below need a stencil
+           buffer and a shader; neither is safe on gl4es / Krypton Wrapper. */
+        if (myau.util.render.MobileSafe.active()) {
+            return false;
+        }
         HUD hud = (HUD) Myau.moduleManager.modules.get(HUD.class);
         return hud != null && hud.isEnabled() && hud.background.getValue() > 0 && hud.blur.getValue();
     }
@@ -1038,6 +1043,9 @@ public class TargetHUD extends Module {
     }
 
     private boolean shouldUseHudGlow() {
+        if (myau.util.render.MobileSafe.active()) {
+            return false;
+        }
         HUD hud = (HUD) Myau.moduleManager.modules.get(HUD.class);
         return hud != null && hud.isEnabled() && hud.glow.getValue();
     }
@@ -1328,6 +1336,14 @@ public class TargetHUD extends Module {
 
         float r = Math.min(radius, Math.min(width, height) * 0.5F);
 
+        if (myau.util.render.MobileSafe.active()) {
+            /* No stencil mask: the same gradient as one rounded fan. */
+            int start = startColor.getRGB();
+            int end = endColor.getRGB();
+            myau.util.render.RoundRectGeometry.fill(x, y, width, height, r, r, r, r, start, end, end, start);
+            return;
+        }
+
         GL11.glClear(GL11.GL_STENCIL_BUFFER_BIT);
         GL11.glEnable(GL11.GL_STENCIL_TEST);
         GL11.glStencilFunc(GL11.GL_ALWAYS, 1, 0xFF);
@@ -1471,6 +1487,12 @@ public class TargetHUD extends Module {
         NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(entity.getName());
         ResourceLocation skin = info != null ? info.getLocationSkin() : new ResourceLocation("textures/entity/steve.png");
 
+        if (myau.util.render.MobileSafe.active()) {
+            /* No stencil mask: a square face. */
+            drawHeadTexture(skin, x, y, w, h);
+            return;
+        }
+
         GL11.glClear(GL11.GL_STENCIL_BUFFER_BIT);
         GL11.glEnable(GL11.GL_STENCIL_TEST);
         GL11.glStencilFunc(GL11.GL_ALWAYS, 1, 0xFF);
@@ -1576,6 +1598,13 @@ public class TargetHUD extends Module {
     }
 
     private void checkSetupFBO() {
+        /* Mobile-safe (2026-10-15): this swaps the game's own depth buffer for
+           a packed depth-stencil one through EXT calls; where a translation
+           layer lacks that format the main framebuffer would be incomplete --
+           a black screen. Nothing uses the stencil in that mode anyway. */
+        if (myau.util.render.MobileSafe.active()) {
+            return;
+        }
         Framebuffer fbo = mc.getFramebuffer();
         if (fbo != null && fbo.depthBuffer > -1) {
             EXTFramebufferObject.glDeleteRenderbuffersEXT(fbo.depthBuffer);

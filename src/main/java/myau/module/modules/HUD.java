@@ -580,8 +580,11 @@ public class HUD extends Module {
             long l = System.currentTimeMillis();
 
             /* JELLO draws each row's own background below: the old blur and
-               glow passes would double it. */
-            if (!HudPanel.active() && (this.glow.getValue() || this.blur.getValue())) {
+               glow passes would double it. Mobile-safe mode (2026-10-15) skips
+               them too: there both would only draw masks nobody sees, a whole
+               extra pass over the list each, every frame. */
+            if (!HudPanel.active() && !myau.util.render.MobileSafe.active()
+                    && (this.glow.getValue() || this.blur.getValue())) {
                 if (this.glow.getValue()) {
                     myau.util.shader.BlurUtils.prepareBloom();
                     long offset = 0L;

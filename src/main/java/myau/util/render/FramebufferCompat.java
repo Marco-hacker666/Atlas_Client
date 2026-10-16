@@ -19,6 +19,9 @@ import java.lang.reflect.Field;
  *
  * Asked every frame, not once: the setting can be changed while playing.
  * The effects then fall back to their plain drawing; nothing goes missing.
+ *
+ * Also off in mobile-safe mode (MobileSafe, 2026-10-15): on gl4es / Krypton
+ * Wrapper every pass is a translated shader over an emulated framebuffer.
  */
 public final class FramebufferCompat {
     private static Field fastRender;
@@ -28,7 +31,8 @@ public final class FramebufferCompat {
     }
 
     public static boolean available() {
-        return OpenGlHelper.shadersSupported && OpenGlHelper.isFramebufferEnabled() && !optifineFastRender();
+        return !MobileSafe.active()
+                && OpenGlHelper.shadersSupported && OpenGlHelper.isFramebufferEnabled() && !optifineFastRender();
     }
 
     /** OptiFine's Fast Render ({@code GameSettings.ofFastRender}); false without OptiFine. */

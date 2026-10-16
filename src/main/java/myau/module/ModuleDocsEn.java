@@ -111,6 +111,10 @@ final class ModuleDocsEn {
         d("Jesus", "Walk on water.");
         d("NoSlow", "No slowdown while using items (blocking, eating, drawing a bow).");
         help("HUD", "hud-theme", "How every HUD draws. JELLO: LiquidBounce's JelloBounce theme (black at 45%, soft shadow, rounded cards, flush module list). CLASSIC: each HUD's older drawing.");
+        // Mobile-safe mode (2026-10-15, util.render.MobileSafe): Client Settings > Performance > mobile-safe
+        help("HUD", "blur", "Blurs the background. Not drawn in mobile-safe mode (Client Settings > Performance > mobile-safe; on by itself on phones running gl4es / Krypton Wrapper).");
+        help("HUD", "glow", "A glow behind the background. Not drawn in mobile-safe mode.");
+        help("ESP", "mode", "How players are marked. OUTLINE uses a shader and an extra framebuffer; in mobile-safe mode (Client Settings > Performance > mobile-safe) it draws 3D boxes instead.");
         d("NoDelay", "Removes delays: attacking, clicking, jumping.");
         d("MLG", "Saves a fall with water or a ladder.");
         d("BlockESP", "Marks chests, beds or chosen blocks.");
@@ -146,7 +150,7 @@ final class ModuleDocsEn {
         d("ChestAura", "Opens nearby chests.");
         d("ChestStealer", "Takes the useful items when a chest opens.");
         d("FastPlace", "Places blocks faster.");
-        d("SpeedMine", "Mines faster. BreakSpeed: sets the dig speed (wool 4, bed 3, end stone and planks 1.56, others x1.39). FinishEarly: ends the dig early; speed 100% is the fastest a vanilla server accepts (70% of vanilla time).");
+        d("SpeedMine", "Mines faster. BreakSpeed: the tool's own dig speed times multiplier (1.4 is about 40% faster). FinishEarly: ends the dig early; speed 100% is the fastest a vanilla server accepts (70% of vanilla time).");
         d("AntiObbyTrap", "When your head is stuck in an obsidian trap, treats that block as air so you can see and get out.");
         // ------------------------------------------------------------ RENDER
         d("ESP", "Draws outlines or glow on other players, visible through walls.");

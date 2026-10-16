@@ -18,8 +18,22 @@ public class RoundedUtils {
     private static ShaderUtils roundedTexturedShader;
     private static ShaderUtils roundedGradientShader;
     private static ShaderUtils roundedRectRiseShader;
+    /* Tried once (2026-10-15). A shader that failed used to be compiled
+       again on every call -- every rounded rectangle, every frame -- leaking
+       a program object each time; now it stays null and its callers draw the
+       plain geometry (RoundRectGeometry) instead of nothing. */
+    private static boolean initTried;
+
+    /** Plain geometry instead of the shader: mobile-safe mode, or the shader did not build. */
+    private static boolean plain(ShaderUtils shader) {
+        return myau.util.render.MobileSafe.active() || shader == null;
+    }
 
     private static void initShaders() {
+        if (initTried || myau.util.render.MobileSafe.active()) {
+            return;
+        }
+        initTried = true;
         if (roundedShader == null) {
             try {
                 roundedShader = new ShaderUtils("roundedRect");
@@ -94,7 +108,10 @@ public class RoundedUtils {
 
     public static void drawRound(float x, float y, float width, float height, float radius, boolean blur, int color) {
         initShaders();
-        if (roundedShader == null) return;
+        if (plain(roundedShader)) {
+            myau.util.render.RoundRectGeometry.fill(x, y, width, height, radius, radius, radius, radius, color);
+            return;
+        }
 
         RenderUtil.resetColor();
         GlStateManager.enableBlend();
@@ -114,7 +131,11 @@ public class RoundedUtils {
 
     public static void drawGradientRound(float x, float y, float width, float height, float radius, Color bottomLeft, Color topLeft, Color bottomRight, Color topRight) {
         initShaders();
-        if (roundedGradientShader == null) return;
+        if (plain(roundedGradientShader)) {
+            myau.util.render.RoundRectGeometry.fill(x, y, width, height, radius, radius, radius, radius,
+                    topLeft.getRGB(), topRight.getRGB(), bottomRight.getRGB(), bottomLeft.getRGB());
+            return;
+        }
 
         RenderUtil.setAlphaLimit(0);
         RenderUtil.resetColor();
@@ -133,7 +154,11 @@ public class RoundedUtils {
 
     public static void drawGradientRound(float x, float y, float width, float height, float radius, int bottomLeft, int topLeft, int bottomRight, int topRight) {
         initShaders();
-        if (roundedGradientShader == null) return;
+        if (plain(roundedGradientShader)) {
+            myau.util.render.RoundRectGeometry.fill(x, y, width, height, radius, radius, radius, radius,
+                    topLeft, topRight, bottomRight, bottomLeft);
+            return;
+        }
 
         RenderUtil.setAlphaLimit(0);
         RenderUtil.resetColor();
@@ -155,7 +180,10 @@ public class RoundedUtils {
 
     public static void drawRound(float x, float y, float width, float height, float radius, boolean blur, Color color) {
         initShaders();
-        if (roundedShader == null) return;
+        if (plain(roundedShader)) {
+            myau.util.render.RoundRectGeometry.fill(x, y, width, height, radius, radius, radius, radius, color.getRGB());
+            return;
+        }
 
         RenderUtil.resetColor();
         GlStateManager.enableBlend();
@@ -175,7 +203,8 @@ public class RoundedUtils {
 
     public static void drawRoundTextured(float x, float y, float width, float height, float radius, float alpha) {
         initShaders();
-        if (roundedTexturedShader == null) return;
+        /* No plain form (unused at the time of writing): skipped. */
+        if (plain(roundedTexturedShader)) return;
 
         RenderUtil.resetColor();
         RenderUtil.setAlphaLimit(0);
@@ -200,7 +229,15 @@ public class RoundedUtils {
 
     public static void drawRoundedRectRise(final float x, final float y, final float width, final float height, final float radius, final int color, boolean leftTop, boolean rightTop, boolean rightBottom, boolean leftBottom) {
         initShaders();
-        if (roundedRectRiseShader == null) return;
+        if (plain(roundedRectRiseShader)) {
+            /* The shader reads its edge flags with the texture's v running
+               down the screen, so "leftTop" rounds the corner drawn at the
+               bottom left; kept the same here so both paths look alike. */
+            myau.util.render.RoundRectGeometry.fill(x, y, width, height,
+                    leftBottom ? radius : 0.0F, rightBottom ? radius : 0.0F,
+                    rightTop ? radius : 0.0F, leftTop ? radius : 0.0F, color);
+            return;
+        }
 
         GL11.glPushMatrix();
         GlStateManager.pushAttrib();
@@ -237,6 +274,11 @@ public class RoundedUtils {
             Color color,
             Color outlineColor) {
         initShaders();
+        if (plain(roundedOutlineShader)) {
+            myau.util.render.RoundRectGeometry.fill(x, y, width, height, radius, radius, radius, radius, color.getRGB());
+            myau.util.render.RoundRectGeometry.stroke(x, y, width, height, radius, outlineThickness, outlineColor.getRGB());
+            return;
+        }
         RenderUtil.resetColor();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

@@ -40,6 +40,8 @@ import net.minecraft.network.play.client.C0EPacketClickWindow;
 import net.minecraft.network.play.client.C0FPacketConfirmTransaction;
 import net.minecraft.network.play.client.C16PacketClientStatus;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
+import net.minecraft.network.play.server.S12PacketEntityVelocity;
+import net.minecraft.network.play.server.S27PacketExplosion;
 import net.minecraft.network.play.server.S19PacketEntityStatus;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.EnumFacing;
@@ -119,6 +121,14 @@ public class NoSlow extends Module {
 
     private final List<Packet<?>> ngBlinkPackets = new ArrayList<Packet<?>>();
     private int ngBlinkTicks;
+    /** Ticks NG-Blink sends movement straight away (after knockback or a correction). */
+    private int ngBlinkPause;
+    /* Set on the network thread, acted on by the client thread. */
+    private volatile boolean ngKnocked;
+    private volatile boolean ngCorrected;
+    /** Knockback takes ~10 ticks to play out; movement goes straight out meanwhile. */
+    private static final int NG_KB_PAUSE = 10;
+    private static final int NG_CORRECTION_PAUSE = 20;
     private boolean ngFlushing;
     private int ng2371Tick;
     private boolean ng2371Prevent;
@@ -730,7 +740,11 @@ public class NoSlow extends Module {
         this.ng2371Prevent = false;
         if (mode == NG_BLINK) {
             if (pre) {
-                if (blocking && this.ngBlinkTicks < this.ngBlinkMaxTicks.getValue()) {
+                this.ngBlinkServerEvents();
+                if (this.ngBlinkPause > 0) {
+                    this.ngBlinkPause--;
+                }
+                if (blocking && this.ngBlinkPause == 0 && this.ngBlinkTicks < this.ngBlinkMaxTicks.getValue()) {
                     this.ngBlinkTicks++;
                 } else {
                     this.ngBlinkFlush();
@@ -793,8 +807,24 @@ public class NoSlow extends Module {
     /**
      * NG-Blink: while blocking, the movement packets wait; anything else that
      * goes out (an attack, a release, a use, a slot change) first sends what
-     * waited, in order. Also let go when the block ends, after NG Blink
-     * MaxTicks, and on a server correction.
+     * waited, in order. Also let go when the block ends and after NG Blink
+     * MaxTicks.
+     *
+     * 2026-10-16, lagbacks 4-6 ticks after a hit (flags log 18:29-18:30, NoSlow
+     * held-send): the server checks knockback against the transaction replies
+     * around its velocity packet. Those replies went out at once while the
+     * moves before them waited, so the server saw the knockback taken with no
+     * movement, then up to MaxTicks of moves at once. Now a transaction reply
+     * first sends the moves before it, so the server gets them in order and
+     * the reply itself is never late (a first try held the replies in the
+     * queue: Pika kicked with "Unexpected pong response" when a world change
+     * dropped them, BlinkManager's and FakeLag's old lesson), knockback
+     * (S12 for us, S27) sends the
+     * queue and pauses holding for NG_KB_PAUSE ticks, and a correction (S08)
+     * DROPS the queue (those moves are from before the teleport; sending them
+     * after it is a second lagback) and pauses NG_CORRECTION_PAUSE ticks. The
+     * old code also sent the queue from the network thread on S08, racing the
+     * client thread, and then queued the teleport reply (C06) itself.
      */
     private void ngBlinkOnPacket(PacketEvent event) {
         if (this.ngFlushing) {
@@ -803,27 +833,64 @@ public class NoSlow extends Module {
         Packet<?> packet = event.getPacket();
         if (event.getType() == EventType.RECEIVE) {
             if (packet instanceof S08PacketPlayerPosLook) {
-                this.ngBlinkFlush();
+                this.ngCorrected = true;
+            } else if (packet instanceof S27PacketExplosion
+                    || packet instanceof S12PacketEntityVelocity && mc.thePlayer != null
+                    && ((S12PacketEntityVelocity) packet).getEntityID() == mc.thePlayer.getEntityId()) {
+                this.ngKnocked = true;
             }
             return;
         }
         if (!"Client thread".equals(Thread.currentThread().getName())) {
-            /* Replies the network thread sends (transactions, keep-alives)
-               pass and do not touch the queue, which the client thread owns
-               (BlinkManager draws the same line). */
+            /* Replies the network thread sends (keep-alives) pass and do not
+               touch the queue, which the client thread owns (BlinkManager draws
+               the same line). */
             return;
         }
-        if (packet instanceof C00PacketKeepAlive || packet instanceof C01PacketChatMessage
-                || packet instanceof C0FPacketConfirmTransaction) {
+        if (this.ngBlinkServerEvents()) {
+            /* This is the first packet after knockback or a correction (the
+               C06 teleport reply among them): it goes now. */
+            return;
+        }
+        if (packet instanceof C00PacketKeepAlive || packet instanceof C01PacketChatMessage) {
+            return;
+        }
+        if (packet instanceof C0FPacketConfirmTransaction) {
+            /* Never held: the moves before it go first, then it, on time.
+               Holding it got "Unexpected pong response -1925 -1922" kicks
+               (18:41 and 18:42) when the queue was dropped on a world change. */
+            this.ngBlinkFlush();
             return;
         }
         if (packet instanceof C03PacketPlayer && this.ngIdx(this.swordMode) == NG_BLINK && this.ngBlocking()
-                && this.ngBlinkTicks < this.ngBlinkMaxTicks.getValue()) {
+                && this.ngBlinkPause == 0 && this.ngBlinkTicks < this.ngBlinkMaxTicks.getValue()) {
             this.ngBlinkPackets.add(packet);
             event.setCancelled(true);
             return;
         }
         this.ngBlinkFlush();
+    }
+
+    /**
+     * Acts, on the client thread, on knockback and corrections the network
+     * thread saw. True when there was one.
+     */
+    private boolean ngBlinkServerEvents() {
+        if (this.ngCorrected) {
+            this.ngCorrected = false;
+            this.ngKnocked = false;
+            this.ngBlinkPackets.clear();
+            this.ngBlinkTicks = 0;
+            this.ngBlinkPause = NG_CORRECTION_PAUSE;
+            return true;
+        }
+        if (this.ngKnocked) {
+            this.ngKnocked = false;
+            this.ngBlinkFlush();
+            this.ngBlinkPause = Math.max(this.ngBlinkPause, NG_KB_PAUSE);
+            return true;
+        }
+        return false;
     }
 
     private void ngBlinkFlush() {
@@ -849,6 +916,9 @@ public class NoSlow extends Module {
             this.ngBlinkPackets.clear();
         }
         this.ngBlinkTicks = 0;
+        this.ngBlinkPause = 0;
+        this.ngKnocked = false;
+        this.ngCorrected = false;
         this.ng2371Tick = 0;
         this.ng2371Prevent = false;
     }

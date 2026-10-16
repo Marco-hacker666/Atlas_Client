@@ -266,6 +266,8 @@ public class FlagDetector extends Module {
     /** Runs of hits the server did not act on at all. */
     private int countHitsDropped;
     private final myau.util.DamageWatch damageWatch = new myau.util.DamageWatch();
+    /** The target's sword block, tick by tick, for HIT-DMG blk= (2026-10-16). */
+    private final myau.util.BlockTrace blockTrace = new myau.util.BlockTrace();
     private boolean hiddenHealthReported;
     /* The mitigation check was active at the last look: to say so once when it starts. */
     private boolean mitigationSaid;
@@ -1127,6 +1129,7 @@ public class FlagDetector extends Module {
             this.implicated.clear();
             /* Damage and whether health is shown are the server's. */
             this.damageWatch.reset();
+            this.blockTrace.reset();
             this.hiddenHealthReported = false;
         }
     }
@@ -1184,6 +1187,8 @@ public class FlagDetector extends Module {
                 continue;
             }
             net.minecraft.entity.EntityLivingBase living = (net.minecraft.entity.EntityLivingBase) entity;
+            this.blockTrace.record(id, now, living instanceof net.minecraft.entity.player.EntityPlayer
+                    && ((net.minecraft.entity.player.EntityPlayer) living).isBlocking());
             /* HealthUtil, not getHealth(): minigame servers often never send
                other players' health in metadata, or send it once; the tab
                list or the objective under the name is what they keep current. */
@@ -1199,14 +1204,20 @@ public class FlagDetector extends Module {
                    numbers rather than from memory (2026-10-13). */
                 /* dealt is per hit since 2026-10-15: the window's loss over the
                    flinches in it (hits=, total=). */
+                /* blk-hit: a sword block seen within 2 ticks of the first
+                   flinch -- the flinch and the use flag both come from the
+                   server, so this is the state the hit met. blk-window: ticks
+                   blocking over the whole settle window (2026-10-16). */
+                int[] blkWindow = this.blockTrace.count(id, hit.at - 100L, now);
                 writeLog(String.format("HIT-DMG target=%s dealt=%.2f hits=%d total=%.2f expected=%s usual=%s health=%s weapon=%s"
-                                + " armour=%d blocking=%s",
+                                + " armour=%d blocking=%s blk-hit=%s blk-window=%d/%d",
                         living.getName(), hit.dealt, hit.hits, hit.total,
                         Float.isNaN(hit.expected) ? "-" : String.format("%.2f", hit.expected),
                         Float.isNaN(hit.usual) ? "-" : String.format("%.2f", hit.usual),
                         myau.util.HealthUtil.source(living), weaponBasis(), living.getTotalArmorValue(),
                         living instanceof net.minecraft.entity.player.EntityPlayer
-                                && ((net.minecraft.entity.player.EntityPlayer) living).isBlocking()));
+                                && ((net.minecraft.entity.player.EntityPlayer) living).isBlocking(),
+                        this.blockTrace.atHit(id, hit.at, 100L), blkWindow[0], blkWindow[1]));
             }
             if (this.damageChat.getValue()) {
                 ChatUtil.sendFormatted(String.format("&7[&cFlagDetector&7] &7dealt &f%.1f&7 to &f%s%s%s",

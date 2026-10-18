@@ -404,7 +404,7 @@ public final class ModuleDocs {
         d("MLG", "墜落時用水或梯子自救。");
         d("BlockESP", "標出箱子、床或自訂方塊的位置。");
         d("AutoMessage", "遊戲結束或擊殺後自動發送訊息。");
-        d("NoItemRelease", "放開右鍵時不送出「停止使用物品」封包，伺服器仍當你在使用；本機照常停止（來源：Slinky）。");
+        d("NoItemRelease", "放開右鍵時不送出「停止使用物品」封包，伺服器仍當你在使用；本機照常停止。照 Slinky 的做法：看實際送出的封包，使用物品後的下一個放開封包不送。");
         help("KeepSprint", "motion-min", "打中人時保留多少速度（%，每下從 min～max 之間隨機）。100＝完全不減速，60＝原版。參考 LiquidBounce NextGen。");
         help("KeepSprint", "motion-max", "同上，範圍的上限。");
         help("KeepSprint", "motion-when-hurt-min", "自己在被打狀態（hurt-time 範圍內）時，打中人保留多少速度（%）。");
@@ -415,7 +415,9 @@ public final class ModuleDocs {
         help("KeepSprint", "hit-control", "進階：打中人的那個 tick 額外調整速度與衝刺（下面幾個 Hit 選項）。預設關；舊版這段每個 tick 都在跑，會一直減速、斷衝刺。");
         help("NoSlow", "NG Timing", "NG-Reuse／NG-Switch 送封包的時機：PreAndPost＝移動封包前放開、之後再用；Pre／Post＝都在那一邊送。");
         help("NoSlow", "NG Blink MaxTicks", "NG-Blink 格擋時最多把移動封包扣住幾個 tick，到了就先送出去。");
-        help("NoItemRelease", "safe-release", "一移動或疾跑，就在該 tick 的移動封包前補送放開封包（避免 Grim NoSlow）；關掉則一直不送。");
+        help("NoItemRelease", "safe-release", "一移動或疾跑，就在該 tick 的移動封包前補送放開封包（避免 Grim NoSlow）；預設關閉，照 Slinky 一直不送。");
+        help("NoItemRelease", "mode", "SWORD：只擋劍的放開（預設，同 Slinky）。CONSUMABLE：只擋食物、藥水等。ALL：兩者都擋。弓和釣竿永遠不擋。");
+        help("NoItemRelease", "let-module-releases", "開：其他模組刻意送的放開（Silent Aura 打之前放下劍、NoSlow）照常送出，只擋你自己放開右鍵的那個。關：全部都擋，完全照 Slinky。");
         d("NoJumpDelay", "移除連續跳躍之間的延遲。");
         d("SafeWalk", "走到方塊邊緣時不會掉下去（像一直按著潛行）。");
         d("Eagle", "走到邊緣時自動潛行，用來後退搭橋。");

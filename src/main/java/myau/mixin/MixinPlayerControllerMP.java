@@ -56,16 +56,5 @@ public abstract class MixinPlayerControllerMP {
             callbackInfo.cancel();
             return;
         }
-        /* NoItemRelease (2026-10-08): the window in which the vanilla release
-           packet is claimed; the body runs unmodified. */
-        myau.module.modules.NoItemRelease.beginVanillaRelease();
-    }
-
-    @Inject(
-            method = {"onStoppedUsingItem"},
-            at = {@At("RETURN")}
-    )
-    private void onStoppedUsingItemReturn(CallbackInfo callbackInfo) {
-        myau.module.modules.NoItemRelease.endVanillaRelease();
     }
 }

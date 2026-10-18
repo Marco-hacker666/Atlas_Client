@@ -156,7 +156,7 @@ final class ModuleDocsEn {
         d("MLG", "Saves a fall with water or a ladder.");
         d("BlockESP", "Marks chests, beds or chosen blocks.");
         d("AutoMessage", "Sends a message after a game or a kill.");
-        d("NoItemRelease", "Does not send the release-use-item packet when you let go of right click; the server still sees the item in use, the client stops as usual (from Slinky).");
+        d("NoItemRelease", "Does not send the release-use-item packet when you let go of right click; the server still sees the item in use, the client stops as usual. Slinky's method: it watches the packets that go out and drops the first release after a use.");
         help("KeepSprint", "motion-min", "How much speed a hit leaves, in percent, drawn between min and max on each hit. 100 keeps all of it, 60 is vanilla. After LiquidBounce NextGen.");
         help("KeepSprint", "motion-max", "The top of the same range.");
         help("KeepSprint", "motion-when-hurt-min", "How much speed a hit leaves while you are hurt (your hurt time inside hurt-time), in percent.");
@@ -167,7 +167,9 @@ final class ModuleDocsEn {
         help("KeepSprint", "hit-control", "Advanced: extra speed and sprint handling on the tick of a hit (the Hit options below). Off by default; it used to run on every tick and kept slowing you and dropping the sprint.");
         help("NoSlow", "NG Timing", "When NG-Reuse and NG-Switch send: PreAndPost lets go before the movement packet and uses again after it; Pre or Post sends both on that side.");
         help("NoSlow", "NG Blink MaxTicks", "The longest NG-Blink holds movement packets while blocking, in ticks, before sending them.");
-        help("NoItemRelease", "safe-release", "Send the withheld release before the movement packet of the first tick you move or sprint (avoids Grim NoSlow); off = never send it.");
+        help("NoItemRelease", "safe-release", "Send the withheld release before the movement packet of the first tick you move or sprint (avoids Grim NoSlow). Off by default: never sent, as Slinky does.");
+        help("NoItemRelease", "mode", "SWORD: only a sword's release is dropped (default, as Slinky). CONSUMABLE: only food, potions and the like. ALL: both. Bows and rods never.");
+        help("NoItemRelease", "let-module-releases", "On: releases other modules send on purpose (Silent Aura lowering the sword before a hit, NoSlow) still go out; only your own let-go is dropped. Off: every one is dropped, exactly as Slinky.");
         d("NoJumpDelay", "Removes the delay between consecutive jumps.");
         d("SafeWalk", "Stops you walking off block edges, as if sneaking.");
         d("Eagle", "Sneaks automatically at edges, for bridging backwards.");

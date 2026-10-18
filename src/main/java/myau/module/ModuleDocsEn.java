@@ -52,7 +52,19 @@ final class ModuleDocsEn {
         d("Criticals", "Makes attacks critical hits (+50% damage) by packets or small hops.");
         d("FastBow", "Draws and shoots the bow faster.");
         help("BlockHit", "ManualChance", "Chance that a hit is followed by a one-tick block (blocks per second = CPS x chance). Idle while Silent Aura blocks by itself.");
-        d("BlockHit", "Blocks with the sword between hits. Manual: after your hits, one-tick block. Predict: raised just before you can be hit again, lowered when you are. Helper / Auto / Lag: other ways.");
+        d("BlockHit", "Blocks with the sword between hits. Slinky (default): while the attack key is held and an enemy is in range the sword goes up, comes down for one tick after a few so the next hit lands, then goes up again; optionally only just before you can be hit, and packets held briefly as it comes down. Manual: after your hits, one-tick block. Predict: raised just before you can be hit again, lowered when you are. Helper / Auto / Lag: other ways.");
+        help("BlockHit", "block-range", "Raise the sword only while an enemy is this close (eyes to its hitbox).");
+        help("BlockHit", "max-hold-ticks", "Ticks the sword stays up before it comes down for one tick so the next hit lands (1.8 drops attack clicks while blocking).");
+        help("BlockHit", "require-left-click", "Block automatically only while the attack key is held; with only right click held it is a plain manual block.");
+        help("BlockHit", "require-right-click", "Also require right click to be held.");
+        help("BlockHit", "require-damage", "Raise the sword only on the tick your hurt time reaches max-hurt-time (the opponent can hit you again soon); lower it when hit.");
+        help("BlockHit", "max-hurt-time", "With require-damage: the hurt time at which the sword goes up.");
+        help("BlockHit", "fake-animation", "Show the blocking animation on screen (your view only; the server is not told).");
+        help("BlockHit", "fake-animation-in-range", "Show the fake animation only while an enemy is in range.");
+        help("BlockHit", "lag-chance", "Chance that, as the sword comes down, every outgoing packet is held. 0 = never.");
+        help("BlockHit", "lag-ticks", "Most ticks the packets are held; then they all go, in order.");
+        help("BlockHit", "lag-flush-on-attack", "An attack lets the held packets go first, so the hit is not delayed.");
+        help("BlockHit", "lag-reblock", "Raise the sword again as soon as the held packets go.");
         d("AntiBounce", "Moves you out of a block you are stuck in: after 2 ticks overlapping a solid block, along the shortest way out (the way you walk first), at about vanilla speed. Idle during a Clutch catch.");
         d("TargetOrbit", "Marks who you are fighting (the aura's target, or the player you last hit while in range) with glowing crystal flakes in formations that turn with the way they face, plus a glow over the body. Crystals fly in on a new target, a hit sends a shockwave and spins them up, a kill shatters them. While it is selected, a live preview stands beside the menu: drag to turn, click for a hit, right-click for a kill. On with any aura; while it is on, TargetESP and Silent Aura's box are not drawn.");
         help("TargetOrbit", "pattern", "Crown: three rings of crystals and one pointing where they face (default); Wings: crystal wings on the back; Helix: two strands climbing the body; Shards: crystals each on its own orbit; Orbit: ring with comets; Halo: ring at the feet; Mark: crystal over the head; Sigil: a magic circle on the ground with an arrow to the front; Scan: a hologram column with a ring sweeping up and down; Lock: lock-on brackets with a health arc.");
@@ -292,6 +304,9 @@ final class ModuleDocsEn {
 
         // ========================================================== HEADINGS
         heading("一般", "General");
+        heading("Slinky 格擋", "Slinky block");
+        heading("Slinky 假動畫", "Slinky fake animation");
+        heading("Slinky 延遲封包", "Slinky lag");
         heading("常用", "Main");
         heading("Swing（舊）", "Swing (old)");
         heading("目標", "Targets");

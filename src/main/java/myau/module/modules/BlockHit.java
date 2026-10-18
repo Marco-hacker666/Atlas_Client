@@ -21,10 +21,50 @@ public class BlockHit extends Module {
        -- it is the port of Vape's Predict -- and the old swing-watching
        Predict, decorative at high ping by its own note, is hidden as "Swing".
        Manual is new. Indices are unchanged (3 = swing, 4 = rhythm). */
-    private final ModeProperty mode = new ModeProperty("Mode", 0,
-            new String[]{"Helper", "Auto", "Lag", "Swing", "Predict", "Manual"})
+    /* 2026-10-19: "Slinky" added and made the default (owner: "fix my
+       AutoBlock the way Slinky does it"); the module is shown as AutoBlock.
+       Saved configs keep the mode they name. */
+    private final ModeProperty mode = new ModeProperty("Mode", 6,
+            new String[]{"Helper", "Auto", "Lag", "Swing", "Predict", "Manual", "Slinky"})
             .hide("Swing")
             .alias("Rhythm", "Predict");
+    /* ---- Slinky (Slinky's Auto Block, rebuilt here from what it does) ----
+       While the attack key is held and an enemy is within block-range, the
+       use key goes down; after max-hold-ticks it comes up for a tick, which
+       is the tick the next hit lands (1.8 drops attack clicks while the
+       sword is up), then it goes down again. With require-damage it only
+       goes up on the tick your hurt time reaches max-hurt-time (just before
+       the next hit can land) and comes down when you are hit again. Holding
+       right click alone blocks as usual. Optionally, on lowering, every
+       outgoing packet is held for lag-ticks (lag-chance of the time), and
+       let go the moment you attack. */
+    private final java.util.function.BooleanSupplier slinky = () -> this.mode.getValue() == 6;
+    private final FloatProperty sRange = new FloatProperty("block-range", 3.1F, 2.0F, 6.0F, slinky);
+    private final IntProperty sHold = new IntProperty("max-hold-ticks", 5, 1, 10, slinky);
+    private final BooleanProperty sRequireLeft = new BooleanProperty("require-left-click", true, slinky);
+    private final BooleanProperty sRequireRight = new BooleanProperty("require-right-click", false, slinky);
+    private final BooleanProperty sRequireDamage = new BooleanProperty("require-damage", false, slinky);
+    private final IntProperty sHurt = new IntProperty("max-hurt-time", 6, 1, 10,
+            () -> slinky.getAsBoolean() && this.sRequireDamage.getValue());
+    private final BooleanProperty sFake = new BooleanProperty("fake-animation", false, slinky);
+    private final BooleanProperty sFakeInRange = new BooleanProperty("fake-animation-in-range", false,
+            () -> slinky.getAsBoolean() && this.sFake.getValue());
+    private final PercentProperty sLagChance = new PercentProperty("lag-chance", 0, slinky);
+    private final IntProperty sLagTicks = new IntProperty("lag-ticks", 2, 1, 10,
+            () -> slinky.getAsBoolean() && this.sLagChance.getValue() > 0);
+    private final BooleanProperty sLagFlush = new BooleanProperty("lag-flush-on-attack", true,
+            () -> slinky.getAsBoolean() && this.sLagChance.getValue() > 0);
+    private final BooleanProperty sLagReblock = new BooleanProperty("lag-reblock", false,
+            () -> slinky.getAsBoolean() && this.sLagChance.getValue() > 0);
+    private boolean sBlocking;
+    private boolean sManual;
+    private boolean sAnimation;
+    private boolean sLagging;
+    private boolean sActive;
+    private int sTick;
+    private int sBlockStart = -1;
+    private int sLagStart = -1;
+    private int sLastHurt;
     /* ---- Manual (Vape's Manual) ------------------------------------------
        Block hits paced by this player's own clicks: after a hit with a sword,
        ManualChance of the time the use key goes down for one tick (Vape: 50
@@ -164,6 +204,7 @@ public class BlockHit extends Module {
         }
         this.intervalCount = 0;
         this.lastDamageAt = 0L;
+        slinkyReset(true);
     }
 
 
@@ -293,6 +334,249 @@ public class BlockHit extends Module {
             } else if (this.rhythmBlocking) {
                 rhythmBlock(false);
             }
+            if (this.mode.getValue() == 6) {
+                slinkyTick();
+            } else if (this.sActive) {
+                slinkyReset(true);
+            }
+        }
+    }
+
+    // ---- Slinky ------------------------------------------------------------
+
+    private static boolean physical(net.minecraft.client.settings.KeyBinding key) {
+        return KeyBindUtil.isKeyDown(key.getKeyCode());
+    }
+
+    /** The enemy to block against: the one under the crosshair, else the nearest in view. */
+    private net.minecraft.entity.player.EntityPlayer slinkyTarget() {
+        float range = this.sRange.getValue();
+        if (mc.objectMouseOver != null
+                && mc.objectMouseOver.entityHit instanceof net.minecraft.entity.player.EntityPlayer) {
+            net.minecraft.entity.player.EntityPlayer hit =
+                    (net.minecraft.entity.player.EntityPlayer) mc.objectMouseOver.entityHit;
+            if (hostile(hit)) {
+                return boxDistance(hit) <= range ? hit : null;
+            }
+        }
+        net.minecraft.entity.player.EntityPlayer best = null;
+        double bestDistance = 15.0;
+        for (net.minecraft.entity.player.EntityPlayer player : mc.theWorld.playerEntities) {
+            if (!hostile(player)) {
+                continue;
+            }
+            double distance = boxDistance(player);
+            if (distance > bestDistance) {
+                continue;
+            }
+            double dx = player.posX - mc.thePlayer.posX;
+            double dy = player.posY - (mc.thePlayer.posY + mc.thePlayer.getEyeHeight());
+            double dz = player.posZ - mc.thePlayer.posZ;
+            float wantYaw = (float) (Math.atan2(dz, dx) * 180.0 / Math.PI) - 90.0F;
+            float wantPitch = (float) (-Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)) * 180.0 / Math.PI);
+            float yaw = net.minecraft.util.MathHelper.wrapAngleTo180_float(wantYaw - mc.thePlayer.rotationYaw);
+            float pitch = wantPitch - mc.thePlayer.rotationPitch;
+            if (yaw * yaw + pitch * pitch > 4900.0F) {
+                continue;
+            }
+            bestDistance = distance;
+            best = player;
+        }
+        return best != null && bestDistance <= range ? best : null;
+    }
+
+    private static boolean hostile(net.minecraft.entity.player.EntityPlayer player) {
+        return player != mc.thePlayer && !player.isDead && player.getHealth() > 0.0F && !player.isPlayerSleeping()
+                && TargetFilter.accepts(player) && !myau.util.TeamUtil.isFriend(player)
+                && !myau.util.TeamUtil.isSameTeam(player) && !myau.util.TeamUtil.isBot(player);
+    }
+
+    /** Eyes to the nearest point of the box (grown by 0.1), as Slinky measures. */
+    private static double boxDistance(net.minecraft.entity.Entity entity) {
+        net.minecraft.util.AxisAlignedBB box = entity.getEntityBoundingBox().expand(0.1, 0.1, 0.1);
+        double ex = mc.thePlayer.posX;
+        double ey = mc.thePlayer.posY + mc.thePlayer.getEyeHeight();
+        double ez = mc.thePlayer.posZ;
+        double x = Math.max(box.minX, Math.min(box.maxX, ex)) - ex;
+        double y = Math.max(box.minY, Math.min(box.maxY, ey)) - ey;
+        double z = Math.max(box.minZ, Math.min(box.maxZ, ez)) - ez;
+        return Math.sqrt(x * x + y * y + z * z);
+    }
+
+    private void slinkyTick() {
+        this.sActive = true;
+        if (mc.currentScreen != null || mc.thePlayer.isDead) {
+            slinkyReset(true);
+            return;
+        }
+        int hurt = mc.thePlayer.hurtTime;
+        boolean hurtAgain = hurt > this.sLastHurt;
+        this.sLastHurt = hurt;
+        if (!ItemUtil.isHoldingSword() || myau.util.Auras.blocksByItself()) {
+            /* No sword, or the aura is blocking by itself: hands off. */
+            slinkyReset(false);
+            return;
+        }
+        int tick = ++this.sTick;
+        boolean right = physical(mc.gameSettings.keyBindUseItem);
+        boolean left = physical(mc.gameSettings.keyBindAttack);
+        if (!left && this.sRequireLeft.getValue()) {
+            if (!right) {
+                slinkyReset(true);
+            } else {
+                /* Right click alone: a plain block. */
+                if (this.sLagging) {
+                    slinkyReleaseLag();
+                }
+                if (!this.sBlocking) {
+                    slinkyStart(tick);
+                    this.sManual = true;
+                }
+            }
+            slinkyAnimation();
+            return;
+        }
+        if (this.sManual) {
+            slinkyStop(true);
+            this.sManual = false;
+        }
+        boolean wanted = slinkyTarget() != null && (!this.sRequireRight.getValue() || right);
+        if (this.sLagging) {
+            int lagTicks = this.sLagTicks.getValue();
+            boolean expired = this.sLagStart >= 0 && tick - this.sLagStart >= lagTicks;
+            if (expired || !wanted) {
+                slinkyReleaseLag();
+                if (expired && this.sLagReblock.getValue() && wanted) {
+                    slinkyStart(tick);
+                }
+            }
+        }
+        if (!wanted) {
+            slinkyStop(true);
+        } else {
+            if (!this.sBlocking && !this.sLagging
+                    && (!this.sRequireDamage.getValue() || hurt == this.sHurt.getValue())) {
+                slinkyStart(tick);
+            }
+            if (this.sBlocking) {
+                int hold = this.sHold.getValue();
+                boolean stop = this.sBlockStart >= 0 && tick - this.sBlockStart >= hold;
+                if (this.sRequireDamage.getValue() && hurtAgain) {
+                    stop = true;
+                }
+                if (stop) {
+                    if (this.sLagChance.getValue() > 0 && Math.random() * 100.0 < this.sLagChance.getValue()) {
+                        slinkyStartLag(tick);
+                    }
+                    slinkyStop(true);
+                }
+            }
+        }
+        slinkyAnimation();
+    }
+
+    private void slinkyStart(int tick) {
+        if (!ItemUtil.isHoldingSword()) {
+            return;
+        }
+        int key = mc.gameSettings.keyBindUseItem.getKeyCode();
+        KeyBindUtil.setKeyBindState(key, true);
+        net.minecraft.client.settings.KeyBinding.onTick(key);
+        this.sBlocking = true;
+        this.sBlockStart = tick;
+    }
+
+    private void slinkyStop(boolean force) {
+        if (this.sBlocking || force) {
+            KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), false);
+            this.sBlocking = false;
+            this.sBlockStart = -1;
+        }
+    }
+
+    private void slinkyStartLag(int tick) {
+        if (this.sLagging) {
+            return;
+        }
+        if (Myau.blinkManager.setBlinkState(true, myau.enums.BlinkModules.AUTO_BLOCK_LAG)) {
+            this.sLagging = true;
+            this.sLagStart = tick;
+        }
+    }
+
+    private void slinkyReleaseLag() {
+        if (this.sLagging) {
+            Myau.blinkManager.setBlinkState(false, myau.enums.BlinkModules.AUTO_BLOCK_LAG);
+        }
+        this.sLagging = false;
+        this.sLagStart = -1;
+    }
+
+    /** The block animation on screen while blocking or lagging, without using the item. */
+    private void slinkyAnimation() {
+        if (!this.sFake.getValue() || !ItemUtil.isHoldingSword()) {
+            slinkyAnimationOff();
+            return;
+        }
+        boolean show = this.sBlocking || this.sLagging;
+        if (show && this.sFakeInRange.getValue()) {
+            show = slinkyTarget() != null;
+        }
+        if (show) {
+            ((myau.mixin.IAccessorEntityPlayer) mc.thePlayer).setItemInUseCount(72000);
+            this.sAnimation = true;
+        } else {
+            slinkyAnimationOff();
+        }
+    }
+
+    private void slinkyAnimationOff() {
+        if (this.sAnimation && mc.thePlayer != null) {
+            if (!mc.thePlayer.isUsingItem()) {
+                ((myau.mixin.IAccessorEntityPlayer) mc.thePlayer).setItemInUseCount(0);
+            }
+            this.sAnimation = false;
+        }
+    }
+
+    /** Lowers the sword, lets any held packets go, and gives the use key back to the player. */
+    private void slinkyReset(boolean releaseKey) {
+        slinkyReleaseLag();
+        if (mc.gameSettings == null) {
+            this.sBlocking = this.sManual = false;
+            return;
+        }
+        slinkyStop(releaseKey);
+        this.sManual = false;
+        slinkyAnimationOff();
+        if (releaseKey && mc.currentScreen == null) {
+            KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
+        }
+        this.sLastHurt = 0;
+        this.sActive = false;
+    }
+
+    /** lag-flush-on-attack: an attack lets the held packets go first, so it is not delayed. */
+    @EventTarget(myau.event.types.Priority.HIGHEST)
+    public void onSlinkyPacket(myau.events.PacketEvent event) {
+        if (!this.sLagging || event.getType() != EventType.SEND || !this.sLagFlush.getValue()) {
+            return;
+        }
+        if (event.getPacket() instanceof net.minecraft.network.play.client.C02PacketUseEntity
+                && ((net.minecraft.network.play.client.C02PacketUseEntity) event.getPacket()).getAction()
+                == net.minecraft.network.play.client.C02PacketUseEntity.Action.ATTACK) {
+            slinkyReleaseLag();
+            if (this.sLagReblock.getValue() && ItemUtil.isHoldingSword()) {
+                slinkyStart(this.sTick);
+            }
+        }
+    }
+
+    /** While held packets wait, a right click must not raise the sword on its own. */
+    @EventTarget
+    public void onSlinkyRightClick(myau.events.RightClickMouseEvent event) {
+        if (this.isEnabled() && this.sLagging && mc.currentScreen == null && ItemUtil.isHoldingSword()) {
+            event.setCancelled(true);
         }
     }
 

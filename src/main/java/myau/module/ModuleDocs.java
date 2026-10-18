@@ -299,7 +299,19 @@ public final class ModuleDocs {
         d("MoreKB", "攻擊時重置衝刺，讓每一下打出更多擊退。");
         d("Criticals", "讓攻擊判定為爆擊（多 50% 傷害），以封包或小跳實現。");
         d("FastBow", "加快拉弓射箭的速度。");
-        d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Helper / Auto / Lag：其他方式。");
+        d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Slinky（預設）：按著左鍵、敵人在範圍內就舉劍，舉滿幾 tick 放下一 tick 讓攻擊打出去，再舉起來；可選只在快被打到時舉、放下時延遲封包。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Helper / Auto / Lag：其他方式。");
+        help("BlockHit", "block-range", "敵人在這個距離內才自動舉劍（從眼睛到對方碰撞箱）。");
+        help("BlockHit", "max-hold-ticks", "劍舉著最多幾 tick，之後放下一 tick 讓下一下攻擊打出去（1.8 舉劍時攻擊點擊會被吃掉）。");
+        help("BlockHit", "require-left-click", "只在按著攻擊鍵時自動舉劍；沒按攻擊、只按右鍵時就是普通的手動格擋。");
+        help("BlockHit", "require-right-click", "還要同時按著右鍵才自動舉劍。");
+        help("BlockHit", "require-damage", "只在你的受傷時間剛好到 max-hurt-time 時舉劍（對方快能再打到你），被打中就放下。");
+        help("BlockHit", "max-hurt-time", "require-damage 開啟時，受傷時間降到這個值的那個 tick 舉劍。");
+        help("BlockHit", "fake-animation", "畫面上顯示舉劍動畫（只是本機畫面，不影響伺服器）。");
+        help("BlockHit", "fake-animation-in-range", "假動畫只在敵人在範圍內時顯示。");
+        help("BlockHit", "lag-chance", "放下劍時，有這個機率把之後送出的封包全部扣住。0 = 不扣。");
+        help("BlockHit", "lag-ticks", "扣住封包最多幾 tick，時間到就照順序全部送出。");
+        help("BlockHit", "lag-flush-on-attack", "扣住期間一攻擊，就先把扣住的封包送出去，攻擊不會被延遲。");
+        help("BlockHit", "lag-reblock", "扣住的封包一送出就馬上再舉劍。");
         d("AntiBounce", "卡在方塊裡時把你推出來：身體跟方塊重疊 2 tick 以上，就往最短的出口（優先你在走的方向）慢慢移出去，速度接近原版。Clutch 接方塊時不動作。");
         d("TargetOrbit", "用整齊排列、跟著敵人面向轉動的發光水晶碎片標示你正在打的人（Aura 的目標，或你最近打中、還在範圍內的玩家），身體也會發光。新目標時水晶飛入組成陣形，打中時有衝擊波並加速旋轉，擊殺時碎裂四散。選到這個模組時，選單旁邊會有即時預覽：拖曳旋轉、左鍵模擬打中、右鍵模擬擊殺。開任何 Aura 都會自動開啟；開著時不畫 TargetESP 和 Silent Aura 的方框。");
         help("TargetOrbit", "pattern", "Crown：三層水晶環＋一顆指向敵人面向的大水晶（預設）；Wings：背後的水晶翅膀；Helix：兩條沿身體往上的水晶螺旋；Shards：各自繞行的水晶；Orbit：光環＋繞行光點；Halo：腳下光環；Mark：頭上的水晶；Sigil：地上的魔法陣，前方有箭頭；Scan：全息掃描光柱，光環上下掃動；Lock：鎖定框＋血量弧。");
@@ -634,7 +646,10 @@ public final class ModuleDocs {
                 h("受傷時機", "MinHurtTime", "MaxHurtTime"),
                 h("Manual", "ManualChance"),
                 h("Predict", "Rhythm*"),
-                h("Swing（舊）", "Predict*"));
+                h("Swing（舊）", "Predict*"),
+                h("Slinky 格擋", "block-range", "max-hold-ticks", "require-*", "max-hurt-time"),
+                h("Slinky 假動畫", "fake-animation*"),
+                h("Slinky 延遲封包", "lag-*"));
         g("TargetHUD",
                 h("樣式", "style", "Anim Mode", "animations", "head", "indicator", "outline", "shadow"),
                 h("顏色", "color", "CustomColor", "Bg-Alpha", "background"),

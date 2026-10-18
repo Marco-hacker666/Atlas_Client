@@ -20,7 +20,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.network.play.server.S19PacketEntityStatus;
 
-public class AutoBlock extends Module {
+public class AuraAutoBlock extends Module {
 
     private static final Minecraft mc = Minecraft.getMinecraft();
 
@@ -57,7 +57,7 @@ public class AutoBlock extends Module {
     private int unblockTicks = 0;
     private boolean blocking = false;
 
-    public AutoBlock() {
+    public AuraAutoBlock() {
         super("AuraAutoBlock", false, false, "Automatically blocks with your sword during combat.");
     }
 

@@ -826,5 +826,5 @@ public class BlockHit extends Module {
     }
 
     /* Merged modules (2026-10-11, ModuleBundle). */
-    public final myau.module.ModuleBundle autoBlockMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.AutoBlock(), "auto-block", "Aura auto block", false);
+    public final myau.module.ModuleBundle autoBlockMerged = myau.module.ModuleBundle.withSwitch(this, new myau.module.modules.AuraAutoBlock(), "auto-block", "Aura auto block", false);
 }

@@ -245,7 +245,7 @@ public final class ModuleDocs {
         d("AutoPlay", "依設定自動重新進入遊戲。");
         d("BlocksESP", "高亮顯示附近的方塊。");
         d("MobESP", "高亮顯示附近的生物。");
-        d("AutoBlock", "攻擊時自動舉盾格擋。");
+        d("AuraAutoBlock", "攻擊時自動舉盾格擋。");
         d("ScriptModule", "載入腳本檔案並執行其鉤子。");
         d("JumpReset", "受擊時自動跳躍以減少擊退。");
         d("Tower", "快速垂直向上堆疊前進，含隧道模式。");

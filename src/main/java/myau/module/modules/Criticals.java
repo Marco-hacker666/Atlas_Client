@@ -58,6 +58,9 @@ public class Criticals extends Module {
 
     public Criticals() {
         super("Criticals", false, false, "Forces critical hits using packets or motion tricks.");
+        /* Lag mode holds movement: one holder at a time, never a packet another has taken (PacketHub, 2026-10-18). */
+        myau.management.PacketHub.register("Criticals", myau.management.PacketHub.MOVEMENT,
+                () -> this.lagQueue.size(), this::flushLag);
     }
 
     public void onEnabled() {
@@ -228,8 +231,9 @@ public class Criticals extends Module {
                 if (packetMode == 4 && (Boolean) this.groundSpoof.getValue() && event.getPacket() instanceof C03PacketPlayer) {
                     ((IAccessorC03PacketPlayer) event.getPacket()).setOnGround(false);
                 } else if (packetMode == 12 && this.lagStart != -1L && !this.flushing && event.getPacket() instanceof C03PacketPlayer) {
-                    event.setCancelled(true);
-                    this.lagQueue.add(event.getPacket());
+                    if (myau.management.PacketHub.take(event, "Criticals")) {
+                        this.lagQueue.add(event.getPacket());
+                    }
                 }
 
             }

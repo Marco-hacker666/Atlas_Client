@@ -163,6 +163,10 @@ public class Disabler extends Module {
 
     public Disabler() {
         super("Disabler", false, false, "Bypasses anticheat checks by altering outbound packets.");
+        /* Replies held on purpose: never one another module has taken (PacketHub, 2026-10-18). */
+        myau.management.PacketHub.registerSide("Disabler",
+                () -> this.c00s.size() + this.c0fs.size() + this.presetCloud.size()
+                        + this.packets.size() + this.presetDelayed.size());
     }
 
     @EventTarget
@@ -283,8 +287,8 @@ public class Disabler extends Module {
                     this.debugMessage("§cStarted Canceling IntaveFly");
                 }
 
-                if (packet instanceof S32PacketConfirmTransaction && this.shouldDelay) {
-                    event.setCancelled(true);
+                if (packet instanceof S32PacketConfirmTransaction && this.shouldDelay
+                        && myau.management.PacketHub.take(event, "Disabler")) {
                     while (this.packets.size() >= MAX_DELAYED_PACKETS) {
                         this.packets.poll();
                     }
@@ -514,10 +518,9 @@ public class Disabler extends Module {
             C0FPacketConfirmTransaction c0f = (C0FPacketConfirmTransaction)packet;
             // avoid calling obfuscated getter, store 0 as fallback
             this.lastPongId = 0;
-            if (!event.isCancelled()) {
+            if (myau.management.PacketHub.take(event, "Disabler")) {
                 long firstTime = !this.c0fs.isEmpty() ? this.c0fs.getLast().getRequiredMs() : 100L;
                 this.c0fs.add(new LatePacket(packet, System.currentTimeMillis() + 35000L));
-                event.setCancelled(true);
                 long secTime = !this.c0fs.isEmpty() ? this.c0fs.getLast().getRequiredMs() : 200L;
                 if (secTime - firstTime >= 20L) {
                     this.c0fs.pollLast();
@@ -536,8 +539,9 @@ public class Disabler extends Module {
                 this.lastC00timer.reset();
             }
 
-            this.c00s.add(packet);
-            event.setCancelled(true);
+            if (myau.management.PacketHub.take(event, "Disabler")) {
+                this.c00s.add(packet);
+            }
         }
 
         if (packet instanceof C0BPacketEntityAction && this.matrixAllDir.getValue()) {
@@ -658,8 +662,9 @@ public class Disabler extends Module {
                 event.setCancelled(true);
                 this.debugMessage("Intave cancelled resource pack status");
             } else if (send && packet instanceof C0FPacketConfirmTransaction && this.presetIntaveCloud.getValue()) {
-                event.setCancelled(true);
-                this.presetCloud.add((C0FPacketConfirmTransaction) packet);
+                if (myau.management.PacketHub.take(event, "Disabler")) {
+                    this.presetCloud.add((C0FPacketConfirmTransaction) packet);
+                }
                 if (this.presetCloud.size() >= 50) {
                     PacketUtil.sendPacketNoEvent(this.presetCloud.pollFirst());
                 }
@@ -686,8 +691,8 @@ public class Disabler extends Module {
                 } else if (this.presetGrimDelayed) {
                     this.debugMessage("Flag detected, consider disabling Disabler");
                 }
-            } else if (receive && packet instanceof S32PacketConfirmTransaction && this.presetGrimDelayed) {
-                event.setCancelled(true);
+            } else if (receive && packet instanceof S32PacketConfirmTransaction && this.presetGrimDelayed
+                    && myau.management.PacketHub.take(event, "Disabler")) {
                 while (this.presetDelayed.size() >= MAX_DELAYED_PACKETS) {
                     this.presetDelayed.pollFirst();
                 }

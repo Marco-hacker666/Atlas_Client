@@ -1428,6 +1428,11 @@ public class FlagDetector extends Module {
         if (!holds.isEmpty()) {
             sb.append(" &8| &cholding ").append(holds).append("&7");
         }
+        /* PacketHub turned a holder away or made one let go just before (2026-10-18). */
+        String hub = myau.management.PacketHub.recent(3000L);
+        if (hub != null) {
+            sb.append(" &8| &chub ").append(hub).append("&7");
+        }
         /* A hold its holder never ended, ended by its lease shortly before:
            the packets arrived at the server late and all at once. */
         myau.management.PacketHolds.Expiry expiry = myau.management.PacketHolds.lastExpiry();

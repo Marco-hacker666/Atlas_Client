@@ -57,6 +57,8 @@ public class InvWalk extends Module {
 
     public InvWalk() {
         super("InvWalk", false, false, "idk");
+        /* Clicks held on purpose: never one another module has taken (PacketHub, 2026-10-18). */
+        myau.management.PacketHub.registerSide("InvWalk", () -> this.clickQueue.size());
     }
 
     public void pressMovementKeys(boolean skipSneak) {
@@ -235,8 +237,9 @@ public class InvWalk extends Module {
                         }
                         if (this.pendingStatus != null) {
                             KeyBinding.unPressAllKeys();
-                            event.setCancelled(true);
-                            this.clickQueue.offer(packet);
+                            if (myau.management.PacketHub.take(event, "InvWalk")) {
+                                this.clickQueue.offer(packet);
+                            }
                         }
                     }
                     break;
@@ -245,8 +248,9 @@ public class InvWalk extends Module {
                         event.setCancelled(true);
                     } else {
                         KeyBinding.unPressAllKeys();
-                        event.setCancelled(true);
-                        this.clickQueue.offer(packet);
+                        if (myau.management.PacketHub.take(event, "InvWalk")) {
+                            this.clickQueue.offer(packet);
+                        }
                         this.delayTicks = 8;
                     }
                     break;
@@ -257,8 +261,9 @@ public class InvWalk extends Module {
                             return;
                         }
                         KeyBinding.unPressAllKeys();
-                        event.setCancelled(true);
-                        this.clickQueue.offer(packet);
+                        if (myau.management.PacketHub.take(event, "InvWalk")) {
+                            this.clickQueue.offer(packet);
+                        }
                         if (this.closeDelayTicks < 0 && this.openDelayTicks < 0){
                             this.pendingStatus = new C16PacketClientStatus(EnumState.OPEN_INVENTORY_ACHIEVEMENT);
                             this.openDelayTicks = openDelay.getValue();

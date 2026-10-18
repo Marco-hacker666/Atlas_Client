@@ -209,6 +209,13 @@ public class NoSlow extends Module {
 
     public NoSlow() {
         super("NoSlow", false, false, "Keeps full speed while blocking or eating.");
+        /* NG Blink holds movement: one holder at a time, never a packet another module has taken (PacketHub). */
+        myau.management.PacketHub.register("NoSlow", myau.management.PacketHub.MOVEMENT,
+                () -> this.ngBlinkPackets.size() + this.grimTestPackets.size() + this.grimSemiPackets.size(), () -> {
+                    this.ngBlinkFlush();
+                    this.flushGrimTest();
+                    this.flushGrimSemi();
+                });
     }
 
     public boolean isSwordActive() {
@@ -864,9 +871,16 @@ public class NoSlow extends Module {
         }
         if (packet instanceof C03PacketPlayer && this.ngIdx(this.swordMode) == NG_BLINK && this.ngBlocking()
                 && this.ngBlinkPause == 0 && this.ngBlinkTicks < this.ngBlinkMaxTicks.getValue()) {
-            this.ngBlinkPackets.add(packet);
-            event.setCancelled(true);
-            return;
+            /* Through PacketHub (2026-10-18): with FakeLag on as well, the same move was kept by both and
+               sent twice, or the two queues let go out of order. */
+            if (myau.management.PacketHub.take(event, "NoSlow")) {
+                this.ngBlinkPackets.add(packet);
+                return;
+            }
+            if (event.isCancelled()) {
+                /* Another module has it; what this queue holds stays in order behind nothing new. */
+                return;
+            }
         }
         this.ngBlinkFlush();
     }
@@ -1488,8 +1502,9 @@ public class NoSlow extends Module {
                         return;
                     }
                 }
-                this.grimTestPackets.add(packet);
-                event.setCancelled(true);
+                if (myau.management.PacketHub.take(event, "NoSlow")) {
+                    this.grimTestPackets.add(packet);
+                }
             }
         }
         if (this.isDonorModeUsed(DONOR_GRIMSEMI)) {
@@ -1511,8 +1526,9 @@ public class NoSlow extends Module {
             }
             if (this.grimSemiHolding && this.grimSemiSwap.getValue()) {
                 if (!(packet instanceof C00PacketKeepAlive) && !(packet instanceof C01PacketChatMessage)) {
-                    this.grimSemiPackets.add(packet);
-                    event.setCancelled(true);
+                    if (myau.management.PacketHub.take(event, "NoSlow")) {
+                        this.grimSemiPackets.add(packet);
+                    }
                 }
             }
         }

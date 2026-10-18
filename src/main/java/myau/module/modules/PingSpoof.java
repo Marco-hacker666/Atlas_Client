@@ -35,6 +35,8 @@ public class PingSpoof extends Module {
 
     public PingSpoof() {
         super("PingSpoof", false, false, "Delays keep alive packets to spoof your ping.");
+        /* Replies held on purpose: never one another module has taken (PacketHub, 2026-10-18). */
+        myau.management.PacketHub.registerSide("PingSpoof", () -> this.queue.size());
     }
 
     @Override
@@ -61,7 +63,7 @@ public class PingSpoof extends Module {
         if (!hold) return;
 
         warnIfStacked();
-        event.setCancelled(true);
+        if (!myau.management.PacketHub.take(event, "PingSpoof")) return;
         queue.add(new PacketData(event.getPacket(), System.currentTimeMillis()));
         while (queue.size() > MAX_QUEUE) {
             PacketData dropped = queue.poll();

@@ -28,6 +28,9 @@ public class ServerLag extends Module {
 
     public ServerLag() {
         super("ServerLag", false, false, "I feel the lag ");
+
+        /* Incoming holder: one at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
+        myau.management.PacketHub.registerIncoming("ServerLag", () -> this.packetQueue.size());
         /* What is held, for PacketHolds (plan step 13). */
         myau.management.PacketHolds.register(() -> {
             int count = this.packetQueue.size();
@@ -96,8 +99,9 @@ public class ServerLag extends Module {
 
         @SuppressWarnings("unchecked")
         Packet<INetHandlerPlayClient> playPacket = (Packet<INetHandlerPlayClient>) packet;
-        packetQueue.add(new TimedPacket(playPacket, System.currentTimeMillis()));
-        event.setCancelled(true);
+        if (myau.management.PacketHub.take(event, "ServerLag")) {
+            packetQueue.add(new TimedPacket(playPacket, System.currentTimeMillis()));
+        }
     }
 
     @EventTarget

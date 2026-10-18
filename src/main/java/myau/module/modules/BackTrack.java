@@ -154,6 +154,9 @@ public class BackTrack extends Module {
 
     public BackTrack() {
         super("Backtrack", false);
+
+        /* Incoming holder: one at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
+        myau.management.PacketHub.registerIncoming("Backtrack", () -> this.incomingQueue.size());
         /* What is held, for PacketHolds (plan step 13). */
         myau.management.PacketHolds.register(() -> {
             int count = this.incomingQueue.size();
@@ -488,20 +491,20 @@ public class BackTrack extends Module {
                     backtrackStartTime = System.currentTimeMillis();
                     rolledDelay = rollDelay();
                 }
-                if (worthHolding(next) && incomingQueue.size() < MAX_HELD) {
+                if (worthHolding(next) && incomingQueue.size() < MAX_HELD
+                        && myau.management.PacketHub.take(event, "Backtrack")) {
                     if (!holding) holds++;
                     realPosition = next;
                     incomingQueue.add(packet);
-                    event.setCancelled(true);
                 } else {
                     /* Nothing to gain any more: everything goes, this last. */
                     releaseIncoming();
                 }
                 return;
             }
-            if (holding && (hold.getValue() == 1 || aboutTarget(packet))) {
+            if (holding && (hold.getValue() == 1 || aboutTarget(packet))
+                    && myau.management.PacketHub.take(event, "Backtrack")) {
                 incomingQueue.add(packet);
-                event.setCancelled(true);
             }
         }
     }

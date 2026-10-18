@@ -171,6 +171,9 @@ public class KnockbackDelay extends Module {
     public KnockbackDelay() {
         super("KnockbackDelay", false, false,
                 "Holds incoming knockback for a short window so the push lands late");
+
+        /* Incoming holder: one at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
+        myau.management.PacketHub.registerIncoming("KnockbackDelay", () -> this.held.size());
         /* What is held, for PacketHolds (plan step 13). */
         myau.management.PacketHolds.register(() -> {
             int count = this.held.size();
@@ -407,8 +410,9 @@ public class KnockbackDelay extends Module {
                    tick in the order they arrived. */
                 this.releaseAt = 0L;
             }
-            this.held.add(packet);
-            event.setCancelled(true);
+            if (myau.management.PacketHub.take(event, "KnockbackDelay")) {
+                this.held.add(packet);
+            }
             return;
         }
 
@@ -419,10 +423,12 @@ public class KnockbackDelay extends Module {
         if (delay <= 0) {
             return;
         }
+        if (!myau.management.PacketHub.take(event, "KnockbackDelay")) {
+            return;
+        }
         this.lastTrigger = System.currentTimeMillis();
         this.releaseAt = this.lastTrigger + delay;
         this.held.add(packet);
-        event.setCancelled(true);
     }
 
     /**

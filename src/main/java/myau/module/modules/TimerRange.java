@@ -90,6 +90,9 @@ public class TimerRange extends Module {
 
    public TimerRange() {
       super("TimerRange", false);
+
+      /* Incoming holder: one at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
+      myau.management.PacketHub.registerIncoming("TimerRange", () -> this.packetsReceived.size());
    }
 
    @Override
@@ -271,8 +274,9 @@ public class TimerRange extends Module {
                }
             }
 
-            event.setCancelled(true);
-            packetsReceived.add(packet);
+            if (myau.management.PacketHub.take(event, "TimerRange")) {
+               packetsReceived.add(packet);
+            }
          }
 
          if (blinked && event.getType() == EventType.SEND) {

@@ -312,6 +312,8 @@ public class FakeLag extends Module {
             new String[]{"OFF", "FILE", "CHAT+FILE"}, () -> this.mode.getValue() != LATENCY);
 
     private final ConcurrentLinkedQueue<Held> queue = new ConcurrentLinkedQueue<Held>();
+    /** This module's name at PacketHub. */
+    private static final String HUB = "FakeLag";
 
     /** The delay for the hold in progress (delay-random). */
     private volatile int rolledDelay = 150;
@@ -415,6 +417,14 @@ public class FakeLag extends Module {
     public FakeLag() {
         super("FakeLag", false, false,
                 "Delays outgoing movement so the server's copy of this player runs behind the real one");
+        /* One holder at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
+        myau.management.PacketHub.register(HUB, myau.management.PacketHub.MOVEMENT,
+                () -> this.queue.size() + (this.heldHit != null ? 1 : 0), () -> {
+                    releaseAll("packet hub");
+                    if (this.heldHit != null) {
+                        releaseHit("packet hub");
+                    }
+                });
         /* What is held, for PacketHolds (plan step 13). */
         myau.management.PacketHolds.register(() -> {
             int count = this.queue.size() + (this.heldHit != null ? 1 : 0);
@@ -572,7 +582,9 @@ public class FakeLag extends Module {
         }
         if (keepsOrder(packet) || this.holdsReply(packet)) {
             if (!this.queue.isEmpty() && !Arbiter.catching()) {
-                event.setCancelled(true);
+                if (!myau.management.PacketHub.take(event, HUB)) {
+                            return;
+                        }
                         this.queue.offer(new Held(packet, System.currentTimeMillis()));
                 noteHeld();
                 enforceLimits();
@@ -592,7 +604,9 @@ public class FakeLag extends Module {
                at the back and reaches the server in order, behind the
                positions it was made from -- late, as with latency, but
                judged exactly where it was made. */
-            event.setCancelled(true);
+            if (!myau.management.PacketHub.take(event, HUB)) {
+                    return;
+                }
                 this.queue.offer(new Held(packet, System.currentTimeMillis()));
             noteHeld();
             enforceLimits();
@@ -609,7 +623,9 @@ public class FakeLag extends Module {
                the player stands, so like a block placement they take their
                place behind the held positions, in order -- late, as with
                latency -- and "using-item" then lets the queue out gradually. */
-            event.setCancelled(true);
+            if (!myau.management.PacketHub.take(event, HUB)) {
+                return;
+            }
             this.queue.offer(new Held(packet, System.currentTimeMillis()));
             noteHeld();
             enforceLimits();
@@ -656,7 +672,9 @@ public class FakeLag extends Module {
                 long window = this.delay.getValue() + this.transmissionOffset.getValue()
                         + (spread > 0 ? (long) (Math.random() * (spread + 1)) : 0L);
                 if (early > 0 && early * 50L <= window) {
-                    event.setCancelled(true);
+                    if (!myau.management.PacketHub.take(event, HUB)) {
+                                    return;
+                                }
                                 this.heldHit = (C02PacketUseEntity) packet;
                     this.heldHitTarget = target;
                     this.heldHitAt = System.currentTimeMillis();
@@ -702,7 +720,9 @@ public class FakeLag extends Module {
             if (!this.queue.isEmpty()) {
                 if (this.easing && System.currentTimeMillis() >= this.recoilUntil) {
                     /* Being let out: this one takes its place at the back. */
-                    event.setCancelled(true);
+                    if (!myau.management.PacketHub.take(event, HUB)) {
+                                    return;
+                                }
                                 this.queue.offer(new Held(packet, System.currentTimeMillis()));
                     noteHeld();
                     enforceLimits();
@@ -725,7 +745,9 @@ public class FakeLag extends Module {
            on the server, and noting every held packet put this module at the
            top of every correction in a fight just for being active
            (2026-10-12). */
-        event.setCancelled(true);
+        if (!myau.management.PacketHub.take(event, HUB)) {
+            return;
+        }
         this.queue.offer(new Held(packet, System.currentTimeMillis()));
         noteHeld();
         enforceLimits();

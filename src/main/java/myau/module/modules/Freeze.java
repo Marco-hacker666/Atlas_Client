@@ -52,6 +52,13 @@ public class Freeze extends Module {
 
     public Freeze() {
         super("Freeze", false, false, "Holds incoming knockback so a hit does not move you.");
+
+        /* Incoming holder: one at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
+        myau.management.PacketHub.registerIncoming("Freeze", () -> {
+            synchronized (this.held) {
+                return this.held.size();
+            }
+        });
     }
 
     @Override
@@ -107,8 +114,9 @@ public class Freeze extends Module {
                 && (packet instanceof S12PacketEntityVelocity
                 || packet instanceof S32PacketConfirmTransaction
                 || packet instanceof S08PacketPlayerPosLook)) {
-            this.hold(packet);
-            event.setCancelled(true);
+            if (myau.management.PacketHub.take(event, "Freeze")) {
+                this.hold(packet);
+            }
         }
     }
 

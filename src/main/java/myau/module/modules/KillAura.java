@@ -2173,7 +2173,7 @@ public class KillAura extends Module {
             double viewerY = renderManagerAccessor.getRenderPosY();
             double viewerZ = renderManagerAccessor.getRenderPosZ();
             if (this.isEnabled() && target != null) {
-                if (this.showTarget.getValue() != 0
+                if (this.showTarget.getValue() != 0 && !TargetOrbit.active()
                         && TeamUtil.isEntityLoaded(this.target.getEntity())
                         && this.isAttackAllowed()) {
                     Color color = new Color(-1);

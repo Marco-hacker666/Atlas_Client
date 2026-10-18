@@ -49,6 +49,7 @@ public class HudEditorScreen extends GuiScreen {
     @Override
     public void onGuiClosed() {
         HudLayout.setEditing(false);
+        HudAnchors.save();
         this.dragging = null;
     }
 
@@ -85,6 +86,23 @@ public class HudEditorScreen extends GuiScreen {
             int edge = active || hover ? withAlpha(accent, 0xE6) : withAlpha(neutral, 0x80);
             frame(left, top, right, bottom, edge);
             drawLabel(element.label, left, top, bottom, sh, active || hover ? accent : neutral, light);
+        }
+
+        /* The anchor the dragged or selected element hangs from (2026-10-18). */
+        HudLayout.Element anchored = this.dragging != null ? this.dragging : this.selected;
+        if (anchored != null) {
+            float[] mark = HudAnchors.marker(anchored, sw, sh);
+            if (mark != null) {
+                int ax = Math.max(1, Math.min(sw - 2, Math.round(mark[0])));
+                int ay = Math.max(1, Math.min(sh - 2, Math.round(mark[1])));
+                int px = Math.round(mark[2]);
+                int py = Math.round(mark[3]);
+                int line = withAlpha(accent, 0x70);
+                Gui.drawRect(Math.min(ax, px), ay, Math.max(ax, px) + 1, ay + 1, line);
+                Gui.drawRect(px, Math.min(ay, py), px + 1, Math.max(ay, py) + 1, line);
+                Gui.drawRect(ax - 3, ay - 3, ax + 4, ay + 4, withAlpha(accent, 0xE6));
+                Gui.drawRect(ax - 1, ay - 1, ax + 2, ay + 2, withAlpha(neutral, 0xFF));
+            }
         }
 
         if (this.dragging != null) {

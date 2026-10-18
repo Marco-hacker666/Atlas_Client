@@ -104,6 +104,8 @@ public class TargetESP extends Module {
     @EventTarget
     public void onRender(Render3DEvent event) {
         if (!this.isEnabled()) return;
+        /* TargetOrbit marks the target while it is on (2026-10-18). */
+        if (TargetOrbit.active()) return;
 
         EntityLivingBase target = myau.util.Auras.target();
         if (target == null || !TeamUtil.isEntityLoaded(target)) return;

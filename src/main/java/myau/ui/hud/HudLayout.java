@@ -78,6 +78,10 @@ public final class HudLayout {
         element.height = height;
         element.mover = mover;
         element.seenAt = System.currentTimeMillis();
+        /* Anchors (2026-10-18): kept in place through a screen change. */
+        net.minecraft.client.gui.ScaledResolution sr =
+                new net.minecraft.client.gui.ScaledResolution(net.minecraft.client.Minecraft.getMinecraft());
+        HudAnchors.track(element, sr.getScaledWidth(), sr.getScaledHeight());
     }
 
     static List<Element> visible() {

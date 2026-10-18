@@ -49,7 +49,7 @@ public final class ModuleCategories {
                 Stasis.class, Parkour.class, NoWeb.class, Tower.class);
         put(Category.RENDER,
                 BlockESP.class, ESP.class, Chams.class, NameTags.class, Tracers.class,
-                TargetESP.class, TargetHUD.class, ItemESP.class, Xray.class,
+                TargetESP.class, TargetOrbit.class, TargetHUD.class, ItemESP.class, Xray.class,
                 ViewClip.class, Trajectories.class, BlockOverlay.class,
                 BreakProgress.class, Indicators.class, Radar.class, LatencyCrosshair.class,
                 TeamHealthDisplay.class, RenderFixes.class,

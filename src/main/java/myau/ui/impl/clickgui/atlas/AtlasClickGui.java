@@ -606,6 +606,9 @@ public class AtlasClickGui extends GuiScreen {
 
     // ---- layout helpers ----------------------------------------------
 
+    /** TargetOrbit, drawn beside the window while it is selected (2026-10-18). */
+    private final OrbitPreview orbitPreview = new OrbitPreview();
+
     private int windowWidth(ScaledResolution sr) {
         return Math.max(Math.min(MIN_WIDTH, sr.getScaledWidth() - 8),
                 Math.min(this.userWidth, sr.getScaledWidth() - 8));
@@ -978,6 +981,12 @@ public class AtlasClickGui extends GuiScreen {
             LiquidFont.alpha = 1.0F;
             unclip();
         }
+
+        /* Outside the window, after it: TargetOrbit's live preview in the gap beside it. */
+        this.orbitPreview.draw(!this.profilesView && !this.appearanceView
+                        && this.selected instanceof myau.module.modules.TargetOrbit,
+                sr.getScaledWidth(), x, y, width, height, mouseX, mouseY, this.delta,
+                this.theme.language.getValue() == 1, accent());
 
         this.theme.autosave();
         this.perfMillis += ((System.nanoTime() - frameStart) / 1.0E6F - this.perfMillis) * 0.05F;
@@ -3253,6 +3262,9 @@ public class AtlasClickGui extends GuiScreen {
             }
             return;
         }
+        if (this.orbitPreview.mouseClicked(mouseX, mouseY, button)) {
+            return;
+        }
 
         /* Typing into a setting ends when the pointer goes anywhere else, and
            what was typed is kept rather than thrown away. */
@@ -3617,6 +3629,7 @@ public class AtlasClickGui extends GuiScreen {
 
     @Override
     protected void mouseReleased(int mouseX, int mouseY, int state) {
+        this.orbitPreview.mouseReleased();
         this.dragging = null;
         this.colorDrag = null;
         this.movingWindow = false;
@@ -3637,7 +3650,12 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
         ScaledResolution sr = new ScaledResolution(mc);
-        float mouseX = layoutX(org.lwjgl.input.Mouse.getEventX() * sr.getScaledWidth() / (float) mc.displayWidth);
+        float rawX = org.lwjgl.input.Mouse.getEventX() * sr.getScaledWidth() / (float) mc.displayWidth;
+        float rawY = sr.getScaledHeight() - org.lwjgl.input.Mouse.getEventY() * sr.getScaledHeight() / (float) mc.displayHeight - 1;
+        if (this.orbitPreview.scroll(rawX, rawY, wheel)) {
+            return;
+        }
+        float mouseX = layoutX(rawX);
         int width = windowWidth(sr);
         if (mouseX > left(sr) + width - detailWidth(width)) {
             /* Bounded by the content, measured when it was last drawn, so the

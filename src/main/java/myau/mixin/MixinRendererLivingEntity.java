@@ -6,6 +6,7 @@ import myau.event.types.EventType;
 import myau.events.RenderLivingEvent;
 import myau.module.modules.ESP;
 import myau.module.modules.NameTags;
+import net.minecraft.client.model.ModelBase;
 import net.minecraft.client.renderer.entity.Render;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.renderer.entity.RendererLivingEntity;
@@ -13,6 +14,7 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -24,6 +26,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
         priority = 9991
 )
 public abstract class MixinRendererLivingEntity<T extends EntityLivingBase> extends Render<T> {
+    @Shadow
+    protected ModelBase mainModel;
+
     protected MixinRendererLivingEntity(RenderManager renderManager) {
         super(renderManager);
     }
@@ -58,6 +63,8 @@ public abstract class MixinRendererLivingEntity<T extends EntityLivingBase> exte
     )
     private void untintModel(T entity, float a, float b, float c, float d, float e, float scale, CallbackInfo ci) {
         myau.module.modules.Chams.endTint();
+        /* TargetOrbit's body glow: the marked entity's model again, larger and glowing (2026-10-18). */
+        myau.module.modules.TargetOrbit.glowModel(entity, this.mainModel, a, b, c, d, e, scale);
     }
 
     @Inject(

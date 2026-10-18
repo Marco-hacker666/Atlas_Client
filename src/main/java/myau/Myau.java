@@ -100,6 +100,7 @@ public class Myau {
         moduleManager.modules.put(AutoAnduril.class, new AutoAnduril());
         moduleManager.modules.put(KnockbackDelay.class, new KnockbackDelay());
         moduleManager.modules.put(TargetESP.class, new TargetESP());
+        moduleManager.modules.put(TargetOrbit.class, new TargetOrbit());
         moduleManager.modules.put(AutoHeal.class, new AutoHeal());
         moduleManager.modules.put(JumpReset.class, new JumpReset());
         moduleManager.modules.put(NoDelay.class, new NoDelay());

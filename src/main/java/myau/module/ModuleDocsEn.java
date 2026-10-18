@@ -37,7 +37,7 @@ final class ModuleDocsEn {
 
     static {
         // ------------------------------------------------------------ COMBAT
-        d("KillAura2", "KillAura rewritten: turns like a hand, clicks like a human, hits only when the look really lands; with InvulnTiming it hits the tick the target's hurt window ends, and it blocks by itself. Cannot run together with KillAura.");
+        d("KillAura2", "Silent Aura rewritten: turns like a hand, clicks like a human, hits only when the look really lands; with InvulnTiming it hits the tick the target's hurt window ends, and it blocks by itself. Cannot run together with Silent Aura.");
         d("KillAura", "Attacks targets in range: picks a target, turns to it (several modes, silent or not), clicks at your CPS and can block for you.");
         d("AimAssist", "Nudges your aim toward a nearby target while you attack, like a small hand correction; never clicks by itself.");
         d("AutoClicker", "Clicks for you while the attack key is held, at a random CPS within your range; can block-hit or break blocks.");
@@ -47,14 +47,14 @@ final class ModuleDocsEn {
         d("Hitflick", "Flicks the view away on a hit and back, to steer the knockback.");
         d("ServerLag", "Holds back some server packets to simulate a lagging server.");
         d("FakeLag", "Delays your outgoing movement so the server's copy of you runs behind, for the first hit.");
-        d("HitSelect", "Lets an attack through only when it suits you, e.g. when it costs less knockback. ACTIVE also decides KillAura's hits.");
+        d("HitSelect", "Lets an attack through only when it suits you, e.g. when it costs less knockback. ACTIVE also decides Silent Aura's hits.");
         d("MoreKB", "Resets sprint on attack so each hit deals more knockback.");
         d("Criticals", "Makes attacks critical hits (+50% damage) by packets or small hops.");
         d("FastBow", "Draws and shoots the bow faster.");
-        help("BlockHit", "ManualChance", "Chance that a hit is followed by a one-tick block (blocks per second = CPS x chance). Idle while KillAura blocks by itself.");
+        help("BlockHit", "ManualChance", "Chance that a hit is followed by a one-tick block (blocks per second = CPS x chance). Idle while Silent Aura blocks by itself.");
         d("BlockHit", "Blocks with the sword between hits. Manual: after your hits, one-tick block. Predict: raised just before you can be hit again, lowered when you are. Helper / Auto / Lag: other ways.");
         d("AntiBounce", "Moves you out of a block you are stuck in: after 2 ticks overlapping a solid block, along the shortest way out (the way you walk first), at about vanilla speed. Idle during a Clutch catch.");
-        d("TargetOrbit", "Marks who you are fighting (the aura's target, or the player you last hit while in range) with glowing crystal flakes in formations that turn with the way they face, plus a glow over the body. Crystals fly in on a new target, a hit sends a shockwave and spins them up, a kill shatters them. While it is selected, a live preview stands beside the menu: drag to turn, click for a hit, right-click for a kill. On with any aura; while it is on, TargetESP and KillAura's box are not drawn.");
+        d("TargetOrbit", "Marks who you are fighting (the aura's target, or the player you last hit while in range) with glowing crystal flakes in formations that turn with the way they face, plus a glow over the body. Crystals fly in on a new target, a hit sends a shockwave and spins them up, a kill shatters them. While it is selected, a live preview stands beside the menu: drag to turn, click for a hit, right-click for a kill. On with any aura; while it is on, TargetESP and Silent Aura's box are not drawn.");
         help("TargetOrbit", "pattern", "Crown: three rings of crystals and one pointing where they face (default); Wings: crystal wings on the back; Helix: two strands climbing the body; Shards: crystals each on its own orbit; Orbit: ring with comets; Halo: ring at the feet; Mark: crystal over the head; Sigil: a magic circle on the ground with an arrow to the front; Scan: a hologram column with a ring sweeping up and down; Lock: lock-on brackets with a health arc.");
         help("TargetOrbit", "crystals", "Crown, Wings, Helix, Shards: how many crystals.");
         help("TargetOrbit", "crystal-size", "Crown, Wings, Helix, Shards: size of each crystal.");

@@ -300,7 +300,7 @@ public class KillAura extends Module {
     private long lastRotationUpdateTime = 0;
 
     public KillAura() {
-        super("KillAura", false, false, "Kill +999999 Aura");
+        super("Silent Aura", false, false, "Kill +999999 Aura");
         this.lastTickProcessed = 0;
 
         // CPS mode setting (added)

@@ -285,7 +285,7 @@ public final class ModuleDocs {
         d("AutoReconnect", "被踢出或斷線後自動重新連線到同一個伺服器。");
         d("AutoGG", "遊戲結束時自動發送訊息（預設是 gg）。");
         // ------------------------------------------------------------ COMBAT
-        d("KillAura2", "重寫的 KillAura：轉頭像真手、點擊像真人，只在視角真的打得到時出手；配合 InvulnTiming 在對方無敵時間結束那一刻出手，並會自動格擋。和 KillAura 不能同時開。");
+        d("KillAura2", "重寫的 Silent Aura：轉頭像真手、點擊像真人，只在視角真的打得到時出手；配合 InvulnTiming 在對方無敵時間結束那一刻出手，並會自動格擋。和 Silent Aura 不能同時開。");
         d("KillAura", "自動攻擊範圍內的目標：選目標、轉頭（多種模式，可靜默）、依 CPS 出手，並可自動格擋。");
         d("AimAssist", "攻擊時把準心輕微往附近目標拉，手感接近真人微調，不會自己出手。");
         d("AutoClicker", "按住左鍵時自動連點，CPS 在設定範圍內隨機，可順便格擋或挖方塊。");
@@ -295,13 +295,13 @@ public final class ModuleDocs {
         d("Hitflick", "打中目標的瞬間把視角甩開，再轉回來（偏移擊退方向）。");
         d("ServerLag", "暫時攔下伺服器送來的部分封包，模擬伺服器延遲。");
         d("FakeLag", "延後送出自己的移動，讓伺服器上的你落後於實際位置，方便先手。");
-        d("HitSelect", "挑出手時機：只在對自己有利（例如減少吃擊退）的時候讓攻擊送出。ACTIVE 也會管 KillAura 的攻擊。");
+        d("HitSelect", "挑出手時機：只在對自己有利（例如減少吃擊退）的時候讓攻擊送出。ACTIVE 也會管 Silent Aura 的攻擊。");
         d("MoreKB", "攻擊時重置衝刺，讓每一下打出更多擊退。");
         d("Criticals", "讓攻擊判定為爆擊（多 50% 傷害），以封包或小跳實現。");
         d("FastBow", "加快拉弓射箭的速度。");
         d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Helper / Auto / Lag：其他方式。");
         d("AntiBounce", "卡在方塊裡時把你推出來：身體跟方塊重疊 2 tick 以上，就往最短的出口（優先你在走的方向）慢慢移出去，速度接近原版。Clutch 接方塊時不動作。");
-        d("TargetOrbit", "用整齊排列、跟著敵人面向轉動的發光水晶碎片標示你正在打的人（Aura 的目標，或你最近打中、還在範圍內的玩家），身體也會發光。新目標時水晶飛入組成陣形，打中時有衝擊波並加速旋轉，擊殺時碎裂四散。選到這個模組時，選單旁邊會有即時預覽：拖曳旋轉、左鍵模擬打中、右鍵模擬擊殺。開任何 Aura 都會自動開啟；開著時不畫 TargetESP 和 KillAura 的方框。");
+        d("TargetOrbit", "用整齊排列、跟著敵人面向轉動的發光水晶碎片標示你正在打的人（Aura 的目標，或你最近打中、還在範圍內的玩家），身體也會發光。新目標時水晶飛入組成陣形，打中時有衝擊波並加速旋轉，擊殺時碎裂四散。選到這個模組時，選單旁邊會有即時預覽：拖曳旋轉、左鍵模擬打中、右鍵模擬擊殺。開任何 Aura 都會自動開啟；開著時不畫 TargetESP 和 Silent Aura 的方框。");
         help("TargetOrbit", "pattern", "Crown：三層水晶環＋一顆指向敵人面向的大水晶（預設）；Wings：背後的水晶翅膀；Helix：兩條沿身體往上的水晶螺旋；Shards：各自繞行的水晶；Orbit：光環＋繞行光點；Halo：腳下光環；Mark：頭上的水晶；Sigil：地上的魔法陣，前方有箭頭；Scan：全息掃描光柱，光環上下掃動；Lock：鎖定框＋血量弧。");
         help("TargetOrbit", "crystals", "Crown、Wings、Helix、Shards：水晶數量。");
         help("TargetOrbit", "crystal-size", "Crown、Wings、Helix、Shards：每顆水晶的大小。");
@@ -325,7 +325,7 @@ public final class ModuleDocs {
         help("AntiBounce", "speed", "每 tick 最多推多遠。原版自己推出方塊是 0.1；太快可能被當成穿牆。");
         help("AntiBounce", "max-escape", "最多找多遠的出口。超過就不推，只記錄。");
         help("AntiBounce", "log", "每次卡住寫一行到 config/Atlas/stuck-*.txt：卡在哪個方塊、是不是自己剛放的、離上次被拉回多久、延遲、怎麼出來的。");
-        help("BlockHit", "ManualChance", "每次打中後舉劍一下的機率（每秒格擋次數 = CPS × 機率）。KillAura 自己有格擋時不作用。");
+        help("BlockHit", "ManualChance", "每次打中後舉劍一下的機率（每秒格擋次數 = CPS × 機率）。Silent Aura 自己有格擋時不作用。");
         d("ThrowAura", "自動把雪球、蛋等投擲物丟向敵人。");
         d("Displace", "攻擊瞬間轉向，把對手的擊退方向導向虛空或指定方向。");
         d("KeepSprint", "攻擊後不讓衝刺被打斷，保持移動速度。");

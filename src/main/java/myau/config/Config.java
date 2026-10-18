@@ -66,6 +66,11 @@ public class Config {
             JsonObject jsonObject = parsed.getAsJsonObject();
             for (Module module : Myau.moduleManager.modules.values()) {
                 JsonElement moduleObj = jsonObject.get(module.getName());
+                if (moduleObj == null) {
+                    /* Saved before a rename: under the old name, which is
+                       the class name (KillAura, BlockHit). */
+                    moduleObj = jsonObject.get(module.getClass().getSimpleName());
+                }
                 if (moduleObj != null && moduleObj.isJsonObject()) {
                     JsonObject object = moduleObj.getAsJsonObject();
 

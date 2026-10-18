@@ -58,7 +58,7 @@ public class AutoBlock extends Module {
     private boolean blocking = false;
 
     public AutoBlock() {
-        super("AutoBlock", false, false, "Automatically blocks with your sword during combat.");
+        super("AuraAutoBlock", false, false, "Automatically blocks with your sword during combat.");
     }
 
     @Override

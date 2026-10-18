@@ -146,7 +146,7 @@ public class BlockHit extends Module {
     private EntityLivingBase target;
 
     public BlockHit() {
-        super("BlockHit", false, false);
+        super("AutoBlock", false, false);
     } //67:D
 
     @Override

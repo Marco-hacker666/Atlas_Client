@@ -26,6 +26,9 @@ public interface IAccessorPlayerControllerMP {
     boolean getIsHittingBlock();
 
     @Accessor
+    void setIsHittingBlock(boolean hitting);
+
+    @Accessor
     int getCurrentPlayerItem();
 
     @Accessor

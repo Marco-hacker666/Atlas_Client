@@ -153,7 +153,19 @@ public abstract class MixinMinecraft {
         EventManager.call(event);
         if (event.isCancelled()) {
             callbackInfo.cancel();
+            return;
         }
+        /* ItemUseFix: while a block is being broken, the game ignores right
+           click; it is told it is not breaking for this one call. */
+        myau.module.modules.ItemUseFix.beforeRightClick();
+    }
+
+    @Inject(
+            method = {"rightClickMouse"},
+            at = {@At("RETURN")}
+    )
+    private void rightClickMouseReturn(CallbackInfo callbackInfo) {
+        myau.module.modules.ItemUseFix.afterRightClick();
     }
 
     @Inject(

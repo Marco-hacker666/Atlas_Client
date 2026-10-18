@@ -53,6 +53,9 @@ public abstract class MixinEntityLivingBase extends MixinEntity {
             if (actived) {
                 this.rotationYaw = yaw;
             }
+            boolean jump = ((IAccessorEntityLivingBase) entityLivingBase).getJumpTicks() > 0
+                    && net.minecraft.client.Minecraft.getMinecraft().gameSettings.keyBindJump.isKeyDown();
+            EventManager.call(new myau.events.PostStrafeEvent(float2, float3, float4, jump));
         } else {
             entityLivingBase.moveFlying(float2, float3, float4);
         }

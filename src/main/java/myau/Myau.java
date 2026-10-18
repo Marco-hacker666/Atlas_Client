@@ -232,6 +232,14 @@ public class Myau {
         moduleManager.modules.put(BedwarUtils.class, new BedwarUtils());
         moduleManager.modules.put(NoSlow.class, new NoSlow());
         moduleManager.modules.put(NoItemRelease.class, new NoItemRelease());
+        /* From Slinky (2026-10-19), rebuilt here. */
+        moduleManager.modules.put(FastAccel.class, new FastAccel());
+        moduleManager.modules.put(InstantStop.class, new InstantStop());
+        moduleManager.modules.put(NullMove.class, new NullMove());
+        moduleManager.modules.put(Strafe.class, new Strafe());
+        moduleManager.modules.put(Pointers.class, new Pointers());
+        moduleManager.modules.put(PingFix.class, new PingFix());
+        moduleManager.modules.put(ItemUseFix.class, new ItemUseFix());
         moduleManager.modules.put(AutoAuth.class, new AutoAuth());
         moduleManager.modules.put(Capes.class, new Capes());
         moduleManager.modules.put(MoveFix.class, new MoveFix());

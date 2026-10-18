@@ -81,6 +81,11 @@ public class ModeProperty extends Property<Integer> {
         return index >= 0 && index < visible.length && this.setValue(visible[index]);
     }
 
+    /** The name of mode {@code index}; empty when out of range. */
+    public String modeName(int index) {
+        return index >= 0 && index < this.modes.length ? this.modes[index] : "";
+    }
+
     public String getModeString() {
         int index = this.getValue();
         return index >= 0 && index < this.modes.length ? this.modes[index] : "";

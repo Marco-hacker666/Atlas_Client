@@ -465,6 +465,9 @@ public final class ModuleDocs {
         help("KeepSprint", "hit-control", "進階：打中人的那個 tick 額外調整速度與衝刺（下面幾個 Hit 選項）。預設關；舊版這段每個 tick 都在跑，會一直減速、斷衝刺。");
         help("NoSlow", "NG Timing", "NG-Reuse／NG-Switch 送封包的時機：PreAndPost＝移動封包前放開、之後再用；Pre／Post＝都在那一邊送。");
         help("NoSlow", "NG Blink MaxTicks", "NG-Blink 格擋時最多把移動封包扣住幾個 tick，到了就先送出去。");
+        help("NoSlow", "Sword Mode", "格擋時的模式。Grim-Alternate（新）：一個 tick 全速、下一個 tick 照原版減速，交替進行，不送任何封包也不扣封包。Grim 只在連續兩個 tick 速度不對才判定 NoSlow，所以交替不會被抓；速度約為正常的 60%（原版只有 20%）。這個模式不吃 Motion 設定：Grim 的 Simulation 只模擬「全速」和「原版減速」兩種，中間值每個 tick 都會被 Simulation 抓。");
+        help("NoSlow", "Food Mode", "吃東西、喝藥水時的模式。Grim-Alternate：同劍的說明，全速和減速 tick 交替。");
+        help("NoSlow", "Bow Mode", "拉弓時的模式。Grim-Alternate：同劍的說明，全速和減速 tick 交替。");
         help("NoItemRelease", "safe-release", "一移動或疾跑，就在該 tick 的移動封包前補送放開封包（避免 Grim NoSlow）；預設關閉，照 Slinky 一直不送。");
         help("NoItemRelease", "mode", "SWORD：只擋劍的放開（預設，同 Slinky）。CONSUMABLE：只擋食物、藥水等。ALL：兩者都擋。弓和釣竿永遠不擋。");
         help("NoItemRelease", "let-module-releases", "開：其他模組刻意送的放開（Silent Aura 打之前放下劍、NoSlow）照常送出，只擋你自己放開右鍵的那個。關：全部都擋，完全照 Slinky。");

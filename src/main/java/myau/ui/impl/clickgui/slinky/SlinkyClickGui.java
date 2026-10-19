@@ -214,7 +214,7 @@ public class SlinkyClickGui extends GuiScreen {
     // ---- look --------------------------------------------------------------
 
     private static int accent() {
-        Module module = Myau.moduleManager.getModule("ClickGUI");
+        Module module = Myau.moduleManager.modules.get(ClickGUIModule.class);
         if (module instanceof ClickGUIModule) {
             return 0xFF000000 | ((ClickGUIModule) module).slinkyAccent.getValue();
         }
@@ -336,14 +336,39 @@ public class SlinkyClickGui extends GuiScreen {
         text(s, style, size, right - textWidth(s, style, size), y, h, color);
     }
 
+    /**
+     * Shortened texts, by font and width (2026-10-19): a long description
+     * was cut a letter at a time, measuring the whole string each time, for
+     * every card on every frame. Widths do not depend on the GUI scale.
+     */
+    private final Map<String, String> trimmed = new HashMap<String, String>();
+
     private String trim(String s, int style, float size, float max) {
-        if (textWidth(s, style, size) <= max) {
-            return s;
+        String key = style + "|" + size + "|" + (int) max + "|" + s;
+        String cached = this.trimmed.get(key);
+        if (cached != null) {
+            return cached;
         }
-        while (s.length() > 1 && textWidth(s + "...", style, size) > max) {
-            s = s.substring(0, s.length() - 1);
+        String out = s;
+        if (s.length() > 1 && textWidth(s, style, size) > max) {
+            /* The longest prefix that fits with "...", by halving. */
+            int low = 1;
+            int high = s.length() - 1;
+            while (low < high) {
+                int mid = (low + high + 1) / 2;
+                if (textWidth(s.substring(0, mid) + "...", style, size) <= max) {
+                    low = mid;
+                } else {
+                    high = mid - 1;
+                }
+            }
+            out = s.substring(0, Math.max(1, low)) + "...";
         }
-        return s + "...";
+        if (this.trimmed.size() > 4096) {
+            this.trimmed.clear();
+        }
+        this.trimmed.put(key, out);
+        return out;
     }
 
     // ---- input helpers -----------------------------------------------------

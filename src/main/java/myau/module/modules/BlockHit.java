@@ -189,9 +189,21 @@ public class BlockHit extends Module {
         super("AutoBlock", false, false);
     } //67:D
 
+    /**
+     * Ends the delay only if this module set it (2026-10-19). It used to set
+     * LagManager's delay to 0 on every tick in every mode but Lag, so with
+     * AutoBlock on, LagRange's delay was wiped each tick and LagRange did
+     * nothing.
+     */
+    private void clearOwnDelay() {
+        if ("BlockHit".equals(Myau.lagManager.holder()) && Myau.lagManager.getDelay() != 0) {
+            Myau.lagManager.setDelay(0);
+        }
+    }
+
     @Override
     public void onDisabled() {
-        Myau.lagManager.setDelay(0);
+        clearOwnDelay();
         if (this.manualTicks > 0) {
             this.manualTicks = 0;
             KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
@@ -313,14 +325,14 @@ public class BlockHit extends Module {
                     KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), true);
                     blockTicks++;
                 } else {
-                    Myau.lagManager.setDelay(0);
+                    clearOwnDelay();
                 }
                 if (blockTicks > blockTick.getValue()) {
                     KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
-                    Myau.lagManager.setDelay(0);
+                    clearOwnDelay();
                     blockTicks = 0;
                 }
-            } else Myau.lagManager.setDelay(0);
+            } else clearOwnDelay();
 
             if (this.mode.getValue() == 3) {
                 predict();

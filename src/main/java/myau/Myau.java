@@ -430,6 +430,8 @@ public class Myau {
         EventManager.register(new myau.anticheat.Noslow());
         EventManager.register(new myau.anticheat.KillAura());
         EventManager.register(new myau.anticheat.Scaffold());
+        /* Keys bound to profiles in the Slinky-style menu load them in game. */
+        EventManager.register(myau.ui.impl.clickgui.slinky.SlinkyProfiles.INSTANCE);
         anticheatRegistered = true;
     }
 }

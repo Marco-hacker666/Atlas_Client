@@ -358,12 +358,40 @@ public class NoSlow extends Module {
      * vanilla 20 %: about 60 % of walking speed instead of 20 %, with no
      * packets sent and nothing held, so no lagback from holding. The first
      * tick of a use is a free one (1.8 is not slowed on it anyway).
+     * Which tick is fast is decided by GrimNoSlowState, so a use that
+     * ended on a fast tick does not start the next one with another.
      * The Simulation check (OffsetHandler) takes the best of all those
      * predictions, flipped item included, so neither tick moves it; that is
      * also why the factor must be exactly 1.0 or 0.2 (see onLivingUpdate).
      */
     public static final String GRIM_ALTERNATE = "Grim-Alternate";
-    private int alternateTick;
+    /** Our copy of Grim's NoSlow state, shared by Grim-Alternate and Grim-Switch. */
+    private final GrimNoSlowState grimState = new GrimNoSlowState();
+
+    /**
+     * What GrimAC's NoSlow check remembers between movement ticks, kept on our
+     * side so a full-speed tick is only taken when Grim cannot flag it:
+     * flagged is its flaggedLastTick (a missed slowed tick; the next miss is
+     * a flag), slotChanged its didSlotChangeLastTick (1.8: the first slowed
+     * tick after a slot change clears flaggedLastTick). Kept across uses,
+     * because Grim keeps it too: a use that ended on a fast tick would make
+     * the first fast tick of the next one a flag.
+     */
+    static final class GrimNoSlowState {
+        boolean flagged;
+        boolean slotChanged;
+
+        /** A tick the server sees the item in use: true when it may be taken at full speed. */
+        boolean slowedTick() {
+            if (this.slotChanged) {
+                this.slotChanged = false;
+                this.flagged = false;
+            }
+            boolean fast = !this.flagged;
+            this.flagged = fast;
+            return fast;
+        }
+    }
 
     private boolean isAlternateActive() {
         return mc.thePlayer.isUsingItem()
@@ -372,17 +400,9 @@ public class NoSlow extends Module {
                 || this.isBowActive() && GRIM_ALTERNATE.equals(this.bowMode.getModeString()));
     }
 
-    /** Whether this tick of an alternating use is the slowed one: ticks 2, 4, 6... */
-    static boolean alternateSlowed(int tickOfUse) {
-        return tickOfUse % 2 == 0;
-    }
-
     @EventTarget
     public void onLivingUpdate(LivingUpdateEvent event) {
         boolean alternate = this.isEnabled() && mc.thePlayer != null && this.isAlternateActive();
-        if (!alternate) {
-            this.alternateTick = 0;
-        }
         if (this.isEnabled() && this.isAnyActive()) {
             float multiplier = (float) this.getMotionMultiplier() / 100.0F;
             if (alternate) {
@@ -390,7 +410,7 @@ public class NoSlow extends Module {
                    setting in between: Grim's simulation only tries those two
                    (and sneaking's 0.3 under them), so any other factor misses
                    both and is a Simulation flag on every tick. */
-                multiplier = alternateSlowed(++this.alternateTick) ? 0.2F : 1.0F;
+                multiplier = this.grimState.slowedTick() ? 1.0F : 0.2F;
             }
             mc.thePlayer.movementInput.moveForward *= multiplier;
             mc.thePlayer.movementInput.moveStrafe *= multiplier;

@@ -37,7 +37,7 @@ final class ModuleDocsEn {
 
     static {
         // ------------------------------------------------------------ COMBAT
-        d("KillAura2", "KillAura rewritten: turns like a hand, clicks like a human, hits only when the look really lands; with InvulnTiming it hits the tick the target's hurt window ends, and it blocks by itself. Cannot run together with KillAura.");
+        d("KillAura2", "Silent Aura rewritten: turns like a hand, clicks like a human, hits only when the look really lands; with InvulnTiming it hits the tick the target's hurt window ends, and it blocks by itself. Cannot run together with Silent Aura.");
         d("KillAura", "Attacks targets in range: picks a target, turns to it (several modes, silent or not), clicks at your CPS and can block for you.");
         d("AimAssist", "Nudges your aim toward a nearby target while you attack, like a small hand correction; never clicks by itself.");
         d("AutoClicker", "Clicks for you while the attack key is held, at a random CPS within your range; can block-hit or break blocks.");
@@ -47,14 +47,26 @@ final class ModuleDocsEn {
         d("Hitflick", "Flicks the view away on a hit and back, to steer the knockback.");
         d("ServerLag", "Holds back some server packets to simulate a lagging server.");
         d("FakeLag", "Delays your outgoing movement so the server's copy of you runs behind, for the first hit.");
-        d("HitSelect", "Lets an attack through only when it suits you, e.g. when it costs less knockback. ACTIVE also decides KillAura's hits.");
+        d("HitSelect", "Lets an attack through only when it suits you, e.g. when it costs less knockback. ACTIVE also decides Silent Aura's hits.");
         d("MoreKB", "Resets sprint on attack so each hit deals more knockback.");
         d("Criticals", "Makes attacks critical hits (+50% damage) by packets or small hops.");
         d("FastBow", "Draws and shoots the bow faster.");
-        help("BlockHit", "ManualChance", "Chance that a hit is followed by a one-tick block (blocks per second = CPS x chance). Idle while KillAura blocks by itself.");
-        d("BlockHit", "Blocks with the sword between hits. Manual: after your hits, one-tick block. Predict: raised just before you can be hit again, lowered when you are. Helper / Auto / Lag: other ways.");
+        help("BlockHit", "ManualChance", "Chance that a hit is followed by a one-tick block (blocks per second = CPS x chance). Idle while Silent Aura blocks by itself.");
+        d("BlockHit", "Blocks with the sword between hits. Slinky (default): while the attack key is held and an enemy is in range the sword goes up, comes down for one tick after a few so the next hit lands, then goes up again; optionally only just before you can be hit, and packets held briefly as it comes down. Manual: after your hits, one-tick block. Predict: raised just before you can be hit again, lowered when you are. Helper / Auto / Lag: other ways.");
+        help("BlockHit", "block-range", "Raise the sword only while an enemy is this close (eyes to its hitbox).");
+        help("BlockHit", "max-hold-ticks", "Ticks the sword stays up before it comes down for one tick so the next hit lands (1.8 drops attack clicks while blocking).");
+        help("BlockHit", "require-left-click", "Block automatically only while the attack key is held; with only right click held it is a plain manual block.");
+        help("BlockHit", "require-right-click", "Also require right click to be held.");
+        help("BlockHit", "require-damage", "Raise the sword only on the tick your hurt time reaches max-hurt-time (the opponent can hit you again soon); lower it when hit.");
+        help("BlockHit", "max-hurt-time", "With require-damage: the hurt time at which the sword goes up.");
+        help("BlockHit", "fake-animation", "Show the blocking animation on screen (your view only; the server is not told).");
+        help("BlockHit", "fake-animation-in-range", "Show the fake animation only while an enemy is in range.");
+        help("BlockHit", "lag-chance", "Chance that, as the sword comes down, every outgoing packet is held. 0 = never.");
+        help("BlockHit", "lag-ticks", "Most ticks the packets are held; then they all go, in order.");
+        help("BlockHit", "lag-flush-on-attack", "An attack lets the held packets go first, so the hit is not delayed.");
+        help("BlockHit", "lag-reblock", "Raise the sword again as soon as the held packets go.");
         d("AntiBounce", "Moves you out of a block you are stuck in: after 2 ticks overlapping a solid block, along the shortest way out (the way you walk first), at about vanilla speed. Idle during a Clutch catch.");
-        d("TargetOrbit", "Marks who you are fighting (the aura's target, or the player you last hit while in range) with glowing crystal flakes in formations that turn with the way they face, plus a glow over the body. Crystals fly in on a new target, a hit sends a shockwave and spins them up, a kill shatters them. While it is selected, a live preview stands beside the menu: drag to turn, click for a hit, right-click for a kill. On with any aura; while it is on, TargetESP and KillAura's box are not drawn.");
+        d("TargetOrbit", "Marks who you are fighting (the aura's target, or the player you last hit while in range) with glowing crystal flakes in formations that turn with the way they face, plus a glow over the body. Crystals fly in on a new target, a hit sends a shockwave and spins them up, a kill shatters them. While it is selected, a live preview stands beside the menu: drag to turn, click for a hit, right-click for a kill. On with any aura; while it is on, TargetESP and Silent Aura's box are not drawn.");
         help("TargetOrbit", "pattern", "Crown: three rings of crystals and one pointing where they face (default); Wings: crystal wings on the back; Helix: two strands climbing the body; Shards: crystals each on its own orbit; Orbit: ring with comets; Halo: ring at the feet; Mark: crystal over the head; Sigil: a magic circle on the ground with an arrow to the front; Scan: a hologram column with a ring sweeping up and down; Lock: lock-on brackets with a health arc.");
         help("TargetOrbit", "crystals", "Crown, Wings, Helix, Shards: how many crystals.");
         help("TargetOrbit", "crystal-size", "Crown, Wings, Helix, Shards: size of each crystal.");
@@ -156,7 +168,32 @@ final class ModuleDocsEn {
         d("MLG", "Saves a fall with water or a ladder.");
         d("BlockESP", "Marks chests, beds or chosen blocks.");
         d("AutoMessage", "Sends a message after a game or a kill.");
-        d("NoItemRelease", "Does not send the release-use-item packet when you let go of right click; the server still sees the item in use, the client stops as usual (from Slinky).");
+        d("NoItemRelease", "Does not send the release-use-item packet when you let go of right click; the server still sees the item in use, the client stops as usual. Slinky's method: it watches the packets that go out and drops the first release after a use.");
+        d("FastAccel", "Faster start: on the ground, moves your speed part of the way toward the speed the held keys settle at. Never past what the keys would reach anyway; it only gets there sooner. (From Slinky)");
+        help("FastAccel", "boost", "How much of the remaining gap is closed each tick. 0% = vanilla, 100% = at once.");
+        help("FastAccel", "require-not-damaged", "Not while hurt (in knockback).");
+        help("FastAccel", "require-weapon", "Only while holding a sword or an axe.");
+        d("InstantStop", "Stops dead when you let go of W: on the ground, the tick forward comes up it taps back (or back-left / back-right) for one tick to cancel the leftover speed, then hands the keys back. (From Slinky)");
+        d("NullMove", "The newest of two opposite keys wins (snap tap): holding A then pressing D walks right instead of stopping; letting go of D with A still held goes left again. W/S the same. (From Slinky)");
+        d("Strafe", "Turns your motion toward the keys you hold: each tick part of the speed is pointed the way you press, with separate strengths for ground, jump and air. (From Slinky)");
+        help("Strafe", "jump", "Strength on the jump tick.");
+        help("Strafe", "ground", "Strength on the ground.");
+        help("Strafe", "air", "Strength in the air. 0% = vanilla momentum, 100% = turns at once.");
+        help("Strafe", "max-hurt-time", "Not while your hurt time is above this (knockback keeps its direction). 10 = always.");
+        help("Strafe", "require-weapon", "Only while holding a sword or an axe.");
+        d("Pointers", "Arrowheads around the crosshair pointing to nearby players; coloured by distance, name tag or by hand; 3D tilts the ring with your pitch. (From Slinky)");
+        help("Pointers", "range", "Players within this many blocks get an arrow.");
+        help("Pointers", "ignore-within-fov", "No arrow for players within this angle of the crosshair (you can already see them). 0 = all.");
+        help("Pointers", "hide-friendlies", "No arrows for friends and teammates.");
+        help("Pointers", "style", "2D: a flat ring. 3D: the ring lies on the ground and tilts with your view.");
+        help("Pointers", "colors", "Distance: near colour close, far colour far, blended between. Name tag: their name tag (team) colour. Manual: one colour for enemies, one for friendlies.");
+        help("Pointers", "near", "Distance colours: the near colour inside this distance.");
+        help("Pointers", "far", "Distance colours: the far colour beyond this distance.");
+        help("Pointers", "scale", "Arrow size.");
+        help("Pointers", "radius", "Ring radius.");
+        help("Pointers", "distance-radius", "Farther players' arrows sit farther from the crosshair.");
+        d("PingFix", "While lag modules hold packets, keep-alives still go straight through both ways, so the ping in the tab list stays your real one instead of jumping. Stops PingSpoof and Disabler from holding keep-alives. (From Slinky)");
+        d("ItemUseFix", "Use items while breaking a block (eat, block, throw): vanilla ignores right click while mining. (From Slinky)");
         help("KeepSprint", "motion-min", "How much speed a hit leaves, in percent, drawn between min and max on each hit. 100 keeps all of it, 60 is vanilla. After LiquidBounce NextGen.");
         help("KeepSprint", "motion-max", "The top of the same range.");
         help("KeepSprint", "motion-when-hurt-min", "How much speed a hit leaves while you are hurt (your hurt time inside hurt-time), in percent.");
@@ -167,7 +204,9 @@ final class ModuleDocsEn {
         help("KeepSprint", "hit-control", "Advanced: extra speed and sprint handling on the tick of a hit (the Hit options below). Off by default; it used to run on every tick and kept slowing you and dropping the sprint.");
         help("NoSlow", "NG Timing", "When NG-Reuse and NG-Switch send: PreAndPost lets go before the movement packet and uses again after it; Pre or Post sends both on that side.");
         help("NoSlow", "NG Blink MaxTicks", "The longest NG-Blink holds movement packets while blocking, in ticks, before sending them.");
-        help("NoItemRelease", "safe-release", "Send the withheld release before the movement packet of the first tick you move or sprint (avoids Grim NoSlow); off = never send it.");
+        help("NoItemRelease", "safe-release", "Send the withheld release before the movement packet of the first tick you move or sprint (avoids Grim NoSlow). Off by default: never sent, as Slinky does.");
+        help("NoItemRelease", "mode", "SWORD: only a sword's release is dropped (default, as Slinky). CONSUMABLE: only food, potions and the like. ALL: both. Bows and rods never.");
+        help("NoItemRelease", "let-module-releases", "On: releases other modules send on purpose (Silent Aura lowering the sword before a hit, NoSlow) still go out; only your own let-go is dropped. Off: every one is dropped, exactly as Slinky.");
         d("NoJumpDelay", "Removes the delay between consecutive jumps.");
         d("SafeWalk", "Stops you walking off block edges, as if sneaking.");
         d("Eagle", "Sneaks automatically at edges, for bridging backwards.");
@@ -290,6 +329,9 @@ final class ModuleDocsEn {
 
         // ========================================================== HEADINGS
         heading("一般", "General");
+        heading("Slinky 格擋", "Slinky block");
+        heading("Slinky 假動畫", "Slinky fake animation");
+        heading("Slinky 延遲封包", "Slinky lag");
         heading("常用", "Main");
         heading("Swing（舊）", "Swing (old)");
         heading("目標", "Targets");

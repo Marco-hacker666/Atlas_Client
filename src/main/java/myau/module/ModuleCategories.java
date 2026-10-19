@@ -43,10 +43,11 @@ public final class ModuleCategories {
         put(Category.PLAYER,
                 MLG.class, Blink.class, NoFall.class, AntiVoid.class, Clutch.class, AutoTool.class, AutoSwap.class,
                 InvManager.class, Refill.class, AntiAFK.class, AntiFireball.class, AutoAnduril.class,
-                InventoryClicker.class, FastUse.class);
+                InventoryClicker.class, FastUse.class, ItemUseFix.class);
         put(Category.MOVEMENT,
                 Fly.class, Speed.class, LongJump.class, Jesus.class, NoSlow.class, NoItemRelease.class, SafeWalk.class, AntiBounce.class, Eagle.class, InvWalk.class, TargetStrafe.class, MoveFix.class,
-                Stasis.class, Parkour.class, NoWeb.class, Tower.class);
+                Stasis.class, Parkour.class, NoWeb.class, Tower.class,
+                FastAccel.class, InstantStop.class, NullMove.class, Strafe.class);
         put(Category.RENDER,
                 BlockESP.class, ESP.class, Chams.class, NameTags.class, Tracers.class,
                 TargetESP.class, TargetOrbit.class, TargetHUD.class, ItemESP.class, Xray.class,
@@ -54,7 +55,7 @@ public final class ModuleCategories {
                 BreakProgress.class, Indicators.class, Radar.class, LatencyCrosshair.class,
                 TeamHealthDisplay.class, RenderFixes.class,
                 AntiDebuff.class, BedPlates.class, TNTTimer.class, DamageTags.class, ItemTags.class,
-                EntityCulling.class, Freecam.class, FallIndicator.class);
+                EntityCulling.class, Freecam.class, FallIndicator.class, Pointers.class);
         put(Category.WORLD,
                 Scaffold.class, AutoBlockIn.class, AutoBedDef.class, AutoHeadHitter.class, BedNuker.class,
                 ChestAura.class, ChestStealer.class, FastPlace.class, SpeedMine.class, Timer.class,
@@ -65,7 +66,7 @@ public final class ModuleCategories {
                 ESPDetector.class, AntiCheat.class, AntiObfuscate.class, MouseRawInput.class,
                 ResourceSpoofer.class, NoRotate.class, ExploitFixer.class,
                 AutoReconnect.class, StaffDetector.class,
-                SkyWars.class, MurderMystery.class);
+                SkyWars.class, MurderMystery.class, PingFix.class);
         put(Category.EXPLOIT,
                 Disabler.class, GhostHand.class, ClientSpoofer.class);
         put(Category.CLIENT,

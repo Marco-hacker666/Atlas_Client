@@ -116,6 +116,10 @@ public final class PacketHub {
         if (!incoming && event.getType() != EventType.SEND) {
             return false;
         }
+        if (myau.module.modules.PingFix.exempt(event.getPacket())) {
+            /* PingFix: keep-alives go straight through, so the ping shown is the real one. */
+            return false;
+        }
         if (event.isCancelled()) {
             alreadyTaken++;
             last = holder + ": already taken";

@@ -125,8 +125,8 @@ public class Adaptive extends Module {
 
     public final myau.property.properties.TextProperty focus =
             new myau.property.properties.TextProperty("focus",
-                    "AimAssist,AutoClicker,Backtrack,BlockHit,ClickAssits,HitSelect,"
-                            + "InvulnTiming,Velocity,WTap,KnockbackDelay,Reach,KillAura,"
+                    "AimAssist,AutoClicker,Backtrack,AutoBlock,ClickAssits,HitSelect,"
+                            + "InvulnTiming,Velocity,WTap,KnockbackDelay,Reach,SilentAura,"
                             + "LagRange,Blink,ServerLag,FakeLag,AntiDebuff,AutoSwap");
 
     /**
@@ -266,6 +266,11 @@ public class Adaptive extends Module {
         }
         for (String entry : raw.split(",")) {
             if (entry.trim().equalsIgnoreCase(name)) {
+                return true;
+            }
+            /* A name written before a rename, or without its space. */
+            Module named = Myau.moduleManager.getModule(entry.trim());
+            if (named != null && named.getName().equals(name)) {
                 return true;
             }
         }

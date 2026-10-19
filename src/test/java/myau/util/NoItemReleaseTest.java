@@ -1,86 +1,64 @@
 package myau.util;
 
 import myau.module.modules.NoItemRelease;
-import net.minecraft.network.play.client.C07PacketPlayerDigging;
-import net.minecraft.util.BlockPos;
-import net.minecraft.util.EnumFacing;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
-
-import java.lang.reflect.Field;
 
 import static org.junit.Assert.*;
 
-/**
- * NoItemRelease's claim / drop window (2026-10-08). Kept outside
- * myau.module.modules on purpose: a frame from that package on the stack
- * counts as a module sending the packet, which is never claimed.
- */
+/** NoItemRelease's rule, rebuilt on Slinky's method (2026-10-19). */
 public class NoItemReleaseTest {
 
-    private static C07PacketPlayerDigging release() {
-        return new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN);
-    }
-
-    private static void openWindow(boolean open) throws Exception {
-        Field field = NoItemRelease.class.getDeclaredField("inVanillaRelease");
-        field.setAccessible(true);
-        field.setBoolean(null, open);
-    }
-
-    @Before
-    public void reset() {
-        NoItemRelease.endVanillaRelease();
-    }
-
-    @After
-    public void close() {
-        NoItemRelease.endVanillaRelease();
+    @Test
+    public void swordModeCoversOnlySwords() {
+        assertTrue(NoItemRelease.covers(0, true, false));
+        assertFalse(NoItemRelease.covers(0, false, false));
     }
 
     @Test
-    public void vanillaReleaseInsideTheWindowIsDroppedOnce() throws Exception {
-        openWindow(true);
-        C07PacketPlayerDigging packet = release();
-        NoItemRelease.claimVanillaRelease(packet);
-        assertTrue(NoItemRelease.dropVanillaRelease(packet));
-        assertFalse("dropped only once", NoItemRelease.dropVanillaRelease(packet));
+    public void consumableModeCoversEverythingButSwords() {
+        assertFalse(NoItemRelease.covers(1, true, false));
+        assertTrue(NoItemRelease.covers(1, false, false));
     }
 
     @Test
-    public void nothingIsDroppedOutsideTheWindow() {
-        C07PacketPlayerDigging packet = release();
-        NoItemRelease.claimVanillaRelease(packet);
-        assertFalse(NoItemRelease.dropVanillaRelease(packet));
+    public void allModeCoversBoth() {
+        assertTrue(NoItemRelease.covers(2, true, false));
+        assertTrue(NoItemRelease.covers(2, false, false));
     }
 
     @Test
-    public void onlyTheFirstReleaseIsClaimedAndOnlyThatInstance() throws Exception {
-        openWindow(true);
-        C07PacketPlayerDigging first = release();
-        C07PacketPlayerDigging second = release();
-        NoItemRelease.claimVanillaRelease(first);
-        NoItemRelease.claimVanillaRelease(second);
-        assertFalse("another instance goes through", NoItemRelease.dropVanillaRelease(second));
-        assertTrue(NoItemRelease.dropVanillaRelease(first));
+    public void bowsAndRodsAreNeverCovered() {
+        for (int mode = 0; mode < 3; mode++) {
+            assertFalse(NoItemRelease.covers(mode, false, true));
+        }
     }
 
     @Test
-    public void otherDiggingActionsAreNeverClaimed() throws Exception {
-        openWindow(true);
-        C07PacketPlayerDigging dig = new C07PacketPlayerDigging(
-                C07PacketPlayerDigging.Action.START_DESTROY_BLOCK, BlockPos.ORIGIN, EnumFacing.UP);
-        NoItemRelease.claimVanillaRelease(dig);
-        assertFalse(NoItemRelease.dropVanillaRelease(dig));
+    public void theReleaseAfterACoveredUseIsDroppedOnce() {
+        NoItemRelease.Gate gate = new NoItemRelease.Gate();
+        gate.use(true);
+        assertTrue(gate.dig(true));
+        assertFalse("dropped only once", gate.dig(true));
     }
 
     @Test
-    public void closingTheWindowForgetsTheClaim() throws Exception {
-        openWindow(true);
-        C07PacketPlayerDigging packet = release();
-        NoItemRelease.claimVanillaRelease(packet);
-        NoItemRelease.endVanillaRelease();
-        assertFalse(NoItemRelease.dropVanillaRelease(packet));
+    public void anyOtherDigDisarms() {
+        NoItemRelease.Gate gate = new NoItemRelease.Gate();
+        gate.use(true);
+        assertFalse("starting to mine is not a release", gate.dig(false));
+        assertFalse("and it disarms", gate.dig(true));
+    }
+
+    @Test
+    public void anUncoveredUseDisarms() {
+        NoItemRelease.Gate gate = new NoItemRelease.Gate();
+        gate.use(true);
+        gate.use(false);
+        assertFalse(gate.dig(true));
+    }
+
+    @Test
+    public void nothingIsDroppedBeforeAnyUse() {
+        assertFalse(new NoItemRelease.Gate().dig(true));
     }
 }

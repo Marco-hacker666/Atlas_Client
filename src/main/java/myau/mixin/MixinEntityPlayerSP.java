@@ -145,6 +145,17 @@ public abstract class MixinEntityPlayerSP extends MixinEntityPlayer {
             method = {"onLivingUpdate"},
             at = {@At(
                     value = "INVOKE",
+                    target = "Lnet/minecraft/util/MovementInput;updatePlayerMoveState()V"
+            )}
+    )
+    private void beforeUpdateMove(CallbackInfo callbackInfo) {
+        EventManager.call(new myau.events.PreMoveInputEvent());
+    }
+
+    @Inject(
+            method = {"onLivingUpdate"},
+            at = {@At(
+                    value = "INVOKE",
                     target = "Lnet/minecraft/util/MovementInput;updatePlayerMoveState()V",
                     shift = At.Shift.AFTER
             )}

@@ -8,6 +8,9 @@ public enum BlinkModules {
     ANTI_VOID("AntiVoid", 10000L),
     /* One block/attack cycle, a few ticks, renewed every cycle. */
     AUTO_BLOCK("KillAura", 2000L),
+    /* AutoBlock's Slinky mode: everything held for a few ticks after the
+       sword comes down, let go on the next attack. */
+    AUTO_BLOCK_LAG("AutoBlock", 1000L),
     /* The player's own blink: as long as they keep it on. */
     BLINK("Blink", -1L),
     DISPLACE("Displace", 2000L),

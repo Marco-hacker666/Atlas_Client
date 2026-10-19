@@ -245,7 +245,7 @@ public final class ModuleDocs {
         d("AutoPlay", "依設定自動重新進入遊戲。");
         d("BlocksESP", "高亮顯示附近的方塊。");
         d("MobESP", "高亮顯示附近的生物。");
-        d("AutoBlock", "攻擊時自動舉盾格擋。");
+        d("AuraAutoBlock", "攻擊時自動舉盾格擋。");
         d("ScriptModule", "載入腳本檔案並執行其鉤子。");
         d("JumpReset", "受擊時自動跳躍以減少擊退。");
         d("Tower", "快速垂直向上堆疊前進，含隧道模式。");
@@ -285,7 +285,7 @@ public final class ModuleDocs {
         d("AutoReconnect", "被踢出或斷線後自動重新連線到同一個伺服器。");
         d("AutoGG", "遊戲結束時自動發送訊息（預設是 gg）。");
         // ------------------------------------------------------------ COMBAT
-        d("KillAura2", "重寫的 KillAura：轉頭像真手、點擊像真人，只在視角真的打得到時出手；配合 InvulnTiming 在對方無敵時間結束那一刻出手，並會自動格擋。和 KillAura 不能同時開。");
+        d("KillAura2", "重寫的 Silent Aura：轉頭像真手、點擊像真人，只在視角真的打得到時出手；配合 InvulnTiming 在對方無敵時間結束那一刻出手，並會自動格擋。和 Silent Aura 不能同時開。");
         d("KillAura", "自動攻擊範圍內的目標：選目標、轉頭（多種模式，可靜默）、依 CPS 出手，並可自動格擋。");
         d("AimAssist", "攻擊時把準心輕微往附近目標拉，手感接近真人微調，不會自己出手。");
         d("AutoClicker", "按住左鍵時自動連點，CPS 在設定範圍內隨機，可順便格擋或挖方塊。");
@@ -295,13 +295,25 @@ public final class ModuleDocs {
         d("Hitflick", "打中目標的瞬間把視角甩開，再轉回來（偏移擊退方向）。");
         d("ServerLag", "暫時攔下伺服器送來的部分封包，模擬伺服器延遲。");
         d("FakeLag", "延後送出自己的移動，讓伺服器上的你落後於實際位置，方便先手。");
-        d("HitSelect", "挑出手時機：只在對自己有利（例如減少吃擊退）的時候讓攻擊送出。ACTIVE 也會管 KillAura 的攻擊。");
+        d("HitSelect", "挑出手時機：只在對自己有利（例如減少吃擊退）的時候讓攻擊送出。ACTIVE 也會管 Silent Aura 的攻擊。");
         d("MoreKB", "攻擊時重置衝刺，讓每一下打出更多擊退。");
         d("Criticals", "讓攻擊判定為爆擊（多 50% 傷害），以封包或小跳實現。");
         d("FastBow", "加快拉弓射箭的速度。");
-        d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Helper / Auto / Lag：其他方式。");
+        d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Slinky（預設）：按著左鍵、敵人在範圍內就舉劍，舉滿幾 tick 放下一 tick 讓攻擊打出去，再舉起來；可選只在快被打到時舉、放下時延遲封包。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Helper / Auto / Lag：其他方式。");
+        help("BlockHit", "block-range", "敵人在這個距離內才自動舉劍（從眼睛到對方碰撞箱）。");
+        help("BlockHit", "max-hold-ticks", "劍舉著最多幾 tick，之後放下一 tick 讓下一下攻擊打出去（1.8 舉劍時攻擊點擊會被吃掉）。");
+        help("BlockHit", "require-left-click", "只在按著攻擊鍵時自動舉劍；沒按攻擊、只按右鍵時就是普通的手動格擋。");
+        help("BlockHit", "require-right-click", "還要同時按著右鍵才自動舉劍。");
+        help("BlockHit", "require-damage", "只在你的受傷時間剛好到 max-hurt-time 時舉劍（對方快能再打到你），被打中就放下。");
+        help("BlockHit", "max-hurt-time", "require-damage 開啟時，受傷時間降到這個值的那個 tick 舉劍。");
+        help("BlockHit", "fake-animation", "畫面上顯示舉劍動畫（只是本機畫面，不影響伺服器）。");
+        help("BlockHit", "fake-animation-in-range", "假動畫只在敵人在範圍內時顯示。");
+        help("BlockHit", "lag-chance", "放下劍時，有這個機率把之後送出的封包全部扣住。0 = 不扣。");
+        help("BlockHit", "lag-ticks", "扣住封包最多幾 tick，時間到就照順序全部送出。");
+        help("BlockHit", "lag-flush-on-attack", "扣住期間一攻擊，就先把扣住的封包送出去，攻擊不會被延遲。");
+        help("BlockHit", "lag-reblock", "扣住的封包一送出就馬上再舉劍。");
         d("AntiBounce", "卡在方塊裡時把你推出來：身體跟方塊重疊 2 tick 以上，就往最短的出口（優先你在走的方向）慢慢移出去，速度接近原版。Clutch 接方塊時不動作。");
-        d("TargetOrbit", "用整齊排列、跟著敵人面向轉動的發光水晶碎片標示你正在打的人（Aura 的目標，或你最近打中、還在範圍內的玩家），身體也會發光。新目標時水晶飛入組成陣形，打中時有衝擊波並加速旋轉，擊殺時碎裂四散。選到這個模組時，選單旁邊會有即時預覽：拖曳旋轉、左鍵模擬打中、右鍵模擬擊殺。開任何 Aura 都會自動開啟；開著時不畫 TargetESP 和 KillAura 的方框。");
+        d("TargetOrbit", "用整齊排列、跟著敵人面向轉動的發光水晶碎片標示你正在打的人（Aura 的目標，或你最近打中、還在範圍內的玩家），身體也會發光。新目標時水晶飛入組成陣形，打中時有衝擊波並加速旋轉，擊殺時碎裂四散。選到這個模組時，選單旁邊會有即時預覽：拖曳旋轉、左鍵模擬打中、右鍵模擬擊殺。開任何 Aura 都會自動開啟；開著時不畫 TargetESP 和 Silent Aura 的方框。");
         help("TargetOrbit", "pattern", "Crown：三層水晶環＋一顆指向敵人面向的大水晶（預設）；Wings：背後的水晶翅膀；Helix：兩條沿身體往上的水晶螺旋；Shards：各自繞行的水晶；Orbit：光環＋繞行光點；Halo：腳下光環；Mark：頭上的水晶；Sigil：地上的魔法陣，前方有箭頭；Scan：全息掃描光柱，光環上下掃動；Lock：鎖定框＋血量弧。");
         help("TargetOrbit", "crystals", "Crown、Wings、Helix、Shards：水晶數量。");
         help("TargetOrbit", "crystal-size", "Crown、Wings、Helix、Shards：每顆水晶的大小。");
@@ -325,7 +337,7 @@ public final class ModuleDocs {
         help("AntiBounce", "speed", "每 tick 最多推多遠。原版自己推出方塊是 0.1；太快可能被當成穿牆。");
         help("AntiBounce", "max-escape", "最多找多遠的出口。超過就不推，只記錄。");
         help("AntiBounce", "log", "每次卡住寫一行到 config/Atlas/stuck-*.txt：卡在哪個方塊、是不是自己剛放的、離上次被拉回多久、延遲、怎麼出來的。");
-        help("BlockHit", "ManualChance", "每次打中後舉劍一下的機率（每秒格擋次數 = CPS × 機率）。KillAura 自己有格擋時不作用。");
+        help("BlockHit", "ManualChance", "每次打中後舉劍一下的機率（每秒格擋次數 = CPS × 機率）。Silent Aura 自己有格擋時不作用。");
         d("ThrowAura", "自動把雪球、蛋等投擲物丟向敵人。");
         d("Displace", "攻擊瞬間轉向，把對手的擊退方向導向虛空或指定方向。");
         d("KeepSprint", "攻擊後不讓衝刺被打斷，保持移動速度。");
@@ -404,7 +416,32 @@ public final class ModuleDocs {
         d("MLG", "墜落時用水或梯子自救。");
         d("BlockESP", "標出箱子、床或自訂方塊的位置。");
         d("AutoMessage", "遊戲結束或擊殺後自動發送訊息。");
-        d("NoItemRelease", "放開右鍵時不送出「停止使用物品」封包，伺服器仍當你在使用；本機照常停止（來源：Slinky）。");
+        d("NoItemRelease", "放開右鍵時不送出「停止使用物品」封包，伺服器仍當你在使用；本機照常停止。照 Slinky 的做法：看實際送出的封包，使用物品後的下一個放開封包不送。");
+        d("FastAccel", "起步更快：在地上時，把速度往「按著這些鍵最後會達到的速度」推近一部分。不會超過正常按鍵能到的速度，只是更快到。（來源：Slinky）");
+        help("FastAccel", "boost", "每 tick 把剩下的差距補上多少。0% = 原版，100% = 一步到位。");
+        help("FastAccel", "require-not-damaged", "受傷（擊退中）時不作用。");
+        help("FastAccel", "require-weapon", "只在拿著劍或斧時作用。");
+        d("InstantStop", "放開 W 時立刻停下：在地上放開前進鍵的那一 tick，自動點一下後退（或後左／後右）把剩下的速度抵銷，下一 tick 還給你。（來源：Slinky）");
+        d("NullMove", "相反方向鍵以最新按的為準（snap tap）：按著 A 再按 D 會往右走，不會停住；放開 D 若還按著 A 就回到往左。W/S 也一樣。（來源：Slinky）");
+        d("Strafe", "讓移動方向更快轉向你按的方向：每 tick 把速度往按鍵方向拉一部分，地面、跳躍、空中分開設定。（來源：Slinky）");
+        help("Strafe", "jump", "起跳那一 tick 的轉向強度。");
+        help("Strafe", "ground", "在地上的轉向強度。");
+        help("Strafe", "air", "在空中的轉向強度。0% = 原版慣性，100% = 立刻轉向。");
+        help("Strafe", "max-hurt-time", "受傷時間大於這個值時不作用（被打飛時不改方向）。10 = 永遠作用。");
+        help("Strafe", "require-weapon", "只在拿著劍或斧時作用。");
+        d("Pointers", "準心周圍的箭頭，指向附近玩家所在的方向；可依距離、名牌顏色或自訂顏色上色，3D 模式會隨你的俯仰角傾斜。（來源：Slinky）");
+        help("Pointers", "range", "多遠內的玩家才顯示箭頭（格）。");
+        help("Pointers", "ignore-within-fov", "在準心這個角度內的玩家不顯示（已經看得到的人）。0 = 全部顯示。");
+        help("Pointers", "hide-friendlies", "不顯示好友和隊友。");
+        help("Pointers", "style", "2D：平面圓圈。3D：圓圈像平放在地上，隨你的視角傾斜。");
+        help("Pointers", "colors", "Distance：近的用近色、遠的用遠色、中間漸變。Name tag：用對方名牌（隊伍）顏色。Manual：敵人／友方各一色。");
+        help("Pointers", "near", "Distance 模式：這個距離內是近色。");
+        help("Pointers", "far", "Distance 模式：這個距離外是遠色。");
+        help("Pointers", "scale", "箭頭大小。");
+        help("Pointers", "radius", "圓圈半徑。");
+        help("Pointers", "distance-radius", "越遠的人箭頭離準心越遠。");
+        d("PingFix", "延遲類功能扣住封包時，Keep-Alive 封包照常立刻送出／處理，Tab 顯示的 ping 維持你的真實 ping，不會跟著暴增。會讓 PingSpoof 和 Disabler 扣不住 Keep-Alive。（來源：Slinky）");
+        d("ItemUseFix", "挖方塊時也能使用物品（吃東西、舉劍、丟東西）：原版挖方塊時右鍵會被忽略。（來源：Slinky）");
         help("KeepSprint", "motion-min", "打中人時保留多少速度（%，每下從 min～max 之間隨機）。100＝完全不減速，60＝原版。參考 LiquidBounce NextGen。");
         help("KeepSprint", "motion-max", "同上，範圍的上限。");
         help("KeepSprint", "motion-when-hurt-min", "自己在被打狀態（hurt-time 範圍內）時，打中人保留多少速度（%）。");
@@ -415,7 +452,9 @@ public final class ModuleDocs {
         help("KeepSprint", "hit-control", "進階：打中人的那個 tick 額外調整速度與衝刺（下面幾個 Hit 選項）。預設關；舊版這段每個 tick 都在跑，會一直減速、斷衝刺。");
         help("NoSlow", "NG Timing", "NG-Reuse／NG-Switch 送封包的時機：PreAndPost＝移動封包前放開、之後再用；Pre／Post＝都在那一邊送。");
         help("NoSlow", "NG Blink MaxTicks", "NG-Blink 格擋時最多把移動封包扣住幾個 tick，到了就先送出去。");
-        help("NoItemRelease", "safe-release", "一移動或疾跑，就在該 tick 的移動封包前補送放開封包（避免 Grim NoSlow）；關掉則一直不送。");
+        help("NoItemRelease", "safe-release", "一移動或疾跑，就在該 tick 的移動封包前補送放開封包（避免 Grim NoSlow）；預設關閉，照 Slinky 一直不送。");
+        help("NoItemRelease", "mode", "SWORD：只擋劍的放開（預設，同 Slinky）。CONSUMABLE：只擋食物、藥水等。ALL：兩者都擋。弓和釣竿永遠不擋。");
+        help("NoItemRelease", "let-module-releases", "開：其他模組刻意送的放開（Silent Aura 打之前放下劍、NoSlow）照常送出，只擋你自己放開右鍵的那個。關：全部都擋，完全照 Slinky。");
         d("NoJumpDelay", "移除連續跳躍之間的延遲。");
         d("SafeWalk", "走到方塊邊緣時不會掉下去（像一直按著潛行）。");
         d("Eagle", "走到邊緣時自動潛行，用來後退搭橋。");
@@ -632,7 +671,10 @@ public final class ModuleDocs {
                 h("受傷時機", "MinHurtTime", "MaxHurtTime"),
                 h("Manual", "ManualChance"),
                 h("Predict", "Rhythm*"),
-                h("Swing（舊）", "Predict*"));
+                h("Swing（舊）", "Predict*"),
+                h("Slinky 格擋", "block-range", "max-hold-ticks", "require-*", "max-hurt-time"),
+                h("Slinky 假動畫", "fake-animation*"),
+                h("Slinky 延遲封包", "lag-*"));
         g("TargetHUD",
                 h("樣式", "style", "Anim Mode", "animations", "head", "indicator", "outline", "shadow"),
                 h("顏色", "color", "CustomColor", "Bg-Alpha", "background"),

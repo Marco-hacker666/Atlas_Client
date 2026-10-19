@@ -358,6 +358,9 @@ public class NoSlow extends Module {
      * vanilla 20 %: about 60 % of walking speed instead of 20 %, with no
      * packets sent and nothing held, so no lagback from holding. The first
      * tick of a use is a free one (1.8 is not slowed on it anyway).
+     * The Simulation check (OffsetHandler) takes the best of all those
+     * predictions, flipped item included, so neither tick moves it; that is
+     * also why the factor must be exactly 1.0 or 0.2 (see onLivingUpdate).
      */
     public static final String GRIM_ALTERNATE = "Grim-Alternate";
     private int alternateTick;
@@ -382,9 +385,12 @@ public class NoSlow extends Module {
         }
         if (this.isEnabled() && this.isAnyActive()) {
             float multiplier = (float) this.getMotionMultiplier() / 100.0F;
-            if (alternate && alternateSlowed(++this.alternateTick)) {
-                /* The vanilla slowdown, applied here after the sprint check. */
-                multiplier = 0.2F;
+            if (alternate) {
+                /* Exactly 1.0 or exactly the vanilla 0.2, never the Motion
+                   setting in between: Grim's simulation only tries those two
+                   (and sneaking's 0.3 under them), so any other factor misses
+                   both and is a Simulation flag on every tick. */
+                multiplier = alternateSlowed(++this.alternateTick) ? 0.2F : 1.0F;
             }
             mc.thePlayer.movementInput.moveForward *= multiplier;
             mc.thePlayer.movementInput.moveStrafe *= multiplier;

@@ -22,14 +22,23 @@ public class ModuleManager {
         }
         /* 2026-10-19: names may have spaces ("Silent Aura"), and a command
            cannot type one, so spaces do not count: "silentaura" finds it. */
-        String wanted = squash(string);
-        Module module = this.modules.values().stream().filter(mD -> squash(mD.getName()).equals(wanted)).findFirst().orElse(null);
+        Module module = null;
+        for (Module candidate : this.modules.values()) {
+            if (sameName(candidate.getName(), string)) {
+                module = candidate;
+                break;
+            }
+        }
         if (module == null) {
             /* A renamed module by its old name, which is its class name
                (KillAura -> Silent Aura, BlockHit -> AutoBlock): old configs,
                binds and lists keep working. */
-            module = this.modules.values().stream()
-                    .filter(mD -> mD.getClass().getSimpleName().equalsIgnoreCase(wanted)).findFirst().orElse(null);
+            for (Module candidate : this.modules.values()) {
+                if (sameName(candidate.getClass().getSimpleName(), string)) {
+                    module = candidate;
+                    break;
+                }
+            }
         }
         /* 2026-10-11: a merged module (ModuleBundle) by its own name, for
            FlagResponder and anything else that names modules. */
@@ -39,6 +48,17 @@ public class ModuleManager {
     /** A module name as looked up: no spaces, any case. */
     public static String squash(String name) {
         return name.replace(" ", "").toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** Same name, ignoring case and spaces; no allocation unless a space is involved. */
+    public static boolean sameName(String name, String wanted) {
+        if (name.equalsIgnoreCase(wanted)) {
+            return true;
+        }
+        if (name.indexOf(' ') < 0 && wanted.indexOf(' ') < 0) {
+            return false;
+        }
+        return squash(name).equals(squash(wanted));
     }
 
     public Module getModule(Class<?> clazz){

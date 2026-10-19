@@ -108,6 +108,12 @@ public class BackTrack extends Module {
     /* The ESP box also shows which way the target is facing. */
     public final BooleanProperty espHead;
     public final BooleanProperty hitStats;
+    /* 2026-10-19 (from Slinky): hold only within a second of your own last
+       hit, and/or only while the attack key is held. */
+    public final BooleanProperty onlyInCombat;
+    public final BooleanProperty requireAttackKey;
+    /** The attack key, read on the client thread each tick (holds open on the network thread). */
+    private volatile boolean attackKeyHeld;
 
     private final Object lock = new Object();
     private final ConcurrentLinkedQueue<Packet<?>> incomingQueue = new ConcurrentLinkedQueue<>();
@@ -203,6 +209,8 @@ public class BackTrack extends Module {
         this.esp = new BooleanProperty("esp", true);
         this.espHead = new BooleanProperty("esp-head", true, this.esp::getValue);
         this.hitStats = new BooleanProperty("hit-stats", false);
+        this.onlyInCombat = new BooleanProperty("only-in-combat", false);
+        this.requireAttackKey = new BooleanProperty("require-attack-key", false);
         instance = this;
     }
 
@@ -348,6 +356,8 @@ public class BackTrack extends Module {
 
     /** Whether a new hold may open now: cooldown over, target hittable, weapon in hand. */
     private boolean mayOpen(EntityLivingBase t) {
+        if (onlyInCombat.getValue() && System.currentTimeMillis() - lastAttackTime > 1000L) return false;
+        if (requireAttackKey.getValue() && !attackKeyHeld) return false;
         if (cooldown.getValue() > 0 && System.currentTimeMillis() - lastReleaseAt < cooldown.getValue()) return false;
         if (maxHurtTime.getValue() < 10 && t.hurtTime > maxHurtTime.getValue()) return false;
         if (weaponsOnly.getValue() && !myau.util.ItemUtil.hasRawUnbreakingEnchant()) return false;
@@ -518,6 +528,7 @@ public class BackTrack extends Module {
     }
 
     private void tickPre() {
+        attackKeyHeld = myau.util.KeyBindUtil.isKeyDown(mc.gameSettings.keyBindAttack.getKeyCode());
         if (hitStats.getValue() && lastAttacked != null) {
             int hurt = lastAttacked.hurtTime;
             if (hurt > lastTargetHurtTime && swingPendingAt > 0L

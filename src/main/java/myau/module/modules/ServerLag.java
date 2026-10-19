@@ -24,7 +24,17 @@ import net.minecraft.network.play.server.S40PacketDisconnect;
 public class ServerLag extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private final ConcurrentLinkedQueue<TimedPacket> packetQueue = new ConcurrentLinkedQueue<>();
-    private final IntProperty maxBlinkTime = new IntProperty("Lag ms", 1000, 500, 30000);
+    /* 2026-10-19: down to 25 ms, so it also works as a light incoming delay
+       (Slinky's Fake Lag "inbound"), next to FakeLag's outgoing one. */
+    private final IntProperty maxBlinkTime = new IntProperty("Lag ms", 1000, 25, 30000);
+    /* Hold only within a second of your own last hit (Slinky's "Attacked"). */
+    private final myau.property.properties.BooleanProperty onlyInCombat =
+            new myau.property.properties.BooleanProperty("only-in-combat", false);
+    private final myau.property.properties.BooleanProperty weaponsOnly =
+            new myau.property.properties.BooleanProperty("weapons-only", false);
+    private volatile long lastAttackAt;
+    /** Whether a hold may start now; set on the client thread each tick. */
+    private volatile boolean allowed = true;
 
     public ServerLag() {
         super("ServerLag", false, false, "I feel the lag ");
@@ -78,7 +88,9 @@ public class ServerLag extends Module {
         if (mc.thePlayer == null || mc.theWorld == null) return;
         Packet<?> packet = event.getPacket();
         if (PacketUtil.isWorldRenderPacket(packet)) return;
-        if (packet instanceof S19PacketEntityStatus || packet instanceof S02PacketChat || packet instanceof S0BPacketAnimation || packet instanceof S06PacketUpdateHealth) return;
+        if (packet instanceof S19PacketEntityStatus || packet instanceof S02PacketChat || packet instanceof S0BPacketAnimation || packet instanceof S06PacketUpdateHealth
+                || packet instanceof net.minecraft.network.play.server.S29PacketSoundEffect) return;
+        if (!this.allowed) return;
         if (myau.management.Arbiter.catching()) {
             /* F-27: every other holder let go for a catch; this one kept
                holding. Held packets go (scheduled ahead of this one's own
@@ -106,17 +118,59 @@ public class ServerLag extends Module {
 
     @EventTarget
     public void onTick(TickEvent event) {
-        if (!this.isEnabled() || event.getType() != EventType.PRE) return;
+        if (!this.isEnabled() || event.getType() != EventType.PRE || mc.thePlayer == null) return;
+        boolean combat = !this.onlyInCombat.getValue() || System.currentTimeMillis() - this.lastAttackAt <= 1000L;
+        boolean weapon = !this.weaponsOnly.getValue() || myau.util.ItemUtil.isHoldingSword();
+        this.allowed = combat && weapon;
+        if (!this.allowed) {
+            releaseAllPackets();
+            return;
+        }
+        releaseDue();
+    }
+
+    /* Checked every frame as well, not only every tick: a short delay is
+       then kept to within a frame instead of up to 50 ms late. The due
+       packets are handled at the start of the next frame (the task queue
+       vanilla handles its own packets from), never in the middle of
+       drawing the world. */
+    private volatile boolean releaseScheduled;
+
+    @EventTarget
+    public void onRender(myau.events.Render3DEvent event) {
+        if (!this.isEnabled() || mc.thePlayer == null || this.releaseScheduled) {
+            return;
+        }
+        TimedPacket head = packetQueue.peek();
+        if (head != null && head.time <= System.currentTimeMillis() - this.maxBlinkTime.getValue()) {
+            this.releaseScheduled = true;
+            mc.addScheduledTask(new Runnable() {
+                @Override
+                public void run() {
+                    ServerLag.this.releaseScheduled = false;
+                    releaseDue();
+                }
+            });
+        }
+    }
+
+    private void releaseDue() {
         long due = System.currentTimeMillis() - this.maxBlinkTime.getValue();
         while (!packetQueue.isEmpty() && packetQueue.peek().time <= due) {
             process(packetQueue.poll());
         }
     }
 
+    @EventTarget
+    public void onAttack(myau.events.AttackEvent event) {
+        this.lastAttackAt = System.currentTimeMillis();
+    }
+
     @EventTarget(whenDisabled = true)
     public void onLoadWorld(LoadWorldEvent event) {
         /* A new world: the held packets describe the old one. */
         packetQueue.clear();
+        this.releaseScheduled = false;
     }
 
     private void scheduleReleaseAll() {

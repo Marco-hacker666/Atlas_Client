@@ -135,6 +135,9 @@ public class KnockbackDelay extends Module {
     public final BooleanProperty waterCheck = new BooleanProperty("WaterCheck", true);
     public final BooleanProperty realtimeDamage = new BooleanProperty("RealtimeDamage", true);
     public final BooleanProperty onlySwords = new BooleanProperty("OnlySwords", false);
+    /* 2026-10-19 (from Slinky): only while the attack key is held / only in the air. */
+    public final BooleanProperty requireAttackKey = new BooleanProperty("RequireAttackKey", false);
+    public final BooleanProperty onlyInAir = new BooleanProperty("OnlyInAir", false);
 
     private final Queue<Packet<?>> held = new ConcurrentLinkedQueue<Packet<?>>();
     /* Written on the client thread, read on the network thread. */
@@ -327,6 +330,15 @@ public class KnockbackDelay extends Module {
             return;
         }
         if (this.onlySwords.getValue() && !ItemUtil.isHoldingSword()) {
+            this.conditionsMet = false;
+            return;
+        }
+        if (this.requireAttackKey.getValue()
+                && !myau.util.KeyBindUtil.isKeyDown(mc.gameSettings.keyBindAttack.getKeyCode())) {
+            this.conditionsMet = false;
+            return;
+        }
+        if (this.onlyInAir.getValue() && mc.thePlayer.onGround) {
             this.conditionsMet = false;
             return;
         }

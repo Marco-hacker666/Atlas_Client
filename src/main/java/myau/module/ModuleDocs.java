@@ -293,7 +293,7 @@ public final class ModuleDocs {
         d("AutoHeal", "血量低時自動使用治療物品（湯、藥水、頭）。");
         d("BackTrack", "對手往後退時，暫時把他留在你最後看到的位置，讓攻擊還能打到伺服器記錄中的位置。");
         d("Hitflick", "打中目標的瞬間把視角甩開，再轉回來（偏移擊退方向）。");
-        d("ServerLag", "暫時攔下伺服器送來的部分封包，模擬伺服器延遲。");
+        d("ServerLag", "把伺服器送來的封包延後處理，模擬伺服器延遲；受傷、血量、音效、聊天照常即時。可當成 FakeLag 的「收到延遲」一起用。");
         d("FakeLag", "延後送出自己的移動，讓伺服器上的你落後於實際位置，方便先手。");
         d("HitSelect", "挑出手時機：只在對自己有利（例如減少吃擊退）的時候讓攻擊送出。ACTIVE 也會管 Silent Aura 的攻擊。");
         d("MoreKB", "攻擊時重置衝刺，讓每一下打出更多擊退。");
@@ -374,6 +374,19 @@ public final class ModuleDocs {
         help("LagRange", "flag-pause", "什麼時候放：被伺服器拉回之後這段時間不壓（毫秒）。");
         help("LagRange", "show-position", "第三人稱時畫出伺服器上你的位置。");
         help("LagRange", "log", "File：每次壓和放的原因寫進 config/Atlas/lagrange-*.txt。");
+        help("LagRange", "release-on-sprint-reset", "什麼時候放：W-tap（停止疾跑）時立刻全部放出，接著的攻擊從你真正的位置算。（來源：Slinky）");
+        help("BackTrack", "only-in-combat", "只在你上次出手後 1 秒內才拖住對手。（來源：Slinky）");
+        help("BackTrack", "require-attack-key", "只在按著攻擊鍵時才拖住對手。（來源：Slinky）");
+        help("KnockbackDelay", "RequireAttackKey", "只在按著攻擊鍵時才延後擊退。（來源：Slinky）");
+        help("KnockbackDelay", "OnlyInAir", "只在空中時才延後擊退，在地上照常。（來源：Slinky）");
+        help("Blink", "release-on-attack", "扣住時攻擊實體，先把扣住的封包全部放出再攻擊。（來源：Slinky）");
+        help("Blink", "release-on-dig", "扣住時挖方塊，先把扣住的封包全部放出再挖。（來源：Slinky）");
+        help("Timer", "require-attack-key", "只在按著攻擊鍵時加速，其他時候 1.0。（來源：Slinky）");
+        help("Timer", "require-damage", "只在受傷時間內加速。（來源：Slinky）");
+        help("Timer", "require-falling", "只在下墜時加速。（來源：Slinky）");
+        help("ServerLag", "Lag ms", "收到的封包延後多久（毫秒）。最低 25，可以當成輕量的「收到延遲」，和 FakeLag（送出延遲）一起開。");
+        help("ServerLag", "only-in-combat", "只在你上次出手後 1 秒內才延遲。（來源：Slinky）");
+        help("ServerLag", "weapons-only", "只在拿著劍時才延遲。");
         d("NoHitDelay", "移除攻擊後的點擊冷卻（1.8 揮空延遲）。");
         d("Piercing", "準心可以穿過方塊或隊友，直接選中後面的目標。");
         d("ClickAssits", "在你點擊時額外補點，讓 CPS 更穩定。");
@@ -689,7 +702,8 @@ public final class ModuleDocs {
         g("Blink",
                 h("扣住", "direction", "mode", "hold-transactions", "auto-off", "timeout"),
                 h("釋放", "auto-send", "send-threshold", "max-drift", "latency-budget", "ping-aware",
-                        "release-on-correction", "release-per-tick", "release-every", "release-on-place"),
+                        "release-on-correction", "release-per-tick", "release-every", "release-on-place",
+                        "release-on-attack", "release-on-dig"),
                 h("顯示", "announce-release", "server-position", "breadcrumbs"));
         g("FlagDetector",
                 h("拉回偵測", "min-distance", "teleport-distance", "show-teleports", "group-bursts", "burst-window"),

@@ -45,7 +45,7 @@ final class ModuleDocsEn {
         d("AutoHeal", "Uses healing items (soup, potions, heads) when health is low.");
         d("BackTrack", "Keeps a retreating target where you last saw them a moment longer, so a swing reaches the position the server still has.");
         d("Hitflick", "Flicks the view away on a hit and back, to steer the knockback.");
-        d("ServerLag", "Holds back some server packets to simulate a lagging server.");
+        d("ServerLag", "Delays the packets the server sends, as if the server lagged; damage, health, sounds and chat still arrive at once. Works as FakeLag's incoming half.");
         d("FakeLag", "Delays your outgoing movement so the server's copy of you runs behind, for the first hit.");
         d("HitSelect", "Lets an attack through only when it suits you, e.g. when it costs less knockback. ACTIVE also decides Silent Aura's hits.");
         d("MoreKB", "Resets sprint on attack so each hit deals more knockback.");
@@ -126,6 +126,19 @@ final class ModuleDocsEn {
         help("LagRange", "flag-pause", "When to let go: after a server correction, no holding for this long (ms).");
         help("LagRange", "show-position", "Draws where the server has you, in third person.");
         help("LagRange", "log", "File: each hold and let-out with its reason in config/Atlas/lagrange-*.txt.");
+        help("LagRange", "release-on-sprint-reset", "When to let go: a W-tap (sprint stopping) lets everything out at once, so the hit after it is judged from where you are. (From Slinky)");
+        help("BackTrack", "only-in-combat", "Hold the target back only within a second of your own last hit. (From Slinky)");
+        help("BackTrack", "require-attack-key", "Hold the target back only while the attack key is held. (From Slinky)");
+        help("KnockbackDelay", "RequireAttackKey", "Delay knockback only while the attack key is held. (From Slinky)");
+        help("KnockbackDelay", "OnlyInAir", "Delay knockback only in the air; on the ground it lands as usual. (From Slinky)");
+        help("Blink", "release-on-attack", "While holding, attacking an entity lets everything out first, then the hit. (From Slinky)");
+        help("Blink", "release-on-dig", "While holding, starting to dig lets everything out first. (From Slinky)");
+        help("Timer", "require-attack-key", "Speed up only while the attack key is held; otherwise 1.0. (From Slinky)");
+        help("Timer", "require-damage", "Speed up only while hurt. (From Slinky)");
+        help("Timer", "require-falling", "Speed up only while falling. (From Slinky)");
+        help("ServerLag", "Lag ms", "How long packets from the server wait (ms). Down to 25, so it works as a light incoming delay next to FakeLag's outgoing one.");
+        help("ServerLag", "only-in-combat", "Delay only within a second of your own last hit. (From Slinky)");
+        help("ServerLag", "weapons-only", "Delay only while holding a sword.");
         d("NoHitDelay", "Removes the 1.8 miss-click cooldown.");
         d("Piercing", "Lets the crosshair pass through blocks or teammates to the target behind.");
         d("ClickAssits", "Adds extra clicks while you click, for a steadier CPS.");

@@ -168,6 +168,10 @@ public class Blink extends Module {
      * right click with a block).
      */
     public final BooleanProperty releaseOnPlace = new BooleanProperty("release-on-place", true);
+    /* 2026-10-19 (from Slinky): a left click on an entity or a block ends the
+       hold first, so the hit or the dig is judged from where you are. */
+    public final BooleanProperty releaseOnAttack = new BooleanProperty("release-on-attack", false);
+    public final BooleanProperty releaseOnDig = new BooleanProperty("release-on-dig", false);
 
 
     public final BooleanProperty notify = new BooleanProperty("announce-release", true,
@@ -424,6 +428,29 @@ public class Blink extends Module {
      * on the client thread, so the queue goes out ahead of the click and the
      * click itself is not held (see releaseOnPlace).
      */
+    /** release-on-attack / release-on-dig: the left click's target decides, before it is sent. */
+    @EventTarget
+    public void onLeftClick(myau.events.LeftClickMouseEvent event) {
+        if (!this.isEnabled() || mc.thePlayer == null || mc.objectMouseOver == null
+                || Myau.blinkManager.getBlinkingModule() != BlinkModules.BLINK) {
+            return;
+        }
+        net.minecraft.util.MovingObjectPosition.MovingObjectType hit = mc.objectMouseOver.typeOfHit;
+        boolean attack = hit == net.minecraft.util.MovingObjectPosition.MovingObjectType.ENTITY
+                && this.releaseOnAttack.getValue();
+        boolean dig = hit == net.minecraft.util.MovingObjectPosition.MovingObjectType.BLOCK
+                && this.releaseOnDig.getValue();
+        if (!attack && !dig) {
+            return;
+        }
+        if (this.notify.getValue()) {
+            myau.util.ChatUtil.sendFormatted(String.format(
+                    "&7[&bBlink&7] released on &f%s &8(&f%.1f&7 blocks, &f%d&7 packets&8)",
+                    attack ? "attacking" : "digging", this.drift, Myau.blinkManager.blinkedPackets.size()));
+        }
+        this.setEnabled(false);
+    }
+
     @EventTarget
     public void onRightClick(RightClickMouseEvent event) {
         if (!this.isEnabled() || !this.releaseOnPlace.getValue() || mc.thePlayer == null

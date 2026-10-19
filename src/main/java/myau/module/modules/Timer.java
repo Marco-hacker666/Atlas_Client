@@ -6,6 +6,7 @@ import myau.event.types.Priority;
 import myau.events.UpdateEvent;
 import myau.mixin.IAccessorMinecraft;
 import myau.module.Module;
+import myau.property.properties.BooleanProperty;
 import myau.property.properties.FloatProperty;
 import myau.property.properties.IntProperty;
 import myau.property.properties.ModeProperty;
@@ -21,6 +22,10 @@ public class Timer extends Module {
     public final IntProperty balanceInterval = new IntProperty("balance-interval", 5, 1, 20, () -> timerMode.getValue() == 2);
     public final FloatProperty minSpeed = new FloatProperty("min-speed", 1.0F, 0.01F, 10.0F);
     public final FloatProperty maxSpeed = new FloatProperty("max-speed", 1.0F, 0.01F, 10.0F);
+    /* 2026-10-19 (from Slinky): run fast only while these hold; otherwise 1.0. */
+    public final BooleanProperty requireAttackKey = new BooleanProperty("require-attack-key", false);
+    public final BooleanProperty requireDamage = new BooleanProperty("require-damage", false);
+    public final BooleanProperty requireFalling = new BooleanProperty("require-falling", false);
 
     private int timerTicks = 0;
     private int randomTicks = 0;
@@ -67,6 +72,10 @@ public class Timer extends Module {
         }
 
         net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
+        if (timer != null && !conditionsMet()) {
+            timer.timerSpeed = 1.0F;
+            return;
+        }
         if (timer != null) {
             // Ported from Raven GrimBoatLongJump timer-balance idea: hop and balance variants.
             if (this.timerMode.getValue() == 1 && mc.thePlayer != null) {
@@ -80,6 +89,20 @@ public class Timer extends Module {
                 timer.timerSpeed = this.randomizedSpeed;
             }
         }
+    }
+
+    private boolean conditionsMet() {
+        if (mc.thePlayer == null) {
+            return true;
+        }
+        if (this.requireAttackKey.getValue()
+                && !myau.util.KeyBindUtil.isKeyDown(mc.gameSettings.keyBindAttack.getKeyCode())) {
+            return false;
+        }
+        if (this.requireDamage.getValue() && mc.thePlayer.hurtTime <= 0) {
+            return false;
+        }
+        return !this.requireFalling.getValue() || !mc.thePlayer.onGround && mc.thePlayer.motionY < 0.0;
     }
 
     @Override

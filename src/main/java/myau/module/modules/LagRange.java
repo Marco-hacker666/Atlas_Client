@@ -88,6 +88,9 @@ public class LagRange extends Module {
     public final ModeProperty letOut = new ModeProperty("let-out", 0, new String[]{"Gradual", "At once"});
     public final IntProperty recoilTime = new IntProperty("recoil-time", 750, 0, 2000);
     public final IntProperty flagPause = new IntProperty("flag-pause", 2000, 0, 5000);
+    /* 2026-10-19 (from Slinky): a W-tap (sprint stopping) lets the queue out
+       at once, so the hit that follows it is judged from where you are. */
+    public final BooleanProperty releaseOnSprintReset = new BooleanProperty("release-on-sprint-reset", false);
     // display
     public final ModeProperty showPosition = new ModeProperty("show-position", 0, new String[]{"NONE", "DEFAULT", "HUD"});
     public final ModeProperty log = new ModeProperty("log", 1, new String[]{"Off", "File"});
@@ -280,6 +283,11 @@ public class LagRange extends Module {
             if (mustBeCurrent(packet)) {
                 /* We are at the head of the send: LagManager sends the queue before this packet. */
                 releaseNow(packet instanceof C02PacketUseEntity ? "attack" : "action", this.recoilTime.getValue());
+            } else if (this.releaseOnSprintReset.getValue()
+                    && packet instanceof net.minecraft.network.play.client.C0BPacketEntityAction
+                    && ((net.minecraft.network.play.client.C0BPacketEntityAction) packet).getAction()
+                    == net.minecraft.network.play.client.C0BPacketEntityAction.Action.STOP_SPRINTING) {
+                releaseNow("sprint-reset", this.recoilTime.getValue());
             }
             return;
         }

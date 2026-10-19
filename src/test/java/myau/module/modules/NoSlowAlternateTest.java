@@ -53,5 +53,8 @@ public class NoSlowAlternateTest {
         assertTrue(noSlow.swordMode.getValuePrompt().contains(NoSlow.GRIM_ALTERNATE));
         assertTrue(noSlow.foodMode.getValuePrompt().contains(NoSlow.GRIM_ALTERNATE));
         assertTrue(noSlow.bowMode.getValuePrompt().contains(NoSlow.GRIM_ALTERNATE));
+        assertTrue(noSlow.swordMode.getValuePrompt().contains(NoSlow.GRIM_SWITCH));
+        assertFalse(noSlow.foodMode.getValuePrompt().contains(NoSlow.GRIM_SWITCH));
+        assertFalse(noSlow.bowMode.getValuePrompt().contains(NoSlow.GRIM_SWITCH));
     }
 }

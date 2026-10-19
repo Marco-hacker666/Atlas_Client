@@ -54,7 +54,7 @@ import java.util.Random;
 public class NoSlow extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "NG-Reuse", "NG-Switch", "NG-Interact", "NG-Blink", "NG-Grim2364", "NG-Grim2371", "Grim-Alternate"});
+    public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "NG-Reuse", "NG-Switch", "NG-Interact", "NG-Blink", "NG-Grim2364", "NG-Grim2371", "Grim-Alternate", "Grim-Switch"});
     public final IntProperty swapDelay = new IntProperty("Swap Delay", 0, 0, 3, () -> swordMode.getValue() == 2);
     public final BooleanProperty noAttack = new BooleanProperty("No Attack", false, () -> swordMode.getValue() == 2);
     public final PercentProperty swordMotion = new PercentProperty("Sword Motion", 100, () -> this.swordMode.getValue() != 0);
@@ -295,6 +295,7 @@ public class NoSlow extends Module {
                 this.savedInventory = this.bpInventory;
             } else if (event.getType() == EventType.POST) {
                 this.resetBadPackets();
+                this.grimSwitchAfterMove();
             }
         }
         if (!this.isEnabled()) return;
@@ -400,9 +401,120 @@ public class NoSlow extends Module {
                 || this.isBowActive() && GRIM_ALTERNATE.equals(this.bowMode.getModeString()));
     }
 
+    /*
+     * Grim-Switch (2026-10-20), sword only, from GrimAC's PacketPlayerDigging
+     * and its PacketOrder / BadPackets checks:
+     *   - for a 1.8 client Grim looks at the held slot only when a movement
+     *     packet comes in; a slot other than the one the use started on ends
+     *     the use (not slowed: full speed is right) and sets
+     *     didSlotChangeLastTick, which lets the next slowed tick go fast too.
+     *     Switching away and back before the movement packet (NG-Switch's
+     *     Pre or Post timing, NG-Grim2364) is never seen and does nothing;
+     *   - PacketOrderE flags a slot change after an attack, use, release,
+     *     sprint, sneak or inventory packet in the same tick, which NG-Switch
+     *     got every tick by re-blocking right after switching back;
+     *   - PacketOrderB (1.8) allows one slot change between swing and attack;
+     *   - BadPacketsA flags the same slot sent twice in a row.
+     * So two ticks a round: (1) another slot before the movement packet, the
+     * sword back after it; (2) the block again (C08) before the movement
+     * packet. Packets go out in onLivingUpdate, after this tick's attacks and
+     * clicks and before the move, and only when nothing else went out since
+     * the last movement packet; a tick that cannot is a normal blocked tick,
+     * slowed when Grim would flag it (GrimNoSlowState).
+     */
+    public static final String GRIM_SWITCH = "Grim-Switch";
+    private boolean gsActive;
+    /** The server still has the block on (it raised it, or our C08 did). */
+    private boolean gsServerUsing;
+    private boolean gsFast;
+    /** The sword slot to switch back to after the movement packet; -1 none. */
+    private int gsBack = -1;
+    /** The last slot sent to the server; -1 unknown. */
+    private int gsWireSlot = -1;
+    /** Something other than our own packets went out since the last movement packet. */
+    private boolean gsBusy;
+    private boolean gsOwn;
+
+    private boolean isGrimSwitchActive() {
+        return mc.thePlayer.isUsingItem() && this.isSwordActive()
+                && GRIM_SWITCH.equals(this.swordMode.getModeString());
+    }
+
+    private void gsSend(Packet<?> packet) {
+        this.gsOwn = true;
+        try {
+            PacketUtil.sendPacket(packet);
+        } finally {
+            this.gsOwn = false;
+        }
+    }
+
+    /** Called before the move each tick the mode is on: sends this tick's packets, sets gsFast. */
+    private void grimSwitchTick() {
+        if (this.gsBack >= 0) {
+            /* No movement packet went out since the switch (a skipped tick):
+               go back now, and Grim saw nothing. */
+            this.gsSend(new C09PacketHeldItemChange(this.gsBack));
+            this.gsBack = -1;
+            this.gsServerUsing = false;
+            this.grimState.slotChanged = false;
+        }
+        if (!this.gsActive) {
+            /* The block the game just raised is on the server. */
+            this.gsActive = true;
+            this.gsServerUsing = true;
+            this.grimState.slotChanged = false;
+        }
+        int sword = mc.thePlayer.inventory.currentItem;
+        boolean canSend = !this.gsBusy && mc.getNetHandler() != null
+                && myau.management.PacketHub.holding() == null
+                && ((IAccessorPlayerControllerMP) mc.playerController).getCurrentPlayerItem() == sword;
+        if (this.gsServerUsing && canSend) {
+            int other = (sword + 1) % 9;
+            if (other == this.gsWireSlot) {
+                other = (sword + 2) % 9;
+            }
+            this.gsSend(new C09PacketHeldItemChange(other));
+            this.gsBack = sword;
+            this.gsServerUsing = false;
+            this.grimState.slotChanged = true;
+            this.gsFast = true;
+        } else if (!this.gsServerUsing && canSend && mc.thePlayer.getHeldItem() != null) {
+            this.gsSend(new C08PacketPlayerBlockPlacement(mc.thePlayer.getHeldItem()));
+            this.gsServerUsing = true;
+            this.gsFast = this.grimState.slowedTick();
+        } else if (!this.gsServerUsing) {
+            /* Not blocking on the server this tick: nothing to be slowed by. */
+            this.gsFast = true;
+        } else {
+            this.gsFast = this.grimState.slowedTick();
+        }
+    }
+
+    /** After the movement packet: the sword slot again. */
+    private void grimSwitchAfterMove() {
+        if (this.gsBack >= 0 && mc.getNetHandler() != null) {
+            this.gsSend(new C09PacketHeldItemChange(this.gsBack));
+        }
+        this.gsBack = -1;
+    }
+
+    private void grimSwitchReset() {
+        this.grimSwitchAfterMove();
+        this.gsActive = false;
+        this.gsServerUsing = false;
+        this.gsFast = false;
+    }
+
     @EventTarget
     public void onLivingUpdate(LivingUpdateEvent event) {
         boolean alternate = this.isEnabled() && mc.thePlayer != null && this.isAlternateActive();
+        boolean grimSwitch = this.isEnabled() && mc.thePlayer != null && this.isGrimSwitchActive();
+        if (grimSwitch) {
+            this.grimSwitchTick();
+        } else {
+            this.gsActive = false;
+        }
         if (this.isEnabled() && this.isAnyActive()) {
             float multiplier = (float) this.getMotionMultiplier() / 100.0F;
             if (alternate) {
@@ -411,6 +523,8 @@ public class NoSlow extends Module {
                    (and sneaking's 0.3 under them), so any other factor misses
                    both and is a Simulation flag on every tick. */
                 multiplier = this.grimState.slowedTick() ? 1.0F : 0.2F;
+            } else if (grimSwitch) {
+                multiplier = this.gsFast ? 1.0F : 0.2F;
             }
             mc.thePlayer.movementInput.moveForward *= multiplier;
             mc.thePlayer.movementInput.moveStrafe *= multiplier;
@@ -469,6 +583,22 @@ public class NoSlow extends Module {
         // BadPacketsComponent tracking (runs regardless of mode).
         if (event.getType() == EventType.SEND) {
             Packet<?> packet = event.getPacket();
+            /* Grim-Switch: the last slot sent, and whether anything but our
+               own packets went out since the last movement packet. */
+            if (packet instanceof C09PacketHeldItemChange) {
+                this.gsWireSlot = ((C09PacketHeldItemChange) packet).getSlotId();
+            }
+            if (!this.gsOwn) {
+                if (packet instanceof C03PacketPlayer) {
+                    this.gsBusy = false;
+                } else if (packet instanceof C02PacketUseEntity || packet instanceof C0APacketAnimation
+                        || packet instanceof C07PacketPlayerDigging || packet instanceof C08PacketPlayerBlockPlacement
+                        || packet instanceof C09PacketHeldItemChange || packet instanceof C0BPacketEntityAction
+                        || packet instanceof C0DPacketCloseWindow || packet instanceof C0EPacketClickWindow
+                        || packet instanceof C16PacketClientStatus) {
+                    this.gsBusy = true;
+                }
+            }
             if (packet instanceof C09PacketHeldItemChange) {
                 this.bpSlot = true;
             } else if (packet instanceof C0APacketAnimation) {
@@ -573,6 +703,9 @@ public class NoSlow extends Module {
     @Override
     public void onDisabled() {
         this.ngReset();
+        if (mc.thePlayer != null) {
+            this.grimSwitchReset();
+        }
         this.newGrimTicks = 0;
         this.ravenHypOffTicks = 0;
         this.ravenHypSend = false;

@@ -54,16 +54,16 @@ import java.util.Random;
 public class NoSlow extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "NG-Reuse", "NG-Switch", "NG-Interact", "NG-Blink", "NG-Grim2364", "NG-Grim2371"});
+    public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "NG-Reuse", "NG-Switch", "NG-Interact", "NG-Blink", "NG-Grim2364", "NG-Grim2371", "Grim-Alternate"});
     public final IntProperty swapDelay = new IntProperty("Swap Delay", 0, 0, 3, () -> swordMode.getValue() == 2);
     public final BooleanProperty noAttack = new BooleanProperty("No Attack", false, () -> swordMode.getValue() == 2);
     public final PercentProperty swordMotion = new PercentProperty("Sword Motion", 100, () -> this.swordMode.getValue() != 0);
     public final BooleanProperty swordSprint = new BooleanProperty("Sword Sprint", true, () -> this.swordMode.getValue() != 0);
     public final BooleanProperty onlyKillAuraAutoBlock = new BooleanProperty("Only Kill Aura Auto Block", false, () -> this.swordMode.getValue() != 0);
-    public final ModeProperty foodMode = new ModeProperty("Food Mode", 0, new String[]{"None", "Vanilla", "Float", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19"});
+    public final ModeProperty foodMode = new ModeProperty("Food Mode", 0, new String[]{"None", "Vanilla", "Float", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "Grim-Alternate"});
     public final PercentProperty foodMotion = new PercentProperty("Food Motion", 100, () -> this.foodMode.getValue() != 0);
     public final BooleanProperty foodSprint = new BooleanProperty("Food Sprint", true, () -> this.foodMode.getValue() != 0);
-    public final ModeProperty bowMode = new ModeProperty("Bow Mode", 0, new String[]{"None", "Vanilla", "Float", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19"});
+    public final ModeProperty bowMode = new ModeProperty("Bow Mode", 0, new String[]{"None", "Vanilla", "Float", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "Grim-Alternate"});
     public final PercentProperty bowMotion = new PercentProperty("Bow Motion", 100, () -> this.bowMode.getValue() != 0);
     public final BooleanProperty bowSprint = new BooleanProperty("Bow Sprint", true, () -> this.bowMode.getValue() != 0);
 
@@ -345,10 +345,47 @@ public class NoSlow extends Module {
         }
     }
 
+    /*
+     * Grim-Alternate (2026-10-19), from reading GrimAC's NoSlow check
+     * (checks/impl/movement/NoSlow.java, prediction engine):
+     *   - Grim simulates every movement both slowed and not slowed by the
+     *     item (it brute-forces the 1.8 use-item desync), so the movement
+     *     check itself accepts either;
+     *   - its NoSlow check flags only when the best slowed prediction misses
+     *     on two movement ticks in a row (flaggedLastTick), and a matching
+     *     tick resets that.
+     * So every other tick is taken at full speed and the one between at the
+     * vanilla 20 %: about 60 % of walking speed instead of 20 %, with no
+     * packets sent and nothing held, so no lagback from holding. The first
+     * tick of a use is a free one (1.8 is not slowed on it anyway).
+     */
+    public static final String GRIM_ALTERNATE = "Grim-Alternate";
+    private int alternateTick;
+
+    private boolean isAlternateActive() {
+        return mc.thePlayer.isUsingItem()
+                && (this.isSwordActive() && GRIM_ALTERNATE.equals(this.swordMode.getModeString())
+                || this.isFoodActive() && GRIM_ALTERNATE.equals(this.foodMode.getModeString())
+                || this.isBowActive() && GRIM_ALTERNATE.equals(this.bowMode.getModeString()));
+    }
+
+    /** Whether this tick of an alternating use is the slowed one: ticks 2, 4, 6... */
+    static boolean alternateSlowed(int tickOfUse) {
+        return tickOfUse % 2 == 0;
+    }
+
     @EventTarget
     public void onLivingUpdate(LivingUpdateEvent event) {
+        boolean alternate = this.isEnabled() && mc.thePlayer != null && this.isAlternateActive();
+        if (!alternate) {
+            this.alternateTick = 0;
+        }
         if (this.isEnabled() && this.isAnyActive()) {
             float multiplier = (float) this.getMotionMultiplier() / 100.0F;
+            if (alternate && alternateSlowed(++this.alternateTick)) {
+                /* The vanilla slowdown, applied here after the sprint check. */
+                multiplier = 0.2F;
+            }
             mc.thePlayer.movementInput.moveForward *= multiplier;
             mc.thePlayer.movementInput.moveStrafe *= multiplier;
             if (!this.canSprint()) {

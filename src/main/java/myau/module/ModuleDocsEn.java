@@ -146,6 +146,15 @@ final class ModuleDocsEn {
         d("Reach", "Increases attack reach. Easy for servers to detect; use with care.");
         d("TickBase", "Runs a few ticks ahead the moment a target comes into range, then repays them, to strike first.");
         d("TimerRange", "Briefly speeds up the game clock when approaching a target, to reach attack range first.");
+        help("TimerRange", "mode", "NORMAL/SMART/MODERN: ours (freeze, then a faster timer for a while). SLINKY: OpenSlinky Regular -- runs a few ticks ahead when the crosshair will reach the target, then stands still as long. LEGIT: OpenSlinky Legit -- stands still first with outgoing packets held, then runs those ticks at once.");
+        help("TimerRange", "min-dist", "SLINKY/LEGIT: not used closer than this to the target.");
+        help("TimerRange", "duration", "SLINKY: the most ticks run ahead.");
+        help("TimerRange", "duration-legit", "LEGIT: the most ticks stood still (1-4).");
+        help("TimerRange", "cooldown", "SLINKY/LEGIT: seconds between uses.");
+        help("TimerRange", "block-while-frozen", "SLINKY: blocks with the sword while standing still.");
+        help("TimerRange", "require-mouse-pressed", "SLINKY/LEGIT: only while the attack key is held.");
+        help("TimerRange", "require-weapon", "SLINKY/LEGIT: only with a sword.");
+        help("TimerRange", "require-not-using-item", "SLINKY/LEGIT: not while using an item.");
         d("Velocity", "Reduces or changes the knockback you take.");
         d("Wtap", "After a hit, really lets go of W and presses it again (W-tap): the game resets the sprint, the next hit knocks back more.");
         help("Wtap", "chance", "How often a hit is followed by a W-tap.");

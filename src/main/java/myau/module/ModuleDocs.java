@@ -394,6 +394,15 @@ public final class ModuleDocs {
         d("Reach", "增加攻擊距離（伺服器容易偵測，慎用）。");
         d("TickBase", "操控 tick 時序，在進入攻擊範圍的瞬間先跑幾個 tick 搶先手。");
         d("TimerRange", "接近目標時短暫加速遊戲時鐘，搶先進入攻擊距離。");
+        help("TimerRange", "mode", "NORMAL/SMART/MODERN：原本的（先凍結，再加速一段時間）。SLINKY：OpenSlinky 的 Regular，預測準星會碰到對手時先多跑幾 tick，再停住同樣久。LEGIT：OpenSlinky 的 Legit，先停住並壓住送出的封包，再一次補跑。");
+        help("TimerRange", "min-dist", "SLINKY/LEGIT：離對手比這更近就不觸發。");
+        help("TimerRange", "duration", "SLINKY：最多先跑幾 tick。");
+        help("TimerRange", "duration-legit", "LEGIT：最多停住幾 tick（1-4）。");
+        help("TimerRange", "cooldown", "SLINKY/LEGIT：兩次之間的冷卻（秒）。");
+        help("TimerRange", "block-while-frozen", "SLINKY：停住時舉劍格擋。");
+        help("TimerRange", "require-mouse-pressed", "SLINKY/LEGIT：要按著攻擊鍵。");
+        help("TimerRange", "require-weapon", "SLINKY/LEGIT：要拿劍。");
+        help("TimerRange", "require-not-using-item", "SLINKY/LEGIT：使用物品時不觸發。");
         d("Velocity", "減少或改變自己吃到的擊退。");
         d("Wtap", "打中後真的放開 W 鍵再按回去（W-tap），由遊戲自己重置衝刺，下一下擊退更大。");
         help("Wtap", "chance", "打中後有多少機率 W-tap。");

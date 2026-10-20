@@ -41,39 +41,53 @@ import java.lang.reflect.Field;
 public class TimerRange extends Module {
    private static final Minecraft mc = Minecraft.getMinecraft();
 
-   public final ModeProperty timerBoostMode = new ModeProperty("mode", 2, new String[]{"NORMAL", "SMART", "MODERN"});
-   public final IntProperty ticksValue = new IntProperty("ticks", 10, 1, 20);
+   /* SLINKY and LEGIT (2026-10-19): OpenSlinky's Timer Range, Regular and Legit (TimerRangeSlinky). */
+   public final ModeProperty timerBoostMode = new ModeProperty("mode", 2, new String[]{"NORMAL", "SMART", "MODERN", "SLINKY", "LEGIT"});
+   static final int MODE_SLINKY = 3;
+   static final int MODE_LEGIT = 4;
+   private final java.util.function.BooleanSupplier ours = () -> timerBoostMode.getValue() < MODE_SLINKY;
+   private final java.util.function.BooleanSupplier slinkyModes = () -> timerBoostMode.getValue() >= MODE_SLINKY;
+   public final FloatProperty slMinDist = new FloatProperty("min-dist", 2.77F, 2.0F, 2.9F, slinkyModes);
+   public final IntProperty slDuration = new IntProperty("duration", 1, 1, 10, () -> timerBoostMode.getValue() == MODE_SLINKY);
+   public final IntProperty slDurationLegit = new IntProperty("duration-legit", 2, 1, 4, () -> timerBoostMode.getValue() == MODE_LEGIT);
+   public final FloatProperty slCooldown = new FloatProperty("cooldown", 0.15F, 0.1F, 5.0F, slinkyModes);
+   public final BooleanProperty slBlockWhileFrozen = new BooleanProperty("block-while-frozen", true, () -> timerBoostMode.getValue() == MODE_SLINKY);
+   public final BooleanProperty slRequireMouse = new BooleanProperty("require-mouse-pressed", true, slinkyModes);
+   public final BooleanProperty slRequireWeapon = new BooleanProperty("require-weapon", true, slinkyModes);
+   public final BooleanProperty slRequireNotUsing = new BooleanProperty("require-not-using-item", true, slinkyModes);
+   private final TimerRangeSlinky slinky = new TimerRangeSlinky(this);
+   public final IntProperty ticksValue = new IntProperty("ticks", 10, 1, 20, ours);
 
-   public final FloatProperty timerBoostValue = new FloatProperty("timer-boost", 1.5F, 0.01F, 35.0F);
-   public final FloatProperty boostDelayMin = new FloatProperty("boost-delay-min", 0.5F, 0.1F, 1.0F);
-   public final FloatProperty boostDelayMax = new FloatProperty("boost-delay-max", 0.55F, 0.1F, 1.0F);
+   public final FloatProperty timerBoostValue = new FloatProperty("timer-boost", 1.5F, 0.01F, 35.0F, ours);
+   public final FloatProperty boostDelayMin = new FloatProperty("boost-delay-min", 0.5F, 0.1F, 1.0F, ours);
+   public final FloatProperty boostDelayMax = new FloatProperty("boost-delay-max", 0.55F, 0.1F, 1.0F, ours);
 
-   public final FloatProperty timerChargedValue = new FloatProperty("timer-charged", 0.45F, 0.05F, 5.0F);
-   public final FloatProperty chargedDelayMin = new FloatProperty("charged-delay-min", 0.75F, 0.1F, 1.0F);
-   public final FloatProperty chargedDelayMax = new FloatProperty("charged-delay-max", 0.9F, 0.1F, 1.0F);
+   public final FloatProperty timerChargedValue = new FloatProperty("timer-charged", 0.45F, 0.05F, 5.0F, ours);
+   public final FloatProperty chargedDelayMin = new FloatProperty("charged-delay-min", 0.75F, 0.1F, 1.0F, ours);
+   public final FloatProperty chargedDelayMax = new FloatProperty("charged-delay-max", 0.9F, 0.1F, 1.0F, ours);
 
    public final FloatProperty rangeValue = new FloatProperty("range", 3.5F, 1.0F, 5.0F, () -> timerBoostMode.getValue() == 0);
    public final IntProperty cooldownTickValue = new IntProperty("cooldown-tick", 10, 1, 50, () -> timerBoostMode.getValue() == 0);
 
-   public final FloatProperty minRange = new FloatProperty("min-range", 2.5F, 2.0F, 8.0F, () -> timerBoostMode.getValue() != 0);
-   public final FloatProperty maxRange = new FloatProperty("max-range", 3.0F, 2.0F, 8.0F, () -> timerBoostMode.getValue() != 0);
-   public final FloatProperty scanRange = new FloatProperty("scan-range", 8.0F, 2.0F, 12.0F, () -> timerBoostMode.getValue() != 0);
+   public final FloatProperty minRange = new FloatProperty("min-range", 2.5F, 2.0F, 8.0F, () -> timerBoostMode.getValue() != 0 && timerBoostMode.getValue() < MODE_SLINKY);
+   public final FloatProperty maxRange = new FloatProperty("max-range", 3.0F, 2.0F, 8.0F, () -> timerBoostMode.getValue() != 0 && timerBoostMode.getValue() < MODE_SLINKY);
+   public final FloatProperty scanRange = new FloatProperty("scan-range", 8.0F, 2.0F, 12.0F, () -> timerBoostMode.getValue() != 0 && timerBoostMode.getValue() < MODE_SLINKY);
 
-   public final IntProperty minTickDelay = new IntProperty("min-tick-delay", 30, 1, 200, () -> timerBoostMode.getValue() != 0);
-   public final IntProperty maxTickDelay = new IntProperty("max-tick-delay", 60, 1, 200, () -> timerBoostMode.getValue() != 0);
+   public final IntProperty minTickDelay = new IntProperty("min-tick-delay", 30, 1, 200, () -> timerBoostMode.getValue() != 0 && timerBoostMode.getValue() < MODE_SLINKY);
+   public final IntProperty maxTickDelay = new IntProperty("max-tick-delay", 60, 1, 200, () -> timerBoostMode.getValue() != 0 && timerBoostMode.getValue() < MODE_SLINKY);
 
-   public final BooleanProperty blink = new BooleanProperty("blink", false);
-   public final IntProperty predictClientMovement = new IntProperty("predict-client-movement", 2, 0, 5);
-   public final FloatProperty predictEnemyPosition = new FloatProperty("predict-enemy-position", 1.5F, -1.0F, 2.0F);
+   public final BooleanProperty blink = new BooleanProperty("blink", false, ours);
+   public final IntProperty predictClientMovement = new IntProperty("predict-client-movement", 2, 0, 5, ours);
+   public final FloatProperty predictEnemyPosition = new FloatProperty("predict-enemy-position", 1.5F, -1.0F, 2.0F, ours);
    public final FloatProperty maxAngleDifference = new FloatProperty("max-angle-difference", 5.0F, 5.0F, 90.0F, () -> timerBoostMode.getValue() == 2);
 
    public final ModeProperty markMode = new ModeProperty("mark", 0, new String[]{"OFF", "BOX", "PLATFORM"}, () -> timerBoostMode.getValue() == 2);
    public final BooleanProperty outline = new BooleanProperty("outline", false, () -> timerBoostMode.getValue() == 2 && markMode.getValue() == 1);
 
-   public final BooleanProperty onLiquid = new BooleanProperty("on-liquid", false);
-   public final BooleanProperty onForwardOnly = new BooleanProperty("on-forward-only", true);
-   public final BooleanProperty resetOnLagBack = new BooleanProperty("reset-on-lagback", false);
-   public final BooleanProperty resetOnKnockback = new BooleanProperty("reset-on-knockback", false);
+   public final BooleanProperty onLiquid = new BooleanProperty("on-liquid", false, ours);
+   public final BooleanProperty onForwardOnly = new BooleanProperty("on-forward-only", true, ours);
+   public final BooleanProperty resetOnLagBack = new BooleanProperty("reset-on-lagback", false, ours);
+   public final BooleanProperty resetOnKnockback = new BooleanProperty("reset-on-knockback", false, ours);
    public final BooleanProperty chatDebug = new BooleanProperty("chat-debug", true, () -> resetOnLagBack.getValue() || resetOnKnockback.getValue());
 
    private int playerTicks = 0;
@@ -97,6 +111,7 @@ public class TimerRange extends Module {
 
    @Override
    public void onDisabled() {
+      slinky.reset();
       shouldResetTimer();
       unblink();
       smartTick = 0;
@@ -111,6 +126,7 @@ public class TimerRange extends Module {
 
    @EventTarget(whenDisabled = true)
    public void onLoadWorld(LoadWorldEvent event) {
+      slinky.reset();
       if (blink.getValue()) {
          packetsReceived.clear();
       }
@@ -119,6 +135,7 @@ public class TimerRange extends Module {
    @EventTarget
    public void onAttack(AttackEvent event) {
       if (!this.isEnabled() || mc.thePlayer == null) return;
+      if (slinkyModes.getAsBoolean()) return;
 
       if (!(event.getTarget() instanceof EntityLivingBase) && playerTicks >= 1) {
          shouldResetTimer();
@@ -167,6 +184,12 @@ public class TimerRange extends Module {
          MODERN mode that boosted the timer while "off", and the reset path
          kept forcing it back to 1 over Timer and Scaffold. */
       if (!this.isEnabled()) return;
+      if (slinkyModes.getAsBoolean()) {
+         if (event.getType() == EventType.PRE) {
+            slinky.tick();
+         }
+         return;
+      }
       if (event.getType() == EventType.PRE) {
          float timerBoost = RandomUtil.nextFloat(boostDelayMin.getValue(), boostDelayMax.getValue());
          float charged = RandomUtil.nextFloat(chargedDelayMin.getValue(), chargedDelayMax.getValue());
@@ -249,6 +272,14 @@ public class TimerRange extends Module {
    public void onPacket(PacketEvent event) {
       if (!this.isEnabled() || mc.thePlayer == null || mc.thePlayer.isDead) return;
       Packet<?> packet = event.getPacket();
+      if (slinkyModes.getAsBoolean()) {
+         if (event.getType() == EventType.SEND) {
+            slinky.onPacket(event);
+         } else if (packet instanceof S08PacketPlayerPosLook) {
+            mc.addScheduledTask(slinky::interrupt);
+         }
+         return;
+      }
 
       if (blink.getValue()) {
          if (playerTicks > 0 && !blinked) {
@@ -309,6 +340,10 @@ public class TimerRange extends Module {
 
    @EventTarget
    public void onRender3D(Render3DEvent event) {
+      if (this.isEnabled() && slinkyModes.getAsBoolean()) {
+         slinky.frame(((myau.mixin.IAccessorMinecraft) mc).getTimer().renderPartialTicks);
+         return;
+      }
       if (!this.isEnabled() || mc.thePlayer == null || mc.getRenderManager() == null || timerBoostMode.getValue() != 2 || markMode.getValue() == 0) return;
 
       EntityLivingBase nearbyEntity = getNearestEntityInRange();

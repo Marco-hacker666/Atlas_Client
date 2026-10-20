@@ -19,10 +19,9 @@ import java.util.Map;
  *
  * Where LiquidBounce has the module, it sits where LiquidBounce puts it
  * (Scaffold, FastPlace, Timer and ChestStealer in World; AntiBot and the
- * name hider in Misc; GhostHand and Disabler in Exploit). The packet-lag
- * tools used in fights -- FakeLag, LagRange, ServerLag, KnockbackDelay,
- * BackTrack, TickBase -- stay together in Combat, as LiquidBounce nextgen
- * files Backtrack, FakeLag and TickBase.
+ * name hider in Misc; GhostHand and Disabler in Exploit). Since 2026-10-19
+ * Combat follows OpenSlinky's combat list plus the fight modules in common
+ * use (see the COMBAT entry).
  */
 public final class ModuleCategories {
 
@@ -30,24 +29,28 @@ public final class ModuleCategories {
             new LinkedHashMap<Class<? extends Module>, Category>();
 
     static {
+        /* 2026-10-19, owner: Combat had 44 modules, too many. It keeps what
+           OpenSlinky's own combat list has, plus the fight modules in common
+           use here; the rest went where OpenSlinky puts them (FakeLag and
+           AutoRod with the utilities, KeepSprint with movement), the packet
+           tricks to Exploit and the item helpers to Player. */
         put(Category.COMBAT,
-                NoDelay.class, AimAssist.class, AutoClicker.class, KillAura.class, KillAura2.class, PlainAura.class, Criticals.class,
-                JumpReset.class, Velocity.class, HitBox.class, Reach.class, BackTrack.class, TickBase.class, TimerRange.class,
-                FakeLag.class, LagRange.class, KnockbackDelay.class, ServerLag.class, MoreKB.class, Freeze.class,
-                SprintReset.class, Wtap.class, KeepSprint.class, BlockHit.class, HitSelect.class,
-                Hitflick.class, InvulnTiming.class, Piercing.class, Displace.class,
-                KeepRange.class, AimBacktrack.class, KBDisplacement.class, ThrowAura.class, AutoHeal.class,
-                FastBow.class, ArmorBreaker.class, AutoRecraft.class,
-                AutoRod.class, AutoWeapon.class,
-                PingSpoof.class, SmartBlinker.class, PearlSaver.class, ProjectileAimBot.class);
+                AimAssist.class, AutoClicker.class, AutoWeapon.class, BackTrack.class, Criticals.class,
+                HitBox.class, HitSelect.class, KnockbackDelay.class, KBDisplacement.class, LagRange.class,
+                Piercing.class, Reach.class, SprintReset.class, TimerRange.class, Velocity.class, BlockHit.class,
+                KillAura.class, KillAura2.class, PlainAura.class, NoDelay.class, JumpReset.class, Wtap.class,
+                MoreKB.class, KeepRange.class, AimBacktrack.class, Hitflick.class, InvulnTiming.class,
+                Displace.class);
         put(Category.PLAYER,
                 MLG.class, Blink.class, NoFall.class, AntiVoid.class, Clutch.class, AutoTool.class, AutoSwap.class,
                 InvManager.class, Refill.class, AntiAFK.class, AntiFireball.class, AutoAnduril.class,
-                InventoryClicker.class, FastUse.class, ItemUseFix.class);
+                InventoryClicker.class, FastUse.class, ItemUseFix.class,
+                FakeLag.class, AutoRod.class, AutoHeal.class, FastBow.class, ArmorBreaker.class, AutoRecraft.class,
+                PearlSaver.class, ThrowAura.class, ProjectileAimBot.class);
         put(Category.MOVEMENT,
                 Fly.class, Speed.class, LongJump.class, Jesus.class, NoSlow.class, NoItemRelease.class, SafeWalk.class, AntiBounce.class, Eagle.class, InvWalk.class, TargetStrafe.class, MoveFix.class,
                 Stasis.class, Parkour.class, NoWeb.class, Tower.class,
-                FastAccel.class, InstantStop.class, NullMove.class, Strafe.class);
+                FastAccel.class, InstantStop.class, NullMove.class, Strafe.class, KeepSprint.class);
         put(Category.RENDER,
                 BlockESP.class, ESP.class, Chams.class, NameTags.class, Tracers.class,
                 TargetESP.class, TargetOrbit.class, TargetHUD.class, ItemESP.class, Xray.class,
@@ -68,7 +71,8 @@ public final class ModuleCategories {
                 AutoReconnect.class, StaffDetector.class,
                 SkyWars.class, MurderMystery.class, PingFix.class);
         put(Category.EXPLOIT,
-                Disabler.class, GhostHand.class, ClientSpoofer.class);
+                Disabler.class, GhostHand.class, ClientSpoofer.class,
+                PingSpoof.class, ServerLag.class, TickBase.class, Freeze.class, SmartBlinker.class);
         put(Category.CLIENT,
                 ClickGUIModule.class, GuiModule.class, FlagDetector.class,
                 FlagResponder.class, HitCheck.class, FightLog.class, Debug.class, PacketLogger.class,

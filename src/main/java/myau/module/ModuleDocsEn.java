@@ -40,8 +40,26 @@ final class ModuleDocsEn {
         d("KillAura2", "Silent Aura rewritten: turns like a hand, clicks like a human, hits only when the look really lands; with InvulnTiming it hits the tick the target's hurt window ends, and it blocks by itself. Cannot run together with Silent Aura.");
         d("KillAura", "Attacks targets in range: picks a target, turns to it (several modes, silent or not), clicks at your CPS and can block for you.");
         d("AimAssist", "Nudges your aim toward a nearby target while you attack, like a small hand correction; never clicks by itself.");
+        help("AimAssist", "style", "Smooth: the old one (a share of what is left each tick). Regular: every frame, fast when far, easing in. Linear: one steady speed. Lock On: stays on the target. The last three after Slinky.");
+        help("AimAssist", "speed-h", "Regular / Linear: sideways speed.");
+        help("AimAssist", "speed-v", "Regular / Linear: up-and-down speed.");
+        help("AimAssist", "lock-vertical", "Lock On: also follow up and down.");
+        help("AimAssist", "predict", "Aim toward where the server last put the target (0-1).");
+        help("AimAssist", "randomization", "How far the aim point wanders (0-1).");
+        help("AimAssist", "hitbox-h", "Sideways: pull the aim from the middle toward the nearest edge of the hitbox (0-1).");
+        help("AimAssist", "hitbox-v", "Up and down: pull the aim from eye height toward the nearest point (0-1).");
+        help("AimAssist", "dead-zone", "No turning for the last this many degrees.");
+        help("AimAssist", "target-mode", "Single: keep one target. Switch: pick the best each tick by sort-by.");
+        help("AimAssist", "sort-by", "Switch: which target is best.");
+        help("AimAssist", "exceed-fov", "Single: keep the target even outside fov.");
+        help("AimAssist", "require-click", "Only while the attack button is held.");
+        help("AimAssist", "require-mouse-move", "Never turn more than your hand did this frame.");
+        help("AimAssist", "stop-on-block-break", "Not while breaking a block.");
+        help("AimAssist", "line-of-sight", "Only targets in sight.");
+        help("AimAssist", "ignore-invisible", "Skip invisible players.");
         d("AutoClicker", "Clicks for you while the attack key is held, at a random CPS within your range; can block-hit or break blocks.");
         d("KnockbackDelay", "Holds incoming knockback for a moment so the push lands late.");
+        help("KnockbackDelay", "HoldTransactions", "While a push is held, the transaction packets after it wait with it, so the server never hears the push arrived before you reacted to it (transaction-timed velocity checks on Polar and Grim). On by default.");
         d("AutoHeal", "Uses healing items (soup, potions, heads) when health is low.");
         d("BackTrack", "Keeps a retreating target where you last saw them a moment longer, so a swing reaches the position the server still has.");
         d("Hitflick", "Flicks the view away on a hit and back, to steer the knockback.");
@@ -181,6 +199,12 @@ final class ModuleDocsEn {
         d("LongJump", "Jumps further.");
         d("Jesus", "Walk on water.");
         d("NoSlow", "No slowdown while using items (blocking, eating, drawing a bow).");
+        help("NoSlow", "HW Open Hurt", "Hit-Window: margin, in ticks of your hurt time, added to the round trip; the sword goes up on the server at hurt time = this + ping in ticks, so it is up when the next hit can land.");
+        help("NoSlow", "HW Ping Aware", "Hit-Window: raise the sword earlier by your round trip (the server hears of it that much later).");
+        help("NoSlow", "HW Hold", "Hit-Window: ticks the sword stays up on the server per window; it comes down at once when the hit lands. You are slowed (as vanilla) only during these ticks.");
+        help("NoSlow", "HW Guard", "Hit-Window: before the first hit of an exchange, raise the sword in short windows while an enemy close by faces you.");
+        help("NoSlow", "HW Guard Range", "Hit-Window: how close that enemy must be.");
+        help("NoSlow", "HW Log", "Hit-Window: each window and whether each hit taken was blocked, in config/Atlas/noslow-*.txt.");
         help("HUD", "hud-theme", "How every HUD draws. JELLO: LiquidBounce's JelloBounce theme (black at 45%, soft shadow, rounded cards, flush module list). CLASSIC: each HUD's older drawing.");
         // Mobile-safe mode (2026-10-15, util.render.MobileSafe): Client Settings > Performance > mobile-safe
         help("HUD", "blur", "Blurs the background. Not drawn in mobile-safe mode (Client Settings > Performance > mobile-safe; on by itself on phones running gl4es / Krypton Wrapper).");
@@ -234,7 +258,7 @@ final class ModuleDocsEn {
         help("NoItemRelease", "let-module-releases", "On: releases other modules send on purpose (Silent Aura lowering the sword before a hit, NoSlow) still go out; only your own let-go is dropped. Off: every one is dropped, exactly as Slinky.");
         d("NoJumpDelay", "Removes the delay between consecutive jumps.");
         d("SafeWalk", "Stops you walking off block edges, as if sneaking.");
-        d("Eagle", "Sneaks automatically at edges, for bridging backwards.");
+        d("Eagle", "BridgeAssist: sneaks automatically at edges, for bridging backwards (formerly Eagle).");
         d("InvWalk", "Move while the inventory or a menu is open.");
         d("TargetStrafe", "Circles around the target.");
         d("MoveFix", "With silent rotations, corrects movement so it matches the rotation the server sees.");
@@ -303,6 +327,8 @@ final class ModuleDocsEn {
         d("HitCheck", "Counts which swings landed and explains the misses.");
         d("FightLog", "One line per fight: hits, combos, knockback and outcome.");
         d("Debug", "One switch for all diagnostic tools.");
+        d("Logs", "Master switch for the diagnostic logs in config/Atlas. Off (default): only the flags log (lagbacks and other corrections) is written. On: every module's session log, for testing. Logs older than keep-days are deleted at startup.");
+        help("Logs", "keep-days", "Session logs older than this many days are deleted when the game starts.");
         d("PacketLogger", "Records packets and writes them to a file when you are kicked.");
         d("ServerFingerprint", "Records what a server reveals about itself and guesses its anticheat.");
         d("AutoTune", "Tries setting values and keeps the ones that measure better.");

@@ -68,6 +68,10 @@ public final class AsyncLog {
         if (file == null || lines.isEmpty()) {
             return;
         }
+        /* The Logs switch (2026-10-20): off, only the flags log among the session logs is written. */
+        if (!myau.module.modules.Logs.allows(file)) {
+            return;
+        }
         start();
         if (!QUEUE.offer(new Entry(file, new ArrayList<String>(lines)))) {
             DROPPED.incrementAndGet();

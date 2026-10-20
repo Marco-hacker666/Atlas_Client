@@ -57,6 +57,15 @@ final class TimerRangeSlinky {
     private EntityPlayer target;
     private double targetDistanceSq;
     private final ConcurrentLinkedQueue<Packet<?>> held = new ConcurrentLinkedQueue<Packet<?>>();
+    /* The trigger log (2026-10-20, owner: LEGIT still seemed to bring mitigation; each use is written with the
+       time to the millisecond, so it can be lined up with FlagDetector's HIT-DMG and mitigation lines). */
+    private static final java.io.File LOG_DIR = new java.io.File("./config/Atlas/");
+    private static final java.text.SimpleDateFormat FILE_STAMP = new java.text.SimpleDateFormat("yyyyMMdd-HHmmss");
+    private static final java.text.SimpleDateFormat LINE_STAMP = new java.text.SimpleDateFormat("HH:mm:ss.SSS");
+    private java.io.File logTarget;
+    private long triggeredAt;
+    private int clicks;
+    private String triggerTarget = "";
 
     TimerRangeSlinky(TimerRange module) {
         this.module = module;
@@ -144,7 +153,12 @@ final class TimerRangeSlinky {
                 MovingObjectPosition hit = mc.objectMouseOver;
                 if (hit != null && hit.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY) {
                     KeyBinding.onTick(keys.keyBindAttack.getKeyCode());
+                    this.clicks++;
                 }
+            }
+            if (this.remaining == 0) {
+                log("DONE " + this.clicks + " click(s) | " + (System.currentTimeMillis() - this.triggeredAt) + "ms after trigger | "
+                        + this.triggerTarget + " hurt " + (this.target == null ? "-" : String.valueOf(this.target.hurtTime)));
             }
             return;
         }
@@ -192,7 +206,10 @@ final class TimerRangeSlinky {
             ((myau.mixin.IAccessorTimer) timer).setTimerSpeed(1.0F);
             this.frozen = false;
             this.packetHold = false;
+            int flushed = this.held.size();
             flushHeld();
+            log("RESUME stood " + (System.currentTimeMillis() - this.triggeredAt) + "ms | let go " + flushed + "p | "
+                    + (legit() ? "running " + this.remaining + "t now" : "paid back"));
             if (!legit() && this.useOwned) {
                 releaseUse();
             }
@@ -239,6 +256,14 @@ final class TimerRangeSlinky {
                     this.remaining = step;
                     this.freezeRemaining = (step - renderPartialTicks) * 0.05;
                     this.cooldown = this.module.slCooldown.getValue();
+                    this.triggeredAt = System.currentTimeMillis();
+                    this.clicks = 0;
+                    this.triggerTarget = t.getName();
+                    myau.util.ActionLedger.note("TimerRange", legit ? "timer-freeze" : "timer-ahead");
+                    log("TRIGGER " + (legit ? "LEGIT" : "SLINKY") + " " + step + "t | " + t.getName()
+                            + String.format(" box %.2f", Math.sqrt(distance)) + " hurt " + t.hurtTime
+                            + " | ping " + ping() + "ms | speed " + String.format("%.2f",
+                            Math.hypot(mc.thePlayer.motionX, mc.thePlayer.motionZ)) + "/t");
                     return;
                 }
             }
@@ -261,6 +286,21 @@ final class TimerRangeSlinky {
                 targetTicks--;
             }
         }
+    }
+
+    private static int ping() {
+        try {
+            return mc.getNetHandler().getPlayerInfo(mc.thePlayer.getUniqueID()).getResponseTime();
+        } catch (RuntimeException e) {
+            return -1;
+        }
+    }
+
+    private void log(String line) {
+        if (this.logTarget == null) {
+            this.logTarget = new java.io.File(LOG_DIR, "timerrange-" + FILE_STAMP.format(new java.util.Date()) + ".txt");
+        }
+        myau.util.AsyncLog.append(this.logTarget, LINE_STAMP.format(new java.util.Date()) + "  " + line);
     }
 
     /** Vanilla's ground input step, as Slinky's RotationMath.movement. */

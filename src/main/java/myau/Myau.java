@@ -179,6 +179,7 @@ public class Myau {
         moduleManager.modules.put(HitCheck.class, new HitCheck());
         moduleManager.modules.put(FightLog.class, new FightLog());
         moduleManager.modules.put(Debug.class, new Debug());
+        moduleManager.modules.put(Logs.class, new Logs());
         moduleManager.modules.put(Theme.class, new Theme());
         moduleManager.modules.put(PlayerColors.class, new PlayerColors());
         moduleManager.modules.put(TracerColors.class, new TracerColors());
@@ -362,6 +363,8 @@ public class Myau {
         if (config.file.exists()) {
             config.load();
         }
+        /* Old session logs go, once the keep-days setting is loaded (2026-10-20). */
+        Logs.cleanOld(((Logs) moduleManager.modules.get(Logs.class)).keepDays.getValue());
         if (friendManager.file.exists()) {
             friendManager.load();
         }

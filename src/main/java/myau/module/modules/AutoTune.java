@@ -458,6 +458,9 @@ public class AutoTune extends Module {
             if (this.logTarget == null) {
                 this.logTarget = new File(LOG_DIR, "autotune.txt");
             }
+            if (!myau.module.modules.Logs.allows(this.logTarget)) {
+                return;
+            }
             writer = new PrintWriter(new FileWriter(this.logTarget, true));
             writer.println(LINE_STAMP.format(new Date()) + "  " + line);
             writer.flush();

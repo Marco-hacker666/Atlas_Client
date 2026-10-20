@@ -51,7 +51,9 @@ public class Eagle extends Module {
     }
 
     public Eagle() {
-        super("Eagle", false);
+        /* Shown as BridgeAssist since 2026-10-20 (owner; OpenSlinky's name for it). Settings saved under
+           "Eagle" still load: Config falls back to the class name. */
+        super("BridgeAssist", false);
     }
 
     @EventTarget(Priority.LOWEST)

@@ -29,9 +29,35 @@ import java.util.stream.Collectors;
 public class AimAssist extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private final TimerUtil timer = new TimerUtil();
-    public final FloatProperty hSpeed = new FloatProperty("horizontal-speed", 3.0F, 0.0F, 10.0F);
-    public final FloatProperty vSpeed = new FloatProperty("vertical-speed", 0.0F, 0.0F, 10.0F);
-    public final PercentProperty smoothing = new PercentProperty("smoothing", 50);
+    /* 2026-10-20 (plan item 6): how the view is turned. Smooth is the one before (a share of
+       what is left each tick). Regular, Linear and Lock On turn every frame by the frame's time,
+       after OpenSlinky's Aim Assist (AimAssistSlinky has the details). */
+    public final ModeProperty style = new ModeProperty("style", 0, new String[]{"Smooth", "Regular", "Linear", "Lock On"});
+    private final java.util.function.BooleanSupplier framed = () -> this.style.getValue() != 0;
+    private final java.util.function.BooleanSupplier smooth = () -> this.style.getValue() == 0;
+    public final FloatProperty speedH = new FloatProperty("speed-h", 5.5F, 0.0F, 30.0F,
+            () -> this.style.getValue() == 1 || this.style.getValue() == 2);
+    public final FloatProperty speedV = new FloatProperty("speed-v", 5.8F, 0.0F, 30.0F,
+            () -> this.style.getValue() == 1 || this.style.getValue() == 2);
+    public final BooleanProperty lockVertical = new BooleanProperty("lock-vertical", false, () -> this.style.getValue() == 3);
+    public final FloatProperty predict = new FloatProperty("predict", 0.85F, 0.0F, 1.0F, framed);
+    public final FloatProperty randomization = new FloatProperty("randomization", 0.36F, 0.0F, 1.0F, framed);
+    public final FloatProperty hitboxH = new FloatProperty("hitbox-h", 1.0F, 0.0F, 1.0F, framed);
+    public final FloatProperty hitboxV = new FloatProperty("hitbox-v", 1.0F, 0.0F, 1.0F, framed);
+    public final FloatProperty deadZone = new FloatProperty("dead-zone", 2.0F, 0.0F, 30.0F, framed);
+    public final ModeProperty targetMode = new ModeProperty("target-mode", 1, new String[]{"Single", "Switch"}, framed);
+    public final ModeProperty sortBy = new ModeProperty("sort-by", 3, new String[]{"Distance", "Health", "Hurt time", "Aim angle"},
+            () -> framed.getAsBoolean() && this.targetMode.getValue() == 1);
+    public final BooleanProperty exceedFov = new BooleanProperty("exceed-fov", true, framed);
+    public final BooleanProperty requireClick = new BooleanProperty("require-click", true, framed);
+    public final BooleanProperty requireMouseMove = new BooleanProperty("require-mouse-move", false, framed);
+    public final BooleanProperty stopOnBlockBreak = new BooleanProperty("stop-on-block-break", true, framed);
+    public final BooleanProperty lineOfSight = new BooleanProperty("line-of-sight", true, framed);
+    public final BooleanProperty ignoreInvisible = new BooleanProperty("ignore-invisible", true, framed);
+    private final AimAssistSlinky framedAim = new AimAssistSlinky(this);
+    public final FloatProperty hSpeed = new FloatProperty("horizontal-speed", 3.0F, 0.0F, 10.0F, smooth);
+    public final FloatProperty vSpeed = new FloatProperty("vertical-speed", 0.0F, 0.0F, 10.0F, smooth);
+    public final PercentProperty smoothing = new PercentProperty("smoothing", 50, smooth);
     public final FloatProperty range = new FloatProperty("range", 4.5F, 3.0F, 8.0F);
     public final IntProperty fov = new IntProperty("fov", 90, 30, 360);
     /* Pull toward the point of the hitbox nearest the crosshair instead of its
@@ -39,7 +65,7 @@ public class AimAssist extends Module {
        player there is nothing to correct and the view is left alone -- an
        assist that keeps dragging an on-target aim to the centre is the
        pattern aim checks look for. */
-    public final BooleanProperty multipoint = new BooleanProperty("multipoint", true);
+    public final BooleanProperty multipoint = new BooleanProperty("multipoint", true, smooth);
     /* After Vape's AimAssist (studied 2026-09-25), rewritten here.
        lead: aim where the target will be, its last tick's movement carried
        this many ticks ahead. A pull toward where they were trails a
@@ -47,8 +73,8 @@ public class AimAssist extends Module {
        strafe-increase: pull 1.6 times harder while this player strafes away
        from the side the target is on -- the case where the gap opens
        fastest. Capped at a full step, so at speed 10 it changes nothing. */
-    public final FloatProperty lead = new FloatProperty("lead", 1.0F, 0.0F, 3.0F);
-    public final BooleanProperty strafeIncrease = new BooleanProperty("strafe-increase", true);
+    public final FloatProperty lead = new FloatProperty("lead", 1.0F, 0.0F, 3.0F, smooth);
+    public final BooleanProperty strafeIncrease = new BooleanProperty("strafe-increase", true, smooth);
     public final BooleanProperty weaponOnly = new BooleanProperty("weapons-only", true);
     public final BooleanProperty allowTools = new BooleanProperty("allow-tools", false, this.weaponOnly::getValue);
     public final BooleanProperty botChecks = new BooleanProperty("bot-check", true);
@@ -65,14 +91,15 @@ public class AimAssist extends Module {
        computed from, and a rotation that only goes on the packet leaves that
        yaw at the camera's, so MoveFix turns them by nothing. move-fix below
        is what closes it (ENGINEERING-NOTES 4.12). */
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"NORMAL", "SILENT"});
+    /* Smooth only: the framed styles turn the camera, as a hand does. */
+    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"NORMAL", "SILENT"}, smooth);
 
     /* How far the silent aim may drift from where the player is actually
        looking. Without a ceiling an assist that nudges a little every tick
        accumulates into a full silent killaura pointing somewhere the player
        never looked, which is both a different feature and a far louder one. */
     public final FloatProperty maxOffset = new FloatProperty("max-offset", 30.0F, 1.0F, 180.0F,
-            () -> this.mode.getValue() == 1);
+            () -> smooth.getAsBoolean() && this.mode.getValue() == 1);
 
     /* SILENT makes the silent aim the yaw movement is computed from too, and
        turns the keys to match, so the player still goes where the camera
@@ -80,7 +107,7 @@ public class AimAssist extends Module {
        the server sees movement that agrees with the yaw it was sent. NONE
        keeps moving by the camera -- the mismatch described above. */
     public final ModeProperty moveFix = new ModeProperty("move-fix", 1, new String[]{"NONE", "SILENT"},
-            () -> this.mode.getValue() == 1);
+            () -> smooth.getAsBoolean() && this.mode.getValue() == 1);
 
     private float silentYaw;
     private float silentPitch;
@@ -127,12 +154,22 @@ public class AimAssist extends Module {
     public void onEnabled() {
         this.silentActive = false;
         this.silentQueued = false;
+        this.framedAim.reset();
     }
 
     @Override
     public void onDisabled() {
         this.silentActive = false;
         this.silentQueued = false;
+        this.framedAim.reset();
+    }
+
+    /** Regular / Linear / Lock On: the view turns every frame. */
+    @EventTarget
+    public void onRender3D(myau.events.Render3DEvent event) {
+        if (this.isEnabled() && this.style.getValue() != 0) {
+            this.framedAim.frame(event.getPartialTicks());
+        }
     }
 
     /** Clamps an angle so the silent aim stays within max-offset of the camera. */
@@ -153,6 +190,11 @@ public class AimAssist extends Module {
 
     @EventTarget
     public void onTick(TickEvent event) {
+        if (this.isEnabled() && event.getType() == EventType.POST && this.style.getValue() != 0) {
+            /* Regular / Linear / Lock On choose their target once a tick. */
+            this.framedAim.tick();
+            return;
+        }
         if (this.isEnabled() && event.getType() == EventType.POST && mc.currentScreen == null) {
             if (!(Boolean) this.weaponOnly.getValue()
                     || ItemUtil.hasRawUnbreakingEnchant()
@@ -291,7 +333,7 @@ public class AimAssist extends Module {
 
     @Override
     public String[] getSuffix() {
-        return new String[]{this.mode.getModeString()};
+        return new String[]{this.style.getValue() == 0 ? this.mode.getModeString() : this.style.getModeString()};
     }
 
     @EventTarget(whenDisabled = true)

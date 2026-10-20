@@ -75,7 +75,7 @@ public final class ModuleCategories {
                 PingSpoof.class, ServerLag.class, TickBase.class, Freeze.class, SmartBlinker.class);
         put(Category.CLIENT,
                 ClickGUIModule.class, GuiModule.class, FlagDetector.class,
-                FlagResponder.class, HitCheck.class, FightLog.class, Debug.class, PacketLogger.class,
+                FlagResponder.class, HitCheck.class, FightLog.class, Debug.class, Logs.class, PacketLogger.class,
                 ServerFingerprint.class, AutoTune.class, Adaptive.class, ServerProfiles.class,
                 LatencyGovernor.class, Panic.class, Rotations.class, Notifications.class, ScriptModule.class);
         put(Category.LEGIT,

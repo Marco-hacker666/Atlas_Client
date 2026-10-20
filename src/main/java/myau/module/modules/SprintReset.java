@@ -49,9 +49,10 @@ public class SprintReset extends Module {
     private final IntProperty releaseTicks = new IntProperty("release-ticks", 1, 1, 5,
             () -> this.mode.getValue() == 1 || this.mode.getValue() == 3);
     /* 2026-10-12, from a player's suggestion:
-       - SOFT: like LEGIT, but forward is eased to walking strength (below the
-         0.8 sprinting needs) instead of let go: sprint drops and comes back,
-         the player never stops.
+       - SOFT: like LEGIT, but instead of letting go of forward the player
+         sneaks for those ticks (since 2026-10-20; it used to ease forward to
+         0.5, which Grim's Simulation flags): sprint drops and comes back, the
+         player never stops.
        - randomize: each reset draws its delay (setting -1..+1) and its length
          (setting +0..+1) instead of using the same numbers every time.
        - wait-for-damage: after the hit, nothing happens until this player is
@@ -60,7 +61,6 @@ public class SprintReset extends Module {
     private final BooleanProperty randomize = new BooleanProperty("randomize", true,
             () -> this.mode.getValue() == 1 || this.mode.getValue() == 3);
     private final BooleanProperty waitForDamage = new BooleanProperty("wait-for-damage", false);
-    private static final float SOFT_FORWARD = 0.5F;
     private boolean waitingForDamage;
     private int waitTicks;
     private int lastHurtTime;
@@ -293,9 +293,16 @@ public class SprintReset extends Module {
         }
         if (forwardReleaseTicks > 0) {
             if (mode.getValue() == 3) {
-                /* SOFT: walking pace, never standing still. */
-                if (mc.thePlayer.movementInput.moveForward > SOFT_FORWARD) {
-                    mc.thePlayer.movementInput.moveForward = SOFT_FORWARD;
+                /* SOFT: a sneak tap, never standing still. Until 2026-10-20 it eased forward to 0.5, an input
+                   no keyboard makes: Grim's Simulation tries the key combinations and could not match that tick
+                   (offsets .0294, .0161, .0088... each 0.546 of the last -- one bad tick decaying with ground
+                   friction, test server 18:31). Sneaking is a real input (forward x 0.3, below the 0.8 sprinting
+                   needs), so sprint drops the vanilla way and the move is one the server can predict. */
+                net.minecraft.util.MovementInput input = mc.thePlayer.movementInput;
+                if (input.moveForward > 0.0F && !input.sneak) {
+                    input.sneak = true;
+                    input.moveForward *= 0.3F;
+                    input.moveStrafe *= 0.3F;
                 }
             } else {
                 mc.thePlayer.movementInput.moveForward = 0.0F;

@@ -71,6 +71,16 @@ public class BedNuker extends Module {
     private long whitelistScanAt = -1L;
     private int breakCooldown = 0;
     private BlockPos ownBedHead = null;
+    /* The dig log (2026-10-20): each START and STOP, and whether the block was really gone 0.6 s later, in
+       config/Atlas/bednuker-*.txt, to line up with the server's flags. */
+    private static final java.io.File LOG_DIR = new java.io.File("./config/Atlas/");
+    private static final java.text.SimpleDateFormat FILE_STAMP = new java.text.SimpleDateFormat("yyyyMMdd-HHmmss");
+    private static final java.text.SimpleDateFormat LINE_STAMP = new java.text.SimpleDateFormat("HH:mm:ss.SSS");
+    private java.io.File logTarget;
+    private int groundTicks;
+    private BlockPos checkPos;
+    private long checkAt;
+    private String checkWhat = "";
     private BlockPos ownBedFoot = null;
     private boolean ownBedPending = false;
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"NORMAL", "SWAP"});
@@ -274,13 +284,51 @@ public class BedNuker extends Module {
         }
     }
 
+    /*
+     * 2026-10-20 (owner: "BedNuker digs but gets flagged / the block will not
+     * break"). The face used to come from a look ray toward the block, and
+     * when that ray met another block first -- the bed's cover, a corner --
+     * the face reported was that other block's. A dig whose face is not the
+     * target's side toward the player is what Grim's PositionBreak and
+     * WrongBreak refuse, and a refused dig is a block that does not break.
+     * Now: the ray's face only if the ray lands on the target itself, else
+     * the target's face pointing at the eye.
+     */
     private EnumFacing getHitFacing(BlockPos blockPos) {
-        double x = (double) blockPos.getX() + 0.5 - mc.thePlayer.posX;
-        double y = (double) blockPos.getY() + 0.25 - mc.thePlayer.posY - (double) mc.thePlayer.getEyeHeight();
-        double z = (double) blockPos.getZ() + 0.5 - mc.thePlayer.posZ;
-        float[] rotations = RotationUtil.getRotationsTo(x, y, z, mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
-        MovingObjectPosition mop = RotationUtil.rayTrace(rotations[0], rotations[1], 8.0, 1.0F);
-        return mop == null ? EnumFacing.UP : mop.sideHit;
+        net.minecraft.util.Vec3 eye = mc.thePlayer.getPositionEyes(1.0F);
+        net.minecraft.util.Vec3 centre = new net.minecraft.util.Vec3(blockPos.getX() + 0.5, blockPos.getY() + 0.5,
+                blockPos.getZ() + 0.5);
+        MovingObjectPosition mop = mc.theWorld.rayTraceBlocks(eye, centre, false, true, false);
+        if (mop != null && mop.typeOfHit == MovingObjectType.BLOCK && blockPos.equals(mop.getBlockPos())
+                && mop.sideHit != null) {
+            return mop.sideHit;
+        }
+        return facingToward(blockPos, eye);
+    }
+
+    /** The face of the block at pos whose side the point is on, by the largest offset from the centre. */
+    static EnumFacing facingToward(BlockPos pos, net.minecraft.util.Vec3 point) {
+        double dx = point.xCoord - (pos.getX() + 0.5);
+        double dy = point.yCoord - (pos.getY() + 0.5);
+        double dz = point.zCoord - (pos.getZ() + 0.5);
+        double ax = Math.abs(dx);
+        double ay = Math.abs(dy);
+        double az = Math.abs(dz);
+        if (ay >= ax && ay >= az) {
+            return dy >= 0.0 ? EnumFacing.UP : EnumFacing.DOWN;
+        }
+        if (ax >= az) {
+            return dx >= 0.0 ? EnumFacing.EAST : EnumFacing.WEST;
+        }
+        return dz >= 0.0 ? EnumFacing.SOUTH : EnumFacing.NORTH;
+    }
+
+    /** Whether the line from the eye to the block's centre meets this block first (no digging through walls). */
+    private boolean visible(BlockPos pos) {
+        net.minecraft.util.Vec3 eye = mc.thePlayer.getPositionEyes(1.0F);
+        net.minecraft.util.Vec3 centre = new net.minecraft.util.Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+        MovingObjectPosition mop = mc.theWorld.rayTraceBlocks(eye, centre, false, true, false);
+        return mop == null || mop.typeOfHit != MovingObjectType.BLOCK || pos.equals(mop.getBlockPos());
     }
 
     private float getDigSpeed(IBlockState iBlockState, int slot, boolean boolean5) {
@@ -359,8 +407,14 @@ public class BedNuker extends Module {
                 }
             }
             if (!pos.isEmpty()) {
+                /* One in sight first (2026-10-20): the easiest cover block could be on the far side of the
+                   bed, dug through it -- a break through a wall, which Grim refuses. */
                 pos.sort(
                         (blockPos, blockPos2) -> {
+                            int seen = Boolean.compare(this.visible(blockPos2), this.visible(blockPos));
+                            if (seen != 0) {
+                                return seen;
+                            }
                             int o = Float.compare(this.calcBlockStrength(blockPos2), this.calcBlockStrength(blockPos));
                             return o != 0
                                     ? o
@@ -454,6 +508,13 @@ public class BedNuker extends Module {
         super("BedNuker", false);
     }
 
+    private void log(String line) {
+        if (this.logTarget == null) {
+            this.logTarget = new java.io.File(LOG_DIR, "bednuker-" + FILE_STAMP.format(new java.util.Date()) + ".txt");
+        }
+        AsyncLog.append(this.logTarget, LINE_STAMP.format(new java.util.Date()) + "  " + line);
+    }
+
     public boolean isReady() {
         return this.targetBed != null && this.readyToBreak;
     }
@@ -471,6 +532,13 @@ public class BedNuker extends Module {
             }
             if (this.breakCooldown > 0) {
                 this.breakCooldown--;
+            }
+            if (this.checkPos != null && System.currentTimeMillis() >= this.checkAt) {
+                /* The client removes the block at STOP; a refusal puts it back. */
+                boolean back = !mc.theWorld.isAirBlock(this.checkPos);
+                log((back ? "REFUSED " : "BROKEN ") + this.checkWhat + " " + this.checkPos.getX() + ","
+                        + this.checkPos.getY() + "," + this.checkPos.getZ() + (back ? " -- the server put it back" : ""));
+                this.checkPos = null;
             }
             if (this.ownBedPending) {
                 this.findOwnBed();
@@ -504,6 +572,16 @@ public class BedNuker extends Module {
                 switch (this.breakStage) {
                     case 0:
                         if (!mc.thePlayer.isUsingItem()) {
+                            IBlockState startState = mc.theWorld.getBlockState(this.targetBed);
+                            float perTick = this.getBreakDelta(startState, this.targetBed, slot, mc.thePlayer.onGround);
+                            log("START " + startState.getBlock().getLocalizedName() + " " + this.targetBed.getX() + ","
+                                    + this.targetBed.getY() + "," + this.targetBed.getZ() + " face "
+                                    + this.getHitFacing(this.targetBed) + (this.visible(this.targetBed) ? "" : " NOT-IN-SIGHT")
+                                    + String.format(" | %.1f blocks | slot %d | ground %s | %.0f ticks at this speed",
+                                    Math.sqrt(this.targetBed.distanceSqToCenter(mc.thePlayer.posX,
+                                            mc.thePlayer.posY + mc.thePlayer.getEyeHeight(), mc.thePlayer.posZ)),
+                                    slot, mc.thePlayer.onGround, perTick > 0.0F ? Math.ceil(1.0F / perTick) : -1.0));
+                            this.groundTicks = 0;
                             this.doSwing();
                             PacketUtil.sendPacket(
                                     new C07PacketPlayerDigging(Action.START_DESTROY_BLOCK, this.targetBed, this.getHitFacing(this.targetBed))
@@ -519,6 +597,9 @@ public class BedNuker extends Module {
                         }
                         this.breaking = true;
                         this.tickCounter++;
+                        if (mc.thePlayer.onGround) {
+                            this.groundTicks++;
+                        }
                         this.breakProgress = this.breakProgress
                                 + this.getBreakDelta(mc.theWorld.getBlockState(this.targetBed), this.targetBed, slot, mc.thePlayer.onGround);
                         float tick = (float) this.tickCounter;
@@ -542,6 +623,12 @@ public class BedNuker extends Module {
                                 }
                             }
                             this.breaking = false;
+                            log(String.format("STOP after %d ticks (%d on ground) | progress %.2f | face %s%s",
+                                    this.tickCounter, this.groundTicks, this.breakProgress, this.getHitFacing(this.targetBed),
+                                    this.visible(this.targetBed) ? "" : " NOT-IN-SIGHT"));
+                            this.checkPos = this.targetBed;
+                            this.checkAt = System.currentTimeMillis() + 600L;
+                            this.checkWhat = mc.theWorld.getBlockState(this.targetBed).getBlock().getLocalizedName();
                             PacketUtil.sendPacket(
                                     new C07PacketPlayerDigging(Action.STOP_DESTROY_BLOCK, this.targetBed, this.getHitFacing(this.targetBed))
                             );

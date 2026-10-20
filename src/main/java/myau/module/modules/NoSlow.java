@@ -54,7 +54,17 @@ import java.util.Random;
 public class NoSlow extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "NG-Reuse", "NG-Switch", "NG-Interact", "NG-Blink", "NG-Grim2364", "NG-Grim2371", "Grim-Alternate"});
+    public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "NG-Reuse", "NG-Switch", "NG-Interact", "NG-Blink", "NG-Grim2364", "NG-Grim2371", "Grim-Alternate", "Hit-Window"});
+    /* Hit-Window (2026-10-20): the sword up on the server only around the next hit, see NoSlowHitWindow. */
+    private final java.util.function.BooleanSupplier hwShown = () -> NoSlowHitWindow.MODE.equals(this.swordMode.getModeString());
+    public final IntProperty hwOpenHurt = new IntProperty("HW Open Hurt", 2, 0, 8, hwShown);
+    public final BooleanProperty hwPingAware = new BooleanProperty("HW Ping Aware", true, hwShown);
+    public final IntProperty hwHold = new IntProperty("HW Hold", 4, 2, 10, hwShown);
+    public final BooleanProperty hwGuard = new BooleanProperty("HW Guard", true, hwShown);
+    public final myau.property.properties.FloatProperty hwGuardRange = new myau.property.properties.FloatProperty("HW Guard Range", 3.4F, 2.0F, 6.0F,
+            () -> hwShown.getAsBoolean() && this.hwGuard.getValue());
+    public final BooleanProperty hwLog = new BooleanProperty("HW Log", true, hwShown);
+    private final NoSlowHitWindow hitWindow = new NoSlowHitWindow(this);
     public final IntProperty swapDelay = new IntProperty("Swap Delay", 0, 0, 3, () -> swordMode.getValue() == 2);
     public final BooleanProperty noAttack = new BooleanProperty("No Attack", false, () -> swordMode.getValue() == 2);
     public final PercentProperty swordMotion = new PercentProperty("Sword Motion", 100, () -> this.swordMode.getValue() != 0);
@@ -252,6 +262,10 @@ public class NoSlow extends Module {
     }
 
     public boolean isAnyActive() {
+        if (this.hitWindow.selected() && ItemUtil.isHoldingSword()) {
+            /* Hit-Window replaces vanilla's slowdown only while it steers the block (slowed() then). */
+            return this.hitWindow.managing() && mc.thePlayer.isUsingItem();
+        }
         if (this.ng2371Prevent && this.ngIdx(this.swordMode) == NG_GRIM2371 && ItemUtil.isHoldingSword()) {
             /* NG-Grim2371: every third tick is taken slowed. */
             return false;
@@ -383,6 +397,16 @@ public class NoSlow extends Module {
         if (!alternate) {
             this.alternateTick = 0;
         }
+        if (this.isEnabled() && this.hitWindow.managing() && ItemUtil.isHoldingSword() && mc.thePlayer.isUsingItem()) {
+            /* Hit-Window: exactly vanilla while the server has the sword up, full speed while it does not.
+               Sprint is left to vanilla's own path, only dropped on a slowed tick as vanilla drops it. */
+            if (this.hitWindow.slowed()) {
+                mc.thePlayer.movementInput.moveForward *= 0.2F;
+                mc.thePlayer.movementInput.moveStrafe *= 0.2F;
+                mc.thePlayer.setSprinting(false);
+            }
+            return;
+        }
         if (this.isEnabled() && this.isAnyActive()) {
             float multiplier = (float) this.getMotionMultiplier() / 100.0F;
             if (alternate) {
@@ -467,6 +491,7 @@ public class NoSlow extends Module {
         if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null) {
             return;
         }
+        this.hitWindow.onPacket(event);
         if (this.ngIdx(this.swordMode) == NG_BLINK || !this.ngBlinkPackets.isEmpty()) {
             this.ngBlinkOnPacket(event);
         }
@@ -521,7 +546,16 @@ public class NoSlow extends Module {
     public void onLoadWorld(LoadWorldEvent event) {
         /* NG-Blink's held movement belongs to the old world: drop it, do not send it. */
         this.ngBlinkPackets.clear();
+        this.hitWindow.worldChanged();
         this.onDisabled();
+    }
+
+    /** Hit-Window decides each tick before the game reads input and moves. */
+    @EventTarget
+    public void onTickHitWindow(myau.events.TickEvent event) {
+        if (event.getType() == EventType.PRE && this.isEnabled()) {
+            this.hitWindow.tick();
+        }
     }
 
     @Override
@@ -552,6 +586,7 @@ public class NoSlow extends Module {
 
     @Override
     public void onDisabled() {
+        this.hitWindow.reset();
         this.ngReset();
         this.newGrimTicks = 0;
         this.ravenHypOffTicks = 0;

@@ -768,6 +768,9 @@ public class Adaptive extends Module {
             if (this.logTarget == null) {
                 this.logTarget = new File(LOG_DIR, "adaptive.txt");
             }
+            if (!myau.module.modules.Logs.allows(this.logTarget)) {
+                return;
+            }
             writer = new PrintWriter(new FileWriter(this.logTarget, true));
             writer.println(LINE_STAMP.format(new Date()) + "  [" + Brain.server() + "]  " + line);
             writer.flush();

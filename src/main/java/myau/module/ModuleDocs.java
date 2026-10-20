@@ -271,7 +271,6 @@ public final class ModuleDocs {
         d("KillSults", "擊殺後自動嘲諷對手。");
         d("FallIndicator", "標記落點方便 MLG 救場。");
         d("SmartBlinker", "智慧型封包閃爍，依情況自動收發。");
-        d("BridgeAssist", "協助搭橋的轉向與放置。");
         d("StaffDetector", "偵測附近的工作人員與可疑行為並發出提醒。");
         d("CheatDetector", "觀察附近玩家並在聊天室回報疑似作弊行為。");
         d("BedProximityAlert", "敵人接近你的床時發出警報。");
@@ -288,8 +287,26 @@ public final class ModuleDocs {
         d("KillAura2", "重寫的 Silent Aura：轉頭像真手、點擊像真人，只在視角真的打得到時出手；配合 InvulnTiming 在對方無敵時間結束那一刻出手，並會自動格擋。和 Silent Aura 不能同時開。");
         d("KillAura", "自動攻擊範圍內的目標：選目標、轉頭（多種模式，可靜默）、依 CPS 出手，並可自動格擋。");
         d("AimAssist", "攻擊時把準心輕微往附近目標拉，手感接近真人微調，不會自己出手。");
+        help("AimAssist", "style", "Smooth：原本的（每 tick 轉剩下角度的一部分）。Regular：每幀轉，遠快近慢。Linear：固定速度。Lock On：黏住目標。後三種參考 Slinky。");
+        help("AimAssist", "speed-h", "Regular / Linear：左右速度。");
+        help("AimAssist", "speed-v", "Regular / Linear：上下速度。");
+        help("AimAssist", "lock-vertical", "Lock On：上下也跟。");
+        help("AimAssist", "predict", "往伺服器最後給的目標位置瞄（0-1）。");
+        help("AimAssist", "randomization", "瞄準點飄動的幅度（0-1）。");
+        help("AimAssist", "hitbox-h", "左右：把瞄準點從中間往碰撞箱最近的邊拉（0-1）。");
+        help("AimAssist", "hitbox-v", "上下：把瞄準點從眼睛高度往最近點拉（0-1）。");
+        help("AimAssist", "dead-zone", "最後這幾度不轉。");
+        help("AimAssist", "target-mode", "Single：鎖一個目標。Switch：每 tick 依 sort-by 選最好的。");
+        help("AimAssist", "sort-by", "Switch：用什麼挑目標。");
+        help("AimAssist", "exceed-fov", "Single：目標超出 fov 也繼續。");
+        help("AimAssist", "require-click", "要按著攻擊鍵。");
+        help("AimAssist", "require-mouse-move", "每幀轉的不超過你自己手動移動的量。");
+        help("AimAssist", "stop-on-block-break", "挖方塊時不轉。");
+        help("AimAssist", "line-of-sight", "只瞄看得到的目標。");
+        help("AimAssist", "ignore-invisible", "跳過隱形的玩家。");
         d("AutoClicker", "按住左鍵時自動連點，CPS 在設定範圍內隨機，可順便格擋或挖方塊。");
         d("KnockbackDelay", "把收到的擊退延後一小段時間才吃下去，讓被打飛的時機變晚。");
+        help("KnockbackDelay", "HoldTransactions", "壓住擊退時，後面的交易確認封包也一起等，伺服器就不會以為你收到擊退卻沒反應（Polar、Grim 用交易確認計時的擊退檢查）。預設開。");
         d("AutoHeal", "血量低時自動使用治療物品（湯、藥水、頭）。");
         d("BackTrack", "對手往後退時，暫時把他留在你最後看到的位置，讓攻擊還能打到伺服器記錄中的位置。");
         d("Hitflick", "打中目標的瞬間把視角甩開，再轉回來（偏移擊退方向）。");
@@ -429,6 +446,12 @@ public final class ModuleDocs {
         d("LongJump", "跳得更遠。");
         d("Jesus", "可以在水面上行走。");
         d("NoSlow", "使用物品（格擋、吃東西、拉弓）時不減速。");
+        help("NoSlow", "HW Open Hurt", "Hit-Window：在來回延遲之外再提前幾個 hurtTime 舉劍；舉劍時機 = 這個值 + ping 換算的 tick，讓下一刀能打到時劍剛好舉著。");
+        help("NoSlow", "HW Ping Aware", "Hit-Window：依你的來回延遲提早舉劍（伺服器晚這麼久才收到）。");
+        help("NoSlow", "HW Hold", "Hit-Window：每次在伺服器上舉劍幾 tick；被打中就立刻放下。只有這幾 tick 會照原版減速。");
+        help("NoSlow", "HW Guard", "Hit-Window：還沒被打之前，附近有敵人面向你時，短暫舉劍防第一刀。");
+        help("NoSlow", "HW Guard Range", "Hit-Window：那個敵人要多近才算。");
+        help("NoSlow", "HW Log", "Hit-Window：每次舉劍和每一刀有沒有擋到，寫進 config/Atlas/noslow-*.txt。");
         help("HUD", "hud-theme", "所有 HUD 的外觀。JELLO：LiquidBounce JelloBounce 主題（黑 45%、柔和陰影、圓角卡片、模組清單貼齊）。CLASSIC：各 HUD 原本的畫法。");
         // 手機安全模式（2026-10-15，util.render.MobileSafe）：Client Settings > Performance > mobile-safe
         help("HUD", "blur", "背景模糊。手機安全模式（Client Settings > Performance > mobile-safe，手機 gl4es / Krypton Wrapper 自動開啟）下不畫。");
@@ -482,7 +505,7 @@ public final class ModuleDocs {
         help("NoItemRelease", "let-module-releases", "開：其他模組刻意送的放開（Silent Aura 打之前放下劍、NoSlow）照常送出，只擋你自己放開右鍵的那個。關：全部都擋，完全照 Slinky。");
         d("NoJumpDelay", "移除連續跳躍之間的延遲。");
         d("SafeWalk", "走到方塊邊緣時不會掉下去（像一直按著潛行）。");
-        d("Eagle", "走到邊緣時自動潛行，用來後退搭橋。");
+        d("Eagle", "BridgeAssist：走到邊緣時自動潛行，用來後退搭橋（原名 Eagle）。");
         d("InvWalk", "開著背包或選單時也能移動。");
         d("TargetStrafe", "繞著目標轉圈移動。");
         d("MoveFix", "靜默轉頭時修正移動方向，讓移動跟伺服器看到的視角一致。");
@@ -551,6 +574,8 @@ public final class ModuleDocs {
         d("HitCheck", "統計哪幾刀真的有打到，並解釋沒打到的原因。");
         d("FightLog", "每場對戰記一行：命中、連擊、擊退、勝負。");
         d("Debug", "所有診斷工具的總開關。");
+        d("Logs", "config/Atlas 診斷紀錄的總開關。關（預設）：只寫 flags 紀錄（拉回等伺服器修正）。開：所有模組的測試紀錄都寫。每次啟動時刪除超過 keep-days 天的舊紀錄。");
+        help("Logs", "keep-days", "啟動遊戲時，刪除超過這麼多天的紀錄。");
         d("PacketLogger", "記錄封包，被踢出時寫成檔案方便查原因。");
         d("ServerFingerprint", "記錄伺服器透露的資訊，推測它用哪種反作弊。");
         d("AutoTune", "自動試不同的設定值，保留實測表現較好的。");

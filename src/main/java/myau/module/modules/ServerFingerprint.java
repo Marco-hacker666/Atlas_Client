@@ -892,6 +892,9 @@ public class ServerFingerprint extends Module {
             if (this.logTarget == null) {
                 this.logTarget = new File(LOG_DIR, "servers.txt");
             }
+            if (!myau.module.modules.Logs.allows(this.logTarget)) {
+                return;
+            }
             writer = new PrintWriter(new FileWriter(this.logTarget, true));
             writer.print(text);
             writer.flush();

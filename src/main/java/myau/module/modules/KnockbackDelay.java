@@ -138,6 +138,17 @@ public class KnockbackDelay extends Module {
     /* 2026-10-19 (from Slinky): only while the attack key is held / only in the air. */
     public final BooleanProperty requireAttackKey = new BooleanProperty("RequireAttackKey", false);
     public final BooleanProperty onlyInAir = new BooleanProperty("OnlyInAir", false);
+    /**
+     * While a push is held, the transactions that follow it wait with it
+     * (2026-10-20). Answering them on time while the push sat in the queue
+     * told the server the push had arrived while this client showed no
+     * reaction to it -- what a transaction-timed velocity check (Polar on
+     * Pika, Grim) answers with a setback: 12 of 16 corrections in the 10-20
+     * Pika games named this module. Held in order, the reply after the push
+     * goes out after the push is applied, and the server sees a late client,
+     * not one ignoring knockback.
+     */
+    public final BooleanProperty holdTransactions = new BooleanProperty("HoldTransactions", true);
 
     private final Queue<Packet<?>> held = new ConcurrentLinkedQueue<Packet<?>>();
     /* Written on the client thread, read on the network thread. */
@@ -369,8 +380,16 @@ public class KnockbackDelay extends Module {
            events on a timeline. Holding either does not delay information --
            it misstates when this client is, which inflates the measured ping by
            the whole window and shifts every lag-compensated check with it. */
-        if (packet instanceof S00PacketKeepAlive
-                || packet instanceof S32PacketConfirmTransaction) {
+        if (packet instanceof S00PacketKeepAlive) {
+            return;
+        }
+        if (packet instanceof S32PacketConfirmTransaction) {
+            /* Except the ones after a held push (HoldTransactions): those wait, in order, so the reply never
+               says the push arrived before this client acted on it. */
+            if (this.holding() && this.holdTransactions.getValue()
+                    && myau.management.PacketHub.take(event, "KnockbackDelay")) {
+                this.held.add(packet);
+            }
             return;
         }
         if (packet instanceof S07PacketRespawn) {

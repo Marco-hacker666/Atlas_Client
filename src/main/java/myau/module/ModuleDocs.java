@@ -316,7 +316,7 @@ public final class ModuleDocs {
         d("MoreKB", "攻擊時重置衝刺，讓每一下打出更多擊退。");
         d("Criticals", "讓攻擊判定為爆擊（多 50% 傷害），以封包或小跳實現。");
         d("FastBow", "加快拉弓射箭的速度。");
-        d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Slinky（預設）：按著左鍵、敵人在範圍內就舉劍，舉滿幾 tick 放下一 tick 讓攻擊打出去，再舉起來；可選只在快被打到時舉、放下時延遲封包。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Full：敵人在範圍內一直舉著劍，每次攻擊同一 tick 放下再舉起。Helper / Auto / Lag：其他方式。");
+        d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Slinky（預設）：按著左鍵、敵人在範圍內就舉劍，舉滿幾 tick 放下一 tick 讓攻擊打出去，再舉起來；可選只在快被打到時舉、放下時延遲封包。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Full：照原版的擋劍節奏（放下、下一 tick 打、打完立刻舉起），只在能保護你的時候舉劍。Helper / Auto / Lag：其他方式。");
         help("BlockHit", "block-range", "敵人在這個距離內才自動舉劍（從眼睛到對方碰撞箱）。");
         help("BlockHit", "max-hold-ticks", "劍舉著最多幾 tick，之後放下一 tick 讓下一下攻擊打出去（1.8 舉劍時攻擊點擊會被吃掉）。");
         help("BlockHit", "require-left-click", "只在按著攻擊鍵時自動舉劍；沒按攻擊、只按右鍵時就是普通的手動格擋。");
@@ -326,10 +326,14 @@ public final class ModuleDocs {
         help("BlockHit", "fake-animation", "畫面上顯示舉劍動畫（只是本機畫面，不影響伺服器）。");
         help("BlockHit", "fake-animation-in-range", "假動畫只在敵人在範圍內時顯示。");
         help("BlockHit", "lag-chance", "放下劍時，有這個機率把之後送出的封包全部扣住。0 = 不扣。");
-        help("BlockHit", "full-range", "Full：敵人在這個距離內（眼睛到碰撞箱）就一直舉著劍；每次攻擊在同一個 tick 內放下、打、再舉起來，伺服器每一下都算你在擋。舉著劍時是格擋的移動速度。");
-        help("BlockHit", "full-log", "Full：寫 fullblock-*.txt（要開 Logs）：舉起/放下、每 20 次交換一行、每次被打到時伺服器那邊有沒有在擋。");
-        help("BlockHit", "full-blink", "Full：你自己不舉劍（不減速，照常點擊），只讓伺服器以為你一直在擋；中間的移動先壓住，每次攻擊時依序送出：放下、壓住的移動、攻擊、舉起。代價跟 Blink 一樣，伺服器會一陣一陣收到你的封包。");
-        help("BlockHit", "full-blink-ticks", "Full blink：最多壓住幾 tick 就送一次（越低越不像延遲）。");
+        help("BlockHit", "full-range", "Full：敵人在這個距離內（眼睛到碰撞箱）才會舉劍。");
+        help("BlockHit", "full-style", "Full：Always＝敵人在範圍內就一直舉著（最安全、最慢）；Smart＝只在快被打到時、被盯上時、在空中時舉（減速少很多）。");
+        help("BlockHit", "full-open-hurt", "Full Smart：被打之後，自己的受傷時間剩這麼多時舉劍（下一下快能打到你了）。");
+        help("BlockHit", "full-ping-aware", "Full Smart：依 ping 提早舉劍，讓伺服器那邊來得及。");
+        help("BlockHit", "full-hold", "Full Smart：每次最多舉幾 tick；被打到就放下。");
+        help("BlockHit", "full-guard", "Full Smart：還沒開打時，範圍內有敵人面向你就短暫舉劍。");
+        help("BlockHit", "full-air", "Full Smart：在空中時一直舉著（空中舉劍幾乎不會變慢，因為速度主要靠慣性）。");
+        help("BlockHit", "full-log", "Full：寫 fullblock-*.txt（要開 Logs）：每次舉起/放下的原因、每次被打到有沒有擋到、舉劍時間佔比。");
         help("BlockHit", "lag-ticks", "扣住封包最多幾 tick，時間到就照順序全部送出。");
         help("BlockHit", "lag-flush-on-attack", "扣住期間一攻擊，就先把扣住的封包送出去，攻擊不會被延遲。");
         help("BlockHit", "lag-reblock", "扣住的封包一送出就馬上再舉劍。");

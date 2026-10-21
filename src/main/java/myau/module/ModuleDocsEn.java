@@ -70,7 +70,7 @@ final class ModuleDocsEn {
         d("Criticals", "Makes attacks critical hits (+50% damage) by packets or small hops.");
         d("FastBow", "Draws and shoots the bow faster.");
         help("BlockHit", "ManualChance", "Chance that a hit is followed by a one-tick block (blocks per second = CPS x chance). Idle while Silent Aura blocks by itself.");
-        d("BlockHit", "Blocks with the sword between hits. Slinky (default): while the attack key is held and an enemy is in range the sword goes up, comes down for one tick after a few so the next hit lands, then goes up again; optionally only just before you can be hit, and packets held briefly as it comes down. Manual: after your hits, one-tick block. Predict: raised just before you can be hit again, lowered when you are. Full: sword up while an enemy is in range, each attack swapped in within one tick. Helper / Auto / Lag: other ways.");
+        d("BlockHit", "Blocks with the sword between hits. Slinky (default): while the attack key is held and an enemy is in range the sword goes up, comes down for one tick after a few so the next hit lands, then goes up again; optionally only just before you can be hit, and packets held briefly as it comes down. Manual: after your hits, one-tick block. Predict: raised just before you can be hit again, lowered when you are. Full: vanilla block-hit order (down, hit next tick, up right after), the sword up only when it protects you. Helper / Auto / Lag: other ways.");
         help("BlockHit", "block-range", "Raise the sword only while an enemy is this close (eyes to its hitbox).");
         help("BlockHit", "max-hold-ticks", "Ticks the sword stays up before it comes down for one tick so the next hit lands (1.8 drops attack clicks while blocking).");
         help("BlockHit", "require-left-click", "Block automatically only while the attack key is held; with only right click held it is a plain manual block.");
@@ -80,10 +80,14 @@ final class ModuleDocsEn {
         help("BlockHit", "fake-animation", "Show the blocking animation on screen (your view only; the server is not told).");
         help("BlockHit", "fake-animation-in-range", "Show the fake animation only while an enemy is in range.");
         help("BlockHit", "lag-chance", "Chance that, as the sword comes down, every outgoing packet is held. 0 = never.");
-        help("BlockHit", "full-range", "Full: while an enemy is this close (eyes to hitbox) the sword stays up; each attack is release, hit and block again in one tick, so the server has it up for every hit. Blocking speed while up.");
-        help("BlockHit", "full-log", "Full: write fullblock-*.txt (needs Logs): up/down, one line per 20 swaps, and whether the sword was up on the server for each hit taken.");
-        help("BlockHit", "full-blink", "Full: you never raise the sword yourself (no slowdown, clicks as usual); only the server is told. The movement in between is held and goes out on each attack as: down, the held movement, the hit, up. The cost is blink's: the server hears from you in bursts.");
-        help("BlockHit", "full-blink-ticks", "Full blink: the most ticks held before a cycle (lower looks less like lag).");
+        help("BlockHit", "full-range", "Full: the sword goes up only while an enemy is this close (eyes to hitbox).");
+        help("BlockHit", "full-style", "Full: Always = up whenever an enemy is in range (most protection, slowest); Smart = up only when a hit can land, when someone faces you, or in the air (far less slowdown).");
+        help("BlockHit", "full-open-hurt", "Full Smart: after a hit, raise when your hurt time is down to this (the next hit is about to be possible).");
+        help("BlockHit", "full-ping-aware", "Full Smart: raise earlier by your ping, so it is up on the server in time.");
+        help("BlockHit", "full-hold", "Full Smart: the most ticks one raise lasts; down as soon as the hit lands.");
+        help("BlockHit", "full-guard", "Full Smart: before a fight starts, short raises while an enemy in range faces you.");
+        help("BlockHit", "full-air", "Full Smart: keep it up in the air (blocking barely slows you there, the speed is momentum).");
+        help("BlockHit", "full-log", "Full: write fullblock-*.txt (needs Logs): why it went up or down, whether each hit taken was blocked, and the share of time the sword was up.");
         help("BlockHit", "lag-ticks", "Most ticks the packets are held; then they all go, in order.");
         help("BlockHit", "lag-flush-on-attack", "An attack lets the held packets go first, so the hit is not delayed.");
         help("BlockHit", "lag-reblock", "Raise the sword again as soon as the held packets go.");

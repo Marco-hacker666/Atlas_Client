@@ -60,12 +60,22 @@ public class BlockHit extends Module {
        one tick (release, hit, block again), so the server has it up for every hit taken. See AutoBlockFull. */
     private final java.util.function.BooleanSupplier full = () -> this.mode.getValue() == 7;
     final FloatProperty fullRange = new FloatProperty("full-range", 3.5F, 2.0F, 6.0F, full);
+    /* Second version (2026-10-21): vanilla block-hit order only, and the sword up only when it protects
+       (windows before the next hit, guard, in the air). full-blink is gone (Grim PacketOrderI / NoSlow). */
+    final ModeProperty fullStyle = new ModeProperty("full-style", 1, new String[]{"Always", "Smart"}, full);
+    final IntProperty fullOpenHurt = new IntProperty("full-open-hurt", 1, 0, 9,
+            () -> full.getAsBoolean() && this.fullStyle.getValue() == 1);
+    final BooleanProperty fullPingAware = new BooleanProperty("full-ping-aware", true,
+            () -> full.getAsBoolean() && this.fullStyle.getValue() == 1);
+    final IntProperty fullHold = new IntProperty("full-hold", 3, 1, 10,
+            () -> full.getAsBoolean() && this.fullStyle.getValue() == 1);
+    final BooleanProperty fullGuard = new BooleanProperty("full-guard", false,
+            () -> full.getAsBoolean() && this.fullStyle.getValue() == 1);
+    final BooleanProperty fullAir = new BooleanProperty("full-air", false,
+            () -> full.getAsBoolean() && this.fullStyle.getValue() == 1);
+    /* Defaults from the owner's 10-21 Pika games (2.6.1): guard and air off -- a raised sword ends sprinting,
+       so blocking in the air cost the sprint on landing, and guard kept it up for a third of every approach. */
     final BooleanProperty fullLog = new BooleanProperty("full-log", true, full);
-    /* full-blink: the client never blocks (no slowdown), only the server, with the movement held between
-       release-and-reblock cycles (2026-10-21). See AutoBlockFull. */
-    final BooleanProperty fullBlink = new BooleanProperty("full-blink", false, full);
-    final IntProperty fullBlinkTicks = new IntProperty("full-blink-ticks", 2, 1, 5,
-            () -> full.getAsBoolean() && this.fullBlink.getValue());
     private final AutoBlockFull fullBlock = new AutoBlockFull(this);
     private static AutoBlockFull fullInstance;
     private boolean sBlocking;
@@ -202,17 +212,10 @@ public class BlockHit extends Module {
         fullInstance = this.fullBlock;
     } //67:D
 
-    /** Full has the sword up: AutoClicker keeps clicking, and each hit is swapped in. */
-    static boolean fullHolding() {
+    /** Full has the use key: AutoClicker's clicks wait while the sword is up. */
+    static boolean fullManaging() {
         AutoBlockFull full = fullInstance;
-        return full != null && full.holding();
-    }
-
-    @EventTarget(myau.event.types.Priority.HIGHEST)
-    public void onFullPacket(myau.events.PacketEvent event) {
-        if (this.isEnabled() && this.mode.getValue() == 7) {
-            this.fullBlock.onPacket(event);
-        }
+        return full != null && full.managing();
     }
 
     @EventTarget(myau.event.types.Priority.LOWEST)
@@ -869,6 +872,9 @@ public class BlockHit extends Module {
             attacking = true;
             attackTicks = 0;
             target = (EntityLivingBase) event.getTarget();
+            if (this.mode.getValue() == 7) {
+                this.fullBlock.attacked();
+            }
             if (this.mode.getValue() == 5) {
                 manualBlock();
             }

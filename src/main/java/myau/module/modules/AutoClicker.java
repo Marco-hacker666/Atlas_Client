@@ -280,8 +280,12 @@ public class AutoClicker extends Module {
                 // Adapted from raven inventory start-delay arming. Default 0 = off.
                 if (this.isEnabled() && this.canClick() && mc.gameSettings.keyBindAttack.isKeyDown()
                         && System.currentTimeMillis() - this.enabledAtMs >= (long) this.startDelayMs.getValue()) {
-                    /* AutoBlock Full keeps the sword up and swaps each hit in (2026-10-21). */
-                    if (!this.isInvFillPaused() && (!mc.thePlayer.isUsingItem() || BlockHit.fullHolding())) {
+                    if (!this.isInvFillPaused() && mc.thePlayer.isUsingItem() && BlockHit.fullManaging()) {
+                        /* AutoBlock Full has the sword up: clicks wait, and do not pile up into a burst for
+                           the tick it comes down (2026-10-21). */
+                        this.clickDelay = Math.max(this.clickDelay, 0L);
+                    }
+                    if (!this.isInvFillPaused() && !mc.thePlayer.isUsingItem()) {
                         // Ported from raven ClickAssist.java (per-click chance gate).
                         if (this.breakChance.getValue() < 100 && RandomUtil.nextInt(1, 100) > this.breakChance.getValue()) {
                             this.clickDelay = this.clickDelay + this.getNextClickDelay();

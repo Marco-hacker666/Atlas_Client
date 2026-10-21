@@ -187,7 +187,8 @@ public class BackTrack extends Module {
                 releaseIncoming();
             }
         });
-        this.range = new FloatProperty("range", 3.5F, 1.0F, 8.0F);
+        /* 3.0 by default (2.6.1): at 3.15 Intave flagged AttackRaytrace at 3.0011 and 3.0684 blocks (10-21). */
+        this.range = new FloatProperty("range", 3.0F, 1.0F, 8.0F);
         this.minRange = new FloatProperty("min-range", 0.0F, 0.0F, 4.0F);
         this.maxHurtTime = new IntProperty("max-hurt-time", 10, 0, 10);
         this.cooldown = new IntProperty("cooldown", 0, 0, 2000);

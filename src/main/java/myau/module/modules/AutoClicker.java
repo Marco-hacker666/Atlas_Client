@@ -198,7 +198,21 @@ public class AutoClicker extends Module {
         }
     }
 
-    private boolean isValidTarget(EntityPlayer entityPlayer) {
+    /* 2026-10-20 (owner: "holding left click in front of an enemy, the
+       clicker stops"). The crosshair sits on a block behind the enemy while
+       the enemy is still just out of reach (ground behind them, or the feet
+       when aiming low), and the old check only looked "range" far down the
+       line, so it called it mining and stopped clicking. Now any enemy on the
+       crosshair line in front of that block counts, however far. */
+    private double rayLength() {
+        double length = this.range.getValue();
+        if (this.isBreakingBlock() && mc.objectMouseOver.hitVec != null) {
+            length = Math.max(length, mc.thePlayer.getPositionEyes(1.0F).distanceTo(mc.objectMouseOver.hitVec));
+        }
+        return length;
+    }
+
+    private boolean isValidTarget(EntityPlayer entityPlayer, double length) {
         if (entityPlayer != mc.thePlayer && entityPlayer != mc.thePlayer.ridingEntity) {
             if (entityPlayer == mc.getRenderViewEntity() || entityPlayer == mc.getRenderViewEntity().ridingEntity) {
                 return false;
@@ -210,7 +224,7 @@ public class AutoClicker extends Module {
                         borderSize + this.hitBoxHorizontal.getValue(),
                         borderSize + this.hitBoxVertical.getValue(),
                         borderSize + this.hitBoxHorizontal.getValue()
-                ), mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch, this.range.getValue()) != null;
+                ), mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch, length) != null;
             }
         } else {
             return false;
@@ -218,12 +232,13 @@ public class AutoClicker extends Module {
     }
 
     private boolean hasValidTarget() {
+        double length = this.rayLength();
         return mc.theWorld
                 .loadedEntityList
                 .stream()
                 .filter(e -> e instanceof EntityPlayer)
                 .map(e -> (EntityPlayer) e)
-                .anyMatch(this::isValidTarget);
+                .anyMatch(p -> this.isValidTarget(p, length));
     }
 
     public AutoClicker() {
@@ -265,7 +280,8 @@ public class AutoClicker extends Module {
                 // Adapted from raven inventory start-delay arming. Default 0 = off.
                 if (this.isEnabled() && this.canClick() && mc.gameSettings.keyBindAttack.isKeyDown()
                         && System.currentTimeMillis() - this.enabledAtMs >= (long) this.startDelayMs.getValue()) {
-                    if (!this.isInvFillPaused() && !mc.thePlayer.isUsingItem()) {
+                    /* AutoBlock Full keeps the sword up and swaps each hit in (2026-10-21). */
+                    if (!this.isInvFillPaused() && (!mc.thePlayer.isUsingItem() || BlockHit.fullHolding())) {
                         // Ported from raven ClickAssist.java (per-click chance gate).
                         if (this.breakChance.getValue() < 100 && RandomUtil.nextInt(1, 100) > this.breakChance.getValue()) {
                             this.clickDelay = this.clickDelay + this.getNextClickDelay();

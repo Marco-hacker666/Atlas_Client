@@ -350,6 +350,14 @@ public class FakeLag extends Module {
     private boolean holdAllowed;
     /** LIQUID: the queue is being let out rather than dropped; new packets wait behind it. */
     private volatile boolean easing;
+    /* 2026-10-21 (FakeLag/Backtrack review). Of 2,744 holds on 10-18..10-21, the ones the tick ended at once
+       went out in one tick: "melee" 619 (155 with 6+ positions), "hurt" 51; and a dig (126) or a right-click
+       on a block (51) emptied the queue ahead of itself. The setbacks naming FakeLag were those bursts.
+       LIQUID now drains instead: DRAIN_POSITIONS a tick, and what is sent meanwhile -- a dig, a click --
+       waits its turn behind, in order, so the server judges it where it was made. Only an attack,
+       knockback, a catch or a correction still empty the queue at once. */
+    private volatile boolean drainingOut;
+    static final int DRAIN_POSITIONS = 3;
 
     /** Set from the network thread, acted on by the client thread. */
     private volatile boolean flushRequested;
@@ -462,6 +470,7 @@ public class FakeLag extends Module {
         this.attackQueued = false;
         this.releasing = false;
         this.lastSent = null;
+        this.drainingOut = false;
         this.holdAllowed = false;
         /* LiquidBounce does not lag on the first moments either: the
            recoil applies from the switch-on, not only after a release. */
@@ -530,6 +539,17 @@ public class FakeLag extends Module {
 
     @EventTarget
     public void onPacket(PacketEvent event) {
+        handlePacket(event);
+        Packet<?> packet = event.getPacket();
+        if (this.isEnabled() && event.getType() == EventType.SEND && !event.isCancelled()
+                && packet instanceof C03PacketPlayer && ((C03PacketPlayer) packet).isMoving()) {
+            /* Let through: now the last position the server has (heldServerPosition). */
+            C03PacketPlayer position = (C03PacketPlayer) packet;
+            this.lastSent = new Vec3(position.getPositionX(), position.getPositionY(), position.getPositionZ());
+        }
+    }
+
+    private void handlePacket(PacketEvent event) {
         if (!this.isEnabled()) {
             return;
         }
@@ -636,6 +656,17 @@ public class FakeLag extends Module {
                head of the send call, so anything released here reaches the
                server first and this one is judged against it. */
             this.recoilUntil = System.currentTimeMillis() + this.recoilTime.getValue();
+            if (this.mode.getValue() == LIQUID && !this.queue.isEmpty() && !Arbiter.catching()) {
+                /* Behind what is held, in order, and the queue drains (drainingOut). */
+                if (!myau.management.PacketHub.take(event, HUB)) {
+                    return;
+                }
+                this.queue.offer(new Held(packet, System.currentTimeMillis()));
+                this.drainingOut = true;
+                noteHeld();
+                enforceLimits();
+                return;
+            }
             releaseAll(actionName(packet));
             return;
         }
@@ -718,7 +749,8 @@ public class FakeLag extends Module {
                current tick must already respect it. Released before this
                packet goes, so nothing overtakes what was held. */
             if (!this.queue.isEmpty()) {
-                if (this.easing && System.currentTimeMillis() >= this.recoilUntil) {
+                if (this.easing && System.currentTimeMillis() >= this.recoilUntil
+                        || this.drainingOut && this.mode.getValue() == LIQUID) {
                     /* Being let out: this one takes its place at the back. */
                     if (!myau.management.PacketHub.take(event, HUB)) {
                                     return;
@@ -970,11 +1002,18 @@ public class FakeLag extends Module {
                     releaseDue(Long.MAX_VALUE, this.catchUp.getValue());
                     closeEpisode(blocked + ", let out");
                 } else {
-                    releaseAll(blocked);
+                    /* Melee, hurt, recoil: quickly, but not in one tick (drainingOut). */
+                    this.drainingOut = true;
+                    releaseDue(Long.MAX_VALUE, Math.max(DRAIN_POSITIONS, this.catchUp.getValue()));
+                    closeEpisode(blocked + ", drained");
                 }
+            }
+            if (this.queue.isEmpty()) {
+                this.drainingOut = false;
             }
             return;
         }
+        this.drainingOut = false;
         /* Closing in: the delay runs down with the distance still to go. */
         long cutoff = now - (long) (holdDelay() * taperFactor);
         releaseDue(cutoff, taperFactor < 1.0 ? this.catchUp.getValue() : Integer.MAX_VALUE);
@@ -1064,12 +1103,17 @@ public class FakeLag extends Module {
     /**
      * Where the server last put this player, as far as the queue can say.
      *
-     * The oldest held position, as LiquidBounce uses; with nothing held the
+     * The last position that reached it (2026-10-21; it was the oldest held,
+     * as LiquidBounce uses -- a tick ahead of what the server has). The oldest
+     * held when that is not known, after a correction; with nothing held the
      * server is up to date and the real position is the answer.
      */
     private Vec3 heldServerPosition() {
         for (Held held : this.queue) {
             if (held.packet instanceof C03PacketPlayer && ((C03PacketPlayer) held.packet).isMoving()) {
+                if (this.lastSent != null) {
+                    return this.lastSent;
+                }
                 C03PacketPlayer position = (C03PacketPlayer) held.packet;
                 return new Vec3(position.getPositionX(), position.getPositionY(), position.getPositionZ());
             }
@@ -1127,6 +1171,7 @@ public class FakeLag extends Module {
     /** Every release goes through here, in the style the setting chooses. */
     private void releaseAll(String reason) {
         this.easing = false;
+        this.drainingOut = false;
         if (this.releaseStyle.getValue() == 1) {
             flush();
         } else {

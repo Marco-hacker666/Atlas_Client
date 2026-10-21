@@ -31,4 +31,12 @@ public class LagRangeTest {
         assertEquals(1, LagRange.ticksFor(0));
         assertEquals(4, LagRange.ticksFor(180));
     }
+
+    @Test
+    public void holdingStopsEarlierTheFasterTheGapCloses() {
+        assertEquals(3.3, LagRange.stopDistance(0.0, 4, 3.0F), 1.0E-9);
+        assertEquals(3.0 + 0.5 * 5 + 0.3, LagRange.stopDistance(0.5, 4, 3.0F), 1.0E-9);
+        assertEquals(4.5, LagRange.stopDistance(0.0, 4, 4.5F), 1.0E-9);
+        assertEquals(3.3, LagRange.stopDistance(-0.4, 4, 3.0F), 1.0E-9);
+    }
 }

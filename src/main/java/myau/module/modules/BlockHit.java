@@ -25,7 +25,7 @@ public class BlockHit extends Module {
        AutoBlock the way Slinky does it"); the module is shown as AutoBlock.
        Saved configs keep the mode they name. */
     private final ModeProperty mode = new ModeProperty("Mode", 6,
-            new String[]{"Helper", "Auto", "Lag", "Swing", "Predict", "Manual", "Slinky"})
+            new String[]{"Helper", "Auto", "Lag", "Swing", "Predict", "Manual", "Slinky", "Full"})
             .hide("Swing")
             .alias("Rhythm", "Predict");
     /* ---- Slinky (Slinky's Auto Block, rebuilt here from what it does) ----
@@ -56,6 +56,18 @@ public class BlockHit extends Module {
             () -> slinky.getAsBoolean() && this.sLagChance.getValue() > 0);
     private final BooleanProperty sLagReblock = new BooleanProperty("lag-reblock", false,
             () -> slinky.getAsBoolean() && this.sLagChance.getValue() > 0);
+    /* ---- Full (2026-10-21): sword up whenever an enemy is in range, every hit swapped in within
+       one tick (release, hit, block again), so the server has it up for every hit taken. See AutoBlockFull. */
+    private final java.util.function.BooleanSupplier full = () -> this.mode.getValue() == 7;
+    final FloatProperty fullRange = new FloatProperty("full-range", 3.5F, 2.0F, 6.0F, full);
+    final BooleanProperty fullLog = new BooleanProperty("full-log", true, full);
+    /* full-blink: the client never blocks (no slowdown), only the server, with the movement held between
+       release-and-reblock cycles (2026-10-21). See AutoBlockFull. */
+    final BooleanProperty fullBlink = new BooleanProperty("full-blink", false, full);
+    final IntProperty fullBlinkTicks = new IntProperty("full-blink-ticks", 2, 1, 5,
+            () -> full.getAsBoolean() && this.fullBlink.getValue());
+    private final AutoBlockFull fullBlock = new AutoBlockFull(this);
+    private static AutoBlockFull fullInstance;
     private boolean sBlocking;
     private boolean sManual;
     private boolean sAnimation;
@@ -187,7 +199,33 @@ public class BlockHit extends Module {
 
     public BlockHit() {
         super("AutoBlock", false, false);
+        fullInstance = this.fullBlock;
     } //67:D
+
+    /** Full has the sword up: AutoClicker keeps clicking, and each hit is swapped in. */
+    static boolean fullHolding() {
+        AutoBlockFull full = fullInstance;
+        return full != null && full.holding();
+    }
+
+    @EventTarget(myau.event.types.Priority.HIGHEST)
+    public void onFullPacket(myau.events.PacketEvent event) {
+        if (this.isEnabled() && this.mode.getValue() == 7) {
+            this.fullBlock.onPacket(event);
+        }
+    }
+
+    @EventTarget(myau.event.types.Priority.LOWEST)
+    public void onFullTick(TickEvent event) {
+        if (event.getType() != EventType.PRE || mc.thePlayer == null || mc.theWorld == null) {
+            return;
+        }
+        if (this.isEnabled() && this.mode.getValue() == 7) {
+            this.fullBlock.tick();
+        } else if (this.fullBlock.active()) {
+            this.fullBlock.reset();
+        }
+    }
 
     /**
      * Ends the delay only if this module set it (2026-10-19). It used to set
@@ -217,6 +255,7 @@ public class BlockHit extends Module {
         this.intervalCount = 0;
         this.lastDamageAt = 0L;
         slinkyReset(true);
+        this.fullBlock.reset();
     }
 
 
@@ -362,7 +401,11 @@ public class BlockHit extends Module {
 
     /** The enemy to block against: the one under the crosshair, else the nearest in view. */
     private net.minecraft.entity.player.EntityPlayer slinkyTarget() {
-        float range = this.sRange.getValue();
+        return blockTarget(this.sRange.getValue());
+    }
+
+    /** The enemy within range: the one under the crosshair, else the nearest within 70 degrees of the view. */
+    net.minecraft.entity.player.EntityPlayer blockTarget(float range) {
         if (mc.objectMouseOver != null
                 && mc.objectMouseOver.entityHit instanceof net.minecraft.entity.player.EntityPlayer) {
             net.minecraft.entity.player.EntityPlayer hit =
@@ -404,7 +447,7 @@ public class BlockHit extends Module {
     }
 
     /** Eyes to the nearest point of the box (grown by 0.1), as Slinky measures. */
-    private static double boxDistance(net.minecraft.entity.Entity entity) {
+    static double boxDistance(net.minecraft.entity.Entity entity) {
         net.minecraft.util.AxisAlignedBB box = entity.getEntityBoundingBox().expand(0.1, 0.1, 0.1);
         double ex = mc.thePlayer.posX;
         double ey = mc.thePlayer.posY + mc.thePlayer.getEyeHeight();

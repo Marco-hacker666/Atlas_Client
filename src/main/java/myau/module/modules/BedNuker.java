@@ -89,6 +89,10 @@ public class BedNuker extends Module {
     public final BooleanProperty groundSpeed = new BooleanProperty("ground-spoof", false);
     public final ModeProperty ignoreVelocity = new ModeProperty("ignore-velocity", 0, new String[]{"NONE", "CANCEL", "DELAY"});
     public final BooleanProperty surroundings = new BooleanProperty("surroundings", true);
+    /* 2026-10-21 (owner: "a switch to dig from the outside in"). Off: dig the easiest block touching the bed
+       (the inner layer). On: dig the first block on the line from the eyes to the bed, layer by layer
+       from the side facing the player, until the bed is in the open. */
+    public final BooleanProperty outsideFirst = new BooleanProperty("outside-first", false, this.surroundings::getValue);
     public final BooleanProperty toolCheck = new BooleanProperty("tool-check", true);
     public final BooleanProperty whiteList = new BooleanProperty("whitelist", true);
 
@@ -430,6 +434,45 @@ public class BedNuker extends Module {
         return null;
     }
 
+    /**
+     * outside-first: the first block on the line from the eyes to either half
+     * of the bed, the nearer of the two; the bed itself when a line reaches it.
+     * Null when no line meets anything (then the old pick decides).
+     */
+    private BlockPos outermostOnPath(BlockPos bedPosition) {
+        IBlockState blockState = mc.theWorld.getBlockState(bedPosition);
+        if (!(blockState.getBlock() instanceof BlockBed)) {
+            return null;
+        }
+        EnumPartType partType = blockState.getValue(BlockBed.PART);
+        EnumFacing facing = blockState.getValue(BlockBed.FACING);
+        net.minecraft.util.Vec3 eye = mc.thePlayer.getPositionEyes(1.0F);
+        BlockPos best = null;
+        double bestSq = Double.MAX_VALUE;
+        for (BlockPos half : Arrays.asList(bedPosition, bedPosition.offset(partType == EnumPartType.HEAD ? facing.getOpposite() : facing))) {
+            net.minecraft.util.Vec3 aim = new net.minecraft.util.Vec3(half.getX() + 0.5, half.getY() + 0.3, half.getZ() + 0.5);
+            MovingObjectPosition mop = mc.theWorld.rayTraceBlocks(eye, aim, false, true, false);
+            if (mop == null || mop.typeOfHit != MovingObjectType.BLOCK || mop.getBlockPos() == null) {
+                continue;
+            }
+            BlockPos hit = mop.getBlockPos();
+            if (mc.theWorld.getBlockState(hit).getBlock() instanceof BlockBed) {
+                /* A clear line to the bed: dig the bed. */
+                return hit;
+            }
+            if (mc.theWorld.getBlockState(hit).getBlock().getBlockHardness(mc.theWorld, hit) < 0.0F) {
+                /* Bedrock, a map wall: never breaks, so not this line. */
+                continue;
+            }
+            double sq = hit.distanceSqToCenter(eye.xCoord, eye.yCoord, eye.zCoord);
+            if (sq < bestSq) {
+                bestSq = sq;
+                best = hit;
+            }
+        }
+        return best;
+    }
+
     private BlockPos findNearestBed() {
         return this.findTargetBed(mc.thePlayer.posX, mc.thePlayer.posY + (double) mc.thePlayer.getEyeHeight(), mc.thePlayer.posZ);
     }
@@ -465,6 +508,15 @@ public class BedNuker extends Module {
                     )
             );
             for (BlockPos blockPos : targets) {
+                if (this.surroundings.getValue() && this.outsideFirst.getValue()) {
+                    BlockPos outer = this.outermostOnPath(blockPos);
+                    if (outer != null && PlayerUtil.isBlockWithinReach(outer, x, y, z, this.range.getValue().doubleValue())
+                            && (!this.toolCheck.getValue()
+                            || mc.theWorld.getBlockState(outer).getBlock() instanceof BlockBed
+                            || this.hasProperTool(mc.theWorld.getBlockState(outer).getBlock()))) {
+                        return outer;
+                    }
+                }
                 if (this.surroundings.getValue()) {
                     BlockPos pos = this.validateBedPlacement(blockPos);
                     if (pos != null) {

@@ -104,6 +104,10 @@ public class LagRange extends Module {
     private File logTarget;
     private long holdStart;
     private String holdTarget = "";
+    /* Each player's box distance last tick, for how fast the gap is closing (2026-10-20). */
+    private final java.util.Map<Integer, Double> lastDistance = new java.util.HashMap<Integer, Double>();
+    /** Vanilla's attack reach, eyes to hitbox. */
+    private static final double ATTACK_REACH = 3.0;
 
     public LagRange() {
         super(NAME, false);
@@ -129,6 +133,22 @@ public class LagRange extends Module {
     }
 
     /** The delay setting in ticks, at least one. */
+    /**
+     * Where to stop holding (2026-10-20, Pika mitigation). The queue must be
+     * empty before the first swing can land: letting out drops the delay a
+     * tick a tick, so it takes about as many ticks as the delay, plus one;
+     * in that time the gap closes by the closing speed each tick. Stop at
+     * reach + that, plus a margin, and never closer than melee-distance.
+     * Before, holding stopped at a fixed 3.0 -- inside reach -- so the hit
+     * came while 17-36 packets were held and sent them all at once (and the
+     * transaction replies queued with them made the server see a sudden ping
+     * spike): every LOW-DAMAGE on 10-20 20:34 and 20:38 named LagRange.
+     */
+    static double stopDistance(double closingPerTick, int queuedTicks, float meleeDistance) {
+        double drain = Math.max(0.0, closingPerTick) * (queuedTicks + 1);
+        return Math.max(meleeDistance, ATTACK_REACH + drain + 0.3);
+    }
+
     static int ticksFor(int millis) {
         return Math.max(1, Math.round(millis / 50.0F));
     }
@@ -222,8 +242,11 @@ public class LagRange extends Module {
                 if (distance > this.range.getValue()) {
                     continue;
                 }
-                if (distance <= this.meleeDistance.getValue()) {
-                    /* Close enough to swing: let out now, so the attack finds little held. */
+                Double before = this.lastDistance.put(player.getEntityId(), distance);
+                double closing = before == null ? 0.0 : before - distance;
+                int queued = Math.max(this.applied, ticksFor(this.delay.getValue()));
+                if (distance <= stopDistance(closing, queued, this.meleeDistance.getValue())) {
+                    /* About to be in reach: let out now, so the queue is empty when the first swing lands. */
                     why = "melee";
                     break;
                 }
@@ -347,6 +370,7 @@ public class LagRange extends Module {
 
     @Override
     public void onDisabled() {
+        this.lastDistance.clear();
         if (this.applied > 0) {
             Myau.lagManager.setDelay(0);
         }

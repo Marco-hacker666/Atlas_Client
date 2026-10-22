@@ -485,6 +485,9 @@ public final class Updater {
         c.setReadTimeout(READ_TIMEOUT_MS);
         c.setUseCaches(false);
         c.setRequestProperty("User-Agent", "Atlas-Updater");
+        /* 2026-10-22: GitHub answers 406 to Java's default Accept header (text/html, image/gif, image/jpeg and
+           two wildcards) on release downloads; every "update check" failed with HTTP 406. Ask for the file. */
+        c.setRequestProperty("Accept", "application/octet-stream");
         if (c instanceof HttpURLConnection) {
             HttpURLConnection h = (HttpURLConnection) c;
             h.setInstanceFollowRedirects(true);

@@ -53,7 +53,7 @@ public final class BugReport {
        forwards a report to the Discord channel. Its address is not a secret:
        the Discord webhook stays on the Worker. Can be overridden with one line
        in config/Atlas/report-relay.txt. */
-    private static final String RELAY_URL = "https://myau-report.myau-atlas.workers.dev/report";
+    private static final String RELAY_URL = "https://atlas-report.atlas-client.workers.dev/report";
     private static final File RELAY_OVERRIDE = new File(ATLAS_DIR, "report-relay.txt");
 
     /*

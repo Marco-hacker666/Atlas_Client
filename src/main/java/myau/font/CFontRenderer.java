@@ -17,6 +17,10 @@ import java.util.Set;
 
 
 public class CFontRenderer extends CFont {
+    private static final char SECTION = '§';
+    /** new Color(20, 20, 20, 200).getRGB(), once. */
+    private static final int SHADOW_MASK = 0xC8141414;
+
     protected CFont.CharData[] boldChars = new CFont.CharData[256];
     protected CFont.CharData[] italicChars = new CFont.CharData[256];
     protected CFont.CharData[] boldItalicChars = new CFont.CharData[256];
@@ -138,7 +142,7 @@ public class CFontRenderer extends CFont {
         }
 
         if (shadow) {
-            color = (color & 0xFCFCFC) >> 2 | color & new Color(20, 20, 20, 200).getRGB();
+            color = (color & 0xFCFCFC) >> 2 | color & SHADOW_MASK;
         }
 
         CFont.CharData[] currentData = this.charData;
@@ -167,9 +171,17 @@ public class CFontRenderer extends CFont {
 
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, tex.getGlTextureId());
 
+            /* 2026-10-22 (plan item 14): glyphs are batched into one glBegin/glEnd run, ended before anything
+               that must not happen inside one (a texture bind, a line); it was a draw call per glyph. Same
+               triangles, same order, same colours. */
+            boolean batch = false;
             for (int i = 0; i < size; i++) {
                 char character = text.charAt(i);
-                if ((String.valueOf(character).equals("\247")) && (i < size)) {
+                if (character == SECTION && (i < size)) {
+                    if (batch) {
+                        GL11.glEnd();
+                        batch = false;
+                    }
                     int colorIndex = 21;
 
                     try {
@@ -232,10 +244,16 @@ public class CFontRenderer extends CFont {
 
                     i++;
                 } else if ((character < currentData.length) && (character >= 0)) {
-                    GL11.glBegin(GL11.GL_TRIANGLES);
+                    if (!batch) {
+                        GL11.glBegin(GL11.GL_TRIANGLES);
+                        batch = true;
+                    }
                     drawChar(currentData, character, (float) x, (float) y);
-                    GL11.glEnd();
 
+                    if ((strikethrough || underline) && batch) {
+                        GL11.glEnd();
+                        batch = false;
+                    }
                     if (strikethrough) {
                         drawLine(x, y + currentData[character].height / 2, x + currentData[character].width - 8.0D, y + currentData[character].height / 2, 1.0F);
                     }
@@ -248,6 +266,9 @@ public class CFontRenderer extends CFont {
                 }
             }
 
+            if (batch) {
+                GL11.glEnd();
+            }
             GL11.glHint(GL11.GL_POLYGON_SMOOTH_HINT, GL11.GL_DONT_CARE);
             GL11.glPopMatrix();
         }
@@ -271,7 +292,7 @@ public class CFontRenderer extends CFont {
         for (int i = 0; i < size; i++) {
             char character = text.charAt(i);
 
-            if ((String.valueOf(character).equals("\247")) && (i < size)) {
+            if (character == SECTION && (i < size)) {
                 int colorIndex = "0123456789abcdefklmnor".indexOf(character);
 
                 if (colorIndex < 16) {

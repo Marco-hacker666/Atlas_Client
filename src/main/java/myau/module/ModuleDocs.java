@@ -50,8 +50,11 @@ public final class ModuleDocs {
     /* The menu's language: Atlas sets it from its Appearance page each frame. */
     private static volatile boolean english;
 
+    /* 2026-10-22 (owner: "remove the whole Chinese interface"): the menu is English only; the Chinese
+       fonts' ideographs are gone, so Chinese text could not be drawn. The tables below stay as the keys the
+       English side (ModuleDocsEn) is looked up by. */
     public static boolean isEnglish() {
-        return english;
+        return true;
     }
 
     public static void setEnglish(boolean value) {
@@ -60,11 +63,20 @@ public final class ModuleDocs {
 
     /** A settings heading in the menu's language. */
     public static String heading(String group) {
-        if (group == null || !english) {
+        if (group == null || !isEnglish()) {
             return group;
         }
         String en = ModuleDocsEn.HEADINGS.get(group);
-        return en != null ? en : group;
+        if (en != null) {
+            return en;
+        }
+        /* A heading without its English: never show it in Chinese (it would draw as nothing). */
+        for (int i = 0; i < group.length(); i++) {
+            if (group.charAt(i) >= 0x2E80) {
+                return "Settings";
+            }
+        }
+        return group;
     }
 
     /** Sets the description, headings and hints, and returns the settings in menu order. */

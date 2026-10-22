@@ -823,7 +823,7 @@ public class AtlasClickGui extends GuiScreen {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        myau.module.ModuleDocs.setEnglish(this.theme.language.getValue() == 1);
+        myau.module.ModuleDocs.setEnglish(true);
         ScaledResolution sr = new ScaledResolution(mc);
         long now = System.nanoTime();
         this.delta = this.lastFrame == 0L ? 0.016F
@@ -986,7 +986,7 @@ public class AtlasClickGui extends GuiScreen {
         this.orbitPreview.draw(!this.profilesView && !this.appearanceView
                         && this.selected instanceof myau.module.modules.TargetOrbit,
                 sr.getScaledWidth(), x, y, width, height, mouseX, mouseY, this.delta,
-                this.theme.language.getValue() == 1, accent());
+                true, accent());
 
         this.theme.autosave();
         this.perfMillis += ((System.nanoTime() - frameStart) / 1.0E6F - this.perfMillis) * 0.05F;
@@ -1066,7 +1066,7 @@ public class AtlasClickGui extends GuiScreen {
     }
 
     private boolean reportChinese() {
-        return this.theme.language.getValue() == 0;
+        return false;
     }
 
     private void sendReport() {

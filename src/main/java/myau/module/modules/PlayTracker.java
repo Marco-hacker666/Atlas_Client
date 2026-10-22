@@ -282,12 +282,12 @@ public class PlayTracker extends Module {
         if (!this.isEnabled() || mc.thePlayer == null || mc.gameSettings.showDebugInfo) {
             return;
         }
-        String time = "§b遊玩 §f" + clock(this.sessionMs)
-                + (this.showToday.getValue() ? " §7(今天 " + clock(this.todayMs) + ")" : "");
-        String games = "§b場數 §f" + this.sessionGames
+        String time = "§bPlayed §f" + clock(this.sessionMs)
+                + (this.showToday.getValue() ? " §7(today " + clock(this.todayMs) + ")" : "");
+        String games = "§bGames §f" + this.sessionGames
                 + (this.showResults.getValue()
-                ? " §a勝" + this.sessionWins + " §c敗" + this.sessionLosses : "")
-                + (this.showToday.getValue() ? " §7(今天 " + this.todayGames + ")" : "");
+                ? " §aW " + this.sessionWins + " §cL " + this.sessionLosses : "")
+                + (this.showToday.getValue() ? " §7(today " + this.todayGames + ")" : "");
         String mitigation = this.showMitigation.getValue() ? mitigationLine() : null;
         int left = this.x.getValue();
         int top = this.y.getValue();
@@ -316,18 +316,18 @@ public class PlayTracker extends Module {
     private String mitigationLine() {
         FlagDetector detector = (FlagDetector) myau.Myau.moduleManager.modules.get(FlagDetector.class);
         if (detector == null || !detector.isEnabled() || !detector.detectLowDamage.getValue()) {
-            return this.mitigationAlways.getValue() ? "§b減傷 §8(FlagDetector 關)" : null;
+            return this.mitigationAlways.getValue() ? "§bMitigation §8(FlagDetector off)" : null;
         }
         myau.util.DamageWatch.Mitigation m = detector.mitigation();
         if (m.active) {
-            return String.format("§c! 減傷 §f%.1f§7/§f%.1f hp §8(%d/%d 下)",
+            return String.format("§c! Mitigation §f%.1f§7/§f%.1f hp §8(%d/%d hits)",
                     m.dealt, m.expected, m.low, m.of);
         }
         int dropped = detector.droppedRun();
         if (dropped >= 2) {
-            return "§c! 打不到 §f" + dropped + "§7 下沒反應";
+            return "§c! Not landing §f" + dropped + "§7 hits with no reaction";
         }
-        return this.mitigationAlways.getValue() ? "§b減傷 §a無" : null;
+        return this.mitigationAlways.getValue() ? "§bMitigation §anone" : null;
     }
 
     /** h:mm:ss */

@@ -319,6 +319,17 @@ public final class BugReport {
             }
         }
         line(sb, "Enabled modules", on.isEmpty() ? "none" : String.join(", ", on) + "  (settings: config.txt)");
+        /* The blocking and packet-holding modules at a glance (2026-10-22): two ban reports showed AutoBlock
+           and NoSlow as active with nothing to say in which mode. */
+        line(sb, "AutoBlock", onOff("AutoBlock") + " | mode " + setting("AutoBlock", "Mode")
+                + " | lag-chance " + setting("AutoBlock", "lag-chance") + " | full-style " + setting("AutoBlock", "full-style")
+                + " hold " + setting("AutoBlock", "full-hold") + " air " + setting("AutoBlock", "full-air")
+                + " guard " + setting("AutoBlock", "full-guard"));
+        line(sb, "Packet holders", "FakeLag " + onOff("FakeLag") + " " + setting("FakeLag", "mode") + " "
+                + setting("FakeLag", "delay") + "ms | Backtrack " + onOff("Backtrack") + " range "
+                + setting("Backtrack", "range") + " | NoSlow " + onOff("NoSlow") + " " + setting("NoSlow", "Sword Mode")
+                + " | LagRange " + onOff("LagRange") + " | Clutch " + onOff("Clutch") + " " + setting("Clutch", "mode")
+                + " | Logs " + onOff("Logs"));
         return sb.toString();
     }
 
@@ -403,6 +414,11 @@ public final class BugReport {
         }
     }
 
+    private static String onOff(String moduleName) {
+        Module module = Myau.moduleManager.getModule(moduleName);
+        return module == null ? "?" : module.isEnabled() ? "on" : "off";
+    }
+
     private static String setting(String moduleName, String propertyName) {
         Module module = Myau.moduleManager.getModule(moduleName);
         if (module == null) {
@@ -441,7 +457,22 @@ public final class BugReport {
         return String.valueOf(property.getValue());
     }
 
-    /** The newest of this client's logs with this prefix, or null. */
+    /** When this game started: a log last written before it belongs to another session. */
+    private static final long SESSION_START = sessionStart();
+
+    private static long sessionStart() {
+        try {
+            return java.lang.management.ManagementFactory.getRuntimeMXBean().getStartTime();
+        } catch (Throwable t) {
+            return System.currentTimeMillis();
+        }
+    }
+
+    /**
+     * The newest of this client's logs with this prefix written during this game, or null (2026-10-22: two
+     * ban reports carried fights and hits from 10-18 as if they were the session's -- with Logs off those
+     * files are not written, and the newest left on disk was days old).
+     */
     private static File newest(String prefix) {
         File[] files = MYAU_DIR.listFiles((dir, name) -> name.startsWith(prefix) && name.endsWith(".txt"));
         if (files == null || files.length == 0) {
@@ -453,13 +484,13 @@ public final class BugReport {
                 best = f;
             }
         }
-        return best;
+        return best.lastModified() >= SESSION_START ? best : null;
     }
 
     private static void tail(StringBuilder sb, String title, File file, int lines) {
         section(sb, title + (file == null ? "" : " - " + file.getName()));
         if (file == null) {
-            sb.append("(none)\n");
+            sb.append("(nothing this session; fights, hits, clutch and placement logs need Logs on)\n");
             return;
         }
         List<String> tail = lastLines(file, lines, null);

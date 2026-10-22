@@ -135,9 +135,7 @@ final class AtlasTheme {
     private long checkedAt;
 
     AtlasTheme() {
-        group("Language", "The language of module descriptions, setting hints and setting headings. "
-                        + "Setting names stay as they are: they are the config keys.",
-                this.language);
+        /* Language: English only since 2026-10-22 (the Chinese interface was removed). */
         group("Colors", "The accent that marks what is on and selected, and the colour of the glass itself.",
                 this.mode, this.accent, this.accentHue, this.accentSaturation, this.tint, this.tintHue, this.opacity);
         group("Glass", "The window's material: how much it blurs and bends the world behind it, and how "

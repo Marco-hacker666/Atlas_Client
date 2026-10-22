@@ -8,6 +8,7 @@ import myau.event.types.EventType;
 import myau.event.types.Priority;
 import myau.enums.BlinkModules;
 import myau.events.AttackEvent;
+import myau.events.LeftClickMouseEvent;
 import myau.events.LoadWorldEvent;
 import myau.events.MoveInputEvent;
 import myau.events.PacketEvent;
@@ -260,16 +261,29 @@ public class Clutch extends Module {
     public final IntProperty speed = new IntProperty("speed", 30, 5, 180);
     /** Degrees a tick when the catch is about to be missed. */
     public final IntProperty maxSpeed = new IntProperty("max-speed", 60, 10, 180);
-    public final IntProperty snapback = new IntProperty("snapback-speed", 20, 1, 100);
+    /* 2026-10-22 (owner, after Slinky's clutch): Even turns the view back in snapback-ticks equal parts, the last
+       one landing exactly (Slinky: rate 1/remaining); Speed is the old fixed degrees a tick. */
+    public final ModeProperty snapbackStyle = new ModeProperty("snapback-style", 1, new String[]{"Speed", "Even"});
+    public final IntProperty snapback = new IntProperty("snapback-speed", 20, 1, 100,
+            () -> this.snapbackStyle.getValue() == 0);
+    public final IntProperty snapbackTicks = new IntProperty("snapback-ticks", 4, 1, 20,
+            () -> this.snapbackStyle.getValue() == 1);
     /* Ticks the view stays where the catch left it before turning back. A
        hand does not start back the instant the block is down. */
     public final IntProperty snapbackDelay = new IntProperty("snapback-delay", 0, 0, 20);
+    /* Up to this many ticks more, drawn for every turn back (Slinky draws its delay too). */
+    public final IntProperty snapbackDelayRandom = new IntProperty("snapback-delay-random", 2, 0, 10);
     /* Pressing jump while the view is being turned back finishes the turn at
        once, so the jump goes where the player is looking. */
     public final BooleanProperty snapOnJump = new BooleanProperty("snap-on-jump", false);
     /* Switch Clutch off once a catch is over and the view is back. */
     public final BooleanProperty disableAfter = new BooleanProperty("disable-after", false);
     public final IntProperty randomization = new IntProperty("rotation-random", 15, 0, 60);
+    /* 2026-10-22 (after Slinky's clutch): the turn's speed scaled by a factor that wanders every 2-4 ticks --
+       when a catch is due only upward (never slower than the time left needs, capped at max-speed), when
+       aiming ahead up and down; and while the look is steeply down (pitch > 75) the yaw wanders a little,
+       which moves the point looked at almost nothing. Percent; 0 = off. */
+    public final IntProperty turnRandom = new IntProperty("turn-random", 25, 0, 60);
     /* humanize (2026-10-04): the spot clicked on a face drawn from a normal
        distribution, a new one every block, instead of always the edge
        nearest the crosshair (scaled by rotation-random); and the turn handed
@@ -485,6 +499,8 @@ public class Clutch extends Module {
        exact moment the server's position and rotation for the player change. */
     private boolean inUpdate;
     private int tick;
+    /** Even snapback: ticks left for the turn back. */
+    private int backTicksLeft;
     /** Ticks left with no clicks, after a correction or a refusal. */
     private int pauseTicks;
     /** Recently placed blocks and the tick each went down, for matching refusals. */
@@ -715,9 +731,56 @@ public class Clutch extends Module {
         if (!this.isEnabled() || mc.thePlayer == null) {
             return;
         }
+        if (lookMisses(event.getTarget())) {
+            /* An aura's hit while the server has Clutch's look (see onLeftClick). */
+            event.setCancelled(true);
+            return;
+        }
         /* The tick counter moves in PRE, and swings are made before it. */
         this.lastAttackTick = this.tick + 1;
         this.lastAttackSprinting = mc.thePlayer.isSprinting();
+    }
+
+    /*
+     * 2026-10-22 (owner: "only skip a hit when Clutch's server-side look is
+     * far from the target; other hits go through"). 19:38-19:51 on Pika:
+     * Clutch was named in 6 of 11 flags, all while fighting with it catching
+     * -- HITS-DROPPED x2 ("4 hits in a row with no reaction") and the one
+     * LOW-DAMAGE. The server judges a hit from the look it last received,
+     * which while Clutch catches is its own (down at a block), not the
+     * crosshair's. A hit whose ray from that look misses the target's hitbox
+     * does not count, and a run of them is what a mitigation check reads. So
+     * such a hit is not sent; any hit the look does reach goes out as before.
+     * The look used is the one already sent (the attack goes out before this
+     * tick's movement packet).
+     */
+    private int skippedHits;
+
+    private boolean lookMisses(net.minecraft.entity.Entity target) {
+        if (!this.hasSent || target == null || mc.thePlayer == null) {
+            return false;
+        }
+        double grow = target.getCollisionBorderSize() + 0.2;
+        AxisAlignedBB box = target.getEntityBoundingBox().expand(grow, grow, grow);
+        if (RotationUtil.rayTrace(box, this.sentYaw, this.sentPitch, 6.0) != null) {
+            return false;
+        }
+        this.skippedHits++;
+        trace(String.format("    hit skipped: the server's look %.1f/%.1f misses %s (%d so far)",
+                this.sentYaw, this.sentPitch, target.getName(), this.skippedHits));
+        return true;
+    }
+
+    /** A click on an entity the server's look would miss: no swing, no hit. */
+    @EventTarget
+    public void onLeftClick(LeftClickMouseEvent event) {
+        if (!this.isEnabled() || event.isCancelled() || mc.thePlayer == null || mc.objectMouseOver == null
+                || mc.objectMouseOver.typeOfHit != MovingObjectType.ENTITY) {
+            return;
+        }
+        if (lookMisses(mc.objectMouseOver.entityHit)) {
+            event.setCancelled(true);
+        }
     }
 
     private int ping() {
@@ -1069,6 +1132,47 @@ public class Clutch extends Module {
 
     private static boolean intersects(AxisAlignedBB box, BlockPos cell) {
         return box.intersectsWith(new AxisAlignedBB(cell, cell.add(1, 1, 1)));
+    }
+
+    /*
+     * 2026-10-22 (owner: "fix 1", Clutch placements refused). FlagDetector's
+     * BLOCKED-BY-BODY is a block refused with an opponent within 1.2 of it:
+     * vanilla will not place into anyone's hitbox, and the server judges it
+     * where the opponent really is, which this client sees late -- a round
+     * trip behind, interpolated a tick or two more. So no cell an opponent
+     * may be standing in is planned or clicked: each opponent's box where the
+     * client draws them and where the server last put them (serverPos),
+     * grown by how far they move in the time our click takes to arrive.
+     */
+    private final List<AxisAlignedBB> opponentBoxes = new ArrayList<AxisAlignedBB>();
+
+    private void updateOpponentBoxes() {
+        this.opponentBoxes.clear();
+        int lead = Math.round(myau.util.Ping.own() / 50.0F) + 2;
+        for (net.minecraft.entity.player.EntityPlayer p : mc.theWorld.playerEntities) {
+            if (p == mc.thePlayer || p.isDead || p.isSpectator() || myau.util.TeamUtil.isBot(p)
+                    || mc.thePlayer.getDistanceSqToEntity(p) > 64.0) {
+                continue;
+            }
+            double speed = Math.min(0.6, Math.hypot(p.posX - p.lastTickPosX, p.posZ - p.lastTickPosZ));
+            double grow = Math.min(1.0, 0.1 + speed * lead);
+            AxisAlignedBB drawn = p.getEntityBoundingBox();
+            double sx = p.serverPosX / 32.0 - p.posX;
+            double sy = p.serverPosY / 32.0 - p.posY;
+            double sz = p.serverPosZ / 32.0 - p.posZ;
+            AxisAlignedBB server = drawn.offset(sx, sy, sz);
+            this.opponentBoxes.add(drawn.union(server).expand(grow, 0.1, grow));
+        }
+    }
+
+    /** An opponent may be standing in this cell when our click reaches the server. */
+    private boolean opponentIn(BlockPos cell) {
+        for (AxisAlignedBB box : this.opponentBoxes) {
+            if (intersects(box, cell)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // --------------------------------------------------------------- trigger
@@ -1563,7 +1667,7 @@ public class Clutch extends Module {
             List<BlockPos> cells = new ArrayList<BlockPos>();
             for (int[] column : columns) {
                 BlockPos cell = new BlockPos(column[0], level, column[1]);
-                if (!BlockUtil.isReplaceable(cell) || intersects(now, cell)) {
+                if (!BlockUtil.isReplaceable(cell) || intersects(now, cell) || opponentIn(cell)) {
                     continue;
                 }
                 if (catchTick(this.path, this.pathStart, cell, PLAN_TICKS) >= 0) {
@@ -1602,7 +1706,7 @@ public class Clutch extends Module {
         int level = MathHelper.floor_double(land.minY - 1.0E-3);
         BlockPos cell = new BlockPos(MathHelper.floor_double((land.minX + land.maxX) / 2.0), level,
                 MathHelper.floor_double((land.minZ + land.maxZ) / 2.0));
-        if (!BlockUtil.isReplaceable(cell) || intersects(this.pathStart, cell)
+        if (!BlockUtil.isReplaceable(cell) || intersects(this.pathStart, cell) || opponentIn(cell)
                 || catchTick(this.path, this.pathStart, cell, PLAN_TICKS) < 0) {
             return null;
         }
@@ -1702,7 +1806,7 @@ public class Clutch extends Module {
                 for (EnumFacing facing : EnumFacing.Plane.HORIZONTAL) {
                     BlockPos neighbour = cell.offset(facing);
                     if (!depth.containsKey(neighbour) && BlockUtil.isReplaceable(neighbour)
-                            && !intersects(next, neighbour)) {
+                            && !intersects(next, neighbour) && !opponentIn(neighbour)) {
                         depth.put(neighbour, d + 1);
                         queue.add(neighbour);
                     }
@@ -1725,6 +1829,43 @@ public class Clutch extends Module {
      * its speed drifting rather than jumping about. The step is whole mouse
      * counts at the player's sensitivity, as every turn a mouse makes is.
      */
+    /* turn-random's two wandering values in [-1, 1]: speed, and the yaw drift when looking steeply down. */
+    private final float[] wander = new float[2];
+    private final float[] wanderFrom = new float[2];
+    private final float[] wanderTo = new float[2];
+    private final int[] wanderTick = new int[2];
+    private final int[] wanderLength = {1, 1};
+    private final java.util.Random turnRandomSource = new java.util.Random();
+
+    private float wander(int i) {
+        if (this.wanderTick[i] >= this.wanderLength[i]) {
+            this.wanderFrom[i] = this.wander[i];
+            this.wanderTo[i] = this.turnRandomSource.nextFloat() * 2.0F - 1.0F;
+            this.wanderLength[i] = 2 + this.turnRandomSource.nextInt(3);
+            this.wanderTick[i] = 0;
+        }
+        this.wanderTick[i]++;
+        float t = this.wanderTick[i] / (float) this.wanderLength[i];
+        this.wander[i] = this.wanderFrom[i] + (this.wanderTo[i] - this.wanderFrom[i]) * t;
+        return this.wander[i];
+    }
+
+    /** A catch or pre-aim turn: step scaled by turn-random, yaw drifting while the look is steep. */
+    private void turnTo(float targetYaw, float targetPitch, float step, boolean urgent) {
+        float r = this.turnRandom.getValue() / 100.0F;
+        if (r > 0.0F) {
+            float u = wander(0);
+            float factor = urgent ? 1.0F + r * (u + 1.0F) / 2.0F : 1.0F + r * u;
+            /* A catch never turns slower than its time left needs; pre-aim may go either way. */
+            step = urgent ? Math.min(step * factor, Math.max(step, this.maxSpeed.getValue()))
+                    : Math.min(step * factor, this.maxSpeed.getValue());
+            if (targetPitch > 75.0F) {
+                targetYaw += wander(1) * r * 6.0F;
+            }
+        }
+        stepRotation(targetYaw, targetPitch, step);
+    }
+
     private void stepRotation(float targetYaw, float targetPitch, float step) {
         if (this.holdThisTick) {
             /* A click went out this tick: the movement packet after it has to
@@ -1880,6 +2021,7 @@ public class Clutch extends Module {
            cost a tick per block. */
         this.holdThisTick = false;
 
+        updateOpponentBoxes();
         predict(false);
         /* extra-block wants this tick even when the fall itself no longer does. */
         BlockPos extra = extraCell();
@@ -1947,7 +2089,9 @@ public class Clutch extends Module {
                 float backPitch = real ? this.viewPitch : mc.thePlayer.rotationPitch;
                 boolean jump = this.snapOnJump.getValue() && mc.gameSettings.keyBindJump.isKeyDown();
                 if (!this.resetting) {
-                    this.backWait = this.snapbackDelay.getValue();
+                    int spread = this.snapbackDelayRandom.getValue();
+                    this.backWait = this.snapbackDelay.getValue() + (spread > 0 ? this.turnRandomSource.nextInt(spread + 1) : 0);
+                    this.backTicksLeft = this.snapbackTicks.getValue();
                 }
                 this.resetting = true;
                 if (this.backWait > 0 && !jump) {
@@ -1959,6 +2103,13 @@ public class Clutch extends Module {
                     float[] back = RotationEngine.quantize(this.sentYaw, this.sentPitch, backYaw, backPitch);
                     this.sentYaw = back[0];
                     this.sentPitch = back[1];
+                } else if (this.snapbackStyle.getValue() == 1) {
+                    /* Even: what is left over the ticks left; the last one lands on it. */
+                    float left = Math.abs(MathHelper.wrapAngleTo180_float(backYaw - this.sentYaw))
+                            + Math.abs(backPitch - this.sentPitch);
+                    int ticks = Math.max(1, this.backTicksLeft);
+                    stepRotation(backYaw, backPitch, ticks <= 1 ? Math.max(left, 0.5F) + 1.0F : Math.max(0.5F, left / ticks));
+                    this.backTicksLeft = ticks - 1;
                 } else {
                     stepRotation(backYaw, backPitch, this.snapback.getValue());
                 }
@@ -2115,7 +2266,7 @@ public class Clutch extends Module {
             }
         }
         float step = stepFor(this.plan);
-        stepRotation(this.plan.yaw, this.plan.pitch, step);
+        turnTo(this.plan.yaw, this.plan.pitch, step, true);
         applyRotation(event);
         this.aimedCell = early ? this.plan.cell : null;
         this.aimedTick = this.tick;
@@ -2169,7 +2320,7 @@ public class Clutch extends Module {
         float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0F;
         float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
         yaw = this.sentYaw + MathHelper.wrapAngleTo180_float(yaw - this.sentYaw);
-        stepRotation(yaw, pitch, Math.max(this.speed.getValue(), this.maxSpeed.getValue() / 2.0F));
+        turnTo(yaw, pitch, Math.max(this.speed.getValue(), this.maxSpeed.getValue() / 2.0F), false);
         applyRotation(event);
     }
 
@@ -2252,6 +2403,10 @@ public class Clutch extends Module {
         }
         if (!BlockUtil.isReplaceable(cell) || intersects(mc.thePlayer.getEntityBoundingBox(), cell)) {
             note("turning: the look would place at " + cell(cell) + ", which is taken or inside the player");
+            return;
+        }
+        if (opponentIn(cell)) {
+            note("no click: an opponent may be standing in " + cell(cell) + " on the server");
             return;
         }
         boolean wanted = cell.equals(this.plan.cell)

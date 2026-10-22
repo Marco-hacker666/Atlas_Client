@@ -118,6 +118,7 @@ final class ModuleDocsEn {
         help("AntiBounce", "log", "One line per time stuck in config/Atlas/stuck-*.txt: which block, whether you just placed it, time since the last correction, ping, and the way out.");
         d("ThrowAura", "Throws snowballs and eggs at enemies.");
         d("Displace", "Turns at the moment of a hit to aim the target's knockback at the void or a chosen direction.");
+        help("Displace", "Keep-hitbox", "Turn the server-side look only as far as it still meets the target's hitbox (Grim and Polar check that); turned further the hit does not count. On, the turn is only 5-10 degrees and moves only the sprint / Knockback part of the push, so on servers like Pika or Grim the effect is small. Off = the full offset, for servers that do not check the hit's look.");
         d("KeepSprint", "Keeps sprinting after an attack instead of slowing down.");
         d("PlainAura", "A minimal aura: attacks only when the rotation actually sent is on the target. The hardest to flag.");
         d("InvulnTiming", "Times attacks to the end of the target's invulnerability, and spends spare swings on someone who can be hurt.");
@@ -192,6 +193,10 @@ final class ModuleDocsEn {
         // ------------------------------------------------------------ PLAYER
         d("Blink", "Holds your outgoing movement and releases it at a pace the server accepts (a teleport-like effect).");
         d("Clutch", "When knocked off a bridge or walking off an edge over the void, turns and places a block to catch you.");
+        help("Clutch", "turn-random", "How much the turn speed wanders, every 2-4 ticks (%): when a catch is due only faster, never slower; while looking steeply down the yaw drifts a little too. 0 = off.");
+        help("Clutch", "snapback-style", "How the view turns back: Even = equal parts over a few ticks, the last one exact; Speed = fixed degrees a tick (the old way).");
+        help("Clutch", "snapback-ticks", "Even: ticks to turn the view back over.");
+        help("Clutch", "snapback-delay-random", "Wait up to this many ticks more before turning back, drawn each time.");
         d("NoFall", "Avoids fall damage.");
         d("AntiVoid", "Pulls you back or catches you when you are about to fall into the void.");
         d("AutoSwap", "When blocks, projectiles or pearls run out, switches to the next slot of the same kind.");

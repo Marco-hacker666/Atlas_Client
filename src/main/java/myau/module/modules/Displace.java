@@ -76,6 +76,11 @@ public class Displace extends Module {
     public final BooleanProperty hasKnockback = new BooleanProperty("Has-knockback", false);
     public final BooleanProperty itemWhitelistToggle = new BooleanProperty("Item-whitelist", false);
     public final ItemListProperty itemWhitelist = new ItemListProperty("Whitelisted-items", "");
+    /* 2026-10-22 (owner: "someone says Displace no longer works"). The hit is judged from the turned look,
+       and Grim and Polar check that look's ray against the target's hitbox: 90 degrees off it cannot meet a
+       box about +-9 degrees wide at 2.5 blocks, so the hit is refused and nothing is displaced. On: the turn
+       goes only as far as the look still meets the box (with a margin for the target moving). Off: as before. */
+    public final BooleanProperty keepHitbox = new BooleanProperty("Keep-hitbox", true);
 
     private boolean displaceThisTick = false;
     private boolean active = false;
@@ -145,6 +150,37 @@ public class Displace extends Module {
         clearArrowState();
         targetWindowStartTicks.clear();
         releaseBlink();
+    }
+
+    /** The yaw nearest to want, toward it from the target, whose ray from the eyes still meets the target's box. */
+    private static float clampToHitbox(EntityPlayer target, float want) {
+        double dx = target.posX - mc.thePlayer.posX;
+        double dz = target.posZ - mc.thePlayer.posZ;
+        float base = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0F;
+        float diff = MathHelper.wrapAngleTo180_float(want - base);
+        float sign = Math.signum(diff);
+        float most = Math.abs(diff);
+        float pitch = mc.thePlayer.rotationPitch;
+        AxisAlignedBB box = target.getEntityBoundingBox().expand(0.1, 0.1, 0.1);
+        if (RotationUtil.rayTrace(box, base, pitch, 6.0) == null) {
+            /* The pitch is off the box too: none of these yaws would count. */
+            return base;
+        }
+        if (RotationUtil.rayTrace(box, base + sign * most, pitch, 6.0) != null) {
+            return want;
+        }
+        float low = 0.0F;
+        float high = most;
+        for (int i = 0; i < 10; i++) {
+            float mid = (low + high) / 2.0F;
+            if (RotationUtil.rayTrace(box, base + sign * mid, pitch, 6.0) != null) {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        /* The hit goes out next tick, judged from this look; the target moves meanwhile. */
+        return base + sign * low * 0.75F;
     }
 
     private static int msToTicks(double ms) {
@@ -721,6 +757,9 @@ public class Displace extends Module {
 
         if (!displaceThisTick || renderDisplaceYaw == null) return;
 
+        if (keepHitbox.getValue()) {
+            renderDisplaceYaw = clampToHitbox(target, renderDisplaceYaw);
+        }
         e.setRotation(renderDisplaceYaw, mc.thePlayer.rotationPitch, 100);
         MoveUtil.fixMovement(renderDisplaceYaw);
     }

@@ -112,7 +112,8 @@ final class NoSlowHitWindow {
 
     private boolean wantsToManage() {
         return this.module.isEnabled() && this.selected() && mc.thePlayer != null && ItemUtil.isHoldingSword()
-                && mc.thePlayer.isUsingItem() && physicalUseKey() && !myau.util.Auras.blocksByItself();
+                && mc.thePlayer.isUsingItem() && physicalUseKey() && !myau.util.Auras.blocksByItself()
+                && !BlockHit.fullManaging();
     }
 
     // ---- each tick, before the game handles input and moves (TickEvent PRE) ----
@@ -258,8 +259,10 @@ final class NoSlowHitWindow {
         }
         if (packet instanceof C08PacketPlayerBlockPlacement
                 && ((C08PacketPlayerBlockPlacement) packet).getPlacedBlockDirection() == 255) {
-            if (physicalUseKey()) {
-                /* The right button went down: the block waits for a window. */
+            if (physicalUseKey() && !BlockHit.fullManaging()) {
+                /* The right button went down: the block waits for a window. (2026-10-22: not while AutoBlock
+                   Full has the sword -- two modules timing one block made a ban report's sword state
+                   unknowable: Full raised it, Hit-Window held the raise back.) */
                 event.setCancelled(true);
                 this.serverBlocking = false;
                 this.managing = true;

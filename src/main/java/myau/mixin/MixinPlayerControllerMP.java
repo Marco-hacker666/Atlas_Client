@@ -22,12 +22,17 @@ public abstract class MixinPlayerControllerMP {
 
     @Inject(
             method = "attackEntity",
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/PlayerControllerMP;syncCurrentPlayItem()V"))
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/PlayerControllerMP;syncCurrentPlayItem()V"),
+            cancellable = true)
     private void attackEntity(
             EntityPlayer entityPlayer, Entity targetEntity, CallbackInfo callbackInfo
     ) {
         AttackEvent event = new AttackEvent(targetEntity);
         EventManager.call(event);
+        /* A listener may drop a hit the server would not count (Clutch, 2026-10-22). */
+        if (event.isCancelled()) {
+            callbackInfo.cancel();
+        }
     }
     @Inject(
             method = {"windowClick"},

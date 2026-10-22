@@ -365,6 +365,7 @@ public final class ModuleDocs {
         help("BlockHit", "ManualChance", "每次打中後舉劍一下的機率（每秒格擋次數 = CPS × 機率）。Silent Aura 自己有格擋時不作用。");
         d("ThrowAura", "自動把雪球、蛋等投擲物丟向敵人。");
         d("Displace", "攻擊瞬間轉向，把對手的擊退方向導向虛空或指定方向。");
+        help("Displace", "Keep-hitbox", "打人的那一下伺服器那邊的視角只轉到還能打到對手碰撞箱的角度（Grim、Polar 會檢查視角打不打得到）；轉太多那一下就不算。開著時只能偏 5～10 度，而且只影響疾跑和擊退附魔那部分的擊退，在 Pika、Grim 這類伺服器上效果很小。關掉＝照設定的角度轉，只適合不檢查攻擊視角的伺服器。");
         d("KeepSprint", "攻擊後不讓衝刺被打斷，保持移動速度。");
         d("PlainAura", "精簡版自動攻擊：只在實際送出的視角真的對準目標時才出手，最不容易被抓。");
         d("InvulnTiming", "算準目標無敵時間結束的時機再出手，並把多餘的攻擊轉給打得動的人。");
@@ -439,6 +440,10 @@ public final class ModuleDocs {
         // ------------------------------------------------------------ PLAYER
         d("Blink", "暫時扣住自己送出的移動封包，之後以伺服器能接受的節奏放出（瞬移般的效果）。");
         d("Clutch", "被打下橋或走到虛空邊緣時，自動轉頭放方塊把自己接住。");
+        help("Clutch", "turn-random", "轉頭速度每 2～4 tick 隨機變化的幅度（%）：快來不及接時只會更快、不會更慢；往下看很陡時，左右也會輕微飄動。0 = 關。");
+        help("Clutch", "snapback-style", "轉回原本視角的方式：Even＝平均分成幾 tick 轉回去（最後一 tick 剛好對準），Speed＝每 tick 固定轉幾度（舊的）。");
+        help("Clutch", "snapback-ticks", "Even：分幾 tick 轉回原本的視角。");
+        help("Clutch", "snapback-delay-random", "轉回視角前，再隨機多等 0 到這麼多 tick。");
         d("NoFall", "避免摔落傷害。");
         d("AntiVoid", "快掉進虛空時自動把你拉回或接住。");
         d("AutoSwap", "方塊、投擲物、珍珠等用完時，自動換到同類物品的格子。");

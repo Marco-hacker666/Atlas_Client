@@ -41,7 +41,6 @@ backups/
 logs/
 reports/
 config/Atlas/
-config/Myau/
 *.txt.bak
 
 # Update signing private key (tools/update/GenUpdateKey.java). Never commit.

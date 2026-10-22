@@ -12,7 +12,7 @@ import java.util.Base64;
  *     java tools/update/GenUpdateKey.java
  *
  * It writes:
- *   src/main/resources/myau-update-key.pub   public key  -> commit this
+ *   src/main/resources/atlas-update-key.pub   public key  -> commit this
  *   update-signing-key.txt                   PRIVATE key -> paste into the GitHub
  *                                            secret UPDATE_SIGNING_KEY, keep a copy
  *                                            somewhere safe, then delete this file.
@@ -22,7 +22,7 @@ import java.util.Base64;
  */
 public class GenUpdateKey {
     public static void main(String[] args) throws Exception {
-        File pub = new File("src/main/resources/myau-update-key.pub");
+        File pub = new File("src/main/resources/atlas-update-key.pub");
         File priv = new File("update-signing-key.txt");
         if (pub.exists() && !(args.length > 0 && args[0].equals("--force"))) {
             System.err.println(pub + " already exists. Players' clients trust that key;");

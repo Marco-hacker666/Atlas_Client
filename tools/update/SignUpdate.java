@@ -14,7 +14,7 @@ import java.util.Base64;
  *
  *     UPDATE_SIGNING_KEY=... java tools/update/SignUpdate.java <version> <jar> <out/update.properties>
  *
- * Writes the signed manifest that clients read (see myau.update.UpdateManifest;
+ * Writes the signed manifest that clients read (see atlas.update.UpdateManifest;
  * the payload format here must stay identical to UpdateManifest.payload).
  */
 public class SignUpdate {

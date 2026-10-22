@@ -41,7 +41,7 @@ jobs:
       # Caches Gradle dependencies + build outputs. Biggest build-time win for Loom/Forge.
       # Read-only on anything other than main so PRs don't poison the shared cache.
       # Gradle 8.8, the same as release.yml. With the wrapper's 8.14.6, remapJar
-      # writes a jar holding only the shadow jar, nested: no mixins.myau.json,
+      # writes a jar holding only the shadow jar, nested: no mixins.atlas.json,
       # no mcmod.info, no classes. Forge cannot load it, yet the build is green.
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
@@ -71,10 +71,10 @@ jobs:
           python3 - "$JAR" <<'PY'
           import sys, zipfile
           names = zipfile.ZipFile(sys.argv[1]).namelist()
-          mixins = [n for n in names if n.startswith('myau/mixin/') and n.count('/') == 2 and n.endswith('.class')]
+          mixins = [n for n in names if n.startswith('atlas/mixin/') and n.count('/') == 2 and n.endswith('.class')]
           nested = [n for n in names if n.endswith('.jar')]
           print(sys.argv[1], len(names), 'entries,', len(mixins), 'mixin classes, nested jars:', nested)
-          if 'mixins.myau.json' not in names or 'mcmod.info' not in names or len(mixins) < 50 or nested:
+          if 'mixins.atlas.json' not in names or 'mcmod.info' not in names or len(mixins) < 50 or nested:
               print('::error::The built jar is not a loadable client.')
               sys.exit(1)
           PY

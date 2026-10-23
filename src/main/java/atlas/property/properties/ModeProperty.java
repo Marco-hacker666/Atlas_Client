@@ -65,14 +65,22 @@ public class ModeProperty extends Property<Integer> {
         return array;
     }
 
-    @Override
-    public String getValuePrompt() {
+    /**
+     * The names the menus offer, in visibleIndices' order. The Atlas menu used
+     * to get them by splitting getValuePrompt on commas (2026-10-23).
+     */
+    public String[] visibleModes() {
         int[] visible = this.visibleIndices();
         String[] names = new String[visible.length];
         for (int i = 0; i < visible.length; i++) {
             names[i] = this.modes[visible[i]];
         }
-        return String.join(", ", names);
+        return names;
+    }
+
+    @Override
+    public String getValuePrompt() {
+        return String.join(", ", visibleModes());
     }
 
     /** Picks the {@code index}-th entry of the menu (getValuePrompt's order). */

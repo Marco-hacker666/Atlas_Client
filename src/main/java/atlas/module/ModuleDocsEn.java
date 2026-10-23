@@ -86,7 +86,12 @@ final class ModuleDocsEn {
         help("BlockHit", "full-ping-aware", "Full Smart: raise earlier by your ping, so it is up on the server in time.");
         help("BlockHit", "full-hold", "Full Smart: the most ticks one raise lasts; down as soon as the hit lands.");
         help("BlockHit", "full-guard", "Full Smart: before a fight starts, short raises while an enemy in range faces you.");
-        help("BlockHit", "full-air", "Full Smart: keep it up in the air (blocking barely slows you there, the speed is momentum).");
+        help("FakeLag", "ping-budget", "The most your ping and FakeLag's delay may add up to (ms). Each hold is cut to "
+                + "this minus your ping; with under 40 ms left it does not hold. 0 turns it off.");
+        help("Velocity", "jitter", "Each reduced hit keeps its percentage give or take 3, so the result is never exactly "
+                + "the set share. A setting of 100 stays a full hit. Servers that predict knockback (Grim) still see "
+                + "any reduction.");
+        help("BlockHit", "full-air","Full Smart: keep it up in the air (blocking barely slows you there, the speed is momentum).");
         help("BlockHit", "full-log", "Full: write fullblock-*.txt (needs Logs): why it went up or down, whether each hit taken was blocked, and the share of time the sword was up.");
         help("BlockHit", "lag-ticks", "Most ticks the packets are held; then they all go, in order.");
         help("BlockHit", "lag-flush-on-attack", "An attack lets the held packets go first, so the hit is not delayed.");

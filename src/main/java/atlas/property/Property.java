@@ -330,6 +330,11 @@ public abstract class Property<T> {
         return this.base;
     }
 
+    /** The value the setting was declared with: what the menu's Reset puts back (2026-10-23). */
+    public T getDefault() {
+        return this.type;
+    }
+
     /** What write() saves: always the base, never an override. */
     protected T getPersistedValue() {
         return this.base;

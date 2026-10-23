@@ -460,6 +460,15 @@ public class Clutch extends Module {
     private Vec3 lastPosition;
     /** Where the player last stood: what a catch steers back toward and looks back at. */
     private Vec3 lastGround;
+    /*
+     * Owner, 2026-10-23: with keep-y on, a jump straight up -- no keys, no
+     * speed -- may still be built under ("I just jump up, it places for me").
+     * keep-y is there for jumps along a bridge and falls off an edge, where a
+     * block above the layer stood on lifts the player a block every jump
+     * (2026-10-03). Set when leaving the ground, cleared by speed in the air.
+     */
+    private boolean plainJump;
+    private boolean wasOnGround;
     /** This tick: whether movement is steered, and toward which world yaw. */
     private boolean steering;
     private float steerYaw;
@@ -1675,7 +1684,7 @@ public class Clutch extends Module {
                 }
             }
             if (!cells.isEmpty()) {
-                levels.add(cells);
+                levels.add(landingCellOnly(cells));
             }
         }
         return levels;
@@ -1686,8 +1695,76 @@ public class Clutch extends Module {
      * before this fall. No limit when keep-y is off or nothing was stood on.
      */
     private int keepYTop() {
-        return this.keepY.getValue() && this.lastGround != null
+        return this.keepY.getValue() && this.lastGround != null && !this.plainJump
                 ? MathHelper.floor_double(this.lastGround.yCoord - 1.0E-3) : Integer.MAX_VALUE;
+    }
+
+    /** Ticks before the feet reach a level that leave time to build to one landing cell rather than any. */
+    static final int ONE_CELL_TICKS = 3;
+
+    /**
+     * One landing cell where there is time for it (owner, 2026-10-23: "the
+     * least blocks, a zigzag on a diagonal"). A diagonal fall crosses two to
+     * four columns per level and every one was a catch cell, so one catch
+     * took this column and the next that one, and chains came in from behind
+     * (12:05 log: 84 2x2 squares in 305 blocks). Vape builds to the cell under
+     * the landing and joins it to the blocks it has. Here: the column under
+     * the middle of the box when the feet cross the level, kept alone when
+     * that is still at least ONE_CELL_TICKS away; nearer than that, any cell
+     * that catches is taken, as before.
+     */
+    private List<BlockPos> landingCellOnly(List<BlockPos> cells) {
+        for (BlockPos cell : cells) {
+            int crossing = catchTick(this.path, this.pathStart, cell, PLAN_TICKS);
+            if (crossing < 0 || this.path.isEmpty()) {
+                continue;
+            }
+            AxisAlignedBB box = this.path.get(Math.min(crossing, this.path.size() - 1));
+            if (isUnderMiddle(box, cell)) {
+                return crossing >= ONE_CELL_TICKS ? Collections.singletonList(cell) : cells;
+            }
+        }
+        return cells;
+    }
+
+    /** Whether the cell's column is the one under the middle of the box. */
+    static boolean isUnderMiddle(AxisAlignedBB box, BlockPos cell) {
+        return MathHelper.floor_double((box.minX + box.maxX) / 2.0) == cell.getX()
+                && MathHelper.floor_double((box.minZ + box.maxZ) / 2.0) == cell.getZ();
+    }
+
+    /** A jump's first tick in the air has motionY about 0.33; walking off an edge has none. */
+    static final double PLAIN_JUMP_RISE = 0.3;
+    /** Horizontal speed a jump straight up has none of: a sprint jump adds 0.2, walking 0.1. */
+    static final double PLAIN_JUMP_SPEED = 0.08;
+    /** Speed picked up in the air that makes it a jump somewhere after all. */
+    static final double PLAIN_JUMP_LOST = 0.15;
+
+    /** Whether leaving the ground with this motion, keys held or not, is a jump straight up. */
+    static boolean isPlainJump(double motionY, double motionX, double motionZ, boolean keys) {
+        return motionY > PLAIN_JUMP_RISE && !keys && Math.hypot(motionX, motionZ) < PLAIN_JUMP_SPEED;
+    }
+
+    /**
+     * Whether the box rests on one of the cells: any of them directly under
+     * its bottom face. A diagonal fall crosses two to four columns at once,
+     * and each counts as a catch cell; once a block this catch placed holds
+     * the landing, the others are extra blocks (owner, 2026-10-23: a diagonal
+     * catch filled the whole 2x2 under the feet).
+     */
+    static boolean restsOn(AxisAlignedBB box, Set<BlockPos> cells) {
+        if (box == null || cells.isEmpty()) {
+            return false;
+        }
+        int y = MathHelper.floor_double(box.minY - 1.0E-3);
+        for (int x = MathHelper.floor_double(box.minX); x <= MathHelper.floor_double(box.maxX - 1.0E-7); x++) {
+            for (int z = MathHelper.floor_double(box.minZ); z <= MathHelper.floor_double(box.maxZ - 1.0E-7); z++) {
+                if (cells.contains(new BlockPos(x, y, z))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -2012,6 +2089,16 @@ public class Clutch extends Module {
         drainRefusals();
         if (mc.thePlayer.onGround) {
             this.lastGround = new Vec3(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ);
+            this.plainJump = false;
+            this.wasOnGround = true;
+        } else {
+            if (this.wasOnGround) {
+                this.plainJump = isPlainJump(mc.thePlayer.motionY, mc.thePlayer.motionX, mc.thePlayer.motionZ,
+                        MoveUtil.isForwardPressed());
+            } else if (Math.hypot(mc.thePlayer.motionX, mc.thePlayer.motionZ) > PLAIN_JUMP_LOST) {
+                this.plainJump = false;
+            }
+            this.wasOnGround = false;
         }
 
         /* The click is made at the end of this PRE, after this tick's turn
@@ -2169,6 +2256,18 @@ public class Clutch extends Module {
             /* Steering alone puts the player back on something: no block needed. */
             trace(state() + String.format(" | steering lands in %dt, %.1f fall", this.landingTick, this.predictedFall)
                     + steerText());
+            holdRotation(event);
+            return;
+        }
+        if (extra == null && this.landingTick >= 0 && this.landingTick < this.path.size()
+                && this.predictedFall <= this.safeDrop.getValue()
+                && restsOn(this.path.get(this.landingTick), this.placed)) {
+            /* Caught: the fall now lands on a block this catch put down. The
+               columns beside it are still crossed by the feet, and placing
+               there too is what filled a 2x2 on diagonal falls. Vape plans
+               the landing cell once and stops at it. */
+            trace(state() + String.format(" | caught: lands on a placed block in %dt, %.1f fall",
+                    this.landingTick, this.predictedFall));
             holdRotation(event);
             return;
         }

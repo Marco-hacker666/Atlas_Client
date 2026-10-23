@@ -85,13 +85,39 @@ public class Velocity extends Module {
     private boolean oldGrimHolding = false;
     private boolean oldGrimAttacked = false;
 
+    /** The share of the knockback kept for a percentage setting, varied when jitter is on. */
+    private double share(int percent) {
+        return this.jitter.getValue() ? jittered(percent, this.jitterRandom.nextDouble()) : percent / 100.0;
+    }
+
+    /**
+     * A percentage as a share, moved by up to +-0.03 for {@code random} in
+     * [0, 1) and kept in [0, 1]; 100 and above are left whole.
+     */
+    static double jittered(int percent, double random) {
+        if (percent >= 100) {
+            return percent / 100.0;
+        }
+        double share = percent / 100.0 + (random - 0.5) * 0.06;
+        return Math.max(0.0, Math.min(1.0, share));
+    }
+
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"Vanilla", "Jump", "Hypixel", "Slap_Attack", "Intave", "GrimAC", "Matrix", "PolarJump", "Legit", "Delay", "Tick", "Zip", "Karhu", "MatrixReverse", "MatrixFull", "Intave14", "XZSwitch", "OldGrim", "Vulcan", "BlocksMC", "GrimC03", "IntaveTimer"});
 
     public final PercentProperty chance = new PercentProperty("chance", 100, () -> mode.getValue() <= 1);
-    public final PercentProperty horizontal = new PercentProperty("horizontal", 0, () -> mode.getValue() <= 1);
-    public final PercentProperty vertical = new PercentProperty("vertical", 100, () -> mode.getValue() <= 1);
-    public final PercentProperty explosionHorizontal = new PercentProperty("explosions-horizontal", 100, () -> mode.getValue() <= 1);
-    public final PercentProperty explosionVertical = new PercentProperty("explosions-vertical", 100, () -> mode.getValue() <= 1);
+    public final PercentProperty horizontal = new PercentProperty("horizontal", 0, () -> mode.getValue() == 0);
+    public final PercentProperty vertical = new PercentProperty("vertical", 100, () -> mode.getValue() == 0);
+    public final PercentProperty explosionHorizontal = new PercentProperty("explosions-horizontal", 100, () -> mode.getValue() == 0);
+    public final PercentProperty explosionVertical = new PercentProperty("explosions-vertical", 100, () -> mode.getValue() == 0);
+    /*
+     * 2026-10-23 (owner): each reduced hit takes its percentage +-3, so the
+     * result is never exactly the set fraction (an exact 0 or 40%). Only a
+     * reduction is varied: a setting of 100 stays a full hit. A check that
+     * predicts the knockback (Grim) flags any reduction, varied or not; this
+     * only changes the ratio a statistical check would see.
+     */
+    public final BooleanProperty jitter = new BooleanProperty("jitter", false, () -> mode.getValue() == 0);
+    private final java.util.Random jitterRandom = new java.util.Random();
 
     public final BooleanProperty reduce = new BooleanProperty("reduce", true, () -> mode.getValue() == 2);
     public final IntProperty attackTimes = new IntProperty("attack-times", 1, 1, 5, () -> mode.getValue() == 2 && reduce.getValue());
@@ -223,15 +249,18 @@ public class Velocity extends Module {
             if (this.pendingExplosion) {
                 if (this.mode.getValue() <= 1) {
                     this.pendingExplosion = false;
-                    if (this.explosionHorizontal.getValue() > 0) {
-                        event.setX(event.getX() * (double) this.explosionHorizontal.getValue() / 100.0);
-                        event.setZ(event.getZ() * (double) this.explosionHorizontal.getValue() / 100.0);
+                    boolean keyOnly = this.mode.getValue() == 1;
+                    double h = keyOnly ? 1.0 : share(this.explosionHorizontal.getValue());
+                    double v = keyOnly ? 1.0 : share(this.explosionVertical.getValue());
+                    if (h > 0.0) {
+                        event.setX(event.getX() * h);
+                        event.setZ(event.getZ() * h);
                     } else {
                         event.setX(mc.thePlayer.motionX);
                         event.setZ(mc.thePlayer.motionZ);
                     }
-                    if (this.explosionVertical.getValue() > 0) {
-                        event.setY(event.getY() * (double) this.explosionVertical.getValue() / 100.0);
+                    if (v > 0.0) {
+                        event.setY(event.getY() * v);
                     } else {
                         event.setY(mc.thePlayer.motionY);
                     }
@@ -244,15 +273,21 @@ public class Velocity extends Module {
                             this.jumpFlag = event.getY() > 0.0;
                         }
 
-                        if (this.horizontal.getValue() > 0) {
-                            event.setX(event.getX() * (double) this.horizontal.getValue() / 100.0);
-                            event.setZ(event.getZ() * (double) this.horizontal.getValue() / 100.0);
+                        /* Jump (2026-10-23, as Slinky's): the knockback is left whole and only
+                           the jump key is pressed (onLivingUpdate), so every motion the server
+                           sees is one vanilla physics gives a jump. */
+                        boolean keyOnly = this.mode.getValue() == 1;
+                        double h = keyOnly ? 1.0 : share(this.horizontal.getValue());
+                        double v = keyOnly ? 1.0 : share(this.vertical.getValue());
+                        if (h > 0.0) {
+                            event.setX(event.getX() * h);
+                            event.setZ(event.getZ() * h);
                         } else {
                             event.setX(mc.thePlayer.motionX);
                             event.setZ(mc.thePlayer.motionZ);
                         }
-                        if (this.vertical.getValue() > 0) {
-                            event.setY(event.getY() * (double) this.vertical.getValue() / 100.0);
+                        if (v > 0.0) {
+                            event.setY(event.getY() * v);
                         } else {
                             event.setY(mc.thePlayer.motionY);
                         }

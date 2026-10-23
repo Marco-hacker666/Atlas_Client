@@ -135,25 +135,7 @@ public class Config {
                 file.getParentFile().mkdirs();
             }
 
-            JsonObject object = new JsonObject();
-            for (Module module : Atlas.moduleManager.modules.values()) {
-                JsonObject moduleObject = new JsonObject();
-                moduleObject.addProperty("toggled", module.isEnabled());
-                moduleObject.addProperty("key", module.getKey());
-                moduleObject.addProperty("hidden", module.isHidden());
-
-                ArrayList<Property<?>> list = Atlas.propertyManager.properties.get(module.getClass());
-                if (list != null) {
-                    for (Property<?> property : list) {
-                        try {
-                            property.write(moduleObject);
-                        } catch (Exception e) {
-                            ((IAccessorMinecraft) mc).getLogger().warn(String.format("Failed to save property %s for module %s", property.getName(), module.getName()));
-                        }
-                    }
-                }
-                object.add(module.getName(), moduleObject);
-            }
+            JsonObject object = snapshot();
 
             PrintWriter printWriter = new PrintWriter(new FileWriter(file));
             printWriter.println(gson.toJson(object));
@@ -163,5 +145,73 @@ public class Config {
             ((IAccessorMinecraft) mc).getLogger().error("Error saving config: " + e.getMessage());
             ChatUtil.sendFormatted(String.format("%sConfig couldn't be saved (&c&o%s&r)&r", Atlas.clientName, file.getName()));
         }
+    }
+
+    /**
+     * Whether saving now would write something different from what the
+     * profile's file holds (2026-10-23, the menu's "unsaved changes"). Compared
+     * value by value, as text, over the entries both have: a setting the file
+     * does not mention was never saved and loads as its default, and numbers
+     * read back from a file print as they were written. False when the file
+     * cannot be read: nothing to warn about then.
+     */
+    public static boolean differsFromFile(String name) {
+        File target = new File("./config/Atlas/", String.format("%s.json", "!".equals(name) ? "default" : name));
+        if (!target.exists()) {
+            return false;
+        }
+        JsonObject saved;
+        try (Reader reader = new BufferedReader(new FileReader(target))) {
+            JsonElement parsed = new JsonParser().parse(reader);
+            if (parsed == null || !parsed.isJsonObject()) {
+                return false;
+            }
+            saved = parsed.getAsJsonObject();
+        } catch (Exception e) {
+            return false;
+        }
+        return differs(snapshot(), saved);
+    }
+
+    /** {@code now} differs from {@code saved} in a value both have (one level of modules, one of settings). */
+    public static boolean differs(JsonObject now, JsonObject saved) {
+        for (java.util.Map.Entry<String, JsonElement> module : now.entrySet()) {
+            JsonElement before = saved.get(module.getKey());
+            if (before == null || !before.isJsonObject() || !module.getValue().isJsonObject()) {
+                continue;
+            }
+            JsonObject old = before.getAsJsonObject();
+            for (java.util.Map.Entry<String, JsonElement> value : module.getValue().getAsJsonObject().entrySet()) {
+                JsonElement was = old.get(value.getKey());
+                if (was != null && !was.toString().equals(value.getValue().toString())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Everything save() writes, without writing it. */
+    public static JsonObject snapshot() {
+        JsonObject object = new JsonObject();
+        for (Module module : Atlas.moduleManager.modules.values()) {
+            JsonObject moduleObject = new JsonObject();
+            moduleObject.addProperty("toggled", module.isEnabled());
+            moduleObject.addProperty("key", module.getKey());
+            moduleObject.addProperty("hidden", module.isHidden());
+
+            ArrayList<Property<?>> list = Atlas.propertyManager.properties.get(module.getClass());
+            if (list != null) {
+                for (Property<?> property : list) {
+                    try {
+                        property.write(moduleObject);
+                    } catch (Exception e) {
+                        ((IAccessorMinecraft) mc).getLogger().warn(String.format("Failed to save property %s for module %s", property.getName(), module.getName()));
+                    }
+                }
+            }
+            object.add(module.getName(), moduleObject);
+        }
+        return object;
     }
 }

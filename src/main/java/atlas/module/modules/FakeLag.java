@@ -13,6 +13,7 @@ import atlas.property.properties.ModeProperty;
 import atlas.management.Arbiter;
 import atlas.util.ActionLedger;
 import atlas.util.ChatUtil;
+import atlas.util.Ping;
 import atlas.util.PacketUtil;
 import atlas.util.RotationUtil;
 import atlas.util.TeamUtil;
@@ -190,6 +191,18 @@ public class FakeLag extends Module {
      */
     public final IntProperty delay = new IntProperty("delay", 150, 0, 1000);
 
+    /*
+     * 2026-10-23 (owner: "no flags"): what the server sees is the real ping
+     * plus this module's delay, and Pika's mitigation starts once that total
+     * is past about a quarter of a second. Each hold waits at most this many
+     * milliseconds minus the ping (Ping.own()), so the total stays under it;
+     * when less than MIN_WORTH_HOLDING would be left, LIQUID does not hold at
+     * all ("ping", let out gradually). 0 turns it off; with no ping reading
+     * the delay is used as set.
+     */
+    public final IntProperty pingBudget = new IntProperty("ping-budget", 250, 0, 600);
+    static final int MIN_WORTH_HOLDING = 40;
+
     /** Extra milliseconds REPEL may hold an attack beyond delay and delay-random. */
     public final IntProperty transmissionOffset = new IntProperty("transmission-offset",
             0, 0, 400, () -> this.mode.getValue() == REPEL);
@@ -334,9 +347,23 @@ public class FakeLag extends Module {
         this.rolledAt = System.currentTimeMillis();
     }
 
-    /** What a held packet waits: the delay drawn for this hold. */
+    /** What a held packet waits: the delay drawn for this hold, cut to the ping budget. */
     private int holdDelay() {
-        return this.rolledDelay;
+        return budgetedDelay(this.rolledDelay, Ping.own(), this.pingBudget.getValue());
+    }
+
+    /** The delay left once the ping is taken out of the budget; unchanged when off or with no ping. */
+    static int budgetedDelay(int rolled, int ping, int budget) {
+        if (budget <= 0 || ping < 0) {
+            return rolled;
+        }
+        return Math.max(0, Math.min(rolled, budget - ping));
+    }
+
+    /** Whether the budget, not the delay setting itself, leaves too little to be worth holding. */
+    static boolean pingRulesOut(int rolled, int ping, int budget) {
+        int left = budgetedDelay(rolled, ping, budget);
+        return left < rolled && left < MIN_WORTH_HOLDING;
     }
 
     /** Outgoing packets currently held, for whatever is reporting on the connection. */
@@ -1080,7 +1107,7 @@ public class FakeLag extends Module {
     private static boolean easesOut(String reason) {
         return "retreating".equals(reason) || "not-moving".equals(reason) || "no-target".equals(reason)
                 || "screen".equals(reason) || "using-item".equals(reason) || "water".equals(reason)
-                || "blocks".equals(reason) || "no-weapon".equals(reason);
+                || "blocks".equals(reason) || "no-weapon".equals(reason) || "ping".equals(reason);
     }
 
     /**
@@ -1142,8 +1169,14 @@ public class FakeLag extends Module {
         if (mc.currentScreen != null) {
             return "screen";
         }
-        if (mc.thePlayer.isUsingItem()) {
+        if (mc.thePlayer.isUsingItem() || mc.gameSettings.keyBindUseItem.isKeyDown() || auraBlocking()) {
+            /* 2026-10-23: an aura's own block is a use packet with no item in
+               use on this client, and the use key held down is a block about
+               to start; both are let out the same gradual way. */
             return "using-item";
+        }
+        if (pingRulesOut(this.rolledDelay, Ping.own(), this.pingBudget.getValue())) {
+            return "ping";
         }
         if (mc.thePlayer.isInWater()) {
             return "water";
@@ -1166,6 +1199,16 @@ public class FakeLag extends Module {
             return "not-moving";
         }
         return null;
+    }
+
+    /** The sword is up because KillAura or KillAura2 raised it. */
+    private static boolean auraBlocking() {
+        KillAura aura = (KillAura) atlas.Atlas.moduleManager.getModule(KillAura.class);
+        if (aura != null && aura.isEnabled() && aura.isAuraBlocking()) {
+            return true;
+        }
+        KillAura2 aura2 = (KillAura2) atlas.Atlas.moduleManager.getModule(KillAura2.class);
+        return aura2 != null && aura2.isBlocking();
     }
 
     /** Every release goes through here, in the style the setting chooses. */

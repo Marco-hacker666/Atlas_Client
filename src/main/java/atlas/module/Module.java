@@ -115,6 +115,10 @@ public abstract class Module {
                 }
             } catch (Exception ignored) {
             }
+            /* What it now works against, said once (2026-10-23, Conflicts). */
+            if (this.enabled) {
+                atlas.management.Conflicts.warnOnEnable(this);
+            }
 
             return true;
         } else {

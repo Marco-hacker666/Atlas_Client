@@ -1127,6 +1127,7 @@ public class FlagDetector extends Module {
     public void onSession(atlas.events.SessionEvent event) {
         if (event.getType() == atlas.events.SessionEvent.Type.START) {
             this.implicated.clear();
+            atlas.management.ModuleHealth.resetSession();
             /* Damage and whether health is shown are the server's. */
             this.damageWatch.reset();
             this.blockTrace.reset();
@@ -1405,6 +1406,18 @@ public class FlagDetector extends Module {
         String culprit = attribution.culprit();
         if (culprit != null) {
             implicate(culprit);
+        }
+        /* The menu's health marks (2026-10-23, ModuleHealth): the same
+           verdict, counted apart from `implicated`, which FlagResponder trims. */
+        long now = System.currentTimeMillis();
+        if (culprit != null) {
+            atlas.management.ModuleHealth.named(culprit, now);
+        } else if (attribution.verdict == Attribution.Verdict.MULTIPLE_CANDIDATES) {
+            for (Attribution.Candidate candidate : attribution.candidates) {
+                if (candidate.confidence >= 0.2) {
+                    atlas.management.ModuleHealth.involved(candidate.module, now);
+                }
+            }
         }
     }
 

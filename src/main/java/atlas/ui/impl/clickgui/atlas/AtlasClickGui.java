@@ -1,6 +1,8 @@
 package atlas.ui.impl.clickgui.atlas;
 
 import atlas.Atlas;
+import atlas.management.ModuleHealth;
+import atlas.management.PacketHolds;
 import atlas.module.Category;
 import atlas.module.Module;
 import atlas.module.ModuleCategories;
@@ -146,8 +148,19 @@ public class AtlasClickGui extends GuiScreen {
     private Module selected;
     /** The name of the module to reselect, held until the list is built. */
     private String pendingSelection = "";
-    private String search = "";
+    private final TextInput searchInput = new TextInput(128, false);
     private boolean searchFocused;
+    /* What the search looks through (SearchIndex, 2026-10-23: modules and
+       settings, names and help), built on open; the last query's results are
+       kept until the query or the page changes, so the three callers a frame
+       share one search. */
+    private SearchIndex index = new SearchIndex();
+    private String searchedFor;
+    private String searchedOn;
+    private SearchIndex.Results searchResults = SearchIndex.NONE;
+    private static final int MAX_SETTING_RESULTS = 60;
+    /** How many modules the client had when the index was built: it is built again only if that changes. */
+    private int indexedModules = -1;
 
     private int listScroll;
     private int listMaxScroll;
@@ -192,6 +205,42 @@ public class AtlasClickGui extends GuiScreen {
     /** Height of an open picker, below the setting's own row. */
     private static final int PICKER_HEIGHT = 74;
 
+    /* 2026-10-23 (GUI redesign M2): a setting's info row -- what it does in
+       full, its default and range, Reset -- opened by the (i) after its label,
+       one at a time like the picker. The description's More, and the
+       module-wide Reset, which asks first (a Dialog since M7). */
+    private Property<?> infoOpen;
+    private Module descriptionOpen;
+    /** The width of the settings card being drawn, which an info row wraps its text to. */
+    private float cardWidth = 200.0F;
+    private static final int INFO_LINE = 11;
+    private static final float INFO_ICON = 9.0F;
+    private static final int DESCRIPTION_MAX_LINES = 14;
+
+    /* 2026-10-23 (GUI redesign M4): two rows above the categories on the
+       Modules and Legit pages, lists made on the spot from this page's
+       modules -- everything on, and everything that needs a look. */
+    private static final String ENABLED = "Enabled";
+    private static final String ATTENTION = "Attention";
+
+    /**
+     * One module's health marks: what FlagDetector named it for this session
+     * (ModuleHealth), what it holds back right now (PacketHolds), and its
+     * settings at a risky value (RiskRules). Read four times a second.
+     */
+    private static final class Health {
+        ModuleHealth.Report report = ModuleHealth.Report.NONE;
+        int held;
+        String heldWay = "";
+        final List<Property<?>> risky = new ArrayList<Property<?>>();
+        /** Conflicts it is part of and the player has not dismissed (Conflicts, M5). */
+        final List<atlas.management.Conflicts.Conflict> conflicts = new ArrayList<atlas.management.Conflicts.Conflict>();
+    }
+
+    private final Map<Module, Health> health = new HashMap<Module, Health>();
+    private long healthAt;
+    private static final long HEALTH_MS = 250L;
+
     /* Dragging a slider. The track's own rectangle is taken from the registry
        when the drag starts, so the value follows the pointer against the bar
        that is on screen rather than against a second guess at where it is. */
@@ -212,7 +261,9 @@ public class AtlasClickGui extends GuiScreen {
      * most of the latency settings in this client want an exact number.
      */
     private Property<?> editing;
-    private String editBuffer = "";
+    private final TextInput editInput = new TextInput(0, false);
+    /** Enter was pressed on something that is not a value for the setting: the field stays open, edged red. */
+    private boolean editError;
 
     /** The mode list currently expanded, and where to draw it. */
     private ModeProperty dropdown;
@@ -230,19 +281,53 @@ public class AtlasClickGui extends GuiScreen {
     /** What the pointer is over, shown along the bottom. */
     private String hint = "";
 
+    /* What a click did, or why it could not, shown in the menu (2026-10-23):
+       these went to chat, half hidden behind the menu. closing is set while
+       the menu closes, when a toast would never be seen and chat is used. */
+    private final Toasts toasts = new Toasts();
+    private boolean closing;
+
+    /**
+     * A question before something that cannot be taken back (2026-10-23, M7):
+     * loading over unsaved changes, deleting a profile, resetting a module.
+     * It takes every click and key while open; Enter is its first button,
+     * Escape closes it.
+     */
+    private static final class Dialog {
+        final String title;
+        final String body;
+        final String[] labels;
+        /** Button styles as drawButton has them: 0 accent, 1 plain, 2 destructive. */
+        final int[] styles;
+        final Runnable[] actions;
+
+        Dialog(String title, String body, String[] labels, int[] styles, Runnable[] actions) {
+            this.title = title;
+            this.body = body;
+            this.labels = labels;
+            this.styles = styles;
+            this.actions = actions;
+        }
+    }
+
+    private Dialog dialog;
+    /* Whether the profile in use has changes its file does not (Config.differsFromFile), read once a second. */
+    private boolean unsaved;
+    private long unsavedAt;
+    /** Set by drawField: where the caret is in what it drew. */
+    private float fieldCaretX;
+
     /* The profiles view: a column of its own in the sidebar, under the
        categories, replacing the module list and the detail pane while open. */
     private boolean profilesView;
     /** The Appearance page, and which of its groups is open. */
     private boolean appearanceView;
+    /** The Servers page (2026-10-23, M6): which profile ServerProfiles loads on which server. */
+    private boolean serversView;
     private String appearanceGroup = "Colors";
     private String profileSelected;
-    private String profileName = "";
+    private final TextInput profileNameInput = new TextInput(32, false);
     private boolean profileNameFocused;
-    /** A delete waits for a second click on the same profile, within this long. */
-    private static final long CONFIRM_MS = 3000L;
-    private String confirmDelete;
-    private long confirmDeleteAt;
     private int profileScroll;
     private int profileMaxScroll;
     private List<AtlasProfiles.Info> profiles = new ArrayList<AtlasProfiles.Info>();
@@ -253,8 +338,8 @@ public class AtlasClickGui extends GuiScreen {
     private long lastFrame;
     private float openedFor;
     private final Spring open = new Spring(0.92F, 260.0F, 17.0F);
-    private final Map<Object, Float> lit = new HashMap<Object, Float>();
-    private final Map<String, Spring> springs = new HashMap<String, Spring>();
+    /** Hits, fades, springs and pulses (UiContext); delta is copied into it every frame. */
+    private final UiContext ui = new UiContext();
     private float delta = 0.016F;
 
     /* The opening animation scales the window about its centre. Everything
@@ -287,60 +372,14 @@ public class AtlasClickGui extends GuiScreen {
 
     private final List<Lens> lenses = new ArrayList<Lens>();
 
-    // ---- hit registry -------------------------------------------------
-
-    /**
-     * One clickable rectangle, recorded as it is drawn.
-     *
-     * The kind says what a click there means and the payload says what it
-     * means it to. Everything the pointer can act on goes through here,
-     * including the window's own frame, so there is exactly one description of
-     * where each control is.
-     */
-    private static final class Hit {
-        final String kind;
-        final Object payload;
-        final float x;
-        final float y;
-        final float x2;
-        final float y2;
-
-        Hit(String kind, Object payload, float x, float y, float x2, float y2) {
-            this.kind = kind;
-            this.payload = payload;
-            this.x = x;
-            this.y = y;
-            this.x2 = x2;
-            this.y2 = y2;
-        }
-
-        boolean contains(float mouseX, float mouseY) {
-            return mouseX >= this.x && mouseX <= this.x2
-                    && mouseY >= this.y && mouseY <= this.y2;
-        }
-    }
-
-    private final List<Hit> hits = new ArrayList<Hit>();
+    // ---- hit registry and motion (UiContext) ------------------------------
 
     private void hit(String kind, Object payload, float x, float y, float x2, float y2) {
-        this.hits.add(new Hit(kind, payload, x, y, x2, y2));
+        this.ui.hit(kind, payload, x, y, x2, y2);
     }
 
-    /**
-     * The topmost thing under the pointer, in layout coordinates.
-     *
-     * Searched newest first, because later drawing means nearer the viewer --
-     * an open dropdown covers the rows it is drawn over, and the click has to
-     * agree with the eye about that.
-     */
-    private Hit hitAt(float mouseX, float mouseY) {
-        for (int i = this.hits.size() - 1; i >= 0; i--) {
-            Hit candidate = this.hits.get(i);
-            if (candidate.contains(mouseX, mouseY)) {
-                return candidate;
-            }
-        }
-        return null;
+    private UiContext.Hit hitAt(float mouseX, float mouseY) {
+        return this.ui.hitAt(mouseX, mouseY);
     }
 
     /** Screen to layout, undoing the opening scale. */
@@ -352,71 +391,28 @@ public class AtlasClickGui extends GuiScreen {
         return this.pivotY + (screenY - this.slideY - this.pivotY) / this.viewScale;
     }
 
-    /**
-     * Moves a stored value a proportion of the way to its target each frame.
-     * Exponential approach: frame-rate independent by construction, fast at
-     * first and easing in at the end. Used for fades; anything with a position
-     * uses a spring instead.
-     */
     private float toward(Object key, float target, float rate) {
-        Float held = this.lit.get(key);
-        float value = held == null ? target : held;
-        value += (target - value) * (1.0F - (float) Math.exp(-rate * this.delta));
-        if (Math.abs(target - value) < 0.0015F) {
-            value = target;
-        }
-        this.lit.put(key, value);
-        return value;
+        return this.ui.toward(key, target, rate);
     }
 
     private float ease(Object key, boolean towards, float rate) {
-        return toward(key, towards ? 1.0F : 0.0F, rate);
+        return this.ui.ease(key, towards, rate);
     }
 
-    /** A spring, created at its target the first time it is asked for. */
     private Spring spring(String key, float target, float stiffness, float damping) {
-        Spring s = this.springs.get(key);
-        if (s == null) {
-            s = new Spring(target, stiffness, damping);
-            this.springs.put(key, s);
-        }
-        s.target = target;
-        if (!this.theme.animations.getValue()) {
-            s.snap(target);
-        } else {
-            s.step(this.delta * this.springSpeed);
-        }
-        return s;
+        return this.ui.spring(key, target, stiffness, damping);
     }
 
-    /** A scroll offset, eased unless the theme turns smooth scrolling off. */
     private float scrollEase(Object key, float target) {
-        if (!this.theme.smoothScroll.getValue()) {
-            this.lit.put(key, target);
-            return target;
-        }
-        return toward(key, target, 16.0F);
+        return this.ui.scrollEase(key, target);
     }
-
-    /** Records the instant something was acted on, for one-shot animations. */
-    private final Map<Object, Long> pulses = new HashMap<Object, Long>();
 
     private void pulse(Object key) {
-        this.pulses.put(key, System.currentTimeMillis());
+        this.ui.pulse(key);
     }
 
-    /** 0 to 1 across the pulse's life, or -1 when it is over. */
     private float pulseAt(Object key, long millis) {
-        Long at = this.pulses.get(key);
-        if (at == null) {
-            return -1.0F;
-        }
-        float t = (System.currentTimeMillis() - at) / (float) millis;
-        if (t >= 1.0F) {
-            this.pulses.remove(key);
-            return -1.0F;
-        }
-        return t;
+        return this.ui.pulseAt(key, millis);
     }
 
     /** Slow at both ends, which is what makes a movement look intentional. */
@@ -460,14 +456,16 @@ public class AtlasClickGui extends GuiScreen {
         if (legit != null) {
             this.legitGroups.putAll(LegitGroups.group(legit));
         }
-        if ("Legit".equals(this.page) && !this.legitGroups.isEmpty()) {
+        if (isQuick(this.category)) {
+            /* Enabled and Attention are lists of the page, not categories. */
+        } else if ("Legit".equals(this.page) && !this.legitGroups.isEmpty()) {
             if (!this.legitGroups.containsKey(this.category)) {
                 this.category = this.legitGroups.keySet().iterator().next();
             }
         } else if (!this.categories.contains(this.category) || "Legit".equals(this.category)) {
             this.category = firstModuleCategory();
         }
-        if ("Client Settings".equals(this.page) && !this.profilesView && !this.appearanceView) {
+        if ("Client Settings".equals(this.page) && !this.profilesView && !this.appearanceView && !this.serversView) {
             this.profilesView = true;
         }
         if (!this.categories.isEmpty() && this.category.isEmpty()) {
@@ -498,6 +496,10 @@ public class AtlasClickGui extends GuiScreen {
 
     private List<String> sidebarCategories() {
         List<String> out = new ArrayList<String>();
+        if ("Legit".equals(this.page) || "Modules".equals(this.page)) {
+            out.add(ENABLED);
+            out.add(ATTENTION);
+        }
         if ("Legit".equals(this.page)) {
             out.addAll(this.legitGroups.keySet());
         } else if ("Modules".equals(this.page)) {
@@ -555,7 +557,8 @@ public class AtlasClickGui extends GuiScreen {
                 } else if ("view".equals(key)) {
                     this.profilesView = "profiles".equals(value);
                     this.appearanceView = "appearance".equals(value);
-                    if (this.profilesView || this.appearanceView) {
+                    this.serversView = "servers".equals(value);
+                    if (this.profilesView || this.appearanceView || this.serversView) {
                         this.page = "Client Settings";
                     }
                 } else if ("page".equals(key)) {
@@ -593,7 +596,8 @@ public class AtlasClickGui extends GuiScreen {
             writer.println("category=" + this.category);
             writer.println("selected=" + (this.selected == null ? "" : this.selected.getName()));
             writer.println("page=" + this.page);
-            writer.println("view=" + (this.profilesView ? "profiles" : this.appearanceView ? "appearance" : "modules"));
+            writer.println("view=" + (this.profilesView ? "profiles" : this.appearanceView ? "appearance"
+                    : this.serversView ? "servers" : "modules"));
             writer.flush();
         } catch (Exception ignored) {
             // Losing a window position is not worth an error on screen.
@@ -654,29 +658,17 @@ public class AtlasClickGui extends GuiScreen {
         if ("Client Settings".equals(this.page)) {
             return out;
         }
-        String needle = this.search.toLowerCase().trim();
+        String needle = search().toLowerCase().trim();
         if (!needle.isEmpty()) {
             /* Search spans every page: this page's matches first, then the other
-               page's, which the list draws as borrowed (see drawList). */
-            List<Module> elsewhere = new ArrayList<Module>();
-            for (List<Module> list : this.byCategory.values()) {
-                for (Module module : list) {
-                    if (module == null || !module.getName().toLowerCase().contains(needle)
-                            || out.contains(module) || elsewhere.contains(module)) {
-                        continue;
-                    }
-                    if (belongsOnPage(module)) {
-                        out.add(module);
-                    } else {
-                        elsewhere.add(module);
-                    }
-                }
+               page's, which the list draws as borrowed (see drawList). Modules
+               found by name come before those found by their description. */
+            for (SearchIndex.Entry entry : searchResults().modules) {
+                out.add((Module) entry.module);
             }
-            out.addAll(elsewhere);
             return out;
         }
-        List<Module> list = "Legit".equals(this.page) ? this.legitGroups.get(this.category)
-                : this.byCategory.get(this.category);
+        List<Module> list = modulesOf(this.category);
         if (list != null) {
             for (Module module : list) {
                 if (module != null) {
@@ -700,7 +692,7 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
         this.page = next;
-        this.search = "";
+        this.searchInput.clear();
         this.searchFocused = false;
         this.listScroll = 0;
         this.detailScroll = 0;
@@ -709,11 +701,13 @@ public class AtlasClickGui extends GuiScreen {
             this.category = this.legitGroups.isEmpty() ? "Legit" : this.legitGroups.keySet().iterator().next();
             this.profilesView = false;
             this.appearanceView = false;
+            this.serversView = false;
             List<Module> modules = visibleModules();
             this.selected = modules.isEmpty() ? null : modules.get(0);
         } else if ("Modules".equals(next)) {
             this.profilesView = false;
             this.appearanceView = false;
+            this.serversView = false;
             if ("Legit".equals(this.category) || this.legitGroups.containsKey(this.category)) {
                 this.category = firstModuleCategory();
             }
@@ -724,6 +718,7 @@ public class AtlasClickGui extends GuiScreen {
         } else {
             this.profilesView = true;
             this.appearanceView = false;
+            this.serversView = false;
             this.selected = null;
             this.profileScroll = 0;
         }
@@ -830,8 +825,9 @@ public class AtlasClickGui extends GuiScreen {
                 : Math.min(0.05F, (now - this.lastFrame) / 1.0E9F);
         this.lastFrame = now;
         this.openedFor += this.delta;
+        this.ui.delta = this.delta;
         this.hint = "";
-        this.hits.clear();
+        this.ui.beginFrame();
         this.lenses.clear();
         this.dropAnchored = false;
         AtlasInspector.beginFrame();
@@ -924,6 +920,9 @@ public class AtlasClickGui extends GuiScreen {
             if (this.profilesView) {
                 drawProfileList(sr, x + sidebar, bodyTop, width - sidebar - detail, bodyHeight, mx, my);
                 drawProfileDetail(sr, x + width - detail, bodyTop, detail, bodyHeight, mx, my);
+            } else if (this.serversView) {
+                drawServersList(x + sidebar, bodyTop, width - sidebar - detail, mx, my);
+                drawServersDetail(x + width - detail, bodyTop, detail, mx, my);
             } else if (this.appearanceView) {
                 drawAppearanceList(sr, x + sidebar, bodyTop, width - sidebar - detail, bodyHeight, mx, my);
                 drawAppearanceDetail(sr, x + width - detail, bodyTop, detail, bodyHeight, mx, my);
@@ -959,6 +958,9 @@ public class AtlasClickGui extends GuiScreen {
                 }
             }
 
+            /* Over the content, under an open list and the report dialog. */
+            drawToasts(x, y, width, height, mx, my);
+
             /* Last of all, and outside every scissor: an expanded mode list has
                to cover the rows below it, and a clipped dropdown is worse than
                none. */
@@ -974,6 +976,9 @@ public class AtlasClickGui extends GuiScreen {
             if (this.reportConfirm) {
                 drawReportConfirm(x, y, width, height, mx, my);
             }
+            if (this.dialog != null) {
+                drawDialog(x, y, width, height, mx, my);
+            }
         } finally {
             GL11.glPopMatrix();
             Liquid.setView(1.0F, 0.0F, 0.0F);
@@ -983,7 +988,7 @@ public class AtlasClickGui extends GuiScreen {
         }
 
         /* Outside the window, after it: TargetOrbit's live preview in the gap beside it. */
-        this.orbitPreview.draw(!this.profilesView && !this.appearanceView
+        this.orbitPreview.draw(!this.profilesView && !this.appearanceView && !this.serversView
                         && this.selected instanceof atlas.module.modules.TargetOrbit,
                 sr.getScaledWidth(), x, y, width, height, mouseX, mouseY, this.delta,
                 true, accent());
@@ -1056,13 +1061,13 @@ public class AtlasClickGui extends GuiScreen {
     /* 2026-10-08: the reason picked (an index of BugReport.REASONS, -1 none
        yet) and what the player typed about it. */
     private int reportReason = -1;
-    private String reportText = "";
     private static final int REPORT_TEXT_MAX = 500;
+    private final TextInput reportInput = new TextInput(REPORT_TEXT_MAX, true);
 
     private void openReport() {
         this.reportConfirm = true;
         this.reportReason = -1;
-        this.reportText = "";
+        this.reportInput.clear();
     }
 
     private boolean reportChinese() {
@@ -1079,38 +1084,8 @@ public class AtlasClickGui extends GuiScreen {
         if (Atlas.notificationManager != null) {
             Atlas.notificationManager.add("Sending bug report...", 2000L);
         }
-        atlas.util.BugReport.send(atlas.util.BugReport.REASONS[this.reportReason], this.reportText,
+        atlas.util.BugReport.send(atlas.util.BugReport.REASONS[this.reportReason], this.reportInput.text(),
                 atlas.command.commands.ReportCommand::announce);
-    }
-
-    /** Text cut into lines no wider than {@code width}; the last {@code max} lines if more. */
-    private static List<String> wrapReport(LiquidFont font, String text, float width, int max) {
-        List<String> lines = new ArrayList<String>();
-        StringBuilder current = new StringBuilder();
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '\n') {
-                lines.add(current.toString());
-                current.setLength(0);
-                continue;
-            }
-            current.append(c);
-            if (font.width(current.toString()) > width) {
-                String full = current.toString();
-                int cut = full.lastIndexOf(' ');
-                if (cut <= 0) {
-                    cut = full.length() - 1;
-                }
-                lines.add(full.substring(0, cut));
-                current.setLength(0);
-                current.append(full.substring(cut).replaceFirst("^ ", ""));
-            }
-        }
-        lines.add(current.toString());
-        while (lines.size() > max) {
-            lines.remove(0);
-        }
-        return lines;
     }
 
     /** An amber warning triangle with an exclamation mark, centred on (cx, cy). */
@@ -1190,21 +1165,34 @@ public class AtlasClickGui extends GuiScreen {
         LiquidFont body = font(8.5F, false);
         float caretX = fx + 9;
         float caretY = fy + 10;
-        if (this.reportText.isEmpty()) {
+        String typedText = this.reportInput.text();
+        if (typedText.isEmpty()) {
             body.draw(zh ? "例：用 Scaffold 搭橋時一直被 Grim Simulation 抓" : "e.g. Scaffold gets flagged by Grim Simulation when bridging",
                     fx + 9, fy + 10, FAINT);
         } else {
-            List<String> lines = wrapReport(body, this.reportText, fx2 - fx - 20, 4);
-            for (int i = 0; i < lines.size(); i++) {
-                float drawn = body.draw(lines.get(i), fx + 9, fy + 10 + i * 13.0F, TEXT);
-                caretX = fx + 9 + drawn;
-                caretY = fy + 10 + i * 13.0F;
+            if (this.reportInput.allSelected()) {
+                Liquid.rect(fx + 4, fy + 4, fx2 - 4, fy2 - 4, 8.0F, alpha(accent, 0.14F));
+            }
+            /* Four lines show: the four around the caret, which while typing
+               at the end are the last four, as before. */
+            List<int[]> lines = TextLayout.wrap(typedText, body::width, fx2 - fx - 20);
+            int caret = this.reportInput.caret();
+            int caretLine = TextLayout.lineOf(lines, caret);
+            int first = Math.max(0, Math.min(lines.size() - 4, caretLine));
+            for (int i = first; i < Math.min(lines.size(), first + 4); i++) {
+                int[] line = lines.get(i);
+                float lineY = fy + 10 + (i - first) * 13.0F;
+                body.draw(typedText.substring(line[0], line[1]), fx + 9, lineY, TEXT);
+                if (i == caretLine) {
+                    caretX = fx + 9 + body.width(typedText.substring(line[0], Math.max(line[0], Math.min(line[1], caret))));
+                    caretY = lineY;
+                }
             }
         }
-        if ((System.currentTimeMillis() / 500L) % 2L == 0L) {
+        if (AtlasStyle.caretOn()) {
             Liquid.rect(caretX + 1, caretY - 4.5F, caretX + 2, caretY + 4.5F, 0.0F, accent);
         }
-        font(7.0F, false).drawRight(this.reportText.length() + " / " + REPORT_TEXT_MAX, fx2, fy2 + 7.0F, FAINT);
+        font(7.0F, false).drawRight(typedText.length() + " / " + REPORT_TEXT_MAX, fx2, fy2 + 7.0F, FAINT);
 
         LiquidFont small = font(7.5F, false);
         small.drawCentred(zh ? "會上傳到 Discord #bug-reports：log 和設定檔（分成兩個檔案）"
@@ -1274,7 +1262,7 @@ public class AtlasClickGui extends GuiScreen {
             hit("search", null, sx, sy, sx2, sy2);
         }
         boolean hovered = searchable && mx >= sx && mx <= sx2 && my >= sy && my <= sy2;
-        float focus = ease("searchFocus", this.searchFocused || !this.search.isEmpty(), 12.0F);
+        float focus = ease("searchFocus", this.searchFocused || !this.searchInput.isEmpty(), 12.0F);
         float lift = ease("searchHover", hovered, 12.0F);
         if (searchable && focus > 0.01F) {
             Liquid.shadow(sx, sy, sx2, sy2, 11.0F, 7.0F, alpha(accent, 0.32F * focus), 0.0F);
@@ -1286,24 +1274,25 @@ public class AtlasClickGui extends GuiScreen {
                     ink(0x0D));
             icon("search", sx + 12, scy, focus > 0.5F ? TEXT : FAINT);
             LiquidFont body = font(9.0F, false);
-            if (this.search.isEmpty()) {
-                body.draw(this.searchFocused ? "" : "Search all modules", sx + 23, scy, FAINT);
+            float caret = sx + 22;
+            if (this.searchInput.isEmpty()) {
+                body.draw(this.searchFocused ? "" : body.trim("Search modules and settings", sx2 - sx - 34), sx + 23,
+                        scy, FAINT);
+                this.searchInput.drawnAt(sx + 23, 0, body::width);
             } else {
-                float typed = body.draw(body.trim(this.search, sx2 - sx - 70), sx + 23, scy, TEXT);
-                String results = visibleModules().size() + " found";
+                drawField(this.searchInput, body, layoutField(this.searchInput, body, sx2 - sx - 70, false),
+                        sx + 23, scy, TEXT, false);
+                caret = this.fieldCaretX;
+                String results = searchResults().size() + " found";
                 font(8.0F, false).drawRight(results, sx2 - 10, scy, FAINT);
-                if (this.searchFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                    Liquid.rect(sx + 24 + typed, scy - 4.5F, sx + 25 + typed, scy + 4.5F, 0.0F, accent);
-                }
             }
-            if (this.searchFocused && this.search.isEmpty()
-                    && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                Liquid.rect(sx + 23, scy - 4.5F, sx + 24, scy + 4.5F, 0.0F, accent);
+            if (this.searchFocused && AtlasStyle.caretOn()) {
+                Liquid.rect(caret + 1, scy - 4.5F, caret + 2, scy + 4.5F, 0.0F, accent);
             }
         }
 
         if (hovered) {
-            this.hint = "Search every page  ·  results from the other page are tagged";
+            this.hint = "Search modules and settings, names and help, on every page  ·  Enter opens the first";
         } else if (this.hint.isEmpty() && mx >= x && mx <= x + width && my >= y && my <= y + HEADER - 1) {
             this.hint = "Drag here to move the window  ·  Ctrl+R resets it";
         }
@@ -1416,9 +1405,10 @@ public class AtlasClickGui extends GuiScreen {
         float profilesLabel = top + shownCategories.size() * CAT + 12;
         float profilesRow = profilesLabel + 10;
         float appearanceRow = profilesRow + CAT;
+        float serversRow = appearanceRow + CAT;
         boolean settingsPage = "Client Settings".equals(this.page);
         boolean profile = settingsPage && this.theme.accountCard.getValue()
-                && y + height - (appearanceRow + CAT_H) >= 46;
+                && y + height - (serversRow + CAT_H) >= 46;
         float limit = y + height - (profile ? 44 : 4);
         /* Module pages: the categories scroll inside [top, listLimit], over a
            small fixed strip at the foot of the column. */
@@ -1430,11 +1420,13 @@ public class AtlasClickGui extends GuiScreen {
         float scrolled = settingsPage ? 0.0F : spring("sidebarScroll", this.sidebarScroll, 300.0F, 30.0F).value;
         boolean profilesFit = settingsPage && profilesRow + CAT_H <= limit;
         boolean appearanceFit = settingsPage && appearanceRow + CAT_H <= limit;
+        boolean serversFit = settingsPage && serversRow + CAT_H <= limit;
 
-        int activeIndex = this.profilesView || this.appearanceView ? -1
-                : this.search.isEmpty() ? shownCategories.indexOf(this.category) : -1;
+        int activeIndex = this.profilesView || this.appearanceView || this.serversView ? -1
+                : search().isEmpty() ? shownCategories.indexOf(this.category) : -1;
         boolean pillOnProfiles = this.profilesView && profilesFit;
         boolean pillOnAppearance = this.appearanceView && appearanceFit;
+        boolean pillOnServers = this.serversView && serversFit;
 
         /* The selected category sits under a droplet of clear glass. It slides
            between rows on a spring and stretches along its path in proportion
@@ -1444,9 +1436,11 @@ public class AtlasClickGui extends GuiScreen {
         /* Sprung in the column's own coordinates, so dragging the window
            carries the pill with it instead of leaving it to catch up. */
         Spring pill = spring("catPill", pillOnProfiles ? profilesRow - top
-                        : pillOnAppearance ? appearanceRow - top : Math.max(0, activeIndex) * CAT - scrolled,
+                        : pillOnAppearance ? appearanceRow - top
+                        : pillOnServers ? serversRow - top : Math.max(0, activeIndex) * CAT - scrolled,
                 380.0F, 26.0F);
-        float shownPill = ease("catPillShown", activeIndex >= 0 || pillOnProfiles || pillOnAppearance, 12.0F);
+        float shownPill = ease("catPillShown", activeIndex >= 0 || pillOnProfiles || pillOnAppearance || pillOnServers,
+                12.0F);
         if (shownPill > 0.02F) {
             float stretch = Math.min(10.0F, Math.abs(pill.velocity) * this.jelly * 0.018F);
             float px = x + 10 + stretch * 0.25F;
@@ -1490,12 +1484,21 @@ public class AtlasClickGui extends GuiScreen {
                     on++;
                 }
             }
-            if (on > 0 && this.theme.counts.getValue()) {
-                font(8.0F, false).drawRight(String.valueOf(on), x + sidebar - 16, cy,
-                        active ? alpha(TEXT, 0.8F) : FAINT);
+            boolean attention = ATTENTION.equals(name);
+            int count = attention ? list.size() : on;
+            if (count > 0 && (attention || this.theme.counts.getValue())) {
+                font(8.0F, attention).drawRight(String.valueOf(count), x + sidebar - 16, cy,
+                        attention ? AtlasStyle.warn : active ? alpha(TEXT, 0.8F) : FAINT);
             }
             if (hovered) {
-                this.hint = on + " of " + list.size() + " enabled in " + name;
+                this.hint = ENABLED.equals(name) ? "Every module that is on, on this page"
+                        : attention ? "Named in this session's flags, or on with a setting at a risky value"
+                                + (flagDetectorOn() ? "" : "  ·  FlagDetector is off, so flags are not counted")
+                        : on + " of " + list.size() + " enabled in " + name;
+            }
+            if (i == 1 && attention && shownCategories.size() > 2) {
+                /* The two lists above, the categories below. */
+                Liquid.rect(x + 18, rowY + CAT - 1.0F, x + sidebar - 18, rowY + CAT - 0.5F, 0.0F, ink(0x14));
             }
         }
         if (!settingsPage) {
@@ -1542,6 +1545,21 @@ public class AtlasClickGui extends GuiScreen {
             font(9.5F, this.appearanceView).draw("Appearance", x + 36, cy, this.appearanceView ? TEXT : DIM);
             if (hovered) {
                 this.hint = "Colours, glass, motion, text and layout of this menu";
+            }
+        }
+        if (serversFit) {
+            boolean hovered = mx >= x + 10 && mx <= x + sidebar - 10 && my >= serversRow && my <= serversRow + CAT_H;
+            hit("servers", null, x + 10, serversRow, x + sidebar - 10, serversRow + CAT_H);
+            float rowLit = ease("cat:#servers", hovered && !this.serversView, 10.0F);
+            if (rowLit > 0.01F) {
+                Liquid.rect(x + 10, serversRow, x + sidebar - 10, serversRow + CAT_H, 11.0F,
+                        alpha(ink(0x12), rowLit), alpha(ink(0x0A), rowLit));
+            }
+            float cy = serversRow + CAT_H / 2.0F;
+            icon("world", x + 25, cy, this.serversView ? TEXT : DIM);
+            font(9.5F, this.serversView).draw("Servers", x + 36, cy, this.serversView ? TEXT : DIM);
+            if (hovered) {
+                this.hint = "Which profile loads when you join which server";
             }
         }
 
@@ -1599,16 +1617,19 @@ public class AtlasClickGui extends GuiScreen {
         Liquid.rim(x + 10, fy, buttonX - 6, fy2, 11.0F, 1.0F, blend(ink(0x2E), alpha(accent, 0.8F), focus),
                 ink(0x0A));
         LiquidFont body = font(9.0F, false);
-        float typed = 0.0F;
-        if (this.profileName.isEmpty()) {
+        float caret = x + 20;
+        if (this.profileNameInput.isEmpty()) {
             if (!this.profileNameFocused) {
                 body.draw("New profile name", x + 20, fcy, FAINT);
             }
+            this.profileNameInput.drawnAt(x + 20, 0, body::width);
         } else {
-            typed = body.draw(body.trim(this.profileName, buttonX - x - 40), x + 20, fcy, TEXT);
+            drawField(this.profileNameInput, body, layoutField(this.profileNameInput, body, buttonX - x - 40, false),
+                    x + 20, fcy, TEXT, false);
+            caret = this.fieldCaretX;
         }
-        if (this.profileNameFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            Liquid.rect(x + 21 + typed, fcy - 4.5F, x + 22 + typed, fcy + 4.5F, 0.0F, accent);
+        if (this.profileNameFocused && AtlasStyle.caretOn()) {
+            Liquid.rect(caret + 1, fcy - 4.5F, caret + 2, fcy + 4.5F, 0.0F, accent);
         }
         if (mx >= x + 10 && mx <= buttonX - 6 && my >= fy && my <= fy2) {
             this.hint = "Name a profile for everything as it is set now  ·  Enter saves it";
@@ -1683,6 +1704,13 @@ public class AtlasClickGui extends GuiScreen {
                 float tagWidth = tag.width("IN USE") + 10;
                 Liquid.rect(tagX, cy - 5.5F, tagX + tagWidth, cy + 5.5F, 5.5F, alpha(accent, 0.22F));
                 tag.draw("IN USE", tagX + 5, cy, accent);
+                if (profileUnsaved()) {
+                    float unsavedX = tagX + tagWidth + 4;
+                    float unsavedWidth = tag.width("UNSAVED") + 10;
+                    Liquid.rect(unsavedX, cy - 5.5F, unsavedX + unsavedWidth, cy + 5.5F, 5.5F,
+                            alpha(AtlasStyle.warn, 0.22F));
+                    tag.draw("UNSAVED", unsavedX + 5, cy, AtlasStyle.warn);
+                }
             }
             LiquidFont small = font(8.0F, false);
             small.drawRight(info.enabled.size() + " on  ·  " + AtlasProfiles.age(info.modified),
@@ -1724,22 +1752,28 @@ public class AtlasClickGui extends GuiScreen {
         font(8.0F, false).draw(saved, x + 16, cursor, alpha(FAINT, arrived));
         cursor += 12;
         if (inUse) {
-            for (String line : body.wrap("In use. Changes made since loading it stay in memory "
-                    + "until you save them here.", width - 32)) {
+            /* 2026-10-23: this said changes stay in memory until saved here; the
+               game saves them to the profile in use when it quits. */
+            for (String line : body.wrap("In use. Your changes are saved to it when you quit, "
+                    + "or now with Save here.", width - 32)) {
                 body.draw(line, x + 16, cursor, alpha(DIM, arrived));
                 cursor += 11;
+            }
+            if (profileUnsaved()) {
+                for (String line : body.wrap("Changed since it was last saved.", width - 32)) {
+                    body.draw(line, x + 16, cursor, alpha(AtlasStyle.warn, arrived));
+                    cursor += 11;
+                }
             }
         }
         cursor += 12;
 
-        /* Load, save over it, delete. Delete asks twice. */
+        /* Load, save over it, delete. Delete asks first; Load asks when there are unsaved changes. */
         float bx = x + 16;
         bx += drawButton("profileLoad", info.name, bx, cursor, 0.0F, inUse ? "Reload" : "Load", 0, mx, my) + 6;
         bx += drawButton("profileSave", info.name, bx, cursor, 0.0F, "Save here", 1, mx, my) + 6;
-        boolean confirming = info.name.equals(this.confirmDelete)
-                && System.currentTimeMillis() - this.confirmDeleteAt < CONFIRM_MS;
         if (!"default".equalsIgnoreCase(info.name)) {
-            drawButton("profileDelete", info.name, bx, cursor, 0.0F, confirming ? "Sure?" : "Delete", 2, mx, my);
+            drawButton("profileDelete", info.name, bx, cursor, 0.0F, "Delete", 2, mx, my);
         }
         cursor += 22;
 
@@ -1773,6 +1807,167 @@ public class AtlasClickGui extends GuiScreen {
         drawButton("profileFolder", null, x + 16, y + height - 16, 0.0F, "Open folder", 1, mx, my);
     }
 
+    // ---- servers page ----------------------------------------------------
+
+    private static atlas.module.modules.ServerProfiles serverProfiles() {
+        return (atlas.module.modules.ServerProfiles) Atlas.moduleManager.modules.get(
+                atlas.module.modules.ServerProfiles.class);
+    }
+
+    /** The server's host: the address without its port, lower case; null in single player. */
+    private static String currentHost() {
+        String address = atlas.module.modules.ServerProfiles.currentAddress();
+        if (address == null) {
+            return null;
+        }
+        int colon = address.indexOf(':');
+        return colon > 0 ? address.substring(0, colon) : address;
+    }
+
+    /**
+     * The middle column of the Servers page: ServerProfiles on or off, and its
+     * rules, first match wins, as the module reads them.
+     */
+    private void drawServersList(int x, int y, int width, float mx, float my) {
+        atlas.module.modules.ServerProfiles profiles = serverProfiles();
+        font(15.0F, true).draw("Servers", x + 16, y + 17, TEXT);
+        font(8.0F, false).draw("Load a profile when you join a server  ·  first match wins", x + 16, y + 31, FAINT);
+        if (profiles == null) {
+            return;
+        }
+        float cy = y + 54;
+        boolean on = profiles.isEnabled();
+        hit("autoConfig", null, x + 10, cy - 11, x + width - 10, cy + 11);
+        boolean hovered = mx >= x + 10 && mx <= x + width - 10 && my >= cy - 11 && my <= cy + 11;
+        float lit = ease("autoConfigHover", hovered, 12.0F);
+        Liquid.rect(x + 10, cy - 11, x + width - 10, cy + 11, 9.0F, alpha(ink(0x10), 0.6F + 0.4F * lit));
+        font(9.5F, false).draw("Auto load config", x + 20, cy, TEXT);
+        drawSwitch("autoConfig", x + width - 18 - 22, cy, 22.0F, 12.0F, on);
+        if (hovered) {
+            this.hint = on ? "ServerProfiles is on: joining a server loads its profile  ·  click to turn it off"
+                    : "ServerProfiles is off: nothing is loaded on join  ·  click to turn it on";
+        }
+
+        List<String[]> rules = atlas.module.modules.ServerProfiles.parse(profiles.rules.getValue());
+        float top = y + 80;
+        font(7.0F, true).drawTracked("RULES  ·  " + rules.size(), x + 18, top, FAINT, 0.8F);
+        top += 10;
+        if (rules.isEmpty()) {
+            font(9.0F, false).draw("No rules yet: join a server and use the button on the right", x + 16, top + 12,
+                    FAINT);
+            return;
+        }
+        LiquidFont name = font(9.5F, false);
+        LiquidFont small = font(8.0F, false);
+        float limit = y + 400;
+        for (int i = 0; i < rules.size(); i++) {
+            String[] rule = rules.get(i);
+            float rowY = top + i * ROW;
+            float rowCy = rowY + ROW_H / 2.0F;
+            boolean exists = new java.io.File(AtlasProfiles.DIR, rule[1] + ".json").exists();
+            boolean rowHovered = mx >= x + 10 && mx <= x + width - 10 && my >= rowY && my <= rowY + ROW_H;
+            if (ease("rule:" + i, rowHovered, 9.0F) > 0.01F) {
+                Liquid.rect(x + 10, rowY, x + width - 10, rowY + ROW_H, 9.0F, ink(0x10));
+            }
+            float drawn = name.draw(name.trim(rule[0], width * 0.45F), x + 20, rowCy, TEXT);
+            String target = "loads " + rule[1] + (exists ? "" : "  (no such profile)");
+            small.draw(small.trim(target, width - drawn - 80), x + 28 + drawn, rowCy, exists ? DIM : AtlasStyle.warn);
+            float bx = x + width - 18 - 10;
+            boolean overDelete = mx >= bx - 7 && mx <= bx + 7 && my >= rowCy - 7 && my <= rowCy + 7;
+            hit("ruleDelete", Integer.valueOf(i), bx - 7, rowCy - 7, bx + 7, rowCy + 7);
+            int c = overDelete ? AtlasStyle.danger : FAINT;
+            Liquid.line(bx - 3, rowCy - 3, bx + 3, rowCy + 3, 1.1F, c);
+            Liquid.line(bx - 3, rowCy + 3, bx + 3, rowCy - 3, 1.1F, c);
+            if (overDelete) {
+                this.hint = "Remove the rule " + rule[0] + " = " + rule[1];
+            } else if (rowHovered) {
+                this.hint = "An address containing \"" + rule[0] + "\" loads " + rule[1]
+                        + (exists ? "" : "  ·  no profile has that name, so it is skipped");
+            }
+            if (rowY + ROW > limit) {
+                break;
+            }
+        }
+    }
+
+    /** The right column: the server played on now, the profile in use, and a rule for this server. */
+    private void drawServersDetail(int x, int y, int width, float mx, float my) {
+        String host = currentHost();
+        font(14.0F, true).draw("This server", x + 16, y + 17, TEXT);
+        LiquidFont body = font(8.5F, false);
+        float cursor = y + 34;
+        body.draw(body.trim(host == null ? "Single player" : host, width - 32), x + 16, cursor, DIM);
+        cursor += 13;
+        String current = AtlasProfiles.current();
+        body.draw(body.trim("Profile in use: " + current, width - 32), x + 16, cursor, DIM);
+        cursor += 13;
+        Module fingerprint = Atlas.moduleManager.modules.get(atlas.module.modules.ServerFingerprint.class);
+        if (fingerprint != null && fingerprint.isEnabled() && host != null) {
+            String[] suffix = fingerprint.getSuffix();
+            String verdict = suffix == null || suffix.length == 0 ? "" : suffix[0];
+            body.draw(body.trim("ServerFingerprint: " + verdict.replaceAll("[&§][0-9a-fklmnor]", ""), width - 32),
+                    x + 16, cursor, DIM);
+            cursor += 13;
+        }
+        cursor += 8;
+        if (host == null) {
+            for (String line : body.wrap("Join a server to give it a profile.", width - 32)) {
+                body.draw(line, x + 16, cursor, FAINT);
+                cursor += 11;
+            }
+            return;
+        }
+        atlas.module.modules.ServerProfiles profiles = serverProfiles();
+        List<String[]> rules = profiles == null ? new ArrayList<String[]>()
+                : atlas.module.modules.ServerProfiles.parse(profiles.rules.getValue());
+        String matched = atlas.module.modules.ServerProfiles.match(rules,
+                atlas.module.modules.ServerProfiles.currentAddress());
+        if (matched != null) {
+            for (String line : body.wrap("A rule loads " + matched + " here.", width - 32)) {
+                body.draw(line, x + 16, cursor, DIM);
+                cursor += 11;
+            }
+            cursor += 6;
+        }
+        cursor += 4;
+        drawButton("ruleHere", null, x + 16, cursor, 0.0F,
+                font(8.5F, true).trim("Use " + current + " here", width - 60), 0, mx, my);
+        if (mx >= x + 16 && mx <= x + width - 16 && my >= cursor - 10 && my <= cursor + 10) {
+            this.hint = "Load " + current + " whenever you join " + host;
+        }
+        cursor += 22;
+        for (String line : body.wrap("Before a rule switches profile, your changes are saved to the profile in use.",
+                width - 32)) {
+            body.draw(line, x + 16, cursor, FAINT);
+            cursor += 11;
+        }
+    }
+
+    /** A rule for this server's host to the profile in use, replacing one for the same host. */
+    private void useProfileHere() {
+        atlas.module.modules.ServerProfiles profiles = serverProfiles();
+        String host = currentHost();
+        if (profiles == null || host == null) {
+            return;
+        }
+        String current = AtlasProfiles.current();
+        List<String[]> rules = atlas.module.modules.ServerProfiles.parse(profiles.rules.getValue());
+        boolean replaced = false;
+        for (String[] rule : rules) {
+            if (rule[0].equals(host)) {
+                rule[1] = current;
+                replaced = true;
+            }
+        }
+        if (!replaced) {
+            rules.add(new String[]{host, current});
+        }
+        profiles.rules.setValue(atlas.module.modules.ServerProfiles.format(rules));
+        pulse("btn:ruleHere");
+        tell(Toasts.Kind.OK, host + " now loads " + current
+                + (profiles.isEnabled() ? "" : "  ·  turn on Auto load config to use it"));
+    }
+
     /**
      * Pushes the theme into everything that reads it, once a frame and before
      * any of it is drawn: the blur, the typeface, the springs and the layout.
@@ -1784,6 +1979,9 @@ public class AtlasClickGui extends GuiScreen {
         boolean animated = this.theme.animations.getValue();
         Spring.dampingScale = animated ? this.theme.damping() : 1.0F;
         this.springSpeed = animated ? this.theme.springSpeed() : 1.0F;
+        this.ui.springSpeed = this.springSpeed;
+        this.ui.animations = animated;
+        this.ui.smoothScroll = this.theme.smoothScroll.getValue();
         this.jelly = animated ? this.theme.jelly() : 0.0F;
         /* In steps of five percent, and the old sheets dropped on a change:
            every distinct size is a set of glyph sheets, and dragging the
@@ -1944,7 +2142,7 @@ public class AtlasClickGui extends GuiScreen {
             } else if ("profileSave".equals(kind)) {
                 this.hint = "Overwrite " + payload + " with everything as it is set now";
             } else if ("profileDelete".equals(kind)) {
-                this.hint = "Delete " + payload + ".json  ·  click twice";
+                this.hint = "Delete " + payload + ".json  ·  asks first";
             } else if ("profileFolder".equals(kind)) {
                 this.hint = "Open " + AtlasProfiles.DIR.getPath();
             } else if ("profileCreate".equals(kind)) {
@@ -1953,6 +2151,9 @@ public class AtlasClickGui extends GuiScreen {
                 this.hint = "Start from the " + payload + " look  ·  every Appearance setting is replaced";
             } else if ("themeReset".equals(kind)) {
                 this.hint = "Put every Appearance setting back to how the menu was designed";
+            } else if ("infoReset".equals(kind) && payload instanceof Property<?>) {
+                Property<?> property = (Property<?>) payload;
+                this.hint = "Put " + property.getLabel() + " back to " + SettingFacts.defaultText(property);
             }
         }
         return w;
@@ -1996,7 +2197,7 @@ public class AtlasClickGui extends GuiScreen {
 
     private void drawList(ScaledResolution sr, int x, int y, int width, int height, float mx, float my) {
         List<Module> modules = visibleModules();
-        boolean searching = !this.search.trim().isEmpty();
+        boolean searching = !search().trim().isEmpty();
         int on = 0;
         for (Module module : modules) {
             if (module.isEnabled()) {
@@ -2013,22 +2214,34 @@ public class AtlasClickGui extends GuiScreen {
                 }
             }
         }
+        /* Settings the search found follow the modules, under a heading row
+           of their own, in the same scroll. */
+        List<SearchIndex.Entry> settings = searching ? searchResults().settings
+                : java.util.Collections.<SearchIndex.Entry>emptyList();
+        int rows = modules.size() + (settings.isEmpty() ? 0 : settings.size() + 1);
         String subtitle = searching
-                ? modules.size() + (modules.size() == 1 ? " result" : " results")
+                ? modules.size() + (modules.size() == 1 ? " module" : " modules")
+                        + "  ·  " + settings.size() + (settings.size() == 1 ? " setting" : " settings")
                         + (elsewhere > 0 ? "  ·  " + elsewhere + " from another page" : "")
                         + "  ·  " + on + " enabled"
-                : modules.size() + " modules  ·  " + on + " enabled";
+                : ATTENTION.equals(this.category)
+                        ? modules.size() + (modules.size() == 1 ? " module" : " modules")
+                                + (flagDetectorOn() ? "  ·  flags counted since you joined"
+                                        : "  ·  FlagDetector is off: flags are not counted")
+                        : modules.size() + " modules  ·  " + on + " enabled";
         font(8.0F, false).draw(subtitle, x + 16, y + 31, FAINT);
 
         float top = y + 42;
         float bottom = y + height - 4;
         int maxRows = Math.max(1, (int) ((bottom - top) / ROW));
-        this.listMaxScroll = Math.max(0, modules.size() - maxRows);
+        this.listMaxScroll = Math.max(0, rows - maxRows);
         if (this.listScroll > this.listMaxScroll) {
             this.listScroll = this.listMaxScroll;
         }
-        if (modules.isEmpty()) {
-            font(9.0F, false).draw("No module matches \"" + this.search + "\"", x + 16, top + 12, FAINT);
+        if (rows == 0) {
+            font(9.0F, false).draw(searching ? "No module or setting matches \"" + search() + "\""
+                    : ATTENTION.equals(this.category) ? "Nothing needs attention"
+                    : ENABLED.equals(this.category) ? "Nothing is on" : "No modules here", x + 16, top + 12, FAINT);
             return;
         }
 
@@ -2121,6 +2334,10 @@ public class AtlasClickGui extends GuiScreen {
             if (module.isHidden()) {
                 icon("eyeOff", nameX + nameWidth + 10, cy, FAINT);
             }
+            float badgeX = nameX + nameWidth + (module.isHidden() ? 20 : 6);
+            float badgeEnd = drawHealthBadge(health(module), badgeX, cy);
+            float afterName = badgeEnd > badgeX ? badgeEnd + 6
+                    : nameX + nameWidth + (module.isHidden() ? 22 : 10);
 
             float switchX = x + width - 18 - 22;
             /* Only the switch turns a module on or off; the rest of the row
@@ -2146,7 +2363,7 @@ public class AtlasClickGui extends GuiScreen {
             String suffix = this.theme.moduleStatus.getValue() ? suffixOf(module) : "";
             if (!suffix.isEmpty()) {
                 LiquidFont small = font(8.0F, false);
-                float room = tagRight - (nameX + nameWidth + (module.isHidden() ? 22 : 10));
+                float room = tagRight - afterName;
                 if (room > 20) {
                     small.drawRight(small.trim(suffix, room), tagRight, cy, FAINT);
                 }
@@ -2160,15 +2377,203 @@ public class AtlasClickGui extends GuiScreen {
                         : module.getDescription();
             }
         }
+        if (!settings.isEmpty()) {
+            float headingY = top + modules.size() * ROW - shown;
+            if (headingY + ROW_H >= top && headingY <= bottom) {
+                font(7.0F, true).drawTracked("SETTINGS  ·  " + settings.size(), x + 18, headingY + ROW_H / 2.0F + 2,
+                        FAINT, 0.8F);
+            }
+            for (int s = 0; s < settings.size(); s++) {
+                int i = modules.size() + 1 + s;
+                if (i < first) {
+                    continue;
+                }
+                float rowY = top + i * ROW - shown;
+                if (rowY > bottom) {
+                    break;
+                }
+                drawSettingResult(settings.get(s), x, rowY, width, top, bottom, mx, my);
+            }
+        }
         unclip();
 
         /* A thin capsule on the right edge, only while there is more. */
         if (this.listMaxScroll > 0) {
             float track = bottom - top;
-            float thumb = Math.max(18.0F, track * maxRows / (float) modules.size());
+            float thumb = Math.max(18.0F, track * maxRows / (float) rows);
             float along = (track - thumb) * (shown / (this.listMaxScroll * (float) ROW));
             float barX = x + width - 5;
             Liquid.rect(barX, top + along, barX + 2.5F, top + along + thumb, 1.25F, ink(0x40));
+        }
+    }
+
+    /**
+     * One setting the search found: its name and the module it is in, its
+     * value on the right. A click opens the module at it (openSetting). A
+     * setting the module hides right now -- another mode's -- says so in place
+     * of its value.
+     */
+    private void drawSettingResult(SearchIndex.Entry entry, int x, float rowY, int width, float top, float bottom,
+                                   float mx, float my) {
+        Module module = (Module) entry.module;
+        Property<?> property = (Property<?>) entry.setting;
+        boolean shownNow = property.isVisible();
+        boolean hovered = mx >= x + 10 && mx <= x + width - 10 && my >= rowY && my <= rowY + ROW_H
+                && my >= top && my <= bottom;
+        float clippedTop = Math.max(rowY, top);
+        float clippedBottom = Math.min(rowY + ROW_H, bottom);
+        if (clippedBottom - clippedTop > 4.0F) {
+            hit("settingResult", entry, x + 10, clippedTop, x + width - 10, clippedBottom);
+        }
+        float hoverLit = ease("res:" + entry.owner + ":" + property.getName(), hovered, 9.0F);
+        if (hoverLit > 0.01F) {
+            Liquid.rect(x + 10, rowY, x + width - 10, rowY + ROW_H, 9.0F,
+                    alpha(ink(0x10), hoverLit), alpha(ink(0x0A), hoverLit));
+        }
+        boolean foreign = !belongsOnPage(module);
+        if (foreign) {
+            Liquid.rect(x + 10, rowY, x + width - 10, rowY + ROW_H, 9.0F,
+                    alpha(foreignColour(), 0.10F), alpha(foreignColour(), 0.05F));
+            dashedRim(x + 10, rowY, x + width - 10, rowY + ROW_H, 9.0F, alpha(foreignColour(), 0.75F));
+        }
+        float cy = rowY + ROW_H / 2.0F;
+        /* A hollow ring where a module row has its on/off bead: a setting is
+           not on or off. */
+        boolean dots = this.theme.stateDots.getValue();
+        float nameX = dots ? x + 30 : x + 20;
+        if (dots) {
+            Liquid.ring(x + 20.5F, cy, 2.3F, 0.9F, FAINT);
+        }
+
+        float tagRight = x + width - 18;
+        if (foreign) {
+            String source = pageOf(module);
+            LiquidFont tag = font(7.0F, true);
+            float tagLeft = tagRight - tag.width(source) - 10;
+            Liquid.rect(tagLeft, cy - 5.5F, tagRight, cy + 5.5F, 5.5F,
+                    alpha(foreignColour(), 0.28F), alpha(foreignColour(), 0.18F));
+            tag.drawCentred(source, (tagLeft + tagRight) / 2.0F, cy, foreignText());
+            tagRight = tagLeft - 6;
+        }
+        LiquidFont small = font(8.0F, false);
+        String value = shownNow ? SettingFacts.format(property, property.getValue()) : "not shown now";
+        value = small.trim(value, Math.max(30.0F, (width - 40) * 0.35F));
+        float valueLeft = tagRight - small.width(value);
+        small.draw(value, valueLeft, cy, shownNow ? accentText() : FAINT);
+
+        LiquidFont name = font(9.5F, false);
+        String owner = "in " + module.getName();
+        float ownerWidth = small.width(owner);
+        float room = valueLeft - 10 - nameX;
+        boolean withOwner = room - ownerWidth - 6 >= 40;
+        float nameWidth = name.draw(name.trim(entry.title, withOwner ? room - ownerWidth - 6 : room), nameX, cy,
+                shownNow ? TEXT : DIM);
+        if (withOwner) {
+            small.draw(owner, nameX + nameWidth + 6, cy, FAINT);
+        }
+        if (hovered && this.hint.isEmpty()) {
+            String help = property.getHelp();
+            this.hint = entry.title + " in " + module.getName()
+                    + (shownNow ? "" : "  ·  not shown with its current settings")
+                    + (help == null || help.isEmpty() ? "  ·  click to open it" : "  ·  " + help);
+        }
+    }
+
+    /** The search's results for what is typed, on this page; searched again only when either changes. */
+    private SearchIndex.Results searchResults() {
+        String query = search();
+        if (!query.equals(this.searchedFor) || !this.page.equals(this.searchedOn)) {
+            this.searchedFor = query;
+            this.searchedOn = this.page;
+            this.searchResults = this.index.search(query, module -> belongsOnPage((Module) module),
+                    MAX_SETTING_RESULTS);
+        }
+        return this.searchResults;
+    }
+
+    /**
+     * Every module in the menu, in its order, and every setting of each, with
+     * the descriptions and help ModuleDocs gave them at start-up.
+     */
+    private void buildIndex() {
+        SearchIndex built = new SearchIndex();
+        java.util.Set<Module> seen = new java.util.HashSet<Module>();
+        for (List<Module> list : this.byCategory.values()) {
+            for (Module module : list) {
+                if (module == null || !seen.add(module)) {
+                    continue;
+                }
+                built.addModule(module, module.getName(), module.getDescription());
+                List<Property<?>> properties = Atlas.propertyManager.properties.get(module.getClass());
+                if (properties == null) {
+                    continue;
+                }
+                for (Property<?> property : properties) {
+                    built.addSetting(module, property, module.getName(), property.getLabel(), property.getName(),
+                            property.getHelp());
+                }
+            }
+        }
+        this.index = built;
+        this.searchedFor = null;
+    }
+
+    /**
+     * Opens a setting found by the search: selects its module, scrolls the
+     * settings card to it, opens its info row and makes it glow for a moment.
+     * A setting the module hides right now (another mode's, or behind a
+     * switch) is not in the card to scroll to, so that is said instead.
+     */
+    private void openSetting(SearchIndex.Entry entry) {
+        openSetting((Module) entry.module, (Property<?>) entry.setting);
+    }
+
+    private void openSetting(Module module, Property<?> property) {
+        if (this.selected != module) {
+            this.ui.set("detailArrive", Float.valueOf(0.0F));
+            this.descriptionOpen = null;
+        }
+        this.selected = module;
+        List<Property<?>> shown = propertiesOf(module);
+        int index = shown.indexOf(property);
+        if (index < 0) {
+            this.infoOpen = null;
+            this.detailScroll = 0;
+            this.ui.set("detailScroll", Float.valueOf(0.0F));
+            tell(Toasts.Kind.INFO, property.getLabel() + " is not shown with the current settings of "
+                    + module.getName() + ": another mode or switch uses it");
+            return;
+        }
+        this.infoOpen = property;
+        /* The same arithmetic as drawSettingsCard: the headings and rows above
+           it. The card clamps the scroll to its content when it is drawn. */
+        int offset = 0;
+        for (int i = 0; i < index; i++) {
+            offset += (headingBefore(shown, i) != null ? HEADING_HEIGHT : 0) + rowHeightOf(shown.get(i));
+        }
+        this.detailScroll = offset;
+        this.ui.set("detailScroll", Float.valueOf(offset));
+        pulse("found:" + module.getName() + ":" + property.getName());
+    }
+
+    /** Enter in the search box: the first result, a module before a setting. */
+    private void openFirstResult() {
+        if (search().trim().isEmpty()) {
+            return;
+        }
+        SearchIndex.Results results = searchResults();
+        if (!results.modules.isEmpty()) {
+            Module module = (Module) results.modules.get(0).module;
+            if (this.selected != module) {
+                this.ui.set("detailArrive", Float.valueOf(0.0F));
+                this.detailScroll = 0;
+                this.ui.set("detailScroll", Float.valueOf(0.0F));
+                this.infoOpen = null;
+                this.descriptionOpen = null;
+            }
+            this.selected = module;
+        } else if (!results.settings.isEmpty()) {
+            openSetting(results.settings.get(0));
         }
     }
 
@@ -2261,7 +2666,10 @@ public class AtlasClickGui extends GuiScreen {
         LiquidFont body = font(8.5F, false);
         if (description != null && !description.isEmpty()) {
             List<String> lines = body.wrap(description, width - 32);
-            int shownLines = Math.min(lines.size(), 5);
+            /* Five lines, as before; a longer one gets More, which shows the
+               rest (2026-10-23: the rest used to be cut off for good). */
+            boolean expanded = this.descriptionOpen == this.selected;
+            int shownLines = Math.min(lines.size(), expanded ? DESCRIPTION_MAX_LINES : 5);
             for (int i = 0; i < shownLines; i++) {
                 String line = lines.get(i);
                 if (i == shownLines - 1 && lines.size() > shownLines) {
@@ -2270,10 +2678,24 @@ public class AtlasClickGui extends GuiScreen {
                 body.draw(line, x + 16, cursor, alpha(DIM, arrived));
                 cursor += 11;
             }
+            if (lines.size() > 5) {
+                LiquidFont link = font(8.0F, true);
+                String label = expanded ? "Less" : "More";
+                float linkWidth = link.width(label);
+                boolean hovered = mx >= x + 14 && mx <= x + 18 + linkWidth && my >= cursor - 6 && my <= cursor + 6;
+                hit("descMore", this.selected, x + 14, cursor - 6, x + 18 + linkWidth, cursor + 6);
+                link.draw(label, x + 16, cursor, alpha(hovered ? accent : accentText(), arrived));
+                if (hovered) {
+                    this.hint = expanded ? "Show the first five lines of the description"
+                            : "Show the whole description";
+                }
+                cursor += 12;
+            }
             cursor += 10;
         } else {
             cursor += 4;
         }
+        cursor = drawHealthStrip(this.selected, x, width, cursor, mx, my, arrived);
 
         /* The two things about a module that are not properties: its key and
            whether the array list shows it. Both live on Module itself, which
@@ -2291,10 +2713,35 @@ public class AtlasClickGui extends GuiScreen {
         cursor += 22;
 
         font(7.0F, true).drawTracked("SETTINGS", x + 18, cursor, FAINT, 0.8F);
+        drawResetModule(x, width, cursor, mx, my);
         cursor += 8;
 
         drawSettingsCard(sr, this.selected.getName(), propertiesOf(this.selected),
                 x + 12, x + width - 12, cursor, y + height - 6, mx, my);
+    }
+
+    /**
+     * "N changed · Reset" on the SETTINGS line, when any of the module's
+     * settings differs from its default -- counted over all of them, those of
+     * other modes too, since all of them are reset. A click asks first (Dialog).
+     */
+    private void drawResetModule(int x, int width, float cy, float mx, float my) {
+        List<Property<?>> all = Atlas.propertyManager.properties.get(this.selected.getClass());
+        int changed = all == null ? 0 : SettingFacts.countChanged(all);
+        if (changed == 0) {
+            return;
+        }
+        String text = changed + " changed  ·  Reset";
+        LiquidFont small = font(8.0F, false);
+        float right = x + width - 18;
+        float left = right - small.width(text);
+        boolean hovered = mx >= left - 4 && mx <= right + 4 && my >= cy - 7 && my <= cy + 7;
+        hit("resetModule", this.selected, left - 4, cy - 7, right + 4, cy + 7);
+        small.draw(text, left, cy, hovered ? accent() : accentText());
+        if (hovered) {
+            this.hint = changed + (changed == 1 ? " setting differs" : " settings differ")
+                    + " from the default  ·  click to reset them all (it asks first)";
+        }
     }
 
     /**
@@ -2308,6 +2755,7 @@ public class AtlasClickGui extends GuiScreen {
         if (cardBottom - cardTop < 24) {
             return;
         }
+        this.cardWidth = cardX2 - cardX;
         if (properties.isEmpty()) {
             Liquid.rect(cardX, cardTop, cardX2, cardTop + 28, 12.0F, ink(0x0E), ink(0x09));
             Liquid.rim(cardX, cardTop, cardX2, cardTop + 28, 12.0F, 1.0F, ink(0x24), ink(0x0A));
@@ -2463,17 +2911,174 @@ public class AtlasClickGui extends GuiScreen {
         return (0xCC << 24) | (accent() & 0x00FFFFFF);
     }
 
-    /** The hint line's start for a setting: its name, and what it does when that is written down. */
+    /**
+     * The hint line's start for a setting: its name, its default when it was
+     * changed, and what it does when that is written down.
+     */
     private static String hintName(Property<?> property) {
-        return property.getHelp() == null ? property.getLabel()
-                : property.getLabel() + "  ·  " + property.getHelp();
+        String name = SettingFacts.changed(property)
+                ? property.getLabel() + " (default " + SettingFacts.defaultText(property) + ")"
+                : property.getLabel();
+        return property.getHelp() == null ? name : name + "  ·  " + property.getHelp();
     }
 
+    /** How tall a setting's whole block is: its row, an open colour picker and an open info row. */
     private int rowHeightOf(Property<?> property) {
+        int height = baseHeightOf(property);
+        if (property == this.infoOpen) {
+            height += infoHeight(property, this.cardWidth);
+        }
+        return height;
+    }
+
+    /** The row itself, with an open colour picker: the part that is hovered and clicked as the setting. */
+    private int baseHeightOf(Property<?> property) {
         if (isNumeric(property)) {
             return 32;
         }
         return property == this.colorOpen ? 22 + PICKER_HEIGHT : 22;
+    }
+
+    /** What a setting does, wrapped for its info row; a plain note when nothing is written down yet. */
+    private static List<String> infoHelp(Property<?> property, LiquidFont font, float width) {
+        String help = property.getHelp();
+        return font.wrap(help == null || help.isEmpty() ? "No description for this setting yet." : help, width);
+    }
+
+    /** Its default and range, and who is overriding it, wrapped for its info row. */
+    private static List<String> infoFacts(Property<?> property, LiquidFont font, float width) {
+        StringBuilder facts = new StringBuilder();
+        if (SettingFacts.resettable(property)) {
+            facts.append("Default ").append(SettingFacts.defaultText(property));
+        }
+        String range = SettingFacts.range(property);
+        if (!range.isEmpty()) {
+            if (facts.length() > 0) {
+                facts.append("  ·  ");
+            }
+            facts.append("Range ").append(range);
+        }
+        List<String> lines = new ArrayList<String>();
+        if (facts.length() > 0) {
+            lines.addAll(font.wrap(facts.toString(), width));
+        }
+        if (property.isOverridden()) {
+            lines.addAll(font.wrap("In effect now: " + SettingFacts.format(property, property.getValue())
+                    + ", from " + property.getSourceOwner() + ". Reset changes your own value.", width));
+        }
+        return lines;
+    }
+
+    /** Why the value is risky, wrapped for the info row; nothing when it is not. */
+    private List<String> infoRisk(Property<?> property, LiquidFont font, float width) {
+        String risk = riskOf(property);
+        return risk == null ? java.util.Collections.<String>emptyList() : font.wrap(risk, width);
+    }
+
+    private int infoHeight(Property<?> property, float width) {
+        LiquidFont body = font(8.0F, false);
+        int height = 4 + infoHelp(property, body, width - 32).size() * INFO_LINE;
+        int risk = infoRisk(property, body, width - 32).size();
+        if (risk > 0) {
+            height += risk * INFO_LINE + 3;
+        }
+        int facts = infoFacts(property, body, width - 32).size();
+        if (facts > 0) {
+            height += 3 + facts * INFO_LINE;
+        }
+        if (SettingFacts.resettable(property)) {
+            height += 4 + 20;
+        }
+        return height + 8;
+    }
+
+    /**
+     * A setting's info row, under its row: what it does in full, its default
+     * and range, and Reset when it differs from the default. The hint bar only
+     * ever had room for the first line of this.
+     */
+    private void drawSettingInfo(Property<?> property, float x, float top, float width, float mx, float my,
+                                 float paneTop, float paneBottom) {
+        LiquidFont body = font(8.0F, false);
+        float left = x + 16;
+        float textWidth = width - 32;
+        int height = infoHeight(property, width);
+        Liquid.rect(x + 8, top, x + width - 8, top + height - 4, 8.0F, ink(0x0A));
+        float lineTop = top + 4;
+        List<String> risk = infoRisk(property, body, textWidth);
+        if (!risk.isEmpty()) {
+            for (String line : risk) {
+                body.draw(line, left, lineTop + INFO_LINE / 2.0F, AtlasStyle.warn);
+                lineTop += INFO_LINE;
+            }
+            lineTop += 3;
+        }
+        for (String line : infoHelp(property, body, textWidth)) {
+            body.draw(line, left, lineTop + INFO_LINE / 2.0F, DIM);
+            lineTop += INFO_LINE;
+        }
+        List<String> facts = infoFacts(property, body, textWidth);
+        if (!facts.isEmpty()) {
+            lineTop += 3;
+            for (String line : facts) {
+                body.draw(line, left, lineTop + INFO_LINE / 2.0F, DIM);
+                lineTop += INFO_LINE;
+            }
+        }
+        if (!SettingFacts.resettable(property)) {
+            return;
+        }
+        float buttonCy = lineTop + 4 + 10;
+        if (!SettingFacts.changed(property)) {
+            body.draw("At its default", left, buttonCy, FAINT);
+            return;
+        }
+        /* Only a button wholly in view takes clicks, like every row. */
+        if (buttonCy - 10 >= paneTop && buttonCy + 10 <= paneBottom) {
+            String fallback = SettingFacts.defaultText(property);
+            drawButton("infoReset", property, left - 2, buttonCy, 0.0F,
+                    fallback.length() <= 16 ? "Reset to " + fallback : "Reset to default", 1, mx, my);
+        }
+    }
+
+    /**
+     * A setting's label, with the mark of a changed value before it and the
+     * (i) that opens its info row after it. maxWidth is the room the row
+     * leaves for the label (Float.MAX_VALUE: never trimmed); the button takes
+     * its share of it. Returns where the button ends.
+     */
+    private float drawLabel(Property<?> property, String text, float labelX, float cy, float maxWidth,
+                            boolean rowHovered, float mx, float my, boolean clickable) {
+        LiquidFont label = font(8.5F, false);
+        if (SettingFacts.changed(property)) {
+            Liquid.dot(labelX - 5.0F, cy, 1.5F, accent());
+        }
+        String risk = riskOf(property);
+        float marks = INFO_ICON + 4.0F + (risk != null ? 12.0F : 0.0F);
+        float room = maxWidth >= Float.MAX_VALUE ? maxWidth : Math.max(12.0F, maxWidth - marks);
+        float drawn = label.draw(room >= Float.MAX_VALUE ? text : label.trim(text, room), labelX, cy, DIM);
+        float ix = labelX + drawn + 4.0F + INFO_ICON / 2.0F;
+        boolean open = this.infoOpen == property;
+        boolean hovered = clickable && mx >= ix - 6 && mx <= ix + 6 && my >= cy - 7 && my <= cy + 7;
+        int colour = open || hovered ? accent() : rowHovered ? DIM : FAINT;
+        Liquid.ring(ix, cy, INFO_ICON / 2.0F, 0.9F, colour);
+        Liquid.dot(ix, cy - 1.9F, 0.7F, colour);
+        Liquid.line(ix, cy - 0.5F, ix, cy + 2.3F, 1.0F, colour);
+        if (clickable) {
+            hit("info", property, ix - 6, cy - 7, ix + 6, cy + 7);
+        }
+        if (hovered) {
+            this.hint = (open ? "Hide" : "Show") + " what " + property.getLabel() + " does, its default and range";
+        }
+        float end = ix + INFO_ICON / 2.0F;
+        if (risk != null) {
+            drawWarning(end + 7.0F, cy, 3.6F);
+            if (clickable && mx >= end + 2.0F && mx <= end + 12.0F && my >= cy - 6.0F && my <= cy + 6.0F) {
+                this.hint = property.getLabel() + ": " + risk;
+            }
+            end += 12.0F;
+        }
+        return end;
     }
 
     /**
@@ -2485,16 +3090,32 @@ public class AtlasClickGui extends GuiScreen {
      */
     private void drawProperty(String owner, Property<?> property, float x, float top, float width,
                               float mx, float my, float paneTop, float paneBottom) {
+        drawPropertyRow(owner, property, x, top, width, mx, my, paneTop, paneBottom);
+        if (property == this.infoOpen) {
+            drawSettingInfo(property, x, top + baseHeightOf(property), width, mx, my, paneTop, paneBottom);
+        }
+    }
+
+    /** The setting's own row (and an open colour picker), without its info row. */
+    private void drawPropertyRow(String owner, Property<?> property, float x, float top, float width,
+                                 float mx, float my, float paneTop, float paneBottom) {
         float labelX = x + 10;
         float right = x + width - 10;
         float cy = top + 11;
-        int rowHeight = rowHeightOf(property);
+        int rowHeight = baseHeightOf(property);
         int accent = accent();
         boolean hovered = mx >= x && mx <= x + width && my >= top && my <= top + rowHeight
                 && my >= paneTop && my <= paneBottom;
         /* A row straddling the edge of the clip is half drawn, so only a row
            wholly inside it takes a hit box at all. */
         boolean clickable = top >= paneTop - 2 && top + rowHeight <= paneBottom + 2;
+        /* Opened from a search result: the row glows for a moment, so the eye
+           finds it in the card. */
+        float found = pulseAt("found:" + owner + ":" + property.getName(), 1600L);
+        if (found >= 0.0F) {
+            Liquid.rect(x + 4, top + 1, x + width - 4, top + rowHeight - 1, 8.0F,
+                    alpha(accent, 0.30F * (1.0F - smooth(found))));
+        }
         if (hovered) {
             /* The range is the part people actually need and the part most
                menus hide: a slider with no numbers cannot be set deliberately. */
@@ -2503,19 +3124,23 @@ public class AtlasClickGui extends GuiScreen {
                             : isNumeric(property)
                                     ? "  ·  drag the bar, or click the number to type one"
                                     : "");
+            String risk = riskOf(property);
+            if (risk != null) {
+                this.hint = property.getLabel() + " is at a risky value  ·  " + risk;
+            }
         }
 
-        LiquidFont label = font(8.5F, false);
         LiquidFont valueFont = font(8.5F, true);
         String value = property.formatValue().replaceAll("[&§][0-9a-fklmnor]", "");
         boolean beingEdited = this.editing == property;
         String id = owner + ":" + property.getName();
 
         if (property instanceof BooleanProperty) {
-            label.draw(label.trim(property.getLabel(), width - 50), labelX, cy, DIM);
             if (clickable) {
                 hit("toggle", property, x + 2, top, x + width - 2, top + rowHeight);
             }
+            /* After the row's hit, so the (i) wins where they overlap. */
+            drawLabel(property, property.getLabel(), labelX, cy, width - 50, hovered, mx, my, clickable);
             drawSwitch(id, right - 22, cy, 22.0F, 12.0F, ((BooleanProperty) property).getValue());
             return;
         }
@@ -2529,25 +3154,26 @@ public class AtlasClickGui extends GuiScreen {
             if (hovered && overrider != null) {
                 this.hint = hintName(property) + "  ·  " + property.describe() + "  ·  the bar is your value";
             }
-            String shownValue = beingEdited ? this.editBuffer
+            String shownValue = beingEdited ? this.editInput.text()
                     : overrider != null ? value + " (" + overrider + ")" : value;
             float shownWidth = valueFont.width(shownValue);
             float valueLeft = right - Math.max(14.0F, shownWidth) - 3;
-            label.draw(label.trim(property.getLabel(), Math.min(width - 70, valueLeft - labelX - 8)),
-                    labelX, cy, DIM);
+            drawLabel(property, property.getLabel(), labelX, cy, Math.min(width - 70, valueLeft - labelX - 8),
+                    hovered, mx, my, clickable);
             if (beingEdited) {
                 Liquid.rect(valueLeft - 3, cy - 6.5F, right + 3, cy + 6.5F, 5.0F, ink(0x1F));
                 Liquid.rim(valueLeft - 3, cy - 6.5F, right + 3, cy + 6.5F, 5.0F, 1.0F,
-                        alpha(accent, 0.7F), ink(0x14));
+                        alpha(editEdge(accent), 0.7F), ink(0x14));
             }
             float commit = pulseAt("edit:" + property.getName(), 360L);
             if (commit >= 0.0F) {
                 Liquid.rect(valueLeft - 3, cy - 6.5F, right + 3, cy + 6.5F, 5.0F,
                         alpha(accent, 0.35F * (1.0F - commit)));
             }
-            valueFont.draw(shownValue, right - shownWidth, cy, beingEdited ? accent : TEXT);
-            if (beingEdited && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                Liquid.rect(right + 1, cy - 4.5F, right + 2, cy + 4.5F, 0.0F, accent);
+            if (beingEdited) {
+                drawEditedText(valueFont, Float.MAX_VALUE, false, right, cy, accent);
+            } else {
+                valueFont.draw(shownValue, right - shownWidth, cy, TEXT);
             }
             if (clickable) {
                 hit("type", property, valueLeft - 4, cy - 7, right + 4, cy + 6);
@@ -2618,7 +3244,7 @@ public class AtlasClickGui extends GuiScreen {
             LiquidFont modeFont = font(8.0F, true);
             float textWidth = modeFont.width(value);
             float capsuleLeft = right - textWidth - 22;
-            label.draw(label.trim(property.getLabel(), capsuleLeft - labelX - 6), labelX, cy, DIM);
+            drawLabel(property, property.getLabel(), labelX, cy, capsuleLeft - labelX - 6, hovered, mx, my, clickable);
             if (clickable) {
                 hit("mode", mode, capsuleLeft - 2, cy - 8, right + 2, cy + 8);
             }
@@ -2644,31 +3270,32 @@ public class AtlasClickGui extends GuiScreen {
         }
 
         if (property instanceof TextProperty) {
-            label.draw(property.getLabel(), labelX, cy, DIM);
-            String shownValue = beingEdited ? this.editBuffer : value;
-            float available = width - 30 - label.width(property.getLabel());
-            String clipped = shownValue;
-            if (valueFont.width(clipped) > available) {
-                /* The tail rather than the head: the end of a comma separated
-                   list is the part being typed. */
+            float labelEnd = drawLabel(property, property.getLabel(), labelX, cy, Float.MAX_VALUE, hovered, mx, my,
+                    clickable);
+            float available = right - labelEnd - 10;
+            /* The tail rather than the head: the end of a comma separated
+               list is the part being typed. */
+            FieldLayout field = beingEdited ? layoutField(this.editInput, valueFont, available, true) : null;
+            String clipped = value;
+            if (!beingEdited && valueFont.width(clipped) > available) {
                 while (clipped.length() > 1 && valueFont.width("..." + clipped) > available) {
                     clipped = clipped.substring(1);
                 }
                 clipped = "..." + clipped;
             }
-            float clippedWidth = valueFont.width(clipped);
+            float clippedWidth = beingEdited ? field.width : valueFont.width(clipped);
             if (clickable) {
                 hit("type", property, right - clippedWidth - 6, cy - 7, right + 4, cy + 7);
             }
             if (beingEdited) {
                 Liquid.rect(right - clippedWidth - 5, cy - 6.5F, right + 3, cy + 6.5F, 5.0F, ink(0x1F));
                 Liquid.rim(right - clippedWidth - 5, cy - 6.5F, right + 3, cy + 6.5F, 5.0F, 1.0F,
-                        alpha(accent, 0.7F), ink(0x14));
-                if ((System.currentTimeMillis() / 500L) % 2L == 0L) {
-                    Liquid.rect(right + 1, cy - 4.5F, right + 2, cy + 4.5F, 0.0F, accent);
-                }
+                        alpha(editEdge(accent), 0.7F), ink(0x14));
+                drawField(this.editInput, valueFont, field, right, cy, accent, true);
+                drawEditCaret(cy, accent);
+            } else {
+                valueFont.draw(clipped, right - clippedWidth, cy, TEXT);
             }
-            valueFont.draw(clipped, right - clippedWidth, cy, beingEdited ? accent : TEXT);
             return;
         }
 
@@ -2681,12 +3308,12 @@ public class AtlasClickGui extends GuiScreen {
             String shown = listening ? "Press a key" : key.getKeyName();
             LiquidFont keyFont = font(8.0F, true);
             float capsuleLeft = right - keyFont.width(shown) - 14;
-            label.draw(label.trim(property.getLabel(), capsuleLeft - labelX - 6), labelX, cy, DIM);
-            if (clickable) {
-                hit("keyProp", key, capsuleLeft - 2, cy - 8, right + 2, cy + 8);
-            }
             if (hovered) {
                 this.hint = hintName(property) + "  ·  click, then press a key  ·  Esc clears it";
+            }
+            drawLabel(property, property.getLabel(), labelX, cy, capsuleLeft - labelX - 6, hovered, mx, my, clickable);
+            if (clickable) {
+                hit("keyProp", key, capsuleLeft - 2, cy - 8, right + 2, cy + 8);
             }
             Liquid.rect(capsuleLeft, cy - 7, right, cy + 7, 7.0F, alpha(accent, listening ? 0.38F : 0.16F));
             if (listening) {
@@ -2697,16 +3324,17 @@ public class AtlasClickGui extends GuiScreen {
         }
 
         if (property instanceof ColorProperty) {
-            drawColour((ColorProperty) property, x, top, width, cy, labelX, right, hovered, my, paneTop, paneBottom,
-                    label, valueFont, beingEdited, accent);
+            drawColour((ColorProperty) property, x, top, width, cy, labelX, right, hovered, mx, my, paneTop,
+                    paneBottom, valueFont, beingEdited, accent);
             return;
         }
 
         /* Anything else -- item lists -- is shown but not editable here,
            because there is no honest control for it yet. Printing it is
            still better than hiding it. */
-        label.draw(property.getLabel(), labelX, cy, DIM);
-        String shown = valueFont.trim(value, width - 30 - label.width(property.getLabel()));
+        float labelEnd = drawLabel(property, property.getLabel(), labelX, cy, Float.MAX_VALUE, hovered, mx, my,
+                clickable);
+        String shown = valueFont.trim(value, right - labelEnd - 10);
         valueFont.drawRight(shown, right, cy, TEXT);
     }
 
@@ -2721,29 +3349,36 @@ public class AtlasClickGui extends GuiScreen {
      * a row half scrolled out of view should still close from its header.
      */
     private void drawColour(ColorProperty colour, float x, float top, float width, float cy, float labelX,
-                            float right, boolean hovered, float my, float paneTop, float paneBottom,
-                            LiquidFont label, LiquidFont valueFont, boolean beingEdited, int accent) {
+                            float right, boolean hovered, float mx, float my, float paneTop, float paneBottom,
+                            LiquidFont valueFont, boolean beingEdited, int accent) {
         int rgb = colour.getValue() & 0xFFFFFF;
         boolean open = this.colorOpen == colour;
-        String hex = beingEdited ? this.editBuffer : String.format("#%06X", rgb);
+        String hex = beingEdited ? this.editInput.text() : String.format("#%06X", rgb);
         float swatchLeft = right - 22;
         float hexRight = swatchLeft - 6;
         float hexLeft = hexRight - valueFont.width(hex);
-        label.draw(label.trim(colour.getName(), hexLeft - labelX - 8), labelX, cy, DIM);
-        if (top >= paneTop - 2 && top + 22 <= paneBottom + 2) {
+        boolean rowClickable = top >= paneTop - 2 && top + 22 <= paneBottom + 2;
+        if (rowClickable) {
             hit("colorOpen", colour, x + 2, top, x + width - 2, top + 22);
             /* Registered after the row, so it is found first. */
             hit("type", colour, hexLeft - 4, cy - 7, hexRight + 3, cy + 7);
         }
         if (hovered && my <= top + 22) {
-            this.hint = colour.getName() + "  ·  click to " + (open ? "close" : "open") + " the picker"
+            this.hint = colour.getLabel() + "  ·  click to " + (open ? "close" : "open") + " the picker"
                     + "  ·  click the hex to type one";
         }
+        /* After the row's hits, so the (i) wins where they overlap. The label,
+           not the raw key (colour rows alone showed "line-color"). */
+        drawLabel(colour, colour.getLabel(), labelX, cy, hexLeft - labelX - 8, hovered && my <= top + 22, mx, my,
+                rowClickable);
         if (beingEdited) {
             Liquid.rect(hexLeft - 3, cy - 6.5F, hexRight + 3, cy + 6.5F, 5.0F, ink(0x1F));
-            Liquid.rim(hexLeft - 3, cy - 6.5F, hexRight + 3, cy + 6.5F, 5.0F, 1.0F, alpha(accent, 0.7F), ink(0x14));
+            Liquid.rim(hexLeft - 3, cy - 6.5F, hexRight + 3, cy + 6.5F, 5.0F, 1.0F, alpha(editEdge(accent), 0.7F),
+                    ink(0x14));
+            drawEditedText(valueFont, Float.MAX_VALUE, false, hexRight, cy, accent);
+        } else {
+            valueFont.draw(hex, hexLeft, cy, TEXT);
         }
-        valueFont.draw(hex, hexLeft, cy, beingEdited ? accent : TEXT);
         Liquid.rect(swatchLeft, cy - 6, right, cy + 6, 4.0F, 0xFF000000 | rgb);
         Liquid.rim(swatchLeft, cy - 6, right, cy + 6, 4.0F, 1.0F, ink(0x40), ink(0x20));
         if (!open) {
@@ -2785,7 +3420,7 @@ public class AtlasClickGui extends GuiScreen {
             hit("colorHue", colour, boxX - 3, hueY - 6, boxX2 + 3, hueY + 6);
         }
         if (hovered && my > top + 22) {
-            this.hint = colour.getName() + "  ·  drag in the field for shade, along the strip for hue";
+            this.hint = colour.getLabel() + "  ·  drag in the field for shade, along the strip for hue";
         }
     }
 
@@ -2816,7 +3451,9 @@ public class AtlasClickGui extends GuiScreen {
      * the one wanted means clicking past the others and reading each in turn.
      */
     private void drawDropdown(int windowTop, int windowHeight, float mx, float my) {
-        String[] modes = modesOf(this.dropdown);
+        /* ModeProperty's own list (2026-10-23): the names used to be split back
+           out of the chat prompt at its commas. */
+        String[] modes = this.dropdown.visibleModes();
         if (modes.length == 0) {
             this.dropdown = null;
             return;
@@ -2922,23 +3559,6 @@ public class AtlasClickGui extends GuiScreen {
     }
 
     /**
-     * The options of a mode setting. ModeProperty keeps its list private and
-     * exposes only the current one, so the names come back out of the prompt
-     * it builds for the chat command, joined with ", " by that class.
-     */
-    private static String[] modesOf(ModeProperty property) {
-        String prompt = property.getValuePrompt();
-        if (prompt == null || prompt.isEmpty()) {
-            return new String[0];
-        }
-        String[] parts = prompt.split(",");
-        for (int i = 0; i < parts.length; i++) {
-            parts[i] = parts[i].trim();
-        }
-        return parts;
-    }
-
-    /**
      * The hint bar. Always present, always at the same place, showing whatever
      * the pointer is over -- so an explanation never moves, never covers what
      * it describes, and never has to be chased.
@@ -2951,6 +3571,160 @@ public class AtlasClickGui extends GuiScreen {
         LiquidFont small = font(7.5F, false);
         text = small.trim(text, width - 50);
         small.draw(text, x + 16, y + FOOTER / 2.0F - 1, blend(FAINT, DIM, shownHint));
+    }
+
+    /**
+     * The toasts, centred along the foot of the window above the hint bar,
+     * the newest lowest. Each is a hit of its own, so a click on one dismisses
+     * it and reaches nothing drawn under it.
+     */
+    private void drawToasts(int x, int y, int width, int height, float mx, float my) {
+        long now = System.currentTimeMillis();
+        List<Toasts.Toast> shown = this.toasts.visible(now);
+        if (shown.isEmpty()) {
+            return;
+        }
+        LiquidFont text = font(AtlasStyle.BODY, false);
+        float bottom = y + height - FOOTER - 8;
+        for (int i = shown.size() - 1; i >= 0; i--) {
+            Toasts.Toast toast = shown.get(i);
+            long age = now - toast.at;
+            float fade = Math.max(0.0F, Math.min(1.0F, age / 120.0F) * Math.min(1.0F, (toast.life - age) / 300.0F));
+            float rise = (1.0F - Math.min(1.0F, age / 160.0F)) * 4.0F;
+            String line = text.trim(toast.text, width - 80.0F);
+            float w = text.width(line) + 30.0F;
+            float tx = x + (width - w) / 2.0F;
+            float ty2 = bottom + rise;
+            float ty = ty2 - 20.0F;
+            float cy = (ty + ty2) / 2.0F;
+            int kind = toast.kind == Toasts.Kind.ERROR ? AtlasStyle.danger
+                    : toast.kind == Toasts.Kind.WARN ? AtlasStyle.warn
+                    : toast.kind == Toasts.Kind.OK ? AtlasStyle.ok : accent();
+            Liquid.shadow(tx, ty, tx + w, ty2, AtlasStyle.R_CONTROL, 10.0F, alpha(0x59000000, fade), 2.0F);
+            Liquid.rect(tx, ty, tx + w, ty2, AtlasStyle.R_CONTROL, alpha(AtlasStyle.toast, fade));
+            Liquid.rim(tx, ty, tx + w, ty2, AtlasStyle.R_CONTROL, 1.0F, alpha(kind, 0.55F * fade),
+                    alpha(ink(0x0A), fade));
+            Liquid.dot(tx + 11, cy, 2.5F, alpha(kind, fade));
+            text.draw(line, tx + 19, cy, alpha(TEXT, fade));
+            hit("toast", toast, tx, ty, tx + w, ty2);
+            if (mx >= tx && mx <= tx + w && my >= ty && my <= ty2) {
+                this.hint = toast.action != null ? toast.text : toast.text + "  ·  click to dismiss";
+            }
+            bottom = ty - 6.0F;
+        }
+    }
+
+    /** A result or a problem, as a toast; in chat while the menu closes, when a toast would never be seen. */
+    private void tell(Toasts.Kind kind, String message) {
+        if (this.closing || this.mc.currentScreen != this) {
+            say(message);
+            return;
+        }
+        this.toasts.add(message, kind, System.currentTimeMillis());
+    }
+
+    /** A module just switched on in the menu: what it now works against, once, as toasts. */
+    private void warnConflicts(Module module) {
+        if (!module.isEnabled()) {
+            return;
+        }
+        this.healthAt = 0L;
+        for (atlas.management.Conflicts.Conflict conflict : atlas.management.Conflicts.newFor(module.getName())) {
+            tell(Toasts.Kind.WARN, conflict.message);
+        }
+    }
+
+    /** Says what a key now does, and what else answers to the same key. */
+    private void reportKey(String what, String self, int key) {
+        if (key == 0) {
+            tell(Toasts.Kind.OK, what + " has no key now");
+            return;
+        }
+        String name = atlas.util.KeyBindUtil.getKeyName(key);
+        List<String> others = KeyConflicts.find(key, self, KeyConflicts.bindings());
+        if (others.isEmpty()) {
+            tell(Toasts.Kind.OK, what + " bound to " + name);
+        } else {
+            tell(Toasts.Kind.WARN, what + " bound to " + name + "  ·  " + name + " is also bound to "
+                    + KeyConflicts.join(others));
+        }
+    }
+
+    // ---- text fields ----------------------------------------------------
+
+    /** A field's text laid out to a width: what shows, from which character, and how wide it is. */
+    private static final class FieldLayout {
+        final int start;
+        final String head;
+        final String shown;
+        final String tail;
+        final float width;
+
+        FieldLayout(int start, String head, String shown, String tail, float width) {
+            this.start = start;
+            this.head = head;
+            this.shown = shown;
+            this.tail = tail;
+            this.width = width;
+        }
+    }
+
+    /**
+     * A field's text in maxWidth: all of it when it fits, otherwise the part
+     * around the caret with "..." where it is cut. preferTail shows the end of a
+     * long text rather than its start.
+     */
+    private static FieldLayout layoutField(TextInput input, LiquidFont font, float maxWidth, boolean preferTail) {
+        String text = input.text();
+        int start = 0;
+        int end = text.length();
+        if (font.width(text) > maxWidth) {
+            float dots = font.width("...");
+            int[] window = TextLayout.window(text, input.caret(), font::width,
+                    Math.max(0.0F, maxWidth - dots * 2.0F), preferTail);
+            start = window[0];
+            end = window[1];
+        }
+        String head = start > 0 ? "..." : "";
+        String tail = end < text.length() ? "..." : "";
+        String shown = text.substring(start, end);
+        return new FieldLayout(start, head, shown, tail, font.width(head + shown + tail));
+    }
+
+    /**
+     * Draws a laid-out field from x, or ending at x when alignRight, with a
+     * Ctrl+A selection behind it. Records where the text went, so a click can
+     * place the caret, and leaves the caret's x in fieldCaretX.
+     */
+    private void drawField(TextInput input, LiquidFont font, FieldLayout field, float x, float cy, int colour,
+                           boolean alignRight) {
+        float left = alignRight ? x - field.width : x;
+        float textX = left + font.width(field.head);
+        if (input.allSelected()) {
+            Liquid.rect(textX - 1, cy - 5.5F, textX + font.width(field.shown) + 1, cy + 5.5F, 2.0F,
+                    alpha(accent(), 0.35F));
+        }
+        font.draw(field.head + field.shown + field.tail, left, cy, colour);
+        input.drawnAt(textX, field.start, font::width);
+        int caret = Math.max(field.start, Math.min(field.start + field.shown.length(), input.caret()));
+        this.fieldCaretX = textX + font.width(field.shown.substring(0, caret - field.start));
+    }
+
+    /** The setting being typed into, ending at {@code right}, and its caret. */
+    private void drawEditedText(LiquidFont font, float maxWidth, boolean preferTail, float right, float cy, int accent) {
+        drawField(this.editInput, font, layoutField(this.editInput, font, maxWidth, preferTail), right, cy, accent, true);
+        drawEditCaret(cy, accent);
+    }
+
+    private void drawEditCaret(float cy, int accent) {
+        if (AtlasStyle.caretOn()) {
+            Liquid.rect(this.fieldCaretX + 1, cy - 4.5F, this.fieldCaretX + 2, cy + 4.5F, 0.0F, accent);
+        }
+    }
+
+    /** The edge of the field being typed into: red after Enter on something that is not a value for it. */
+    private int editEdge(int accent) {
+        return this.editError ? AtlasStyle.danger : accent;
     }
 
     // ---- icons --------------------------------------------------------
@@ -3089,6 +3863,13 @@ public class AtlasClickGui extends GuiScreen {
             /* A padlock: shackle over a body with a keyhole. */
             Liquid.ring(x, y - 2.2F, 2.8F, 1.1F, c);
             Liquid.rect(x - 4.2F, y - 1.0F, x + 4.2F, y + 5.0F, 1.2F, c);
+        } else if (key.equals("attention")) {
+            /* A warning triangle and its mark. */
+            Liquid.line(x, y - 4.6F, x - 4.8F, y + 3.8F, 1.1F, c);
+            Liquid.line(x - 4.8F, y + 3.8F, x + 4.8F, y + 3.8F, 1.1F, c);
+            Liquid.line(x + 4.8F, y + 3.8F, x, y - 4.6F, 1.1F, c);
+            Liquid.line(x, y - 1.6F, x, y + 1.0F, 1.1F, c);
+            Liquid.dot(x, y + 2.4F, 0.6F, c);
         } else if (key.equals("search")) {
             Liquid.ring(x - 0.8F, y - 0.8F, 3.3F, 1.2F, c);
             Liquid.line(x + 1.6F, y + 1.6F, x + 3.8F, y + 3.8F, 1.3F, c);
@@ -3140,20 +3921,255 @@ public class AtlasClickGui extends GuiScreen {
     private void paintPalette() {
         boolean light = this.theme.isLight();
         atlas.ui.UiMode.setLight(light);
-        TEXT = light ? 0xFF161A21 : 0xFFF5F8FF;
-        DIM = light ? 0xD1404958 : 0xD1C3CEDF;
-        FAINT = light ? 0xA6667080 : 0x9E93A3BA;
-        INK = light ? 0xFF0E1726 : 0xFFFFFFFF;
+        AtlasStyle.paint(light);
+        TEXT = AtlasStyle.text;
+        DIM = AtlasStyle.dim;
+        FAINT = AtlasStyle.faint;
+        INK = AtlasStyle.ink;
     }
 
     /** The modules behind a sidebar row: a Legit sub-group on the Legit page, a category elsewhere. */
     private List<Module> modulesOf(String name) {
+        if (isQuick(name)) {
+            boolean enabled = ENABLED.equals(name);
+            List<Module> out = new ArrayList<Module>();
+            for (Module module : pageModules()) {
+                if (enabled ? module.isEnabled() : needsAttention(module)) {
+                    out.add(module);
+                }
+            }
+            return out;
+        }
         List<Module> list = "Legit".equals(this.page) ? this.legitGroups.get(name) : this.byCategory.get(name);
         return list == null ? new ArrayList<Module>() : list;
     }
 
+    private static boolean isQuick(String name) {
+        return ENABLED.equals(name) || ATTENTION.equals(name);
+    }
+
+    /** Every module of this page once, in its categories' order. */
+    private List<Module> pageModules() {
+        List<Module> out = new ArrayList<Module>();
+        java.util.Set<Module> seen = new java.util.HashSet<Module>();
+        if ("Legit".equals(this.page)) {
+            for (List<Module> list : this.legitGroups.values()) {
+                for (Module module : list) {
+                    if (module != null && seen.add(module)) {
+                        out.add(module);
+                    }
+                }
+            }
+            return out;
+        }
+        for (Map.Entry<String, List<Module>> entry : this.byCategory.entrySet()) {
+            if ("Legit".equals(entry.getKey())) {
+                continue;
+            }
+            for (Module module : entry.getValue()) {
+                if (module != null && seen.add(module)) {
+                    out.add(module);
+                }
+            }
+        }
+        return out;
+    }
+
     private String sidebarIcon(String name) {
+        if (ENABLED.equals(name)) {
+            return "check";
+        }
+        if (ATTENTION.equals(name)) {
+            return "attention";
+        }
         return "Legit".equals(this.page) ? LegitGroups.icon(name) : name;
+    }
+
+    // ---- health marks ---------------------------------------------------
+
+    /** The module's health marks, or null when it has none. */
+    private Health health(Module module) {
+        refreshHealth();
+        return this.health.get(module);
+    }
+
+    /** Named in this session's corrections, or switched on with a setting at a risky value. */
+    private boolean needsAttention(Module module) {
+        Health h = health(module);
+        return h != null && (h.report.named > 0
+                || module.isEnabled() && (!h.risky.isEmpty() || !h.conflicts.isEmpty()));
+    }
+
+    private static boolean flagDetectorOn() {
+        Module detector = Atlas.moduleManager.modules.get(atlas.module.modules.FlagDetector.class);
+        return detector != null && detector.isEnabled();
+    }
+
+    /**
+     * Reads every module's marks again, at most four times a second: the
+     * counts are locked against the network thread, and the holds ask seven
+     * holders, which is not worth doing every frame.
+     */
+    private void refreshHealth() {
+        long now = System.currentTimeMillis();
+        if (now - this.healthAt < HEALTH_MS) {
+            return;
+        }
+        this.healthAt = now;
+        this.health.clear();
+        Map<String, Module> byName = new HashMap<String, Module>();
+        java.util.Set<Module> seen = new java.util.HashSet<Module>();
+        for (List<Module> list : this.byCategory.values()) {
+            for (Module module : list) {
+                if (module == null || !seen.add(module)) {
+                    continue;
+                }
+                String type = module.getClass().getSimpleName();
+                byName.put(module.getName(), module);
+                byName.put(type, module);
+                ModuleHealth.Report report = ModuleHealth.of(now, module.getName(), type);
+                if (report.any()) {
+                    healthOf(module).report = report;
+                }
+                if (RiskRules.covers(module.getClass())) {
+                    List<Property<?>> properties = Atlas.propertyManager.properties.get(module.getClass());
+                    if (properties != null) {
+                        for (Property<?> property : properties) {
+                            if (RiskRules.warning(module.getClass(), property) != null) {
+                                healthOf(module).risky.add(property);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for (atlas.management.Conflicts.Conflict conflict : atlas.management.Conflicts.current()) {
+            if (atlas.management.Conflicts.isIgnored(conflict.key)) {
+                continue;
+            }
+            for (String name : conflict.names) {
+                int open = name.indexOf(" (");
+                Module module = byName.get(open > 0 ? name.substring(0, open) : name);
+                if (module != null && !healthOf(module).conflicts.contains(conflict)) {
+                    healthOf(module).conflicts.add(conflict);
+                }
+            }
+        }
+        /* Holders name themselves "FakeLag", "Backtrack", "Blink/NoSlow",
+           "DelayManager/BedNuker": the part after a slash is the module. */
+        for (PacketHolds.Hold hold : PacketHolds.snapshot()) {
+            String name = hold.holder == null ? "" : hold.holder;
+            int slash = name.lastIndexOf('/');
+            Module module = byName.get(slash >= 0 ? name.substring(slash + 1) : name);
+            if (module == null) {
+                continue;
+            }
+            Health h = healthOf(module);
+            h.held += hold.count;
+            String way = hold.direction == PacketHolds.Direction.OUT ? "outgoing" : "incoming";
+            h.heldWay = h.heldWay.isEmpty() || h.heldWay.equals(way) ? way : "both ways";
+        }
+    }
+
+    private Health healthOf(Module module) {
+        Health h = this.health.get(module);
+        if (h == null) {
+            h = new Health();
+            this.health.put(module, h);
+        }
+        return h;
+    }
+
+    /** Why this setting of the selected module is at a risky value, or null. */
+    private String riskOf(Property<?> property) {
+        if (this.selected == null || this.profilesView || this.appearanceView || this.serversView) {
+            return null;
+        }
+        return RiskRules.warning(this.selected.getClass(), property);
+    }
+
+    /**
+     * A module row's mark after its name: the number of corrections it was
+     * named for this session (amber; red when three came in five minutes), or
+     * a small warning for a setting at a risky value. Returns where it ends.
+     */
+    private float drawHealthBadge(Health h, float x, float cy) {
+        if (h == null) {
+            return x;
+        }
+        if (h.report.named > 0) {
+            LiquidFont bold = font(7.0F, true);
+            String count = String.valueOf(h.report.named);
+            float w = Math.max(11.0F, bold.width(count) + 8.0F);
+            int colour = h.report.recent >= 3 ? AtlasStyle.danger : AtlasStyle.warn;
+            Liquid.rect(x, cy - 5.5F, x + w, cy + 5.5F, 5.5F, alpha(colour, 0.9F));
+            bold.drawCentred(count, x + w / 2.0F, cy, 0xFF14161C);
+            return x + w;
+        }
+        if (!h.risky.isEmpty() || !h.conflicts.isEmpty()) {
+            drawWarning(x + 4.0F, cy, 3.6F);
+            return x + 8.0F;
+        }
+        return x;
+    }
+
+    /**
+     * The detail pane's health lines, under the description, only when there
+     * is something to say. A risky setting's line opens that setting.
+     */
+    private float drawHealthStrip(Module module, int x, int width, float cursor, float mx, float my, float arrived) {
+        Health h = health(module);
+        if (h == null) {
+            return cursor;
+        }
+        LiquidFont small = font(8.0F, false);
+        float textWidth = width - 44;
+        float lineY = cursor;
+        ModuleHealth.Report report = h.report;
+        if (report.named > 0) {
+            String text = "Named as the likely cause of " + report.named
+                    + (report.named == 1 ? " correction" : " corrections") + " this session  ·  last "
+                    + AtlasProfiles.age(report.lastAt);
+            healthLine(small, text, x, lineY, textWidth, report.recent >= 3 ? AtlasStyle.danger : AtlasStyle.warn,
+                    arrived);
+            lineY += 11;
+        }
+        if (report.involved > 0) {
+            String text = (report.named > 0 ? "Also among the possible causes of " : "Among the possible causes of ")
+                    + report.involved + (report.involved == 1 ? " correction" : " corrections");
+            healthLine(small, text, x, lineY, textWidth, FAINT, arrived);
+            lineY += 11;
+        }
+        if (h.held > 0) {
+            healthLine(small, "Holding " + h.held + (h.held == 1 ? " packet" : " packets") + " now (" + h.heldWay + ")",
+                    x, lineY, textWidth, accent(), arrived);
+            lineY += 11;
+        }
+        for (Property<?> property : h.risky) {
+            String text = property.getLabel() + " is at a risky value  ·  click to see why";
+            boolean hovered = mx >= x + 16 && mx <= x + width - 16 && my >= lineY - 5.5F && my <= lineY + 5.5F;
+            hit("riskOpen", property, x + 16, lineY - 5.5F, x + width - 16, lineY + 5.5F);
+            healthLine(small, text, x, lineY, textWidth, AtlasStyle.warn, arrived);
+            if (hovered) {
+                this.hint = property.getLabel() + ": " + RiskRules.warning(module.getClass(), property);
+            }
+            lineY += 11;
+        }
+        for (atlas.management.Conflicts.Conflict conflict : h.conflicts) {
+            boolean hovered = mx >= x + 16 && mx <= x + width - 16 && my >= lineY - 5.5F && my <= lineY + 5.5F;
+            hit("conflictIgnore", conflict, x + 16, lineY - 5.5F, x + width - 16, lineY + 5.5F);
+            healthLine(small, conflict.message, x, lineY, textWidth, AtlasStyle.warn, arrived);
+            if (hovered) {
+                this.hint = conflict.message + "  ·  click to stop warning about this";
+            }
+            lineY += 11;
+        }
+        return lineY == cursor ? cursor : lineY + 4;
+    }
+
+    private void healthLine(LiquidFont font, String text, int x, float cy, float width, int colour, float arrived) {
+        Liquid.dot(x + 20, cy, 2.2F, alpha(colour, arrived));
+        font.draw(font.trim(text, width), x + 28, cy, alpha(DIM, arrived));
     }
 
     /** The top-level page a module lives on, as its tab is labelled. */
@@ -3163,11 +4179,11 @@ public class AtlasClickGui extends GuiScreen {
 
     /** The colour that marks a search result from the other page. */
     private static int foreignColour() {
-        return atlas.ui.UiMode.isLight() ? 0xFF6A4BD6 : 0xFFB59CFF;
+        return AtlasStyle.foreign;
     }
 
     private static int foreignText() {
-        return atlas.ui.UiMode.isLight() ? 0xFF3E2A99 : 0xFFE9E1FF;
+        return AtlasStyle.foreignText;
     }
 
     /** A dashed outline along the straight parts of a rounded rectangle. */
@@ -3232,8 +4248,21 @@ public class AtlasClickGui extends GuiScreen {
         ScaledResolution sr = new ScaledResolution(mc);
         float mx = layoutX(mouseX);
         float my = layoutY(mouseY);
-        Hit target = hitAt(mx, my);
+        UiContext.Hit target = hitAt(mx, my);
 
+        if (this.dialog != null) {
+            Dialog open = this.dialog;
+            if (target != null && target.kind.startsWith("dialog") && target.payload instanceof Integer) {
+                this.dialog = null;
+                Runnable action = open.actions[((Integer) target.payload).intValue()];
+                if (action != null) {
+                    action.run();
+                }
+            } else if (target == null || "dialogOutside".equals(target.kind)) {
+                this.dialog = null;
+            }
+            return;
+        }
         /* The report dialog takes every click while it is open: Send sends,
            anything outside the dialog box closes it (2026-10-07). */
         if (this.reportConfirm) {
@@ -3254,7 +4283,7 @@ public class AtlasClickGui extends GuiScreen {
            was underneath turns closing a menu into changing a setting. */
         if (this.dropdown != null) {
             ModeProperty open = this.dropdown;
-            this.springs.remove("drop:" + open.getName());
+            this.ui.removeSpring("drop:" + open.getName());
             this.dropdown = null;
             if (target != null && "pick".equals(target.kind)) {
                 open.setVisible(((Integer) target.payload).intValue());
@@ -3263,6 +4292,14 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
         if (this.orbitPreview.mouseClicked(mouseX, mouseY, button)) {
+            return;
+        }
+        if (target != null && "toast".equals(target.kind)) {
+            Toasts.Toast toast = (Toasts.Toast) target.payload;
+            this.toasts.dismiss(toast);
+            if (toast.action != null) {
+                toast.action.run();
+            }
             return;
         }
 
@@ -3278,6 +4315,11 @@ public class AtlasClickGui extends GuiScreen {
 
         this.searchFocused = target != null && "search".equals(target.kind);
         this.profileNameFocused = target != null && "profileName".equals(target.kind);
+        if (this.searchFocused) {
+            this.searchInput.placeAt(mx);
+        } else if (this.profileNameFocused) {
+            this.profileNameInput.placeAt(mx);
+        }
         if (target == null || "search".equals(target.kind) || "profileName".equals(target.kind)) {
             return;
         }
@@ -3322,47 +4364,96 @@ public class AtlasClickGui extends GuiScreen {
         if ("appearance".equals(target.kind)) {
             this.appearanceView = true;
             this.profilesView = false;
+            this.serversView = false;
             this.page = "Client Settings";
-            this.search = "";
+            this.searchInput.clear();
             this.detailScroll = 0;
+            return;
+        }
+        if ("servers".equals(target.kind)) {
+            this.serversView = true;
+            this.profilesView = false;
+            this.appearanceView = false;
+            this.page = "Client Settings";
+            this.searchInput.clear();
+            return;
+        }
+        if ("autoConfig".equals(target.kind)) {
+            atlas.module.modules.ServerProfiles profiles = serverProfiles();
+            if (profiles != null) {
+                profiles.setEnabled(!profiles.isEnabled());
+            }
+            return;
+        }
+        if ("ruleDelete".equals(target.kind)) {
+            atlas.module.modules.ServerProfiles profiles = serverProfiles();
+            int index = ((Integer) target.payload).intValue();
+            if (profiles != null) {
+                List<String[]> rules = atlas.module.modules.ServerProfiles.parse(profiles.rules.getValue());
+                if (index >= 0 && index < rules.size()) {
+                    String[] gone = rules.remove(index);
+                    profiles.rules.setValue(atlas.module.modules.ServerProfiles.format(rules));
+                    tell(Toasts.Kind.OK, "Removed " + gone[0] + " = " + gone[1]);
+                }
+            }
+            return;
+        }
+        if ("ruleHere".equals(target.kind)) {
+            useProfileHere();
             return;
         }
         if ("group".equals(target.kind)) {
             String group = (String) target.payload;
             if (!group.equals(this.appearanceGroup)) {
-                this.lit.put("groupArrive", Float.valueOf(0.0F));
+                this.infoOpen = null;
+                this.ui.set("groupArrive", Float.valueOf(0.0F));
                 this.detailScroll = 0;
-                this.lit.put("detailScroll", Float.valueOf(0.0F));
+                this.ui.set("detailScroll", Float.valueOf(0.0F));
             }
             this.appearanceGroup = group;
             return;
         }
         if ("preset".equals(target.kind)) {
             pulse("btn:preset:" + target.payload);
+            final java.util.Map<Property<?>, Object> before = this.theme.values();
             this.theme.apply((String) target.payload);
-            say("appearance set to " + target.payload);
+            this.toasts.add("Appearance set to " + target.payload + "  ·  click to undo", Toasts.Kind.OK,
+                    System.currentTimeMillis(), () -> this.theme.restore(before));
             return;
         }
         if ("themeReset".equals(target.kind)) {
             pulse("btn:themeReset");
+            final java.util.Map<Property<?>, Object> before = this.theme.values();
             this.theme.reset();
-            say("appearance reset");
+            this.toasts.add("Appearance reset  ·  click to undo", Toasts.Kind.OK, System.currentTimeMillis(),
+                    () -> this.theme.restore(before));
             return;
         }
         if ("category".equals(target.kind)) {
             this.appearanceView = false;
+            this.serversView = false;
             this.profilesView = false;
             this.category = (String) target.payload;
-            this.search = "";
+            this.searchInput.clear();
             this.listScroll = 0;
             List<Module> modules = visibleModules();
             this.selected = modules.isEmpty() ? null : modules.get(0);
+            this.infoOpen = null;
+            this.descriptionOpen = null;
             return;
         }
         if ("rowSwitch".equals(target.kind)) {
             Module module = (Module) target.payload;
             module.setEnabled(!module.isEnabled());
             pulse("tog:" + module.getName());
+            warnConflicts(module);
+            return;
+        }
+        if ("conflictIgnore".equals(target.kind)) {
+            atlas.management.Conflicts.Conflict conflict = (atlas.management.Conflicts.Conflict) target.payload;
+            atlas.management.Conflicts.ignore(conflict.key);
+            this.healthAt = 0L;
+            tell(Toasts.Kind.OK, "Won't warn about this again");
             return;
         }
         if ("module".equals(target.kind)) {
@@ -3370,17 +4461,61 @@ public class AtlasClickGui extends GuiScreen {
             /* A row only selects. Toggling from anywhere on the row turned
                modules on by accident while reaching for their settings. */
             if (this.selected != module) {
-                this.lit.put("detailArrive", Float.valueOf(0.0F));
+                this.ui.set("detailArrive", Float.valueOf(0.0F));
                 this.detailScroll = 0;
-                this.lit.put("detailScroll", Float.valueOf(0.0F));
+                this.ui.set("detailScroll", Float.valueOf(0.0F));
+                this.infoOpen = null;
+                this.descriptionOpen = null;
             }
             this.selected = module;
+            return;
+        }
+        if ("settingResult".equals(target.kind)) {
+            openSetting((SearchIndex.Entry) target.payload);
+            return;
+        }
+        if ("riskOpen".equals(target.kind) && this.selected != null) {
+            openSetting(this.selected, (Property<?>) target.payload);
+            return;
+        }
+        if ("info".equals(target.kind)) {
+            Property<?> property = (Property<?>) target.payload;
+            this.infoOpen = this.infoOpen == property ? null : property;
+            return;
+        }
+        if ("infoReset".equals(target.kind)) {
+            Property<?> property = (Property<?>) target.payload;
+            pulse("btn:infoReset");
+            if (SettingFacts.reset(property)) {
+                pulse("edit:" + property.getName());
+                tell(Toasts.Kind.OK, property.getLabel() + " reset to " + SettingFacts.defaultText(property));
+            }
+            return;
+        }
+        if ("resetModule".equals(target.kind)) {
+            final Module module = (Module) target.payload;
+            final List<Property<?>> all = Atlas.propertyManager.properties.get(module.getClass());
+            int changed = all == null ? 0 : SettingFacts.countChanged(all);
+            this.dialog = new Dialog("Reset " + module.getName() + "?",
+                    "Puts its " + changed + (changed == 1 ? " changed setting" : " changed settings")
+                            + " back to the defaults, those of its other modes too.",
+                    new String[]{"Reset", "Cancel"}, new int[]{2, 1}, new Runnable[]{() -> {
+                        int count = all == null ? 0 : SettingFacts.resetAll(all);
+                        tell(Toasts.Kind.OK, "Reset " + count + (count == 1 ? " setting" : " settings")
+                                + " of " + module.getName() + " to the defaults");
+                    }, null});
+            return;
+        }
+        if ("descMore".equals(target.kind)) {
+            Module module = (Module) target.payload;
+            this.descriptionOpen = this.descriptionOpen == module ? null : module;
             return;
         }
         if ("power".equals(target.kind)) {
             Module module = (Module) target.payload;
             module.setEnabled(!module.isEnabled());
             pulse("tog:" + module.getName());
+            warnConflicts(module);
             return;
         }
         if ("bind".equals(target.kind)) {
@@ -3409,7 +4544,7 @@ public class AtlasClickGui extends GuiScreen {
                 return;
             }
             Spring grow = new Spring(0.0F, 420.0F, 22.0F);
-            this.springs.put("drop:" + mode.getName(), grow);
+            this.ui.putSpring("drop:" + mode.getName(), grow);
             this.dropdown = mode;
             this.dropScrollInit = true;
             return;
@@ -3417,13 +4552,15 @@ public class AtlasClickGui extends GuiScreen {
         if ("type".equals(target.kind)) {
             Property<?> property = (Property<?>) target.payload;
             if (this.editing == property) {
-                /* Already typing into it. Re-reading the value here would
-                   replace what has been typed so far. */
+                /* Already typing into it: the click moves the caret. Re-reading
+                   the value here would replace what has been typed so far. */
+                this.editInput.placeAt(mx);
                 return;
             }
             this.editing = property;
-            this.editBuffer = property.formatValue()
-                    .replaceAll("[&§][0-9a-fklmnor]", "").replace("%", "");
+            this.editError = false;
+            this.editInput.set(property.formatValue()
+                    .replaceAll("[&§][0-9a-fklmnor]", "").replace("%", ""));
             return;
         }
         if ("keyProp".equals(target.kind)) {
@@ -3463,19 +4600,20 @@ public class AtlasClickGui extends GuiScreen {
     }
 
     /** Everything the profiles view can be clicked for. Returns whether it was one. */
-    private boolean handleProfileClick(Hit target) {
+    private boolean handleProfileClick(UiContext.Hit target) {
         String kind = target.kind;
         if ("profiles".equals(kind)) {
             this.profilesView = true;
             this.appearanceView = false;
+            this.serversView = false;
             this.page = "Client Settings";
-            this.search = "";
+            this.searchInput.clear();
             return true;
         }
         if ("profile".equals(kind)) {
             String name = (String) target.payload;
             if (!name.equals(this.profileSelected)) {
-                this.lit.put("profileArrive", Float.valueOf(0.0F));
+                this.ui.set("profileArrive", Float.valueOf(0.0F));
             }
             this.profileSelected = name;
             return true;
@@ -3487,7 +4625,7 @@ public class AtlasClickGui extends GuiScreen {
         }
         if ("profileLoad".equals(kind)) {
             pulse("btn:" + kind);
-            AtlasProfiles.load((String) target.payload);
+            loadProfile((String) target.payload);
             return true;
         }
         if ("profileSave".equals(kind)) {
@@ -3496,25 +4634,23 @@ public class AtlasClickGui extends GuiScreen {
             AtlasProfiles.save(name);
             pulse("saved:" + name);
             this.profilesReadAt = 0L;
+            this.unsavedAt = 0L;
             return true;
         }
         if ("profileDelete".equals(kind)) {
-            String name = (String) target.payload;
-            long now = System.currentTimeMillis();
-            if (name.equals(this.confirmDelete) && now - this.confirmDeleteAt < CONFIRM_MS) {
-                this.confirmDelete = null;
-                if (AtlasProfiles.delete(name)) {
-                    say("deleted profile " + name);
-                    this.profileSelected = null;
-                } else {
-                    say("could not delete " + name);
-                }
-                this.profilesReadAt = 0L;
-            } else {
-                this.confirmDelete = name;
-                this.confirmDeleteAt = now;
-                pulse("btn:" + kind);
-            }
+            final String name = (String) target.payload;
+            pulse("btn:" + kind);
+            this.dialog = new Dialog("Delete " + name + "?", "Deletes " + name + ".json from config/Atlas."
+                    + " This cannot be undone.", new String[]{"Delete", "Cancel"}, new int[]{2, 1},
+                    new Runnable[]{() -> {
+                        if (AtlasProfiles.delete(name)) {
+                            tell(Toasts.Kind.OK, "Deleted profile " + name);
+                            this.profileSelected = null;
+                        } else {
+                            tell(Toasts.Kind.ERROR, "Could not delete " + name);
+                        }
+                        this.profilesReadAt = 0L;
+                    }, null});
             return true;
         }
         if ("profileFolder".equals(kind)) {
@@ -3525,19 +4661,98 @@ public class AtlasClickGui extends GuiScreen {
         return false;
     }
 
+    /** Whether the profile in use has changes its file does not, read at most once a second. */
+    private boolean profileUnsaved() {
+        long now = System.currentTimeMillis();
+        if (now - this.unsavedAt > 1000L) {
+            this.unsavedAt = now;
+            this.unsaved = atlas.config.Config.differsFromFile(AtlasProfiles.current());
+        }
+        return this.unsaved;
+    }
+
+    /**
+     * Loads a profile; with unsaved changes in the one in use, asks first
+     * (2026-10-23: loading used to drop them without a word).
+     */
+    private void loadProfile(final String name) {
+        final String current = AtlasProfiles.current();
+        boolean changes = atlas.config.Config.differsFromFile(current);
+        Runnable load = () -> {
+            AtlasProfiles.load(name);
+            this.unsavedAt = 0L;
+            this.profilesReadAt = 0L;
+        };
+        if (!changes) {
+            load.run();
+            return;
+        }
+        if (name.equalsIgnoreCase(current)) {
+            this.dialog = new Dialog("Reload " + name + "?",
+                    "Your changes since it was last saved are lost.",
+                    new String[]{"Reload", "Cancel"}, new int[]{2, 1}, new Runnable[]{load, null});
+            return;
+        }
+        this.dialog = new Dialog("Save your changes first?",
+                "You changed settings in " + current + " since it was saved. Loading " + name + " replaces them.",
+                new String[]{"Save and load", "Load without saving", "Cancel"}, new int[]{0, 2, 1},
+                new Runnable[]{() -> {
+                    AtlasProfiles.save(current);
+                    load.run();
+                }, load, null});
+    }
+
+    /** The open dialog, over the whole window like the report dialog. */
+    private void drawDialog(int x, int y, int width, int height, float mx, float my) {
+        Dialog open = this.dialog;
+        Liquid.rect(x, y, x + width, y + height, RADIUS, 0x99000000, 0xAA000000);
+        hit("dialogOutside", null, x, y, x + width, y + height);
+        float w = Math.min(340.0F, width - 20.0F);
+        LiquidFont body = font(8.5F, false);
+        List<String> lines = body.wrap(open.body, w - 36);
+        float h = 70.0F + lines.size() * 11.0F;
+        float bx = x + (width - w) / 2.0F;
+        float by = y + (height - h) / 2.0F;
+        Liquid.shadow(bx, by, bx + w, by + h, 16.0F, 18.0F, 0x80000000, 4.0F);
+        Liquid.rect(bx, by, bx + w, by + h, 16.0F, atlas.ui.UiMode.isLight() ? 0xFAF6F8FB : 0xF2141820,
+                atlas.ui.UiMode.isLight() ? 0xFAEEF1F5 : 0xF20D1016);
+        Liquid.rim(bx, by, bx + w, by + h, 16.0F, 1.0F, ink(0x24), ink(0x10));
+        hit("dialogBox", null, bx, by, bx + w, by + h);
+        font(12.0F, true).draw(font(12.0F, true).trim(open.title, w - 36), bx + 18, by + 22, TEXT);
+        float cursor = by + 40;
+        for (String line : lines) {
+            body.draw(line, bx + 18, cursor, DIM);
+            cursor += 11;
+        }
+        LiquidFont bold = font(8.5F, true);
+        float total = 0.0F;
+        for (String label : open.labels) {
+            total += bold.width(label) + 22 + 8;
+        }
+        float bxx = bx + w - 18 - (total - 8);
+        float buttonsY = by + h - 20;
+        for (int i = 0; i < open.labels.length; i++) {
+            bxx += drawButton("dialog" + i, Integer.valueOf(i), bxx, buttonsY, 0.0F, open.labels[i], open.styles[i],
+                    mx, my) + 8;
+        }
+        if (mx >= bx && mx <= bx + w && my >= by && my <= by + h) {
+            this.hint = "Enter: " + open.labels[0] + "  ·  Esc: close";
+        }
+    }
+
     /** Saves the current setup under the typed name, and selects it. */
     private void createProfile() {
-        String name = AtlasProfiles.clean(this.profileName);
+        String name = AtlasProfiles.clean(this.profileNameInput.text());
         if (name.isEmpty()) {
-            say("type a name for the profile first");
+            tell(Toasts.Kind.WARN, "Type a name for the profile first");
             this.profileNameFocused = true;
             return;
         }
         AtlasProfiles.save(name);
-        this.profileName = "";
+        this.profileNameInput.clear();
         this.profileNameFocused = false;
         this.profileSelected = name;
-        this.lit.put("profileArrive", Float.valueOf(0.0F));
+        this.ui.set("profileArrive", Float.valueOf(0.0F));
         this.profilesReadAt = 0L;
         pulse("saved:" + name);
     }
@@ -3683,85 +4898,107 @@ public class AtlasClickGui extends GuiScreen {
     private void commitEdit() {
         Property<?> property = this.editing;
         this.editing = null;
-        if (property == null) {
-            return;
+        this.editError = false;
+        if (property != null) {
+            applyEdit(property);
         }
-        String text = this.editBuffer.trim();
+    }
+
+    /**
+     * Applies the typed text to the setting. False, with a toast saying why,
+     * when it is not a value for it: a number that does not parse, or text the
+     * setting's own check turns down (parseString returns false then; that used
+     * to pass as applied).
+     */
+    private boolean applyEdit(Property<?> property) {
+        String text = this.editInput.text().trim();
         if (text.isEmpty()) {
-            return;
+            return true;
         }
+        boolean applied;
         try {
             if (isNumeric(property)) {
                 assign(property, Float.parseFloat(text.replace("%", "")));
+                applied = true;
             } else {
-                property.parseString(text);
+                applied = property.parseString(text);
             }
-            pulse("edit:" + property.getName());
         } catch (Exception ignored) {
-            say("\"" + text + "\" is not a value for " + property.getLabel()
+            applied = false;
+        }
+        if (applied) {
+            pulse("edit:" + property.getName());
+        } else {
+            tell(Toasts.Kind.ERROR, "\"" + text + "\" is not a value for " + property.getLabel()
                     + " (" + property.getValuePrompt() + ")");
         }
+        return applied;
     }
 
     @Override
     protected void keyTyped(char typed, int key) {
+        if (this.dialog != null) {
+            Dialog open = this.dialog;
+            if (key == Keyboard.KEY_ESCAPE) {
+                this.dialog = null;
+            } else if (key == Keyboard.KEY_RETURN || key == Keyboard.KEY_NUMPADENTER) {
+                this.dialog = null;
+                if (open.actions[0] != null) {
+                    open.actions[0].run();
+                }
+            }
+            return;
+        }
         if (this.reportConfirm) {
-            if (key == Keyboard.KEY_RETURN || key == Keyboard.KEY_NUMPADENTER) {
+            TextInput.Result result = this.reportInput.key(typed, key, GuiScreen.isCtrlKeyDown(),
+                    GuiScreen::getClipboardString);
+            if (result == TextInput.Result.SUBMIT) {
                 sendReport();
-            } else if (key == Keyboard.KEY_ESCAPE) {
+            } else if (result == TextInput.Result.CANCEL) {
                 this.reportConfirm = false;
-            } else if (key == Keyboard.KEY_BACK) {
-                if (!this.reportText.isEmpty()) {
-                    this.reportText = this.reportText.substring(0, this.reportText.length() - 1);
-                }
-            } else if (GuiScreen.isKeyComboCtrlV(key)) {
-                String paste = GuiScreen.getClipboardString();
-                if (paste != null) {
-                    paste = paste.replace("\r", "").replace('\t', ' ');
-                    this.reportText = (this.reportText + paste).substring(0,
-                            Math.min(REPORT_TEXT_MAX, this.reportText.length() + paste.length()));
-                }
-            } else if (typed >= 32 && typed != 127 && this.reportText.length() < REPORT_TEXT_MAX) {
-                this.reportText += typed;
             }
             return;
         }
         if (this.binding != null) {
             /* Escape clears rather than cancels: wanting to remove a key is far
-               commoner than changing one's mind about setting one. */
-            this.binding.setKey(key == Keyboard.KEY_ESCAPE ? 0 : key);
-            say(this.binding.getName() + " bound to "
-                    + (key == Keyboard.KEY_ESCAPE ? "nothing"
-                            : atlas.util.KeyBindUtil.getKeyName(key)));
+               commoner than changing one's mind about setting one (kept, owner
+               2026-10-23). Another module on the same key is said, not refused. */
+            Module bound = this.binding;
             this.binding = null;
+            int newKey = key == Keyboard.KEY_ESCAPE ? 0 : key;
+            bound.setKey(newKey);
+            reportKey(bound.getName(), bound.getName(), newKey);
             return;
         }
         if (this.keyEditing != null) {
             /* Escape clears, as for a module's own key. */
             KeyProperty edited = this.keyEditing;
             this.keyEditing = null;
-            edited.setValue(Integer.valueOf(key == Keyboard.KEY_ESCAPE ? Keyboard.KEY_NONE : key));
+            int newKey = key == Keyboard.KEY_ESCAPE ? Keyboard.KEY_NONE : key;
+            edited.setValue(Integer.valueOf(newKey));
             pulse("edit:" + edited.getName());
-            say(edited.getName() + " set to " + edited.getKeyName());
+            String self = this.selected == null ? edited.getLabel()
+                    : KeyConflicts.nameOf(this.selected, edited);
+            reportKey(edited.getLabel(), self, newKey);
             return;
         }
         if (this.editing != null) {
-            if (key == Keyboard.KEY_RETURN || key == Keyboard.KEY_NUMPADENTER) {
-                commitEdit();
-                return;
-            }
-            if (key == Keyboard.KEY_ESCAPE) {
-                this.editing = null;
-                return;
-            }
-            if (key == Keyboard.KEY_BACK) {
-                if (!this.editBuffer.isEmpty()) {
-                    this.editBuffer = this.editBuffer.substring(0, this.editBuffer.length() - 1);
+            TextInput.Result result = this.editInput.key(typed, key, GuiScreen.isCtrlKeyDown(),
+                    GuiScreen::getClipboardString);
+            if (result == TextInput.Result.SUBMIT) {
+                /* Something that is not a value keeps the field open, edged
+                   red, to be corrected; a click elsewhere still gives up on it. */
+                if (applyEdit(this.editing)) {
+                    this.editing = null;
+                    this.editError = false;
+                } else {
+                    this.editError = true;
                 }
-                return;
-            }
-            if (typed >= 32 && typed != 127) {
-                this.editBuffer += typed;
+            } else if (result == TextInput.Result.CANCEL) {
+                this.editing = null;
+                this.editError = false;
+            } else if (result == TextInput.Result.EDITED) {
+                this.editError = false;
             }
             return;
         }
@@ -3770,16 +5007,12 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
         if (this.profileNameFocused) {
-            if (key == Keyboard.KEY_RETURN || key == Keyboard.KEY_NUMPADENTER) {
+            TextInput.Result result = this.profileNameInput.key(typed, key, GuiScreen.isCtrlKeyDown(),
+                    GuiScreen::getClipboardString);
+            if (result == TextInput.Result.SUBMIT) {
                 createProfile();
-            } else if (key == Keyboard.KEY_ESCAPE) {
+            } else if (result == TextInput.Result.CANCEL) {
                 this.profileNameFocused = false;
-            } else if (key == Keyboard.KEY_BACK) {
-                if (!this.profileName.isEmpty()) {
-                    this.profileName = this.profileName.substring(0, this.profileName.length() - 1);
-                }
-            } else if (typed >= 32 && typed != 127 && this.profileName.length() < 32) {
-                this.profileName += typed;
             }
             return;
         }
@@ -3796,7 +5029,9 @@ public class AtlasClickGui extends GuiScreen {
            Control plus a letter is untouched inside a screen, and holding
            Control keeps the character out of the search box as well. */
         if (GuiScreen.isCtrlKeyDown()) {
-            if (key == Keyboard.KEY_L) {
+            if (this.searchFocused && (key == Keyboard.KEY_V || key == Keyboard.KEY_A)) {
+                editSearch(typed, key, true);
+            } else if (key == Keyboard.KEY_L) {
                 if (AtlasInspector.isRecording()) {
                     say(AtlasInspector.report());
                 } else {
@@ -3814,7 +5049,7 @@ public class AtlasClickGui extends GuiScreen {
                 this.userHeight = DEFAULT_HEIGHT;
                 this.userX = UNSET;
                 this.userY = UNSET;
-                say("window reset to " + DEFAULT_WIDTH + "x" + DEFAULT_HEIGHT + ", centred");
+                tell(Toasts.Kind.OK, "Window reset to " + DEFAULT_WIDTH + "x" + DEFAULT_HEIGHT + ", centred");
             } else if (key == Keyboard.KEY_P) {
                 this.perf = !this.perf;
             } else if (key == Keyboard.KEY_H && this.selected != null) {
@@ -3824,10 +5059,10 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
         if (key == Keyboard.KEY_ESCAPE) {
-            if (!this.search.isEmpty()) {
+            if (!this.searchInput.isEmpty()) {
                 /* Escape clears the search before it closes the menu: losing a
                    filter is a smaller surprise than losing the menu. */
-                this.search = "";
+                this.searchInput.clear();
                 this.listScroll = 0;
                 alignCategory();
                 return;
@@ -3835,24 +5070,47 @@ public class AtlasClickGui extends GuiScreen {
             mc.displayGuiScreen(null);
             return;
         }
-        if (key == Keyboard.KEY_BACK) {
-            if (!this.search.isEmpty()) {
-                this.search = this.search.substring(0, this.search.length() - 1);
-                this.listScroll = 0;
-                alignCategory();
-            }
-            return;
-        }
         /* Any printable character starts a search, wherever focus nominally
            is. Having to click a box first is what stops people searching. */
-        if (typed >= 32 && typed != 127) {
+        boolean printable = typed >= 32 && typed != 127;
+        if (this.searchFocused || printable || key == Keyboard.KEY_BACK) {
+            editSearch(typed, key, false);
+        }
+    }
+
+    /**
+     * A key for the search box. Without the box focused, typing and Backspace
+     * work at the end of the search, as they always did; with it focused the
+     * caret moves too.
+     */
+    private void editSearch(char typed, int key, boolean ctrl) {
+        if (!this.searchFocused) {
+            this.searchInput.toEnd();
+        }
+        String before = this.searchInput.text();
+        TextInput.Result result = this.searchInput.key(typed, key, ctrl, GuiScreen::getClipboardString);
+        if (result == TextInput.Result.SUBMIT) {
+            openFirstResult();
+            return;
+        }
+        if (result != TextInput.Result.EDITED || this.searchInput.text().equals(before)) {
+            return;
+        }
+        this.listScroll = 0;
+        if (this.searchInput.isEmpty()) {
+            alignCategory();
+        } else {
             /* A search is of modules, so it leaves the profiles and appearance views. */
             this.profilesView = false;
             this.appearanceView = false;
-            this.search += typed;
+            this.serversView = false;
             this.searchFocused = true;
-            this.listScroll = 0;
         }
+    }
+
+    /** What is typed in the search box. */
+    private String search() {
+        return this.searchInput.text();
     }
 
     private void say(String message) {
@@ -3865,23 +5123,36 @@ public class AtlasClickGui extends GuiScreen {
         loadState();
         atlas.ui.GuiPerf.step("load");
         build();
+        /* Names and help do not change in a session, so the index is built
+           once, and again only if a module is added (a script). */
+        if (Atlas.moduleManager.modules.size() != this.indexedModules) {
+            buildIndex();
+            this.indexedModules = Atlas.moduleManager.modules.size();
+        }
+        this.searchedFor = null;
         atlas.ui.GuiPerf.step("build");
         this.binding = null;
         this.keyEditing = null;
         this.colorDrag = null;
         this.editing = null;
+        this.editError = false;
+        this.closing = false;
+        this.dialog = null;
+        this.unsavedAt = 0L;
+        this.toasts.clear();
+        this.infoOpen = null;
+        this.descriptionOpen = null;
         this.dropdown = null;
         this.dragging = null;
         this.movingWindow = false;
         this.resizingWindow = false;
         this.searchFocused = false;
         this.profileNameFocused = false;
-        this.confirmDelete = null;
         this.profilesReadAt = 0L;
         /* The filter is per-visit; the category and the selected module are
            not, which is the difference between "where I was" and "what I was
            looking for at the time". */
-        this.search = "";
+        this.searchInput.clear();
         this.listScroll = 0;
         this.openedFor = 0.0F;
         this.open.snap(0.92F);
@@ -3890,9 +5161,7 @@ public class AtlasClickGui extends GuiScreen {
         atlas.ui.GuiPerf.step("theme");
         alignCategory();
         this.lastFrame = 0L;
-        this.lit.clear();
-        this.springs.clear();
-        this.hits.clear();
+        this.ui.reset();
         this.lenses.clear();
         /* Every size the menu draws, built now rather than on the first frame
            that needs it, where building them would stall the opening. */
@@ -3913,11 +5182,12 @@ public class AtlasClickGui extends GuiScreen {
      * selection instead of dropping it.
      */
     private void alignCategory() {
-        if (this.selected == null || !this.search.trim().isEmpty() || this.profilesView || this.appearanceView) {
+        if (this.selected == null || !search().trim().isEmpty() || this.profilesView || this.appearanceView
+                || this.serversView) {
             return;
         }
         Map<String, List<Module>> lists = "Legit".equals(this.page) ? this.legitGroups : this.byCategory;
-        List<Module> here = lists.get(this.category);
+        List<Module> here = isQuick(this.category) ? modulesOf(this.category) : lists.get(this.category);
         if (here != null && here.contains(this.selected)) {
             return;
         }
@@ -3933,7 +5203,9 @@ public class AtlasClickGui extends GuiScreen {
     @Override
     public void onGuiClosed() {
         /* Anything half-typed counts, so closing the menu is not a way to lose
-           a number that was already entered. */
+           a number that was already entered. A problem with it goes to chat:
+           a toast would never be seen now. */
+        this.closing = true;
         commitEdit();
         this.dragging = null;
         this.movingWindow = false;

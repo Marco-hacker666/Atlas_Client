@@ -331,14 +331,23 @@ final class AtlasTheme {
         this.mode.setValue(keepMode);
     }
 
-    @SuppressWarnings("unchecked")
     private static void resetOne(Property<?> property) {
-        try {
-            java.lang.reflect.Field type = Property.class.getDeclaredField("type");
-            type.setAccessible(true);
-            property.setValue(type.get(property));
-        } catch (Exception ignored) {
-            // Leaves it as it is; the rest still reset.
+        /* Property.getDefault() since 2026-10-23; this read the private field by reflection. */
+        property.setValue(property.getDefault());
+    }
+
+    /** Every Appearance setting's value now, for restore() (a preset's Undo, 2026-10-23). */
+    java.util.Map<Property<?>, Object> values() {
+        java.util.Map<Property<?>, Object> values = new java.util.LinkedHashMap<Property<?>, Object>();
+        for (Property<?> property : all()) {
+            values.put(property, property.getValue());
+        }
+        return values;
+    }
+
+    void restore(java.util.Map<Property<?>, Object> values) {
+        for (java.util.Map.Entry<Property<?>, Object> entry : values.entrySet()) {
+            entry.getKey().setValue(entry.getValue());
         }
     }
 

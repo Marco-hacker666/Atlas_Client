@@ -112,9 +112,29 @@ public class ServerProfiles extends Module {
 
     /** First rule whose fragment appears in the address. */
     private String match(String address) {
-        String raw = this.rules.getValue();
+        return match(parse(this.rules.getValue()), address);
+    }
+
+    /** The first rule of {@code rules} whose fragment is in {@code address}, its profile; null for none. */
+    public static String match(java.util.List<String[]> rules, String address) {
+        for (String[] rule : rules) {
+            if (address.contains(rule[0])) {
+                return rule[1];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The rules in a "fragment=profile, fragment=profile" string, as {fragment,
+     * profile} in order; entries without both halves are left out. Fragments
+     * are lower case, as they are matched (2026-10-23: shared with the menu's
+     * Servers page, which writes the same string back).
+     */
+    public static java.util.List<String[]> parse(String raw) {
+        java.util.List<String[]> out = new java.util.ArrayList<String[]>();
         if (raw == null || raw.trim().isEmpty()) {
-            return null;
+            return out;
         }
         for (String rule : raw.split(",")) {
             int equals = rule.indexOf('=');
@@ -123,11 +143,32 @@ public class ServerProfiles extends Module {
             }
             String fragment = rule.substring(0, equals).trim().toLowerCase();
             String config = rule.substring(equals + 1).trim();
-            if (!fragment.isEmpty() && !config.isEmpty() && address.contains(fragment)) {
-                return config;
+            if (!fragment.isEmpty() && !config.isEmpty()) {
+                out.add(new String[]{fragment, config});
             }
         }
-        return null;
+        return out;
+    }
+
+    /** Rules back into the string parse() reads. */
+    public static String format(java.util.List<String[]> rules) {
+        StringBuilder out = new StringBuilder();
+        for (String[] rule : rules) {
+            if (out.length() > 0) {
+                out.append(", ");
+            }
+            out.append(rule[0]).append('=').append(rule[1]);
+        }
+        return out.toString();
+    }
+
+    /** The address of the server played on now, lower case; null in single player. */
+    public static String currentAddress() {
+        ServerData data = mc.getCurrentServerData();
+        if (data == null || data.serverIP == null) {
+            return null;
+        }
+        return data.serverIP.toLowerCase();
     }
 
     private void apply(String target, String address) {
@@ -144,10 +185,19 @@ public class ServerProfiles extends Module {
             return;
         }
         this.applied = target;
+        /* Owner, 2026-10-23 (D3): what was changed under the profile in use is
+           saved to it first. Loading used to drop it; quitting would have
+           saved it there anyway. */
+        String from = Config.lastConfig == null || Config.lastConfig.isEmpty() || Config.lastConfig.equals("!")
+                ? "default" : Config.lastConfig;
+        boolean saved = !from.equalsIgnoreCase(target);
+        if (saved) {
+            new Config(from, false).save();
+        }
         new Config(target, false).load();
         if (this.chat.getValue()) {
             ChatUtil.sendFormatted("&7[&bServerProfiles&7] loaded &f" + target
-                    + "&7 for &f" + address);
+                    + "&7 for &f" + address + (saved ? "&7 (your changes to &f" + from + "&7 were saved)" : ""));
         }
     }
 

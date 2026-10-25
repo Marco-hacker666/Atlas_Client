@@ -8,12 +8,14 @@ import atlas.events.PacketEvent;
 import atlas.module.Module;
 import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.FloatProperty;
+import atlas.property.properties.ModeProperty;
 import atlas.util.AsyncLog;
 import atlas.util.Ping;
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
+import net.minecraft.network.play.server.S12PacketEntityVelocity;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.MathHelper;
@@ -25,7 +27,9 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 
 /**
@@ -48,19 +52,36 @@ import java.util.function.Predicate;
  * `log` writes each time stuck (config/Atlas/stuck-*.txt): where, which
  * blocks, whether this client placed them and how long ago, ticks since the
  * last server correction, ping, the way out and how it ended.
+ *
+ * 2026-10-23 (owner): 141 of 192 times stuck were followed by a position flag
+ * within 2 s, and in 94 of them the server's correction is what ended it. This
+ * module moved the player in 191 of the 192, so there was nothing to compare
+ * against. WATCH finds and logs the way out exactly as ESCAPE does but leaves
+ * the motion alone (vanilla's own push only); played in turns, the two modes
+ * say whether the escape is what the server corrects. Each line also gives
+ * the ticks since the last hit or knockback and how far the last correction
+ * moved the player, since a hit while stuck had ESCAPE overwrite the
+ * knockback the server expected.
  */
 public class AntiBounce extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final double STEP = 0.05;
     private static final File LOG_DIR = new File("./config/Atlas/");
+    private static final int ESCAPE = 0;
+    private static final int WATCH = 1;
 
+    public final ModeProperty mode = new ModeProperty("mode", ESCAPE, new String[]{"ESCAPE", "WATCH"});
     public final FloatProperty speed = new FloatProperty("speed", 0.12F, 0.05F, 0.3F);
     public final FloatProperty maxEscape = new FloatProperty("max-escape", 1.0F, 0.3F, 1.5F);
     public final BooleanProperty log = new BooleanProperty("log", true);
 
     private int tick;
     private volatile boolean corrected;
+    private volatile String pendingCorrectionMove = "?";
+    private String correctionMove = "?";
     private int lastCorrection = -1000;
+    private volatile boolean knockedBack;
+    private int lastHit = -1000;
     private int insideTicks;
     private int stuckSince;
     private String stuckWhat = "";
@@ -103,13 +124,41 @@ public class AntiBounce extends Module {
         return null;
     }
 
+    /** Ticks from {@code at} to {@code start} as the log shows them ("5t", "-2t" when after the start), or "none". */
+    static String ticksBefore(int start, int at) {
+        int ticks = start - at;
+        return ticks > 200 ? "none" : ticks + "t";
+    }
+
+    /** A correction's displacement as the log shows it: horizontal distance and signed vertical. */
+    static String moveText(double dx, double dy, double dz) {
+        return String.format(Locale.ROOT, "h%.2f v%+.2f", Math.sqrt(dx * dx + dz * dz), dy);
+    }
+
     @EventTarget
     public void onPacket(PacketEvent event) {
         if (!this.isEnabled()) {
             return;
         }
         if (event.getType() == EventType.RECEIVE && event.getPacket() instanceof S08PacketPlayerPosLook) {
+            S08PacketPlayerPosLook packet = (S08PacketPlayerPosLook) event.getPacket();
+            if (mc.thePlayer != null) {
+                /* As FlagDetector reads it: relative fields carry a delta, the rest a target. */
+                Set<S08PacketPlayerPosLook.EnumFlags> flags = packet.func_179834_f();
+                boolean relX = flags != null && flags.contains(S08PacketPlayerPosLook.EnumFlags.X);
+                boolean relY = flags != null && flags.contains(S08PacketPlayerPosLook.EnumFlags.Y);
+                boolean relZ = flags != null && flags.contains(S08PacketPlayerPosLook.EnumFlags.Z);
+                this.pendingCorrectionMove = moveText(
+                        relX ? packet.getX() : packet.getX() - mc.thePlayer.posX,
+                        relY ? packet.getY() : packet.getY() - mc.thePlayer.posY,
+                        relZ ? packet.getZ() : packet.getZ() - mc.thePlayer.posZ);
+            }
             this.corrected = true;
+        } else if (event.getType() == EventType.RECEIVE && event.getPacket() instanceof S12PacketEntityVelocity) {
+            if (mc.thePlayer != null
+                    && ((S12PacketEntityVelocity) event.getPacket()).getEntityID() == mc.thePlayer.getEntityId()) {
+                this.knockedBack = true;
+            }
         } else if (event.getType() == EventType.SEND && event.getPacket() instanceof C08PacketPlayerBlockPlacement) {
             C08PacketPlayerBlockPlacement use = (C08PacketPlayerBlockPlacement) event.getPacket();
             if (use.getPlacedBlockDirection() != 255 && use.getPosition() != null) {
@@ -140,6 +189,14 @@ public class AntiBounce extends Module {
         if (this.corrected) {
             this.corrected = false;
             this.lastCorrection = this.tick;
+            this.correctionMove = this.pendingCorrectionMove;
+        }
+        /* A hit: our knockback arrived, or the hurt animation has just started
+           (hurtTime is set to maxHurtTime and has counted down once by now). */
+        if (this.knockedBack || (mc.thePlayer.maxHurtTime > 0
+                && mc.thePlayer.hurtTime >= mc.thePlayer.maxHurtTime - 1)) {
+            this.knockedBack = false;
+            this.lastHit = this.tick;
         }
         if (mc.thePlayer.capabilities.isFlying || mc.thePlayer.noClip || mc.thePlayer.isSpectator()
                 || mc.playerController.isInCreativeMode() || atlas.management.Arbiter.catching()) {
@@ -169,6 +226,10 @@ public class AntiBounce extends Module {
             return;
         }
         this.exitWay = String.format("%+.2f %+.2f %+.2f", way[0], way[1], way[2]);
+        if (this.mode.getValue() == WATCH) {
+            /* Found and logged, not taken: vanilla's push is all that moves the player. */
+            return;
+        }
         double cap = this.speed.getValue();
         double length = Math.sqrt(way[0] * way[0] + way[2] * way[2]);
         if (length > 1e-6) {
@@ -219,10 +280,13 @@ public class AntiBounce extends Module {
             if (this.logFile == null) {
                 this.logFile = new File(LOG_DIR, "stuck-" + new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date()) + ".txt");
             }
-            int sinceCorrection = this.stuckSince - this.lastCorrection;
-            AsyncLog.append(this.logFile, String.format("%s  STUCK %dt in %s | correction %s before | ping %dms | way out %s | %s",
+            String correction = ticksBefore(this.stuckSince, this.lastCorrection);
+            AsyncLog.append(this.logFile, String.format("%s  STUCK %dt in %s | correction %s before | ping %dms | way out %s | %s"
+                            + " | hit %s before | correction moved %s | mode %s",
                     new SimpleDateFormat("HH:mm:ss").format(new Date()), this.insideTicks, this.stuckWhat,
-                    sinceCorrection > 200 ? "none" : sinceCorrection + "t", Ping.own(), this.exitWay, how));
+                    correction, Ping.own(), this.exitWay, how,
+                    ticksBefore(this.stuckSince, this.lastHit), "none".equals(correction) ? "-" : this.correctionMove,
+                    this.mode.getModeString()));
         }
         this.insideTicks = 0;
     }

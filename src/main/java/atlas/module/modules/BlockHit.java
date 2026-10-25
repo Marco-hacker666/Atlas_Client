@@ -25,7 +25,7 @@ public class BlockHit extends Module {
        AutoBlock the way Slinky does it"); the module is shown as AutoBlock.
        Saved configs keep the mode they name. */
     private final ModeProperty mode = new ModeProperty("Mode", 6,
-            new String[]{"Helper", "Auto", "Lag", "Swing", "Predict", "Manual", "Slinky", "Full"})
+            new String[]{"Helper", "Auto", "Lag", "Swing", "Predict", "Manual", "Slinky", "Full", "Yuri"})
             .hide("Swing")
             .alias("Rhythm", "Predict");
     /* ---- Slinky (Slinky's Auto Block, rebuilt here from what it does) ----
@@ -39,6 +39,14 @@ public class BlockHit extends Module {
        outgoing packet is held for lag-ticks (lag-chance of the time), and
        let go the moment you attack. */
     private final java.util.function.BooleanSupplier slinky = () -> this.mode.getValue() == 6;
+    /* ---- Yuri (2026-10-24, BlockHitYuri): after your hit, the use key down
+       combo-delay ms later (forward held), up block-delay ms after that. */
+    private final java.util.function.BooleanSupplier yuriMode = () -> this.mode.getValue() == 8;
+    private final FloatProperty yRange = new FloatProperty("yuri-range", 3.0F, 1.0F, 6.0F, yuriMode);
+    private final PercentProperty yChance = new PercentProperty("yuri-chance", 100, yuriMode);
+    private final IntProperty yBlockDelay = new IntProperty("yuri-block-delay", 30, 1, 300, yuriMode);
+    private final IntProperty yComboDelay = new IntProperty("yuri-combo-delay", 30, 1, 300, yuriMode);
+    private final BlockHitYuri yuri = new BlockHitYuri();
     private final FloatProperty sRange = new FloatProperty("block-range", 3.1F, 2.0F, 6.0F, slinky);
     private final IntProperty sHold = new IntProperty("max-hold-ticks", 5, 1, 10, slinky);
     private final BooleanProperty sRequireLeft = new BooleanProperty("require-left-click", true, slinky);
@@ -245,6 +253,10 @@ public class BlockHit extends Module {
     @Override
     public void onDisabled() {
         clearOwnDelay();
+        if (this.yuri.blocking) {
+            KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), false);
+        }
+        this.yuri.reset();
         if (this.manualTicks > 0) {
             this.manualTicks = 0;
             KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
@@ -878,6 +890,36 @@ public class BlockHit extends Module {
             if (this.mode.getValue() == 5) {
                 manualBlock();
             }
+            if (this.mode.getValue() == 8) {
+                this.yuri.hit(true, mc.thePlayer.getDistanceToEntity(event.getTarget()), this.yRange.getValue(),
+                        Math.random(), this.yChance.getValue(), System.currentTimeMillis());
+            }
+        }
+    }
+
+    /* Yuri: after this tick's input, as Yuri's motion event, so the tick's own clicks count as actions. */
+    @EventTarget
+    public void onYuriUpdate(atlas.events.UpdateEvent event) {
+        if (event.getType() != EventType.PRE || mc.thePlayer == null) {
+            return;
+        }
+        if (!this.isEnabled() || this.mode.getValue() != 8 || !mc.inGameHasFocus) {
+            if (this.yuri.blocking) {
+                KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), false);
+            }
+            this.yuri.reset();
+            return;
+        }
+        boolean actions = atlas.management.TickActions.any(atlas.management.TickActions.SLOT
+                | atlas.management.TickActions.ATTACK | atlas.management.TickActions.SWING
+                | atlas.management.TickActions.USE | atlas.management.TickActions.DIG
+                | atlas.management.TickActions.INVENTORY);
+        BlockHitYuri.Act act = this.yuri.tick(System.currentTimeMillis(), actions,
+                mc.gameSettings.keyBindForward.isKeyDown(), this.yComboDelay.getValue(), this.yBlockDelay.getValue());
+        if (act == BlockHitYuri.Act.PRESS) {
+            KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), true);
+        } else if (act == BlockHitYuri.Act.RELEASE) {
+            KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), false);
         }
     }
 

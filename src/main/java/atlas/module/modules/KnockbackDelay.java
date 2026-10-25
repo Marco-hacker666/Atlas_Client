@@ -594,16 +594,11 @@ public class KnockbackDelay extends Module {
             return aura2.getTarget();
         }
         KillAura killAura = (KillAura) Atlas.moduleManager.modules.get(KillAura.class);
-        if (killAura != null && killAura.isEnabled() && killAura.target != null) {
-            try {
-                Field field = KillAura.AttackData.class.getDeclaredField("entity");
-                field.setAccessible(true);
-                Entity entity = (Entity) field.get(killAura.target);
-                if (entity != null) {
-                    return entity;
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
+        if (killAura != null && killAura.isEnabled()) {
+            /* getTarget answers for whichever engine runs (LiquidBounce or Atlas, 2026-10-25). */
+            Entity entity = killAura.getTarget();
+            if (entity != null) {
+                return entity;
             }
         }
         if (mc.pointedEntity != null) {

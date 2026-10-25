@@ -36,11 +36,11 @@ public final class ModuleCategories {
            tricks to Exploit and the item helpers to Player. */
         put(Category.COMBAT,
                 AimAssist.class, AutoClicker.class, AutoWeapon.class, BackTrack.class, Criticals.class,
-                HitBox.class, HitSelect.class, KnockbackDelay.class, KBDisplacement.class, LagRange.class,
+                HitBox.class, HitSelect.class, KnockbackDelay.class, LagRange.class,
                 Piercing.class, Reach.class, SprintReset.class, TimerRange.class, Velocity.class, BlockHit.class,
                 KillAura.class, KillAura2.class, PlainAura.class, NoDelay.class, JumpReset.class, Wtap.class,
                 MoreKB.class, KeepRange.class, AimBacktrack.class, Hitflick.class, InvulnTiming.class,
-                Displace.class);
+                Humanization.class);
         put(Category.PLAYER,
                 MLG.class, Blink.class, NoFall.class, AntiVoid.class, Clutch.class, AutoTool.class, AutoSwap.class,
                 InvManager.class, Refill.class, AntiAFK.class, AntiFireball.class, AutoAnduril.class,

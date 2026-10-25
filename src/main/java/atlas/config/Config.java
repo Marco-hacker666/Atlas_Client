@@ -116,6 +116,9 @@ public class Config {
                         }
                     }
                 }
+                /* Modules merged into this one, saved before the merge under their own names. */
+                atlas.module.ModuleBundle.readLegacy(module, jsonObject,
+                        moduleObj != null && moduleObj.isJsonObject() ? moduleObj.getAsJsonObject() : null);
             }
             ChatUtil.sendFormatted(String.format("%sConfig has been loaded (&a&o%s&r)&r", Atlas.clientName, file.getName()));
         } catch (FileNotFoundException e) {

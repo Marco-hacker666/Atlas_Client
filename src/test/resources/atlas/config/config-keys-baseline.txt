@@ -101,6 +101,7 @@ AntiBot WasInvisible
 AntiBounce #name AntiBounce
 AntiBounce log
 AntiBounce max-escape
+AntiBounce mode
 AntiBounce speed
 AntiCheat #name AntiCheat
 AntiCheat candidate-range
@@ -588,6 +589,10 @@ BlockHit max-hurt-time
 BlockHit require-damage
 BlockHit require-left-click
 BlockHit require-right-click
+BlockHit yuri-block-delay
+BlockHit yuri-chance
+BlockHit yuri-combo-delay
+BlockHit yuri-range
 BlockLadder #name BlockLadder
 BlockLadder fall-distance
 BlockLadder place-delay
@@ -1100,6 +1105,7 @@ Hitflick Blink
 Hitflick Cooldown
 Hitflick Custom-Angle
 Hitflick Direction
+Hitflick mode
 Hitflick move-fix
 Hotbar #name Hotbar
 Hotbar offset-x
@@ -1343,6 +1349,9 @@ KillAura VisualizeAim
 KillAura WeaponsOnly
 KillAura YRandomize
 KillAura auto-block
+KillAura simulate-clicks
+KillAura yuri-hurt-ticks
+KillAura yuri-only-when-hurt
 KillAura2 #name KillAura2
 KillAura2 aim-drift
 KillAura2 animals
@@ -1429,9 +1438,12 @@ LagRange allow-tools
 LagRange bot-check
 LagRange delay
 LagRange flag-pause
+LagRange flush-on-block
+LagRange flush-on-sprint
 LagRange let-out
 LagRange log
 LagRange melee-distance
+LagRange mode
 LagRange range
 LagRange recoil-time
 LagRange release-on-sprint-reset
@@ -2180,6 +2192,12 @@ Velocity jump
 Velocity karhu-factor
 Velocity karhu-start
 Velocity karhu-stop
+Velocity lag-chance
+Velocity lag-cooldown
+Velocity lag-explosions
+Velocity lag-only-in-fight
+Velocity lag-ping-budget
+Velocity lag-ticks
 Velocity legit-chance
 Velocity legit-ignore-liquid
 Velocity legit-jump-in-inv

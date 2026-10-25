@@ -102,9 +102,21 @@ public class Velocity extends Module {
         return Math.max(0.0, Math.min(1.0, share));
     }
 
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"Vanilla", "Jump", "Hypixel", "Slap_Attack", "Intave", "GrimAC", "Matrix", "PolarJump", "Legit", "Delay", "Tick", "Zip", "Karhu", "MatrixReverse", "MatrixFull", "Intave14", "XZSwitch", "OldGrim", "Vulcan", "BlocksMC", "GrimC03", "IntaveTimer"});
+    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"Vanilla", "Jump", "Hypixel", "Slap_Attack", "Intave", "GrimAC", "Matrix", "PolarJump", "Legit", "Delay", "Tick", "Zip", "Karhu", "MatrixReverse", "MatrixFull", "Intave14", "XZSwitch", "OldGrim", "Vulcan", "BlocksMC", "GrimC03", "IntaveTimer", "Lag"});
 
     public final PercentProperty chance = new PercentProperty("chance", 100, () -> mode.getValue() <= 1);
+    /* Lag (2026-10-24, VelocityLag, after Rise's DelayVelocity): own knockback and the transactions after it
+       (explosions too) wait lag-ticks, then reach the game in order; everything else flows. */
+    private static final int LAG = 22;
+    public final IntProperty lagTicks = new IntProperty("lag-ticks", 4, 1, 20, () -> mode.getValue() == LAG);
+    public final PercentProperty lagChance = new PercentProperty("lag-chance", 100, () -> mode.getValue() == LAG);
+    public final BooleanProperty lagExplosions = new BooleanProperty("lag-explosions", true, () -> mode.getValue() == LAG);
+    public final IntProperty lagPingBudget = new IntProperty("lag-ping-budget", 250, 0, 600, () -> mode.getValue() == LAG);
+    public final IntProperty lagCooldown = new IntProperty("lag-cooldown", 500, 0, 3000, () -> mode.getValue() == LAG);
+    public final BooleanProperty lagOnlyInFight = new BooleanProperty("lag-only-in-fight", true, () -> mode.getValue() == LAG);
+    private static final int LAG_MAX_QUEUE = 200;
+    private final VelocityLag<Packet<?>> lag = new VelocityLag<Packet<?>>();
+    private volatile int lagTick;
     public final PercentProperty horizontal = new PercentProperty("horizontal", 0, () -> mode.getValue() == 0);
     public final PercentProperty vertical = new PercentProperty("vertical", 100, () -> mode.getValue() == 0);
     public final PercentProperty explosionHorizontal = new PercentProperty("explosions-horizontal", 100, () -> mode.getValue() == 0);
@@ -451,6 +463,13 @@ public class Velocity extends Module {
     public void onTick(TickEvent event) {
         if (!this.isEnabled() || event.getType() != EventType.PRE) return;
 
+        this.lagTick++;
+        if (this.mode.getValue() == LAG) {
+            this.lagRelease(this.lag.due(this.lagTick, System.currentTimeMillis(), this.lagCooldown.getValue()));
+        } else if (this.lag.size() > 0) {
+            this.lagRelease(this.lag.drain(System.currentTimeMillis(), 0));
+        }
+
         if (this.mode.getValue() == 1) {
             this.handleJumpReset();
         }
@@ -726,6 +745,79 @@ public class Velocity extends Module {
         }
     }
 
+    /** Lag: takes own knockback, transactions and explosions into the queue (network thread). */
+    @EventTarget(atlas.event.types.Priority.HIGH)
+    public void onLagPacket(PacketEvent event) {
+        if (!this.isEnabled() || event.isCancelled() || event.getType() != EventType.RECEIVE
+                || this.mode.getValue() != LAG || mc.thePlayer == null) {
+            return;
+        }
+        Packet<?> packet = event.getPacket();
+        if (packet instanceof net.minecraft.network.play.server.S08PacketPlayerPosLook) {
+            /* A correction is judged after what came before it: let the queue go first, in order. */
+            this.lagRelease(this.lag.drain(System.currentTimeMillis(), this.lagCooldown.getValue()));
+            return;
+        }
+        boolean queued = packet instanceof S32PacketConfirmTransaction
+                || (packet instanceof S27PacketExplosion && this.lagExplosions.getValue())
+                || (packet instanceof S12PacketEntityVelocity
+                    && ((S12PacketEntityVelocity) packet).getEntityID() == mc.thePlayer.getEntityId());
+        if (queued && this.lag.add(packet)) {
+            event.setCancelled(true);
+            if (this.lag.size() > LAG_MAX_QUEUE) {
+                this.lagRelease(this.lag.drain(System.currentTimeMillis(), this.lagCooldown.getValue()));
+            }
+            return;
+        }
+        if (packet instanceof S12PacketEntityVelocity
+                && ((S12PacketEntityVelocity) packet).getEntityID() == mc.thePlayer.getEntityId()
+                && !this.isVelocityPaused()
+                && Math.random() * 100.0 < this.lagChance.getValue()
+                && (!this.lagOnlyInFight.getValue() || this.lagInFight())) {
+            int ticks = VelocityLag.holdTicks(this.lagTicks.getValue(), atlas.util.Ping.own(), this.lagPingBudget.getValue());
+            if (this.lag.start(packet, this.lagTick, ticks, System.currentTimeMillis())) {
+                event.setCancelled(true);
+                atlas.util.ActionLedger.note(this.getName(), "held-recv");
+            }
+        }
+    }
+
+    /** Whether this mode holds packets back (Lag), for the menu's conflict warnings. */
+    public boolean holdsPackets() {
+        return this.mode.getValue() == LAG;
+    }
+
+    /** Another player close enough to be fighting: within 6 blocks, not a bot or a teammate. */
+    private boolean lagInFight() {
+        for (net.minecraft.entity.player.EntityPlayer player : mc.theWorld.playerEntities) {
+            if (player != mc.thePlayer && mc.thePlayer.getDistanceToEntity(player) <= 6.0F
+                    && !atlas.util.TeamUtil.isBot(player) && !atlas.util.TeamUtil.isSameTeam(player)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Hands queued packets to the game in order (on the network thread vanilla re-queues them, in order). */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void lagRelease(java.util.List<Packet<?>> packets) {
+        if (packets.isEmpty()) {
+            return;
+        }
+        atlas.util.ActionLedger.note(this.getName(), "release-self", packets.size());
+        for (Packet<?> packet : packets) {
+            try {
+                if (mc.getNetHandler() != null) {
+                    ((Packet) packet).processPacket(mc.getNetHandler());
+                }
+            } catch (net.minecraft.network.ThreadQuickExitException ignored) {
+                // Rescheduled onto the client thread by vanilla, in order; not an error.
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     @EventTarget
     public void onPacket(PacketEvent event) {
         if (!this.isEnabled() || event.isCancelled()) return;
@@ -915,7 +1007,7 @@ public class Velocity extends Module {
         }
         float border = target.getCollisionBorderSize();
         net.minecraft.util.AxisAlignedBB box = target.getEntityBoundingBox().expand(border, border, border);
-        double range = killAura.attackRange.getValue();
+        double range = killAura.attackReach();
         if (RotationUtil.distanceToBox(box) > range) {
             return false;
         }
@@ -1018,6 +1110,8 @@ public class Velocity extends Module {
 
     @Override
     public void onDisabled() {
+        /* Lag: nothing held may be lost -- the transactions above all. */
+        this.lagRelease(this.lag.drain(System.currentTimeMillis(), 0));
         this.pendingExplosion = false;
         this.allowNext = true;
         this.hasReceivedVelocity = false;

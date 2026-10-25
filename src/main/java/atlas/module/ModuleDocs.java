@@ -317,11 +317,13 @@ public final class ModuleDocs {
         help("AimAssist", "line-of-sight", "只瞄看得到的目標。");
         help("AimAssist", "ignore-invisible", "跳過隱形的玩家。");
         d("AutoClicker", "按住左鍵時自動連點，CPS 在設定範圍內隨機，可順便格擋或挖方塊。");
+        help("AutoClicker", "randomization", "Human（建議）：CPS 在範圍內慢慢漂移再回來，每一下的間隔像手一樣偏斜（很少太快、偶爾慢一點），會重複節奏、偶爾停頓，每場一開始稍快。Normal / Extra / Extra+：舊的均勻隨機。");
         d("KnockbackDelay", "把收到的擊退延後一小段時間才吃下去，讓被打飛的時機變晚。");
         help("KnockbackDelay", "HoldTransactions", "壓住擊退時，後面的交易確認封包也一起等，伺服器就不會以為你收到擊退卻沒反應（Polar、Grim 用交易確認計時的擊退檢查）。預設開。");
         d("AutoHeal", "血量低時自動使用治療物品（湯、藥水、頭）。");
         d("BackTrack", "對手往後退時，暫時把他留在你最後看到的位置，讓攻擊還能打到伺服器記錄中的位置。");
-        d("Hitflick", "打中目標的瞬間把視角甩開，再轉回來（偏移擊退方向）。");
+        d("Hitflick", "改變你打出去的擊退方向：FLICK 打中瞬間甩開視角再轉回；HAZARD 靜默轉向附近的虛空或岩漿；DISPLACE 攻擊瞬間轉向虛空或指定角度。");
+        help("Hitflick", "mode", "FLICK：甩開再轉回。HAZARD：原本的 KBDisplacement。DISPLACE：原本的 Displace。各自的設定在下面。");
         d("ServerLag", "把伺服器送來的封包延後處理，模擬伺服器延遲；受傷、血量、音效、聊天照常即時。可當成 FakeLag 的「收到延遲」一起用。");
         d("FakeLag", "延後送出自己的移動，讓伺服器上的你落後於實際位置，方便先手。");
         d("HitSelect", "挑出手時機：只在對自己有利（例如減少吃擊退）的時候讓攻擊送出。ACTIVE 也會管 Silent Aura 的攻擊。");
@@ -329,6 +331,10 @@ public final class ModuleDocs {
         d("Criticals", "讓攻擊判定為爆擊（多 50% 傷害），以封包或小跳實現。");
         d("FastBow", "加快拉弓射箭的速度。");
         d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Slinky（預設）：按著左鍵、敵人在範圍內就舉劍，舉滿幾 tick 放下一 tick 讓攻擊打出去，再舉起來；可選只在快被打到時舉、放下時延遲封包。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Full：照原版的擋劍節奏（放下、下一 tick 打、打完立刻舉起），只在能保護你的時候舉劍。Helper / Auto / Lag：其他方式。");
+        help("BlockHit", "yuri-range", "Yuri：打到這個距離內（腳到腳）的目標才會格擋。");
+        help("BlockHit", "yuri-chance", "Yuri：有多少比例的攻擊會接著格擋。");
+        help("BlockHit", "yuri-combo-delay", "Yuri：打完幾 ms 後舉劍（那時要按著前進）。");
+        help("BlockHit", "yuri-block-delay", "Yuri：劍舉著幾 ms。");
         help("BlockHit", "block-range", "敵人在這個距離內才自動舉劍（從眼睛到對方碰撞箱）。");
         help("BlockHit", "max-hold-ticks", "劍舉著最多幾 tick，之後放下一 tick 讓下一下攻擊打出去（1.8 舉劍時攻擊點擊會被吃掉）。");
         help("BlockHit", "require-left-click", "只在按著攻擊鍵時自動舉劍；沒按攻擊、只按右鍵時就是普通的手動格擋。");
@@ -442,6 +448,35 @@ public final class ModuleDocs {
         help("TimerRange", "require-weapon", "SLINKY/LEGIT：要拿劍。");
         help("TimerRange", "require-not-using-item", "SLINKY/LEGIT：使用物品時不觸發。");
         d("Velocity", "減少或改變自己吃到的擊退。");
+        d("Humanization", "讓戰鬥模組像人一樣：會揮空、會瞄偏、有反應時間。全域設定，Silent Aura 等模組都能套用。");
+        help("Humanization", "preset", "一次填好所有數值：Legit（40%）、Good（55%）、Tryhard（70%）。之後每項都還能改；Custom 不會覆蓋。");
+        help("Humanization", "apply-silent-aura", "套用到 Silent Aura（LiquidBounce 和 Atlas 引擎）。");
+        help("Humanization", "hit-rate", "目標命中率：點擊中真正打到的比例。真人大約 40-60%。");
+        help("Humanization", "hit-rate-spread", "命中率會在目標上下慢慢漂移的幅度（百分點）。");
+        help("Humanization", "correction", "實際命中率偏離目標時拉回去的力道；0 = 純擲骰。");
+        help("Humanization", "streaks", "手熱、手冷：一段時間連中或連空。");
+        help("Humanization", "distance-penalty", "超過 distance-start 之後，每多一格扣幾個百分點。");
+        help("Humanization", "strafe-penalty", "目標每橫移 0.1 格/tick 扣幾個百分點。");
+        help("Humanization", "hurt-penalty", "剛被打的 hurt-ticks 內扣的百分點（逐漸恢復）。");
+        help("Humanization", "max-hits-per-second", "每秒最多打中幾下（0 = 不限）。");
+        help("Humanization", "miss-aim-off", "揮空方式的權重：瞄偏（那一 tick 視角真的偏出碰撞箱）。最像真人。");
+        help("Humanization", "miss-swing-only", "權重：視角對準、只揮不打。");
+        help("Humanization", "miss-skip", "權重：這一下不點。");
+        help("Humanization", "aim-off-min", "瞄偏時越過碰撞箱邊緣的最小距離（格）。");
+        help("Humanization", "miss-cooldown", "揮空後照原版 1.8 等 10 tick 才能再點。");
+        help("Humanization", "reaction-new-min", "看到新目標到開始瞄準的反應時間（ms）。");
+        help("Humanization", "tracking-noise", "瞄準時手的微抖（度），目標動越快抖越大。");
+        help("Humanization", "overshoot-chance", "大角度轉頭時轉過頭再拉回的機率。");
+        help("Humanization", "lapse-chance", "每秒短暫走神、停止跟隨目標的機率。");
+        help("Humanization", "speed-sigma", "每 tick 轉頭速度的對數常態波動。");
+        help("Humanization", "human-clicks", "aura 的點擊節奏改用 AutoClicker 的 Human。");
+        help("Humanization", "show-stats", "畫面上顯示最近 30 秒的命中率、揮空方式、反應時間。");
+        help("Velocity", "lag-ticks", "Lag：擊退（和之後的 transaction）延後幾 tick 才交給遊戲。伺服器看到的是 ping 短暫變高、擊退晚到，就像延遲。");
+        help("Velocity", "lag-chance", "Lag：幾成的擊退會延後。");
+        help("Velocity", "lag-explosions", "Lag：爆炸也一起延後。");
+        help("Velocity", "lag-ping-budget", "Lag：ping 加延後不超過這個值（ms）；會自動縮短，ping 太高就不延後。0＝不限制。");
+        help("Velocity", "lag-cooldown", "Lag：放出後隔多久（ms）才能再延後，連段時不會一直卡著。");
+        help("Velocity", "lag-only-in-fight", "Lag：6 格內有其他玩家（不是 bot、不是隊友）才延後。");
         d("Wtap", "打中後真的放開 W 鍵再按回去（W-tap），由遊戲自己重置衝刺，下一下擊退更大。");
         help("Wtap", "chance", "打中後有多少機率 W-tap。");
         help("Wtap", "release-delay", "打中後幾毫秒放開 W（每次隨機 ±20%）。");
@@ -693,11 +728,22 @@ public final class ModuleDocs {
                 h("疊高與高度", "hypixeltower", "keep-y-on-press", "no-keep-y-on-jump-potion"),
                 h("放置", "pause-on-correction", "safe", "safe-delay-ticks", "multi-place", "swing", "item-spoof"),
                 h("顯示", "block-counter", "outline-esp", "outline-color"));
+        g("Humanization",
+                h("預設與套用", "preset", "apply-*"),
+                h("命中率", "hit-rate*", "drift-seconds", "window", "correction", "streaks", "hot-*", "cold-*"),
+                h("情境修正", "distance-*", "strafe-penalty", "target-air-penalty", "self-air-penalty", "hurt-*",
+                        "first-hit-bonus", "low-health-*", "min-hits-per-second", "max-hits-per-second"),
+                h("怎麼揮空", "miss-*", "aim-off*"),
+                h("反應時間", "reaction-*", "reacquire-window"),
+                h("瞄準誤差", "tracking-noise", "noise-*", "overshoot*", "undershoot*", "lapse-*", "speed*"),
+                h("點擊", "human-clicks", "click-*"),
+                h("觀察", "show-stats", "log"));
         g("Velocity",
                 h("模式與比例", "mode", "chance", "horizontal", "vertical", "explosions-horizontal",
                         "explosions-vertical"),
                 h("Reduce 模式", "reduce", "attack-times", "only-sprinting", "reduce-when-can-attack", "slap-reduce"),
                 h("Jump / Rotate", "jump", "rotate", "rotate-ticks", "tickExact"),
+                h("Lag 模式", "lag-*"),
                 h("依延遲調整（毫秒）", "500", "1000", "2000", "3000", "4000", "5000", "6000", "7000", "8000",
                         "9000", "10000"),
                 h("其他", "fake-check", "debug-log"));
@@ -919,7 +965,16 @@ public final class ModuleDocs {
         help(ka, "RequirePress", "只有按住左鍵時才攻擊。");
         help(ka, "AllowMining", "準心對著方塊且按住左鍵時，讓你挖方塊而不是打人。");
         help(ka, "InventoryCheck", "開著背包、箱子等畫面時不攻擊。");
-        help(ka, "auto-block", "自動格擋方式。LEGIT：只在對方面向你、正在揮劍（或你剛被打）時才 block hit——打完立刻舉劍、下一下之前放下，不降 CPS；對方沒威脅就不格擋，跑得快。SameTick：要點的那 tick 先放下、打、立刻再舉，其餘時間舉著；離開揮手距離就放下。");
+        help(ka, "yuri-only-when-hurt", "Yuri 模式：自己的 hurtTime 到 yuri-hurt-ticks 才格擋。");
+        help(ka, "yuri-hurt-ticks", "Yuri 模式：hurtTime 到多少才允許格擋。");
+        help(ka, "simulate-clicks", "Yuri：每一下都用原版左鍵點擊，打準心對著的東西，而不是 aura 自己送攻擊封包。打空會有原版的點擊冷卻，除非開著 NoDelay。");
+        help(ka, "engine", "LiquidBounce：完整移植的 LiquidBounce NextGen KillAura（設定在 LiquidBounce 標題下）。Atlas：原本的 Silent Aura，所有模式和設定照舊。");
+        help("LiquidAura", "AngleSmooth", "每 tick 怎麼轉：Linear、Sigmoid、Interpolation、Acceleration，或 AimAssist（用 Atlas AimAssist 的 Smooth 轉法和瞄準點，數值讀 AimAssist 模組自己的速度、smoothing、lead、multipoint；AimAssist 本身可以關著）。");
+        help("LiquidAura", "RangeIncrease", "攻擊距離 = 3.0 + 這個值。LB 預設 1.0 也就是 4 格，會檢查距離的伺服器請調低。");
+        help("LiquidAura", "MovementCorrection", "Off：照鏡頭走。Strict：照伺服器朝向走。Silent：連按鍵方向一起轉。ChangeLook：鏡頭跟著瞄準轉。");
+        help("LiquidAura", "AutoBlocking", "LB 的自動格擋：兩下之間舉劍，打之前放下。");
+        help("LiquidAura", "FightBot", "自動走位：走到目標視線外的側邊，還沒到點擊時就後退。");
+        help(ka, "auto-block", "自動格擋方式。Yuri-Hypixel：3 格內兩下之間舉劍一 tick，8 CPS。Yuri-Legit：自己 hurtTime 6-10 且目標 3 格內時按住右鍵，5 CPS。Yuri-NCP：每 tick 先放下、移動封包後再舉。Yuri-Vanilla：每 tick 送格擋封包。LEGIT：只在對方面向你、正在揮劍（或你剛被打）時才 block hit——打完立刻舉劍、下一下之前放下，不降 CPS；對方沒威脅就不格擋，跑得快。SameTick：要點的那 tick 先放下、打、立刻再舉，其餘時間舉著；離開揮手距離就放下。");
         help(ka, "LegitThreat", "LEGIT 什麼時候算「有危險」才舉劍。Look（建議，參考 LiquidBounce NextGen）：敵人的準心真的對著你（他的視線在攻擊距離內打到你、中間沒有牆）才擋，擋得少、跑得快。Swing：舊的判斷，你剛被打，或敵人在 3.6 格內面向你（60 度內）在揮手；打架時幾乎一直成立。");
         help(ka, "LegitTolerance", "Look 判斷時把你的身體放大幾格。越大越早舉劍、擋得越多；0.3 是 NextGen 的預設。");
         help(ka, "LegitSameTick", "開：要出手的那個 tick 先放下、打、立刻再舉（同 SameTick），不浪費 tick。關：舊做法，出手前一個 tick 先放下，每下多花一個 tick。部分反作弊可能在意放下和出手在同一個 tick，被抓再關掉。");

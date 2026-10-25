@@ -171,7 +171,6 @@ public class Atlas {
         moduleManager.modules.put(ItemESP.class, new ItemESP());
         moduleManager.modules.put(Jesus.class, new Jesus());
         moduleManager.modules.put(Disabler.class, new Disabler());
-        moduleManager.modules.put(Displace.class, new Displace());
         moduleManager.modules.put(KeepSprint.class, new KeepSprint());
         moduleManager.modules.put(FlagDetector.class, new FlagDetector());
         moduleManager.modules.put(ESPDetector.class, new ESPDetector());
@@ -206,7 +205,6 @@ public class Atlas {
         /* Rise comparison items 4, 6 and 7 (2026-09-28). */
         moduleManager.modules.put(KeepRange.class, new KeepRange());
         moduleManager.modules.put(AimBacktrack.class, new AimBacktrack());
-        moduleManager.modules.put(KBDisplacement.class, new KBDisplacement());
         moduleManager.modules.put(ServerProfiles.class, new ServerProfiles());
         moduleManager.modules.put(HitBox.class, new HitBox());
         moduleManager.modules.put(KillAura.class, new KillAura());
@@ -294,6 +292,7 @@ public class Atlas {
         moduleManager.modules.put(TeamHealthDisplay.class, new TeamHealthDisplay());
         moduleManager.modules.put(Animations.class, new Animations());
         moduleManager.modules.put(LegitHUD.class, new LegitHUD());
+        moduleManager.modules.put(Humanization.class, new Humanization());
         moduleManager.modules.put(ArmorHUD.class, new ArmorHUD());
         moduleManager.modules.put(EffectsHUD.class, new EffectsHUD());
         moduleManager.modules.put(AutoRespawn.class, new AutoRespawn());

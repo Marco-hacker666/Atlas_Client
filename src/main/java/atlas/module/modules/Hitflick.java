@@ -17,6 +17,14 @@ import net.minecraft.entity.EntityLivingBase;
 public class Hitflick extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
+    /* 2026-10-24 (owner): KBDisplacement and Displace are modes of this
+       module now (ModuleBundle, as AutoClicker's types). Each keeps its own
+       code and settings (keys prefixed hazard- / displace-); FLICK is this
+       class's own flick, paused while another mode is picked. Settings and
+       on/off saved under the old module names are read once (ModuleBundle
+       .readLegacy). */
+    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"FLICK", "HAZARD", "DISPLACE"});
+
     public final ModeProperty direction = new ModeProperty("Direction", 0, new String[]{"Left", "Right", "Back", "Custom"});
     public final FloatProperty customAngle = new FloatProperty("Custom-Angle", 90F, 1F, 180F, () -> this.direction.getValue() == 3);
     public final IntProperty cooldown = new IntProperty("Cooldown", 1, 1, 40);
@@ -145,5 +153,22 @@ public class Hitflick extends Module {
             case 3: return customAngle.getValue();
             default: return 90F;
         }
+    }
+
+    public final atlas.module.ModuleBundle hazardMerged = atlas.module.ModuleBundle.forMode(this,
+                    new KBDisplacement(), "hazard", "Hazard", () -> this.mode.getValue() == 1)
+            .deselectWith(() -> this.mode.setValue(0)).selectWith(() -> this.mode.setValue(1));
+    public final atlas.module.ModuleBundle displaceMerged = atlas.module.ModuleBundle.forMode(this,
+                    new Displace(), "displace", "Displace", () -> this.mode.getValue() == 2)
+            .deselectWith(() -> this.mode.setValue(0)).selectWith(() -> this.mode.setValue(2));
+
+    {
+        this.pauseWhen(() -> this.mode.getValue() != 0);
+        java.util.function.BooleanSupplier flick = () -> this.mode.getValue() == 0;
+        this.direction.alsoWhen(flick);
+        this.customAngle.alsoWhen(flick);
+        this.cooldown.alsoWhen(flick);
+        this.blink.alsoWhen(flick);
+        this.moveFix.alsoWhen(flick);
     }
 }

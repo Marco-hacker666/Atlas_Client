@@ -75,22 +75,38 @@ public class LagRange extends Module {
     private static final SimpleDateFormat LINE_STAMP = new SimpleDateFormat("HH:mm:ss");
     private static final String NAME = "LagRange";
 
+    /* 2026-10-23 (owner): RAVEN, Raven bS's rules (LagRangeRaven), is the
+       default; ATLAS is the Pika-tuned behaviour below, kept as it was. A
+       saved config keeps whatever mode it names. */
+    private static final int RAVEN = 0;
+    private static final int ATLAS = 1;
+    public final ModeProperty mode = new ModeProperty("mode", RAVEN, new String[]{"RAVEN", "ATLAS"});
     // when to hold
-    public final FloatProperty range = new FloatProperty("range", 10.0F, 3.0F, 100.0F);
-    public final FloatProperty meleeDistance = new FloatProperty("melee-distance", 3.0F, 0.0F, 6.0F);
+    public final FloatProperty range = new FloatProperty("range", 6.0F, 3.0F, 100.0F);
+    public final FloatProperty meleeDistance = new FloatProperty("melee-distance", 3.0F, 0.0F, 6.0F,
+            () -> this.mode.getValue() == ATLAS);
     public final BooleanProperty weaponsOnly = new BooleanProperty("weapons-only", true);
     public final BooleanProperty allowTools = new BooleanProperty("allow-tools", false, this.weaponsOnly::getValue);
     public final BooleanProperty botCheck = new BooleanProperty("bot-check", true);
     public final BooleanProperty teams = new BooleanProperty("teams", true);
     // how long
-    public final IntProperty delay = new IntProperty("delay", 150, 0, 1000);
+    public final IntProperty delay = new IntProperty("delay", 200, 0, 1000);
     // when to let go
-    public final ModeProperty letOut = new ModeProperty("let-out", 0, new String[]{"Gradual", "At once"});
-    public final IntProperty recoilTime = new IntProperty("recoil-time", 750, 0, 2000);
+    public final ModeProperty letOut = new ModeProperty("let-out", 0, new String[]{"Gradual", "At once"},
+            () -> this.mode.getValue() == ATLAS);
+    public final IntProperty recoilTime = new IntProperty("recoil-time", 750, 0, 2000,
+            () -> this.mode.getValue() == ATLAS);
     public final IntProperty flagPause = new IntProperty("flag-pause", 2000, 0, 5000);
     /* 2026-10-19 (from Slinky): a W-tap (sprint stopping) lets the queue out
        at once, so the hit that follows it is judged from where you are. */
-    public final BooleanProperty releaseOnSprintReset = new BooleanProperty("release-on-sprint-reset", false);
+    public final BooleanProperty releaseOnSprintReset = new BooleanProperty("release-on-sprint-reset", false,
+            () -> this.mode.getValue() == ATLAS);
+    /* RAVEN: Raven's flush conditions -- sprint starting again after a W-tap, a sword block starting. */
+    public final BooleanProperty flushOnSprint = new BooleanProperty("flush-on-sprint", true,
+            () -> this.mode.getValue() == RAVEN);
+    public final BooleanProperty flushOnBlock = new BooleanProperty("flush-on-block", true,
+            () -> this.mode.getValue() == RAVEN);
+    private final LagRangeRaven raven = new LagRangeRaven();
     // display
     public final ModeProperty showPosition = new ModeProperty("show-position", 0, new String[]{"NONE", "DEFAULT", "HUD"});
     public final ModeProperty log = new ModeProperty("log", 1, new String[]{"Off", "File"});
@@ -223,6 +239,10 @@ public class LagRange extends Module {
         if (event.getType() != EventType.PRE) {
             return;
         }
+        if (this.mode.getValue() == RAVEN) {
+            ravenTick();
+            return;
+        }
         this.hasTarget = false;
         int wanted = 0;
         String why = ruledOut();
@@ -265,6 +285,85 @@ public class LagRange extends Module {
         apply(wanted, why);
     }
 
+    /** RAVEN: one LagRangeRaven step on the nearest valid target in range. */
+    private void ravenTick() {
+        String blocked = ravenRuledOut();
+        EntityPlayer target = null;
+        double best = Double.MAX_VALUE;
+        double rangeSq = this.range.getValue() * this.range.getValue();
+        Vec3 eye = new Vec3(mc.thePlayer.posX, mc.thePlayer.posY + mc.thePlayer.getEyeHeight(), mc.thePlayer.posZ);
+        for (EntityPlayer player : mc.theWorld.playerEntities) {
+            if (!this.isValidTarget(player)) {
+                continue;
+            }
+            double distance = RotationUtil.distanceToBox(player, eye);
+            if (distance * distance <= rangeSq && distance < best) {
+                best = distance;
+                target = player;
+            }
+        }
+        boolean weaponOk = !this.weaponsOnly.getValue() || ItemUtil.hasRawUnbreakingEnchant()
+                || (this.allowTools.getValue() && ItemUtil.isHoldingTool());
+        boolean moving = mc.thePlayer.moveForward != 0.0F || mc.thePlayer.moveStrafing != 0.0F;
+        LagRangeRaven.Step step = this.raven.step(blocked, target == null ? -1 : target.getEntityId(),
+                target == null ? 0.0 : best * best, rangeSq, mc.thePlayer.hurtTime,
+                target == null ? 0 : target.hurtTime, moving, weaponOk, mc.thePlayer.isSprinting(),
+                mc.thePlayer.isBlocking(), this.flushOnSprint.getValue(), this.flushOnBlock.getValue());
+        if (step == LagRangeRaven.Step.START) {
+            this.holdTarget = target.getName() + " " + String.format("%.1f", best) + " RAVEN";
+        }
+        this.hasTarget = this.raven.lagging;
+        if (step == LagRangeRaven.Step.FLUSH) {
+            releaseNow(this.raven.reason, 0L);
+        } else {
+            apply(this.raven.lagging ? ticksFor(this.delay.getValue()) : 0, this.raven.reason);
+        }
+    }
+
+    /**
+     * RAVEN: what rules holding out -- Raven's GUI, bed-breaking and Autoblock
+     * checks, plus Atlas's own: digging, a correction's flag-pause, a Clutch
+     * catch, another module holding movement. Weapons and items in use are
+     * not here: the weapon is a condition of the step, and Raven holds while
+     * an item is used.
+     */
+    private String ravenRuledOut() {
+        if (mc.currentScreen != null) {
+            return "screen";
+        }
+        BedNuker bedNuker = (BedNuker) Atlas.moduleManager.modules.get(BedNuker.class);
+        if (bedNuker.isEnabled() && bedNuker.isReady()) {
+            return "bed";
+        }
+        if (((IAccessorPlayerControllerMP) mc.playerController).getIsHittingBlock()) {
+            return "digging";
+        }
+        if (System.currentTimeMillis() < this.recoilUntil) {
+            return "flag-pause";
+        }
+        if (Arbiter.catching()) {
+            return "catch";
+        }
+        String other = PacketHub.holding();
+        if (other != null && !NAME.equals(other)) {
+            return other;
+        }
+        if (auraBlocking()) {
+            return "autoblock";
+        }
+        return null;
+    }
+
+    /** The sword is up because KillAura or KillAura2 raised it (Raven lets go while its Autoblock is active). */
+    private static boolean auraBlocking() {
+        KillAura aura = (KillAura) Atlas.moduleManager.getModule(KillAura.class);
+        if (aura != null && aura.isEnabled() && aura.isAuraBlocking()) {
+            return true;
+        }
+        KillAura2 aura2 = (KillAura2) Atlas.moduleManager.getModule(KillAura2.class);
+        return aura2 != null && aura2.isBlocking();
+    }
+
     private void apply(int wanted, String why) {
         int before = this.applied;
         int next = nextDelay(before, wanted, this.letOut.getValue() == 0);
@@ -302,11 +401,17 @@ public class LagRange extends Module {
             return;
         }
         Packet<?> packet = event.getPacket();
+        boolean ravenMode = this.mode.getValue() == RAVEN;
         if (event.getType() == EventType.SEND) {
             if (mustBeCurrent(packet)) {
-                /* We are at the head of the send: LagManager sends the queue before this packet. */
-                releaseNow(packet instanceof C02PacketUseEntity ? "attack" : "action", this.recoilTime.getValue());
-            } else if (this.releaseOnSprintReset.getValue()
+                /* We are at the head of the send: LagManager sends the queue before this packet.
+                   RAVEN: no pause after it, the next tick may hold again (Raven's onAttack flush). */
+                releaseNow(packet instanceof C02PacketUseEntity ? "attack" : "action",
+                        ravenMode ? 0L : this.recoilTime.getValue());
+                if (ravenMode) {
+                    this.raven.released();
+                }
+            } else if (!ravenMode && this.releaseOnSprintReset.getValue()
                     && packet instanceof net.minecraft.network.play.client.C0BPacketEntityAction
                     && ((net.minecraft.network.play.client.C0BPacketEntityAction) packet).getAction()
                     == net.minecraft.network.play.client.C0BPacketEntityAction.Action.STOP_SPRINTING) {
@@ -322,10 +427,10 @@ public class LagRange extends Module {
         } else if (packet instanceof S12PacketEntityVelocity
                 && ((S12PacketEntityVelocity) packet).getEntityID() == mc.thePlayer.getEntityId()) {
             cause = "knockback";
-            pause = this.recoilTime.getValue();
+            pause = ravenMode ? 0L : this.recoilTime.getValue();
         } else if (packet instanceof S27PacketExplosion) {
             cause = "explosion";
-            pause = this.recoilTime.getValue();
+            pause = ravenMode ? 0L : this.recoilTime.getValue();
         } else {
             return;
         }
@@ -333,6 +438,7 @@ public class LagRange extends Module {
         mc.addScheduledTask(() -> {
             if (this.isEnabled()) {
                 releaseNow(cause, pause);
+                this.raven.released();
             }
         });
     }
@@ -371,6 +477,7 @@ public class LagRange extends Module {
     @Override
     public void onDisabled() {
         this.lastDistance.clear();
+        this.raven.reset();
         if (this.applied > 0) {
             Atlas.lagManager.setDelay(0);
         }

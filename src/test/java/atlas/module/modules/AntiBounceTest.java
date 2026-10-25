@@ -5,6 +5,7 @@ import org.junit.Test;
 import java.util.function.Predicate;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 /** AntiBounce's way out of a block (2026-10-16). */
@@ -33,5 +34,19 @@ public class AntiBounceTest {
     @Test
     public void noWayOutWithinTheLimit() {
         assertNull(AntiBounce.escape(BOX, b -> true, null, 1.0));
+    }
+
+    @Test
+    public void ticksBeforeTheStuckAsLogged() {
+        assertEquals("3t", AntiBounce.ticksBefore(100, 97));
+        assertEquals("-2t", AntiBounce.ticksBefore(100, 102));
+        assertEquals("none", AntiBounce.ticksBefore(100, -1000));
+        assertEquals("200t", AntiBounce.ticksBefore(300, 100));
+    }
+
+    @Test
+    public void correctionMoveIsHorizontalAndSignedVertical() {
+        assertEquals("h0.50 v+1.10", AntiBounce.moveText(0.3, 1.1, 0.4));
+        assertEquals("h0.00 v-0.25", AntiBounce.moveText(0, -0.25, 0));
     }
 }

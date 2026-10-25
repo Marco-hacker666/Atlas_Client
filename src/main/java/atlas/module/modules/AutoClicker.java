@@ -37,7 +37,9 @@ public class AutoClicker extends Module {
     public final FloatProperty hitBoxVertical = new FloatProperty("hit-box-vertical", 0.1F, 0.0F, 1.0F, this.breakBlocks::getValue);
     public final FloatProperty hitBoxHorizontal = new FloatProperty("hit-box-horizontal", 0.2F, 0.0F, 1.0F, this.breakBlocks::getValue);
     public final ModeProperty clickMode = new ModeProperty("click-mode", 0, new String[]{"Normal", "LowCPS", "Record", "DragClick"});
-    public final ModeProperty randomization = new ModeProperty("randomization", 0, new String[]{"Normal", "Extra", "Extra+"});
+    /* Human (2026-10-25, HumanClicks): a mean-reverting CPS walk, log-normal gaps, cadence repeats, hesitations. */
+    public final ModeProperty randomization = new ModeProperty("randomization", 3, new String[]{"Normal", "Extra", "Extra+", "Human"});
+    private final atlas.util.HumanClicks humanClicks = new atlas.util.HumanClicks();
     public final IntProperty lowMaxCPS = new IntProperty("low-max-cps", 6, 1, 20, () -> this.clickMode.getValue() == 1);
     public final BooleanProperty jitter = new BooleanProperty("jitter", false);
     public final FloatProperty jitterStrength = new FloatProperty("jitter-strength", 0.3F, 0.0F, 2.0F, this.jitter::getValue);
@@ -91,6 +93,10 @@ public class AutoClicker extends Module {
         } else if (this.clickMode.getValue() == 3) {
             int top = Math.max(this.minCPS.getValue(), this.maxCPS.getValue());
             base = 1000L / RandomUtil.nextLong(top, top + 8);
+        } else if (this.randomization.getValue() == 3) {
+            /* Human shapes the whole gap; fatigue still sags it on a long fight. */
+            long gap = this.humanClicks.next(this.minCPS.getValue(), this.maxCPS.getValue(), System.currentTimeMillis());
+            return (long) ((double) gap / this.fatigueMultiplier());
         } else {
             base = 1000L / RandomUtil.nextLong(this.minCPS.getValue(), this.maxCPS.getValue());
         }
@@ -204,12 +210,18 @@ public class AutoClicker extends Module {
        when aiming low), and the old check only looked "range" far down the
        line, so it called it mining and stopped clicking. Now any enemy on the
        crosshair line in front of that block counts, however far. */
+    /* 2026-10-25 (owner: "facing a block with someone behind it, holding the
+       mouse never breaks the block"). The line was max(range, distance to the
+       block), so with the block nearer than range a player BEHIND it was on
+       the line too: "a target", clicking went on and every click restarted the
+       break. On a block the line now ends at the block -- only an enemy in
+       front of it counts, at any distance (the 10-20 case above still holds:
+       there the block is behind the enemy). */
     private double rayLength() {
-        double length = this.range.getValue();
         if (this.isBreakingBlock() && mc.objectMouseOver.hitVec != null) {
-            length = Math.max(length, mc.thePlayer.getPositionEyes(1.0F).distanceTo(mc.objectMouseOver.hitVec));
+            return mc.thePlayer.getPositionEyes(1.0F).distanceTo(mc.objectMouseOver.hitVec);
         }
-        return length;
+        return this.range.getValue();
     }
 
     private boolean isValidTarget(EntityPlayer entityPlayer, double length) {
@@ -355,6 +367,7 @@ public class AutoClicker extends Module {
 
     @Override
     public void onEnabled() {
+        this.humanClicks.reset();
         this.moduleClickThisTick = false;
         this.clickDelay = 0L;
         this.blockHitDelay = 0L;

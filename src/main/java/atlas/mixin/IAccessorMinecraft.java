@@ -23,6 +23,18 @@ public interface IAccessorMinecraft {
     @Accessor("rightClickDelayTimer")
     void setRightClickDelayTimer(int integer);
 
+    /* 2026-10-24: the LiquidBounce clicker's miss cooldown (ticks left after a swing at the air). */
+    @Accessor("leftClickCounter")
+    int getLeftClickCounter();
+
+    /* The LiquidBounce aura's FailSwing: a swing at the air costs vanilla's miss delay. */
+    @Accessor("leftClickCounter")
+    void setLeftClickCounter(int ticks);
+
+    /* 2026-10-24: KillAura's simulate-clicks (Yuri): vanilla's own left click. */
+    @org.spongepowered.asm.mixin.gen.Invoker("clickMouse")
+    void callClickMouse();
+
     /* 2026-10-11: where AtlasResources adds the jar's "atlas" resources. */
     @Accessor("defaultResourcePacks")
     java.util.List<net.minecraft.client.resources.IResourcePack> getDefaultResourcePacks();

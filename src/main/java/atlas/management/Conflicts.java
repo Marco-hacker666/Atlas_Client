@@ -42,7 +42,9 @@ public final class Conflicts {
      */
     public static final Set<String> HOLDERS = Collections.unmodifiableSet(new LinkedHashSet<String>(java.util.Arrays.asList(
             "FakeLag", "LagRange", "BackTrack", "KnockbackDelay", "ServerLag", "TimerRange", "PingSpoof", "Freeze",
-            "Blink")));
+            "Blink",
+            /* Velocity while its mode is Lag (2026-10-24): listed as "Velocity (Lag)". */
+            "VelocityLag")));
 
     public static final class Conflict {
         public final String key;
@@ -164,6 +166,10 @@ public final class Conflicts {
             for (atlas.module.Module module : atlas.Atlas.moduleManager.modules.values()) {
                 if (module != null && module.isEnabled()) {
                     on.add(new String[]{module.getName(), module.getClass().getSimpleName()});
+                    if (module instanceof atlas.module.modules.Velocity
+                            && ((atlas.module.modules.Velocity) module).holdsPackets()) {
+                        on.add(new String[]{module.getName() + " (Lag)", "VelocityLag"});
+                    }
                 }
             }
         }

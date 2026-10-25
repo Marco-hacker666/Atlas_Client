@@ -43,6 +43,11 @@ public final class ModuleBundle implements PropertyGroup {
     private boolean wanted;
     /** For a mode merge: picks the host's own mode again (FlagResponder switching it off). */
     private Runnable deselect;
+    /** For a mode merge: picks this one's mode (an old config had the merged module on). */
+    private Runnable select;
+    /** Each member's key before the prefix, as a config saved before the merge has it. */
+    private final Map<Property<?>, String> ownKeys = new HashMap<Property<?>, String>();
+    private static final List<ModuleBundle> ALL = new ArrayList<ModuleBundle>();
 
     private ModuleBundle(Module host, Module child, String prefix, String title, BooleanProperty toggle,
                          BooleanSupplier selected) {
@@ -53,6 +58,7 @@ public final class ModuleBundle implements PropertyGroup {
         this.toggle = toggle;
         this.selected = selected;
         MERGED.put(child.getClass(), child);
+        ALL.add(this);
     }
 
     /** Merged module with its own on/off switch under the host. */
@@ -84,6 +90,107 @@ public final class ModuleBundle implements PropertyGroup {
     public ModuleBundle deselectWith(Runnable action) {
         this.deselect = action;
         return this;
+    }
+
+    public ModuleBundle selectWith(Runnable action) {
+        this.select = action;
+        return this;
+    }
+
+    /** Fills the merged module's settings from the host's own section, once, when it has none of them yet. */
+    private java.util.function.Consumer<com.google.gson.JsonObject> seed;
+
+    public ModuleBundle seedWith(java.util.function.Consumer<com.google.gson.JsonObject> seed) {
+        this.seed = seed;
+        return this;
+    }
+
+    /** The member whose key before the prefix was {@code own}, or null. */
+    public Property<?> member(String own) {
+        for (Property<?> property : properties()) {
+            if (own.equals(this.ownKeys.get(property))) {
+                return property;
+            }
+        }
+        return null;
+    }
+
+    /** Reads {@code value} into the member whose own key is {@code own}; false when there is none or it does not fit. */
+    public boolean readInto(String own, com.google.gson.JsonElement value) {
+        Property<?> property = member(own);
+        if (property == null || value == null) {
+            return false;
+        }
+        com.google.gson.JsonObject one = new com.google.gson.JsonObject();
+        one.add(property.getName(), value);
+        try {
+            return property.read(one);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * A config saved before a merge (2026-10-24, Hitflick): the merged
+     * module's own section, under its own name and unprefixed keys. When the
+     * host's section has none of the prefixed keys yet, each setting is read
+     * from there; if the old module was on, the host is switched on and
+     * (a mode merge) its mode picked. Saving again writes the new keys only.
+     *
+     * @param hostObject the host's section, or null when the file has none
+     */
+    public static void readLegacy(Module host, com.google.gson.JsonObject root, com.google.gson.JsonObject hostObject) {
+        for (ModuleBundle bundle : ALL) {
+            if (bundle.host != host) {
+                continue;
+            }
+            List<Property<?>> members = bundle.properties();
+            boolean merged = false;
+            for (Property<?> property : members) {
+                merged |= hostObject != null && hostObject.has(property.getName());
+            }
+            if (merged) {
+                continue;
+            }
+            if (bundle.seed != null && hostObject != null) {
+                try {
+                    bundle.seed.accept(hostObject);
+                } catch (Exception ignored) {
+                    /* A seed that cannot read the old section leaves the defaults. */
+                }
+            }
+            com.google.gson.JsonElement old = root.get(bundle.child.getName());
+            if (old == null || !old.isJsonObject()) {
+                continue;
+            }
+            com.google.gson.JsonObject section = old.getAsJsonObject();
+            for (Property<?> property : members) {
+                String own = bundle.ownKeys.get(property);
+                if (own == null || !section.has(own)) {
+                    continue;
+                }
+                com.google.gson.JsonObject one = new com.google.gson.JsonObject();
+                one.add(property.getName(), section.get(own));
+                try {
+                    property.read(one);
+                } catch (Exception ignored) {
+                    /* One unreadable value keeps its default, as Config does. */
+                }
+            }
+            com.google.gson.JsonElement toggled = section.get("toggled");
+            if (toggled != null && toggled.isJsonPrimitive() && toggled.getAsBoolean()) {
+                if (bundle.select != null) {
+                    bundle.select.run();
+                } else if (bundle.toggle != null) {
+                    bundle.toggle.setValue(true);
+                }
+                try {
+                    host.setEnabled(true);
+                } catch (Exception ignored) {
+                    /* As Config: a module that cannot start during the load stays off. */
+                }
+            }
+        }
     }
 
     public Module child() {
@@ -141,6 +248,7 @@ public final class ModuleBundle implements PropertyGroup {
                 : (this.selected != null ? this.selected : () -> true);
         for (Property<?> property : own) {
             property.setOwner(this.child);
+            this.ownKeys.put(property, property.getName());
             property.rekey(this.prefix + "-" + property.getName());
             property.alsoWhen(shown);
             property.fixGroup(this.title);

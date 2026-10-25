@@ -61,12 +61,35 @@ public class KillAura extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final DecimalFormat df = new DecimalFormat("+0.0;-0.0", new DecimalFormatSymbols(Locale.US));
     private static final long ROTATION_UPDATE_INTERVAL_MS = 50;
+    /*
+     * 2026-10-25 (owner: "replace it with LiquidBounce's KillAura, keep some
+     * modes, do not rename"): LiquidBounce (default) runs KillAuraLB, the full
+     * port, merged in with ModuleBundle (its settings under the LiquidBounce
+     * heading, keys prefixed lb-); Atlas is this class's own aura, every mode
+     * and setting as before, under their old names. The module stays Silent
+     * Aura; other modules still ask this class, which answers for whichever
+     * engine runs.
+     */
+    public final ModeProperty engine = new ModeProperty("engine", 0, new String[]{"LiquidBounce", "Atlas"});
     public final ModeProperty cpsMode;
     public final ModeProperty mode;
     public final ModeProperty sort;
     public ModeProperty autoBlock;
     /* Read by NoSlow ("No Attack" with SWAP autoblock): the block tick on which no hit goes out. */
     public final IntProperty attackTick = new IntProperty("AttackTick", 0, 1, 5, () -> this.autoBlock.getValue() == 6);
+    /* Yuri auto-block modes (2026-10-24, KillAuraYuri): auto-block 11-14. */
+    private static final int YURI_FIRST = 11;
+    public final BooleanProperty yuriOnlyWhenHurt = new BooleanProperty("yuri-only-when-hurt", false,
+            () -> this.autoBlock.getValue() >= YURI_FIRST);
+    public final IntProperty yuriHurtTicks = new IntProperty("yuri-hurt-ticks", 4, 0, 10,
+            () -> this.autoBlock.getValue() >= YURI_FIRST && this.yuriOnlyWhenHurt.getValue());
+    /* Yuri's "Simulate Mouse Clicks": a due click is vanilla's own left click
+       (Minecraft.clickMouse) instead of the aura's attack packet -- it hits
+       whatever the crosshair is on, swings at the air otherwise (and a miss
+       costs vanilla's 10-tick miss delay unless NoDelay is on). */
+    public final BooleanProperty simulateClicks = new BooleanProperty("simulate-clicks", false);
+    private final KillAuraYuri yuri = new KillAuraYuri();
+    private boolean yuriBlockAfterMove;
     /* LEGIT autoblock (2026-10-16), after LiquidBounce NextGen's KillAuraAutoBlock:
        - LegitThreat "Look": block only while an enemy's look ray, within its
          reach and with line of sight, lands on our box (NextGen's
@@ -308,13 +331,15 @@ public class KillAura extends Module {
 
         this.mode = new ModeProperty("Mode", 1, new String[]{"Single", "Switch"});
         this.sort = new ModeProperty("Sort", 1, new String[]{"Distance", "Health", "HurtTime", "FOV"});
-        this.autoBlock = new ModeProperty("auto-block", 3, new String[]{"NONE", "VANILLA", "SPOOF", "HYPIXEL", "BLINK", "INTERACT", "SWAP", "LEGIT", "FAKE", "Morden", "SameTick"})
+        this.autoBlock = new ModeProperty("auto-block", 3, new String[]{"NONE", "VANILLA", "SPOOF", "HYPIXEL", "BLINK", "INTERACT", "SWAP", "LEGIT", "FAKE", "Morden", "SameTick",
+                "Yuri-Hypixel", "Yuri-Legit", "Yuri-NCP", "Yuri-Vanilla"})
                 /* 2026-10-08: the menu keeps the tuned modes; the rest stay
                    in the code for old configs. */
                 .hide("VANILLA", "SPOOF", "BLINK", "INTERACT", "SWAP", "FAKE", "Morden")
                 .alias("LiquidBounce", "SameTick");
         this.autoBlockCPS = new FloatProperty("AutoBlockCPS", 8.0F, 1.0F, 10.0F,
-                () -> this.autoBlock.getValue() != 7 && this.autoBlock.getValue() != 10);
+                () -> this.autoBlock.getValue() != 7 && this.autoBlock.getValue() != 10
+                        && this.autoBlock.getValue() < YURI_FIRST);
         this.autoBlockRequirePress = new BooleanProperty("AutoBlockRequirePress", false);
         this.autoBlockRange = new FloatProperty("AutoBlockRange", 6.0F, 3.0F, 8.0F);
         this.swingRange = new FloatProperty("SwingRange", 3.5F, 3.0F, 6.0F);
@@ -400,6 +425,43 @@ public class KillAura extends Module {
         this.minCPS.when(() -> cpsMode.getValue() == 0 || cpsMode.getValue() == 2);
         this.maxCPS.when(() -> cpsMode.getValue() == 0 || cpsMode.getValue() == 2);
         this.moveFix.when(() -> rotations.getValue() != 0);
+        /* Every setting of the Atlas engine shows only while it is picked. */
+        for (java.lang.reflect.Field field : KillAura.class.getDeclaredFields()) {
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                continue;
+            }
+            try {
+                field.setAccessible(true);
+                Object value = field.get(this);
+                if (value instanceof atlas.property.Property && value != this.engine) {
+                    ((atlas.property.Property<?>) value).alsoWhen(this::atlasEngine);
+                }
+            } catch (IllegalAccessException ignored) {
+                // Unreadable field: not a setting.
+            }
+        }
+        this.pauseWhen(() -> !this.atlasEngine());
+    }
+
+    /** The Atlas engine (this class's own aura) is the one picked. */
+    public boolean atlasEngine() {
+        return this.engine.getValue() == 1;
+    }
+
+    /** On, and the Atlas engine runs (its handlers that also run while off check this). */
+    private boolean atlasOn() {
+        return this.isEnabled() && this.atlasEngine();
+    }
+
+    /** The LiquidBounce engine, while it is the one running; null otherwise. */
+    public KillAuraLB liquidBounce() {
+        return !this.atlasEngine() && this.lbEngine.child().isEnabled() ? (KillAuraLB) this.lbEngine.child() : null;
+    }
+
+    /** Reach of whichever engine runs: the Atlas AttackRange, or LiquidBounce's interaction range. */
+    public float attackReach() {
+        KillAuraLB lb = liquidBounce();
+        return lb != null ? lb.reach() : this.attackRange.getValue();
     }
 
     /**
@@ -502,7 +564,11 @@ public class KillAura extends Module {
            fits between clicks. AutoBlockCPS (8 for the owner) used to cap
            them whenever a target was in reach. */
         int blockMode = this.autoBlock.getValue();
-        if (this.isBlocking && blockMode != 7 && blockMode != 10) {
+        if (blockMode >= YURI_FIRST && KillAuraYuri.CLICK_MS[blockMode - YURI_FIRST] > 0L) {
+            /* Yuri: Hypixel 8 and Legit 5 clicks a second, whatever the CPS settings say. */
+            return KillAuraYuri.CLICK_MS[blockMode - YURI_FIRST];
+        }
+        if (this.isBlocking && blockMode != 7 && blockMode != 10 && blockMode < YURI_FIRST) {
             return (long) (1000.0F / this.autoBlockCPS.getValue());
         } else {
             if (this.cpsMode.getValue() == 2) {
@@ -529,11 +595,16 @@ public class KillAura extends Module {
      * The hit is judged along the look the movement packet will carry.
      */
     public void afterRotations(UpdateEvent event) {
+        KillAuraLB lb = liquidBounce();
+        if (lb != null) {
+            lb.afterRotations(event);
+            return;
+        }
         if (!this.deferredPending) {
             return;
         }
         this.deferredPending = false;
-        if (!this.isEnabled() || this.target == null) {
+        if (!this.atlasOn() || this.target == null) {
             return;
         }
         if (this.deferredAttack) {
@@ -751,6 +822,17 @@ public class KillAura extends Module {
                    1 and 2). The remainder is at most one tick: the countdown
                    above stops at zero or just under. */
                 this.attackDelayMS += this.getAttackDelay();
+                if (this.simulateClicks.getValue()) {
+                    /* Yuri: the click is vanilla's own (swing, then whatever the
+                       crosshair is on); AttackEvent fires from attackEntity. */
+                    if (this.cpsMode.getValue() == 1) {
+                        patternIndex = (patternIndex + 4) % clickPattern.length;
+                    }
+                    ((atlas.mixin.IAccessorMinecraft) mc).callClickMouse();
+                    this.hitRegistered = mc.objectMouseOver != null
+                            && mc.objectMouseOver.entityHit == this.target.getEntity();
+                    return this.hitRegistered;
+                }
                 mc.thePlayer.swingItem();
 
                 if (this.cpsMode.getValue() == 1) {
@@ -1082,10 +1164,24 @@ public class KillAura extends Module {
     }
 
     public EntityLivingBase getTarget() {
+        KillAuraLB lb = liquidBounce();
+        if (lb != null) {
+            return lb.getTarget();
+        }
         return this.target != null ? this.target.getEntity() : null;
     }
 
+    /** Whether the running engine blocks by itself: Atlas auto-block not NONE, or LiquidBounce AutoBlocking on. */
+    public boolean blocksByItself() {
+        KillAuraLB lb = liquidBounce();
+        return lb != null ? lb.autoBlocking.getValue() : this.autoBlock.getValue() != 0;
+    }
+
     public boolean isAttackAllowed() {
+        KillAuraLB lb = liquidBounce();
+        if (lb != null) {
+            return lb.isAttackAllowed();
+        }
         Scaffold scaffold = (Scaffold) Atlas.moduleManager.modules.get(Scaffold.class);
         if (scaffold.isEnabled()) {
             return false;
@@ -1111,15 +1207,142 @@ public class KillAura extends Module {
     }
 
     public boolean isBlocking() {
+        KillAuraLB lb = liquidBounce();
+        if (lb != null) {
+            return lb.isBlockVisual();
+        }
         return this.fakeBlockState && ItemUtil.isHoldingSword();
     }
 
     /** The block this aura raised itself (its own use packet), not the player's right click. */
+    /**
+     * Yuri auto-block (KillAuraYuri), at the start of the aura's tick: lets go,
+     * blocks or sets the use key as the step says. False when this tick's
+     * click must wait (Legit: a tick with the key up first).
+     *
+     * @param eligible the aura may attack and auto-block (a target, a sword, the press rule met)
+     */
+    private boolean yuriAutoBlock(boolean eligible) {
+        int mode = this.autoBlock.getValue() - YURI_FIRST;
+        EntityLivingBase entity = this.target == null ? null : this.target.getEntity();
+        double distance = entity == null ? Double.MAX_VALUE : mc.thePlayer.getDistanceToEntity(entity);
+        boolean inRange = eligible && entity != null && distance <= this.autoBlockRange.getValue()
+                && ItemUtil.isHoldingSword();
+        KillAuraYuri.Plan plan = this.yuri.step(mode, inRange, distance, mc.thePlayer.hurtTime,
+                this.yuriOnlyWhenHurt.getValue(), this.yuriHurtTicks.getValue(), this.attackDelayMS,
+                mc.thePlayer.isUsingItem());
+        this.yuriApply(mode, plan);
+        if (mode == KillAuraYuri.LEGIT && inRange) {
+            /* Yuri: the player's own left clicks are dropped while the aura clicks for them. */
+            while (mc.gameSettings.keyBindAttack.isPressed()) {
+                // consumed
+            }
+        }
+        this.isBlocking = inRange && mode != KillAuraYuri.LEGIT;
+        this.fakeBlockState = inRange;
+        return plan.mayClick;
+    }
+
+    private void yuriApply(int mode, KillAuraYuri.Plan plan) {
+        if (plan.release) {
+            if (mode == KillAuraYuri.HYPIXEL) {
+                this.stopBlock();
+            } else {
+                PacketUtil.sendPacket(new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.RELEASE_USE_ITEM,
+                        BlockPos.ORIGIN, EnumFacing.DOWN));
+            }
+        }
+        if (plan.useKey != null) {
+            net.minecraft.client.settings.KeyBinding.setKeyBindState(
+                    mc.gameSettings.keyBindUseItem.getKeyCode(), plan.useKey);
+        }
+        ItemStack held = mc.thePlayer.getHeldItem();
+        if (plan.block && held != null) {
+            if (mode == KillAuraYuri.HYPIXEL) {
+                this.startBlock(held);
+            } else {
+                PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(held));
+            }
+        }
+        this.yuriBlockAfterMove = plan.blockAfterMove;
+    }
+
+    /** After the movement packet: NCP's block, and Hypixel keeping the client's own use up. */
+    private void yuriAfterMove() {
+        int mode = this.autoBlock.getValue() - YURI_FIRST;
+        if (mode < 0) {
+            return;
+        }
+        ItemStack held = mc.thePlayer.getHeldItem();
+        if (this.yuriBlockAfterMove) {
+            this.yuriBlockAfterMove = false;
+            if (held != null && ItemUtil.isHoldingSword()) {
+                PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(held));
+                this.yuri.blockedAfterMove();
+            }
+        }
+        if (mode == KillAuraYuri.HYPIXEL && this.yuri.blocking && held != null && !mc.thePlayer.isBlocking()) {
+            mc.thePlayer.setItemInUse(held, held.getMaxItemUseDuration());
+        }
+    }
+
+    /** Lets a Yuri block go when the aura stops. */
+    private void yuriStop() {
+        int mode = this.autoBlock.getValue() - YURI_FIRST;
+        if (mode >= 0 && this.yuri.blocking && mc.thePlayer != null) {
+            if (mode == KillAuraYuri.LEGIT) {
+                net.minecraft.client.settings.KeyBinding.setKeyBindState(
+                        mc.gameSettings.keyBindUseItem.getKeyCode(), false);
+            } else {
+                PacketUtil.sendPacket(new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.RELEASE_USE_ITEM,
+                        BlockPos.ORIGIN, EnumFacing.DOWN));
+                if (mode == KillAuraYuri.HYPIXEL) {
+                    mc.thePlayer.stopUsingItem();
+                }
+            }
+        }
+        this.yuri.reset();
+        this.yuriBlockAfterMove = false;
+    }
+
+    private boolean atlasStoodDown = true;
+
+    /** Once after switching to LiquidBounce: what the Atlas engine held is let go, as on disabling it. */
+    private void atlasStandDown() {
+        if (this.atlasStoodDown) {
+            return;
+        }
+        this.atlasStoodDown = true;
+        this.blinkReset = false;
+        Atlas.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
+        if (mc.thePlayer != null) {
+            this.yuriStop();
+            if (this.blockingState) {
+                this.stopBlock();
+            }
+        }
+        this.blockingState = false;
+        this.isBlocking = false;
+        this.fakeBlockState = false;
+        this.target = null;
+        this.wantsToDisable = false;
+        this.returning = false;
+        this.currentAimVec = null;
+    }
+
     public boolean isAuraBlocking() {
+        KillAuraLB lb = liquidBounce();
+        if (lb != null) {
+            return lb.isAuraBlocking();
+        }
         return this.blockingState && ItemUtil.isHoldingSword();
     }
 
     public boolean isPlayerBlocking() {
+        KillAuraLB lb = liquidBounce();
+        if (lb != null) {
+            return (mc.thePlayer.isUsingItem() || lb.isAuraBlocking()) && ItemUtil.isHoldingSword();
+        }
         return (mc.thePlayer.isUsingItem() || this.blockingState) && ItemUtil.isHoldingSword();
     }
 
@@ -1130,6 +1353,17 @@ public class KillAura extends Module {
             this.lastSentYaw = event.getYaw();
             this.lastSentPitch = event.getPitch();
             this.sentKnown = true;
+            if (this.atlasOn()) {
+                this.yuriAfterMove();
+            }
+        }
+        if (!this.atlasEngine()) {
+            /* LiquidBounce runs: let the Atlas engine's own state go once (blocks, blink, smooth-back). */
+            this.atlasStandDown();
+            return;
+        }
+        if (this.isEnabled()) {
+            this.atlasStoodDown = false;
         }
         if (event.getType() == EventType.POST && this.blinkReset) {
             this.blinkReset = false;
@@ -1164,6 +1398,9 @@ public class KillAura extends Module {
                                 | atlas.management.TickActions.INVENTORY);
                 boolean attack = this.target != null && this.canAttack() && this.invulnAllowsAttack();
                 boolean block = attack && this.canAutoBlock();
+                if (this.autoBlock.getValue() >= YURI_FIRST && !this.yuriAutoBlock(block)) {
+                    attack = false;
+                }
                 if (!block) {
                     Atlas.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
                     this.isBlocking = false;
@@ -1968,7 +2205,7 @@ public class KillAura extends Module {
 
     @EventTarget(whenDisabled = true)
     public void onTick(TickEvent event) {
-        if (this.isEnabled() || this.wantsToDisable) {
+        if (this.atlasOn() || this.wantsToDisable && this.atlasEngine()) {
             switch (event.getType()) {
                 case PRE:
                     if (this.target == null && !this.isSmoothBacking && !this.wantsToDisable) {
@@ -2148,7 +2385,7 @@ public class KillAura extends Module {
 
     @EventTarget(whenDisabled = true)
     public void onMove(MoveInputEvent event) {
-        if (this.isEnabled() || this.wantsToDisable) {
+        if (this.atlasOn() || this.wantsToDisable && this.atlasEngine()) {
             boolean isSilent = this.rotations.getValue() == 2;
             boolean isLiquidBounce = this.rotations.getValue() == 4;
             boolean isRavenBS = this.rotations.getValue() == 5;
@@ -2172,7 +2409,7 @@ public class KillAura extends Module {
             double viewerX = renderManagerAccessor.getRenderPosX();
             double viewerY = renderManagerAccessor.getRenderPosY();
             double viewerZ = renderManagerAccessor.getRenderPosZ();
-            if (this.isEnabled() && target != null) {
+            if (this.atlasOn() && target != null) {
                 if (this.showTarget.getValue() != 0 && !TargetOrbit.active()
                         && TeamUtil.isEntityLoaded(this.target.getEntity())
                         && this.isAttackAllowed()) {
@@ -2193,7 +2430,7 @@ public class KillAura extends Module {
                     RenderUtil.disableRenderState();
                 }
             }
-            if ((this.isEnabled() || this.wantsToDisable) && this.visualizeAim.getValue() && this.currentAimVec != null) {
+            if ((this.atlasOn() || this.wantsToDisable && this.atlasEngine()) && this.visualizeAim.getValue() && this.currentAimVec != null) {
                 double x = this.currentAimVec.xCoord;
                 double y = this.currentAimVec.yCoord;
                 double z = this.currentAimVec.zCoord;
@@ -2241,7 +2478,7 @@ public class KillAura extends Module {
         if (this.isBlocking) {
             event.setCancelled(true);
         } else {
-            if (this.isEnabled() && this.target != null && this.canAttack()) {
+            if (this.atlasOn() && this.target != null && this.canAttack()) {
                 event.setCancelled(true);
             }
         }
@@ -2252,7 +2489,7 @@ public class KillAura extends Module {
         if (this.isBlocking) {
             event.setCancelled(true);
         } else {
-            if (this.isEnabled() && this.target != null && this.canAttack()) {
+            if (this.atlasOn() && this.target != null && this.canAttack()) {
                 event.setCancelled(true);
             }
         }
@@ -2263,7 +2500,7 @@ public class KillAura extends Module {
         if (this.isBlocking) {
             event.setCancelled(true);
         } else {
-            if (this.isEnabled() && this.target != null && this.canAttack()) {
+            if (this.atlasOn() && this.target != null && this.canAttack()) {
                 event.setCancelled(true);
             }
         }
@@ -2470,10 +2707,11 @@ public class KillAura extends Module {
            blinkReset switched the blink on again after the module was off. */
         this.blinkReset = false;
         Atlas.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
+        this.yuriStop();
         this.blockingState = false;
         this.isBlocking = false;
         this.fakeBlockState = false;
-        if (!this.closing && this.rotations.getValue() != 0 && this.rotations.getValue() != 3 && this.smoothBack.getValue()
+        if (!this.closing && this.atlasEngine() && this.rotations.getValue() != 0 && this.rotations.getValue() != 3 && this.smoothBack.getValue()
                 && mc.thePlayer != null && this.sentKnown
                 && (Math.abs(MathHelper.wrapAngleTo180_float(this.lastSentYaw - mc.thePlayer.rotationYaw)) > 1.0F
                 || Math.abs(this.lastSentPitch - mc.thePlayer.rotationPitch) > 1.0F)) {
@@ -2718,5 +2956,62 @@ public class KillAura extends Module {
         double p = this.aimPhase + phaseOffset;
         double wave = Math.sin(p) + Math.sin(p * 2.7 + 1.3) * 0.3;
         return (float) (wave * amplitude * activity);
+    }
+
+    /*
+     * The LiquidBounce engine (KillAuraLB, L1-L3 of the port), merged in.
+     * Saved before L4, a Silent Aura section has none of the lb- keys: the
+     * settings both engines share are taken from it once (seedLiquidBounce),
+     * so a profile keeps its CPS, targets, reach and move fix.
+     */
+    public final atlas.module.ModuleBundle lbEngine = atlas.module.ModuleBundle.forMode(this, new KillAuraLB(),
+                    "lb", "LiquidBounce", () -> !this.atlasEngine())
+            .deselectWith(() -> this.engine.setValue(1))
+            .selectWith(() -> this.engine.setValue(0))
+            .seedWith(this::seedLiquidBounce);
+
+    private void seedLiquidBounce(com.google.gson.JsonObject old) {
+        atlas.module.ModuleBundle b = this.lbEngine;
+        for (String key : new String[]{"MinCPS", "MaxCPS", "Players", "Mobs", "Animals", "Golems", "Silverfish",
+                "Bosses", "Teams", "BotCheck", "RotationTiming", "LazyRotation", "ShortStop", "Raycast"}) {
+            b.readInto(key, old.get(key));
+        }
+        /* Atlas ThroughWalls = attack through walls: LiquidBounce's walls range (the whole reach) and aiming through them. */
+        com.google.gson.JsonElement walls = old.get("ThroughWalls");
+        boolean throughWalls = walls != null && walls.isJsonPrimitive() && walls.getAsBoolean();
+        b.readInto("ThroughWalls", new com.google.gson.JsonPrimitive(throughWalls));
+        com.google.gson.JsonElement range = old.get("AttackRange");
+        if (range != null && range.isJsonPrimitive()) {
+            float increase = Math.max(0.0F, Math.min(5.0F, range.getAsFloat() - atlas.lb.combat.AuraRules.VANILLA_REACH));
+            b.readInto("RangeIncrease", new com.google.gson.JsonPrimitive(increase));
+            b.readInto("ThroughWallsRange", new com.google.gson.JsonPrimitive(throughWalls ? range.getAsFloat() : 0.0F));
+        }
+        com.google.gson.JsonElement extra = old.get("ScanExtra");
+        if (extra != null && extra.isJsonPrimitive()) {
+            b.readInto("ScanRangeIncrease-min", extra);
+            b.readInto("ScanRangeIncrease-max", extra);
+        }
+        com.google.gson.JsonElement fov = old.get("FOV");
+        if (fov != null && fov.isJsonPrimitive()) {
+            b.readInto("TargetFOV", new com.google.gson.JsonPrimitive(Math.min(180.0F, fov.getAsFloat())));
+        }
+        com.google.gson.JsonElement moveFix = old.get("MoveFix");
+        com.google.gson.JsonElement rotations = old.get("Rotations");
+        if (rotations != null && rotations.isJsonPrimitive() && "LockView".equalsIgnoreCase(rotations.getAsString())) {
+            b.readInto("MovementCorrection", new com.google.gson.JsonPrimitive("ChangeLook"));
+        } else if (moveFix != null && moveFix.isJsonPrimitive()) {
+            String fix = moveFix.getAsString();
+            b.readInto("MovementCorrection", new com.google.gson.JsonPrimitive(
+                    "NONE".equalsIgnoreCase(fix) ? "Off" : fix));
+        }
+        com.google.gson.JsonElement block = old.get("auto-block");
+        if (block != null && block.isJsonPrimitive()) {
+            String mode = block.getAsString();
+            boolean on = !"NONE".equalsIgnoreCase(mode);
+            b.readInto("AutoBlocking", new com.google.gson.JsonPrimitive(on));
+            if ("FAKE".equalsIgnoreCase(mode)) {
+                b.readInto("BlockMode", new com.google.gson.JsonPrimitive("Fake"));
+            }
+        }
     }
 }

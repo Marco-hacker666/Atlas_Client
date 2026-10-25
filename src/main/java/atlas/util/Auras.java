@@ -64,7 +64,7 @@ public final class Auras {
             return rewrite.blocksByItself();
         }
         KillAura old = old();
-        return old != null && old.isEnabled() && old.autoBlock.getValue() != 0;
+        return old != null && old.isEnabled() && old.blocksByItself();
     }
 
     /** The running aura's attack range, or {@code fallback}. */
@@ -74,6 +74,6 @@ public final class Auras {
             return rewrite.attackRange.getValue();
         }
         KillAura old = old();
-        return old != null && old.isEnabled() ? old.attackRange.getValue() : fallback;
+        return old != null && old.isEnabled() ? old.attackReach() : fallback;
     }
 }

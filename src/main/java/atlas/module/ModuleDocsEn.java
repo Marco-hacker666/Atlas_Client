@@ -58,11 +58,13 @@ final class ModuleDocsEn {
         help("AimAssist", "line-of-sight", "Only targets in sight.");
         help("AimAssist", "ignore-invisible", "Skip invisible players.");
         d("AutoClicker", "Clicks for you while the attack key is held, at a random CPS within your range; can block-hit or break blocks.");
+        help("AutoClicker", "randomization", "Human (best): the CPS wanders inside your range and drifts back, each gap skewed like a hand's (rarely too fast, sometimes slow), with cadence repeats, short hesitations and a quicker start to each fight. Normal / Extra / Extra+: the older uniform draws.");
         d("KnockbackDelay", "Holds incoming knockback for a moment so the push lands late.");
         help("KnockbackDelay", "HoldTransactions", "While a push is held, the transaction packets after it wait with it, so the server never hears the push arrived before you reacted to it (transaction-timed velocity checks on Polar and Grim). On by default.");
         d("AutoHeal", "Uses healing items (soup, potions, heads) when health is low.");
         d("BackTrack", "Keeps a retreating target where you last saw them a moment longer, so a swing reaches the position the server still has.");
-        d("Hitflick", "Flicks the view away on a hit and back, to steer the knockback.");
+        d("Hitflick", "Steers the knockback of your hits: FLICK flicks the view away on a hit and back; HAZARD silently aims it at nearby void or lava; DISPLACE turns at the hit toward the void or a set angle.");
+        help("Hitflick", "mode", "FLICK: the flick away and back. HAZARD: what KBDisplacement did. DISPLACE: what Displace did. Each has its own settings below.");
         d("ServerLag", "Delays the packets the server sends, as if the server lagged; damage, health, sounds and chat still arrive at once. Works as FakeLag's incoming half.");
         d("FakeLag", "Delays your outgoing movement so the server's copy of you runs behind, for the first hit.");
         d("HitSelect", "Lets an attack through only when it suits you, e.g. when it costs less knockback. ACTIVE also decides Silent Aura's hits.");
@@ -71,6 +73,10 @@ final class ModuleDocsEn {
         d("FastBow", "Draws and shoots the bow faster.");
         help("BlockHit", "ManualChance", "Chance that a hit is followed by a one-tick block (blocks per second = CPS x chance). Idle while Silent Aura blocks by itself.");
         d("BlockHit", "Blocks with the sword between hits. Slinky (default): while the attack key is held and an enemy is in range the sword goes up, comes down for one tick after a few so the next hit lands, then goes up again; optionally only just before you can be hit, and packets held briefly as it comes down. Manual: after your hits, one-tick block. Predict: raised just before you can be hit again, lowered when you are. Full: vanilla block-hit order (down, hit next tick, up right after), the sword up only when it protects you. Helper / Auto / Lag: other ways.");
+        help("BlockHit", "yuri-range", "Yuri: only hits on a target this close (feet to feet) start a block.");
+        help("BlockHit", "yuri-chance", "Yuri: share of your hits that start a block.");
+        help("BlockHit", "yuri-combo-delay", "Yuri: ms after the hit before the sword goes up (only if you hold forward then).");
+        help("BlockHit", "yuri-block-delay", "Yuri: ms the sword stays up.");
         help("BlockHit", "block-range", "Raise the sword only while an enemy is this close (eyes to its hitbox).");
         help("BlockHit", "max-hold-ticks", "Ticks the sword stays up before it comes down for one tick so the next hit lands (1.8 drops attack clicks while blocking).");
         help("BlockHit", "require-left-click", "Block automatically only while the attack key is held; with only right click held it is a plain manual block.");
@@ -88,6 +94,35 @@ final class ModuleDocsEn {
         help("BlockHit", "full-guard", "Full Smart: before a fight starts, short raises while an enemy in range faces you.");
         help("FakeLag", "ping-budget", "The most your ping and FakeLag's delay may add up to (ms). Each hold is cut to "
                 + "this minus your ping; with under 40 ms left it does not hold. 0 turns it off.");
+        help("Velocity", "lag-ticks", "Lag: ticks your knockback (and the transactions after it) wait before they reach the game. The server sees a short rise in ping, then the knockback taken late, as latency looks.");
+        help("Velocity", "lag-chance", "Lag: share of knockbacks that are held.");
+        help("Velocity", "lag-explosions", "Lag: explosions wait in the same queue.");
+        help("Velocity", "lag-ping-budget", "Lag: ping plus the hold never goes past this (ms); the hold is cut, and on a high enough ping there is none. 0 = off.");
+        help("Velocity", "lag-cooldown", "Lag: after a release, no new hold for this long (ms), so a combo does not keep you lagging.");
+        help("Velocity", "lag-only-in-fight", "Lag: only with another player (not a bot or teammate) within 6 blocks.");
+        d("Humanization", "Makes combat modules look human: they miss, aim off and take time to react. One global set of rules that Silent Aura and others apply.");
+        help("Humanization", "preset", "Fills every value at once: Legit (40 %), Good (55 %), Tryhard (70 %). Each can still be changed; Custom overwrites nothing.");
+        help("Humanization", "apply-silent-aura", "Applies to Silent Aura (both engines, LiquidBounce and Atlas).");
+        help("Humanization", "hit-rate", "The hit rate aimed for: clicks that land out of clicks. People land roughly 40-60 %.");
+        help("Humanization", "hit-rate-spread", "How far the rate slowly wanders around the aim (points).");
+        help("Humanization", "correction", "How hard the measured rate is pulled back to the aim; 0 = pure dice.");
+        help("Humanization", "streaks", "Hot and cold spells: a run of hits, a run of misses.");
+        help("Humanization", "distance-penalty", "Points off for every block beyond distance-start.");
+        help("Humanization", "strafe-penalty", "Points off per 0.1 block a tick the target moves across your look.");
+        help("Humanization", "hurt-penalty", "Points off within hurt-ticks of being hit (fading).");
+        help("Humanization", "max-hits-per-second", "Never more hits a second than this (0 = no cap).");
+        help("Humanization", "miss-aim-off", "Weight of an aimed miss: that tick's look really passes the hitbox. The most human.");
+        help("Humanization", "miss-swing-only", "Weight of a swing with the look on the target and no hit.");
+        help("Humanization", "miss-skip", "Weight of not clicking at all.");
+        help("Humanization", "aim-off-min", "Least distance an aimed miss passes the hitbox edge by (blocks).");
+        help("Humanization", "miss-cooldown", "After a miss, wait vanilla 1.8's 10 ticks before clicking again.");
+        help("Humanization", "reaction-new-min", "Reaction time to a new target before aiming starts (ms).");
+        help("Humanization", "tracking-noise", "Hand tremor on the aim (degrees); larger while the target moves fast.");
+        help("Humanization", "overshoot-chance", "Chance a large turn goes past the target and comes back.");
+        help("Humanization", "lapse-chance", "Chance a second of a short lapse, the aim not following.");
+        help("Humanization", "speed-sigma", "Log-normal spread of the turn speed, tick to tick.");
+        help("Humanization", "human-clicks", "The aura clicks with AutoClicker's Human timing.");
+        help("Humanization", "show-stats", "Shows the last 30 s on screen: hit rate, kinds of miss, reaction time.");
         help("Velocity", "jitter", "Each reduced hit keeps its percentage give or take 3, so the result is never exactly "
                 + "the set share. A setting of 100 stays a full hit. Servers that predict knockback (Grim) still see "
                 + "any reduction.");
@@ -118,6 +153,8 @@ final class ModuleDocsEn {
         help("TargetOrbit", "trail", "Orbit: comet tail length.");
         help("TargetOrbit", "opacity", "Overall opacity.");
         help("Scaffold", "rotation-random", "Degrees the aim wanders, smoothly, from placement to placement, so it is not the same look every time; where the wandered look would miss the block, the exact one is used. 0 = off.");
+        help("AntiBounce", "mode", "ESCAPE moves you out of the block. WATCH only logs each time stuck (and the way out it "
+                + "would take) and leaves the moving to vanilla, to compare how often the server pulls you back.");
         help("AntiBounce", "speed", "Furthest it moves you a tick. Vanilla pushes a stuck player 0.1; much faster can look like phasing.");
         help("AntiBounce", "max-escape", "Furthest exit it looks for. Beyond it, nothing is moved, only logged.");
         help("AntiBounce", "log", "One line per time stuck in config/Atlas/stuck-*.txt: which block, whether you just placed it, time since the last correction, ping, and the way out.");
@@ -146,6 +183,12 @@ final class ModuleDocsEn {
         d("ExploitFixer", "Blocks malformed payload and chat packets you send (defensive).");
         d("HitBox", "Expands other entities' hitboxes so they are easier to hit; can draw them.");
         d("LagRange", "Delays your packets while closing on a target, so the server sees you late. Lets them out gradually within melee distance, so an attack finds little held; an attack, knockback or correction lets go at once and pauses holding.");
+        help("LagRange", "mode", "RAVEN (Raven bS's rules): holds while closing in from beyond 3 blocks, and keeps holding after "
+                + "your hit lands until you are hit; an attack sends what is held and it may hold again the next tick. "
+                + "ATLAS: lets go before reach and pauses after each attack, so the server rarely judges a hit from a "
+                + "stale position (safer against damage reduction, weaker in a trade).");
+        help("LagRange", "flush-on-sprint", "RAVEN: let go when sprint starts again (after a W-tap).");
+        help("LagRange", "flush-on-block", "RAVEN: let go when you start blocking with a sword.");
         help("LagRange", "range", "When to hold: a target within this distance that you are closing on.");
         help("LagRange", "melee-distance", "When to let go: the closest it ever holds. It lets out earlier on its own: at reach + how fast the gap closes x the ticks the queue needs to empty, so the queue is gone before the first hit can land.");
         help("LagRange", "weapons-only", "When to hold: only with a weapon in hand.");
@@ -422,6 +465,15 @@ final class ModuleDocsEn {
         heading("模式與比例", "Mode & amounts");
         heading("Reduce 模式", "Reduce mode");
         heading("Jump / Rotate", "Jump / Rotate");
+        heading("Lag 模式", "Lag mode");
+        heading("預設與套用", "Preset and modules");
+        heading("命中率", "Hit rate");
+        heading("情境修正", "Situations");
+        heading("怎麼揮空", "How it misses");
+        heading("反應時間", "Reaction");
+        heading("瞄準誤差", "Aim error");
+        heading("點擊", "Clicks");
+        heading("觀察", "Observing");
         heading("依延遲調整（毫秒）", "By latency (ms)");
         heading("顏色", "Colours");
         heading("位置與大小", "Position & size");
@@ -600,7 +652,26 @@ final class ModuleDocsEn {
         help(ka, "RequirePress", "Only attack while the attack key is held.");
         help(ka, "AllowMining", "With the crosshair on a block and the attack key held, mine instead of attacking.");
         help(ka, "InventoryCheck", "No attacks while an inventory or chest screen is open.");
-        help(ka, "auto-block", "How it blocks. LEGIT: block hits only while the target can hit back (facing you and swinging, or you were just hit): raised right after a hit, lowered before the next, CPS unchanged; no threat, no blocking, full speed. SameTick: on a click tick lower, hit and raise again at once; blocking between clicks; lowered out of swing range.");
+        help(ka, "yuri-only-when-hurt", "Yuri modes: block only once your hurt time reaches yuri-hurt-ticks.");
+        help(ka, "yuri-hurt-ticks", "Yuri modes: the hurt time from which blocking is allowed.");
+        help(ka, "simulate-clicks", "Yuri: each click is vanilla's own left click, hitting whatever the crosshair is on (not the aura's attack packet). A miss costs vanilla's miss delay unless NoDelay is on.");
+        help(ka, "engine", "LiquidBounce: the full port of LiquidBounce NextGen's KillAura (its settings under the LiquidBounce heading). Atlas: the previous Silent Aura, every mode and setting as before.");
+        help("LiquidAura", "Technique", "Human: log-normal gaps around a CPS drawn per combo. Constant: evenly at the top of the CPS range.");
+        help("LiquidAura", "MaxPerTick", "Most clicks in one tick (above 20 CPS).");
+        help("LiquidAura", "MissCooldown", "Waits out vanilla's delay after a swing at the air, as a real click would.");
+        help("LiquidAura", "RangeIncrease", "Reach = 3.0 + this. LiquidBounce's default 1.0 means 4.0 blocks: lower it for servers that check reach.");
+        help("LiquidAura", "ThroughWallsRange", "Reach for a target behind a block (never more than the reach).");
+        help("LiquidAura", "AngleSmooth", "How each tick turns: Linear (degrees a tick), Sigmoid, Interpolation (Bezier/sigmoid ease), Acceleration (turn rate built up from the last tick's), AimAssist (Atlas's AimAssist Smooth turn and aim point, using the AimAssist module's own speeds, smoothing, lead and multipoint; AimAssist itself can stay off).");
+        help("LiquidAura", "MovementCorrection", "Off: walk by the camera. Strict: walk along the server yaw. Silent: also turn the walk keys. ChangeLook: the camera follows the aim.");
+        help("LiquidAura", "RotationTiming", "Normal: aim all the time. Snap: aim only when a click will come as it arrives. OnTick: turn only on the click (look packets there and back).");
+        help("LiquidAura", "Raycast", "What a click hits along the look: None (the target), Enemy (an enemy in the way), All (anything in the way).");
+        help("LiquidAura", "Criticals", "Smart: hold a click while a jump is about to fall into a crit. Always: click only on a crit. Ignore: never wait.");
+        help("LiquidAura", "AutoBlocking", "LiquidBounce's auto block: raise the sword between clicks, lower it to hit.");
+        help("LiquidAura", "FailSwing", "Swings at the air at an enemy just out of reach, for the look of it.");
+        help("LiquidAura", "FightBot", "Walks for you: to a spot beside the target out of its view, backing off while no click is due.");
+        help("LiquidAura", "RangeIndicator", "Draws your reach around your feet.");
+        help("LiquidAura", "TargetRender", "Marks the target: Legacy, Circle, GlowingCircle or Ghost.");
+        help(ka, "auto-block", "How it blocks. Yuri-Hypixel: within 3 blocks the sword is up one tick between hits, 8 CPS. Yuri-Legit: right click held while your hurt time is 6-10 and the target within 3 blocks, 5 CPS. Yuri-NCP: let go before each tick, block after the movement packet. Yuri-Vanilla: a block packet every tick. LEGIT: block hits only while the target can hit back (facing you and swinging, or you were just hit): raised right after a hit, lowered before the next, CPS unchanged; no threat, no blocking, full speed. SameTick: on a click tick lower, hit and raise again at once; blocking between clicks; lowered out of swing range.");
         help(ka, "LegitThreat", "When LEGIT counts as threatened and blocks. Look (recommended, after LiquidBounce NextGen): only while an enemy's look actually lands on you within its reach with no wall between, so fewer blocks and more speed. Swing: the old test, you were just hit or an enemy within 3.6 faces you (within 60 degrees) swinging, which holds nearly the whole fight.");
         help(ka, "LegitTolerance", "How far your box is grown for the Look test. Larger blocks earlier and more often; 0.3 is NextGen's default.");
         help(ka, "LegitSameTick", "On: on a click tick, lower, hit and raise again at once (as SameTick), losing no tick. Off: the old timing, lowered the tick before the click, a tick per hit. Some anticheats may mind a release and a hit in one tick; turn it off if flagged.");

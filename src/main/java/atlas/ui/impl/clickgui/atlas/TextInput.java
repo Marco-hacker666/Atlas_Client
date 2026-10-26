@@ -19,9 +19,9 @@ import java.util.function.Supplier;
  * was last drawn is kept ({@link #drawnAt}) so that a click can put the caret
  * where it lands.
  */
-final class TextInput {
+public final class TextInput {
 
-    enum Result {
+    public enum Result {
         /** The key did nothing (a full field, Backspace at the start). */
         NONE,
         /** The text changed. */
@@ -49,16 +49,16 @@ final class TextInput {
     private int drawnStart;
     private TextLayout.Width drawnWidth;
 
-    TextInput(int max, boolean newlines) {
+    public TextInput(int max, boolean newlines) {
         this.max = max;
         this.newlines = newlines;
     }
 
-    String text() {
+    public String text() {
         return this.text;
     }
 
-    int caret() {
+    public int caret() {
         return this.caret;
     }
 
@@ -67,7 +67,7 @@ final class TextInput {
     }
 
     /** Whether Ctrl+A has everything selected. */
-    boolean allSelected() {
+    public boolean allSelected() {
         return this.all && !this.text.isEmpty();
     }
 
@@ -75,7 +75,7 @@ final class TextInput {
      * Replaces the text and puts the caret at its end. Never cut to the limit:
      * a value longer than a field allows is still that value.
      */
-    void set(String value) {
+    public void set(String value) {
         this.text = value == null ? "" : value;
         this.caret = this.text.length();
         this.all = false;
@@ -94,7 +94,7 @@ final class TextInput {
      * One key, as GuiScreen.keyTyped hands it over. {@code ctrl} is whether
      * Control is held; {@code clipboard} is asked only for Ctrl+V.
      */
-    Result key(char typed, int key, boolean ctrl, Supplier<String> clipboard) {
+    public Result key(char typed, int key, boolean ctrl, Supplier<String> clipboard) {
         if (key == Keyboard.KEY_RETURN || key == Keyboard.KEY_NUMPADENTER) {
             return Result.SUBMIT;
         }

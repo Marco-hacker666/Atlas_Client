@@ -19,23 +19,19 @@ import atlas.util.font.impl.FontRenderer;
 import atlas.font.CFontRenderer;
 import atlas.font.CFont;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Gui;
 import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.util.ResourceLocation;
-import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.Color;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
 
 import static net.minecraft.init.Items.string;
 
 public class WaterMark extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final ModeProperty mode = new ModeProperty("Mode", 4,
-            new String[] { "Exhibition", "Modern", "WeedHack", "Vape", "Jello" });
+    /* 2026-10-26: the "Vape" mode (another client's wordmark drawn from two
+       PNGs) is gone; a config that names it falls back to Jello. */
+    public final ModeProperty mode = new ModeProperty("Mode", 3,
+            new String[] { "Exhibition", "Modern", "WeedHack", "Jello" }).alias("Vape", "Jello");
 
     public final TextProperty modernText = new TextProperty("Text", "Atlas", () -> mode.getValue() == 1);
     public final BooleanProperty shadow = new BooleanProperty("Shadow", true, () -> mode.getValue() == 1);
@@ -43,14 +39,6 @@ public class WaterMark extends Module {
     /* Added with the HUD editor (2026-10-05): drag it there, or set it here. 0 keeps the original place. */
     public final IntProperty offsetX = new IntProperty("offset-x", 0, -1000, 1000);
     public final IntProperty offsetY = new IntProperty("offset-y", 0, -1000, 1000);
-
-    // "VAPE V4" image watermark. The two PNGs live in
-    // assets/atlas/assets/ and are drawn side-by-side to read as "VAPE V4".
-    private static final ResourceLocation VAPE_IMAGE = new ResourceLocation("atlas", "assets/textvape.png");
-    private static final ResourceLocation V4_IMAGE = new ResourceLocation("atlas", "assets/textv4.png");
-    private DynamicTexture vapeTexture, v4Texture;
-    private int vapeWidth, vapeHeight, v4Width, v4Height;
-    private boolean vapeImagesLoaded = false;
 
     public WaterMark() {
         super("WaterMark", false, false);
@@ -131,9 +119,6 @@ public class WaterMark extends Module {
                 renderWeedhackWatermark(4, 4);
                 break;
             case 3:
-                renderVape(4.0f, 4.0f);
-                break;
-            case 4:
                 renderJello(4.0f, 4.0f);
                 break;
         }
@@ -159,19 +144,9 @@ public class WaterMark extends Module {
             }
             case 2:
                 return new float[]{4.0f, 4.0f, mc.fontRendererObj.getStringWidth("weedhack premium beta") + 12.0f, 20.0f};
-            case 4: {
+            case 3: {
                 float[] size = jelloSize();
                 return new float[]{4.0f, 4.0f, size[0], size[1]};
-            }
-            case 3: {
-                float width = 0.0f;
-                if (vapeTexture != null && vapeHeight > 0) {
-                    width += vapeWidth * 18.0f / vapeHeight;
-                }
-                if (v4Texture != null && v4Height > 0) {
-                    width += 0.1f + v4Width * 18.0f / v4Height;
-                }
-                return width > 0.0f ? new float[]{4.0f, 4.0f, width, 18.0f} : null;
             }
             default:
                 return null;
@@ -182,96 +157,6 @@ public class WaterMark extends Module {
     private static Color neutral(int r, int g, int b) {
         int argb = UiMode.adapt(0xFF000000 | (r << 16) | (g << 8) | b);
         return new Color((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF);
-    }
-
-    private void loadVapeImages() {
-        vapeImagesLoaded = true;
-        try {
-            java.io.InputStream vapeStream = WaterMark.class.getResourceAsStream("/assets/atlas/assets/textvape.png");
-            if (vapeStream != null) {
-                BufferedImage image = ImageIO.read(vapeStream);
-                vapeWidth = image.getWidth();
-                vapeHeight = image.getHeight();
-                vapeTexture = new DynamicTexture(image);
-                vapeStream.close();
-            } else {
-                System.out.println(
-                        "[Atlas] Failed to find /assets/atlas/assets/textvape.png via getResourceAsStream, trying ResourceLocation...");
-                BufferedImage image = ImageIO.read(
-                        mc.getResourceManager().getResource(VAPE_IMAGE).getInputStream());
-                vapeWidth = image.getWidth();
-                vapeHeight = image.getHeight();
-                vapeTexture = new DynamicTexture(image);
-            }
-        } catch (Exception e) {
-            System.err.println("[Atlas] Failed to load vape watermark image:");
-            e.printStackTrace();
-            vapeTexture = null;
-        }
-        try {
-            java.io.InputStream v4Stream = WaterMark.class.getResourceAsStream("/assets/atlas/assets/textv4.png");
-            if (v4Stream != null) {
-                BufferedImage image = ImageIO.read(v4Stream);
-                v4Width = image.getWidth();
-                v4Height = image.getHeight();
-                v4Texture = new DynamicTexture(image);
-                v4Stream.close();
-            } else {
-                System.out.println(
-                        "[Atlas] Failed to find /assets/atlas/assets/textv4.png via getResourceAsStream, trying ResourceLocation...");
-                BufferedImage image = ImageIO.read(
-                        mc.getResourceManager().getResource(V4_IMAGE).getInputStream());
-                v4Width = image.getWidth();
-                v4Height = image.getHeight();
-                v4Texture = new DynamicTexture(image);
-            }
-        } catch (Exception e) {
-            System.err.println("[Atlas] oh fuck it doenst wokr :D:");
-            e.printStackTrace();
-            v4Texture = null;
-        }
-    }
-
-    /**
-     * Renders the "VAPE" and "V4" PNGs next to each other so they read as
-     * "VAPE V4". Both images are scaled to a common height so they line up
-     * regardless of their native resolution.
-     */
-    private void renderVape(float x, float y) {
-        if (!vapeImagesLoaded) {
-            loadVapeImages();
-        }
-
-        final float targetHeight = 18.0f;
-        final float gap = 0.1f;
-
-        float cursorX = x;
-        cursorX = drawVapeImage(vapeTexture, vapeWidth, vapeHeight, cursorX, y, targetHeight);
-        cursorX += gap;
-        drawVapeImage(v4Texture, v4Width, v4Height, cursorX, y, targetHeight);
-    }
-
-    private float drawVapeImage(DynamicTexture texture, int width, int height, float x, float y, float targetHeight) {
-        if (texture == null || height <= 0) {
-            return x;
-        }
-
-        float scale = targetHeight / (float) height;
-
-        GlStateManager.pushMatrix();
-        GlStateManager.enableBlend();
-        GlStateManager.enableTexture2D();
-        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
-        GlStateManager.translate(x, y, 0.0f);
-        GlStateManager.scale(scale, scale, 1.0f);
-        GlStateManager.bindTexture(texture.getGlTextureId());
-        Gui.drawModalRectWithCustomSizedTexture(
-                0, 0, 0.0f, 0.0f, width, height, (float) width, (float) height);
-        GlStateManager.disableBlend();
-        GlStateManager.popMatrix();
-
-        return x + (float) width * scale;
     }
 
     private void renderModern() {

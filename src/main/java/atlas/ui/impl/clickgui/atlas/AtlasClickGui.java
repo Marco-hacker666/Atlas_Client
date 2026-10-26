@@ -3733,7 +3733,7 @@ public class AtlasClickGui extends GuiScreen {
      * Icons, drawn from primitives so they are sharp at any scale. Category
      * icons are chosen by name; anything unknown gets the grid.
      */
-    private static void icon(String name, float x, float y, int c) {
+    static void icon(String name, float x, float y, int c) {
         String key = name.toLowerCase();
         if (key.equals("combat")) {
             Liquid.ring(x, y, 4.2F, 1.1F, c);

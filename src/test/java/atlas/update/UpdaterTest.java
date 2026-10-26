@@ -33,6 +33,8 @@ public class UpdaterTest {
     private File dir;
     private HttpServer server;
     private final Map<String, byte[]> served = new HashMap<String, byte[]>();
+    private final Map<String, Integer> hits = new java.util.concurrent.ConcurrentHashMap<String, Integer>();
+    private volatile long jarDelayMs;
     private KeyPair keys;
 
     @Before
@@ -43,7 +45,15 @@ public class UpdaterTest {
         keys = g.generateKeyPair();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
-            byte[] body = served.get(exchange.getRequestURI().getPath());
+            String path = exchange.getRequestURI().getPath();
+            hits.merge(path, 1, Integer::sum);
+            if (path.endsWith(".jar") && jarDelayMs > 0) {
+                try {
+                    Thread.sleep(jarDelayMs);
+                } catch (InterruptedException ignored) {
+                }
+            }
+            byte[] body = served.get(path);
             if (body == null) {
                 exchange.sendResponseHeaders(404, -1);
             } else {
@@ -289,6 +299,103 @@ public class UpdaterTest {
         assertEquals(plus.getCanonicalFile(),
                 Updater.toJarFile(new java.net.URL("jar:" + plus.toURI().toURL() + "!/atlas/update/Updater.class")).getCanonicalFile());
         assertNull(Updater.toJarFile(dir.toURI().toURL())); // a class folder (development) is not a jar
+    }
+
+    // ------------------------------------------------- 2026-10-26 fixes
+
+    private static void waitFor(Updater u, Updater.State want) throws InterruptedException {
+        long end = System.currentTimeMillis() + 10000L;
+        while (u.getState() != want && System.currentTimeMillis() < end) {
+            Thread.sleep(20L);
+        }
+        assertEquals(want, u.getState());
+    }
+
+    @Test
+    public void overlappingChecksDownloadOnce() throws Exception {
+        Fixture f = publish("2.2.0", "new client".getBytes(StandardCharsets.UTF_8), keys.getPrivate());
+        jarDelayMs = 400L;
+        Updater u = updater("2.1.1");
+        List<String> said = listen(u);
+        u.checkAsync(false);
+        u.checkAsync(true);
+        u.downloadAsync();
+        waitFor(u, Updater.State.READY);
+        Thread.sleep(200L);
+        assertEquals(Integer.valueOf(1), hits.get("/r/download/v2.2.0/" + f.file));
+        assertTrue(said.toString(), said.toString().contains("already running"));
+    }
+
+    @Test
+    public void downloadLeavesOnlyTheJar() throws Exception {
+        Fixture f = publish("2.2.0", "new client".getBytes(StandardCharsets.UTF_8), keys.getPrivate());
+        Updater u = updater("2.1.1");
+        u.check(false);
+        String[] left = new File(u.workDir(), "pending").list();
+        assertArrayEquals(new String[]{f.file}, left);
+    }
+
+    @Test
+    public void cancelSkipsTheVersionOnLaterStarts() throws Exception {
+        publish("2.2.0", "new client".getBytes(StandardCharsets.UTF_8), keys.getPrivate());
+        Updater u = updater("2.1.1");
+        u.check(false);
+        u.cancelInstall();
+        assertEquals("2.2.0", u.getSkipped().toString());
+        Updater next = updater("2.1.1");
+        next.cleanStaleFiles();
+        hits.clear();
+        List<String> said = listen(next);
+        next.check(true);
+        assertEquals(Updater.State.AVAILABLE, next.getState());
+        assertNull(hits.get("/r/download/v2.2.0/Atlas-v2.2.0.jar"));
+        assertTrue(said.toString(), said.toString().contains("skipped"));
+    }
+
+    @Test
+    public void aNewerVersionEndsTheSkip() throws Exception {
+        publish("2.2.0", "new client".getBytes(StandardCharsets.UTF_8), keys.getPrivate());
+        Updater u = updater("2.1.1");
+        u.check(false);
+        u.cancelInstall();
+        publish("2.3.0", "newer client".getBytes(StandardCharsets.UTF_8), keys.getPrivate());
+        Updater next = updater("2.1.1");
+        next.check(false);
+        assertEquals(Updater.State.READY, next.getState());
+        assertNull(next.getSkipped());
+    }
+
+    @Test
+    public void downloadByHandInstallsASkippedVersion() throws Exception {
+        publish("2.2.0", "new client".getBytes(StandardCharsets.UTF_8), keys.getPrivate());
+        Updater u = updater("2.1.1");
+        u.check(false);
+        u.cancelInstall();
+        Updater next = updater("2.1.1");
+        next.cleanStaleFiles();
+        next.check(false);
+        assertEquals(Updater.State.AVAILABLE, next.getState());
+        next.downloadAsync();
+        waitFor(next, Updater.State.READY);
+        assertNull(next.getSkipped());
+        assertNull(updater("2.1.1").getSkipped());
+    }
+
+    @Test
+    public void switchingToAutoDoesNotFetchASkippedVersion() throws Exception {
+        publish("2.2.0", "new client".getBytes(StandardCharsets.UTF_8), keys.getPrivate());
+        Updater u = updater("2.1.1");
+        u.check(false);
+        u.cancelInstall();
+        Updater next = updater("2.1.1");
+        next.setMode(Updater.Mode.NOTIFY);
+        next.cleanStaleFiles();
+        next.check(false);
+        hits.clear();
+        next.setMode(Updater.Mode.AUTO);
+        Thread.sleep(300L);
+        assertEquals(Updater.State.AVAILABLE, next.getState());
+        assertNull(hits.get("/r/download/v2.2.0/Atlas-v2.2.0.jar"));
     }
 
     // ---------------------------------------------------------------- helpers

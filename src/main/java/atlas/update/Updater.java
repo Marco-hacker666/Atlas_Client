@@ -74,6 +74,13 @@ public final class Updater {
     private volatile boolean installCancelled;
     private volatile String lastError;
     private volatile File currentJarOverride;
+    /* 2026-10-26: one background check or download at a time. The state checks in checkAsync/downloadAsync were
+       check-then-act: the start-up check and a ".update check" (or ".update mode auto") could both download into
+       the same .part file, and one's failure deleted the other's file. */
+    private final java.util.concurrent.atomic.AtomicBoolean working = new java.util.concurrent.atomic.AtomicBoolean();
+    /* 2026-10-26: the version ".update cancel" skipped (updater.properties "skip"); null when none. It is not
+       downloaded again on later starts; a newer version, or ".update download", clears it. */
+    private volatile UpdateVersion skipped;
 
     Updater(File gameDir, String currentVersion, PublicKey key) {
         this.gameDir = gameDir;
@@ -146,6 +153,7 @@ public final class Updater {
             if (m != null) {
                 mode = m;
             }
+            skipped = UpdateVersion.parse(p.getProperty("skip"));
         } catch (IOException ignored) {
         } finally {
             closeQuietly(in);
@@ -155,11 +163,15 @@ public final class Updater {
     private void saveSettings() {
         Properties p = new Properties();
         p.setProperty("mode", mode.name().toLowerCase(Locale.ROOT));
+        UpdateVersion skip = skipped;
+        if (skip != null) {
+            p.setProperty("skip", skip.toString());
+        }
         OutputStream out = null;
         try {
             settingsFile.getParentFile().mkdirs();
             out = new FileOutputStream(settingsFile);
-            p.store(out, "Atlas online updates: auto | notify | off");
+            p.store(out, "Atlas online updates: mode = auto | notify | off; skip = a version not to install");
         } catch (IOException ignored) {
         } finally {
             closeQuietly(out);
@@ -186,21 +198,31 @@ public final class Updater {
     public void setMode(Mode m) {
         mode = m;
         saveSettings();
-        if (m == Mode.AUTO && state == State.AVAILABLE) {
-            downloadAsync();
+        UpdateManifest l = latest;
+        UpdateVersion skip = skipped;
+        if (m == Mode.AUTO && state == State.AVAILABLE && l != null && (skip == null || l.version.isNewerThan(skip))) {
+            /* Switching to auto gets what is waiting, but not a version the player skipped. */
+            startDownload(false);
         }
     }
 
     // ------------------------------------------------------------------ check
 
     public void checkAsync(final boolean manual) {
-        if (state == State.CHECKING || state == State.DOWNLOADING) {
+        if (!working.compareAndSet(false, true)) {
+            if (manual) {
+                say("已經在檢查或下載更新了，請稍等。", "An update check or download is already running; wait a moment.");
+            }
             return;
         }
         Thread t = new Thread(new Runnable() {
             @Override
             public void run() {
-                check(manual);
+                try {
+                    check(manual);
+                } finally {
+                    working.set(false);
+                }
             }
         }, "Atlas-Updater");
         t.setDaemon(true);
@@ -256,6 +278,20 @@ public final class Updater {
             return;
         }
         state = State.AVAILABLE;
+        UpdateVersion skip = skipped;
+        if (skip != null && !m.version.isNewerThan(skip)) {
+            /* Skipped with ".update cancel": not downloaded again; ".update download" still gets it. */
+            if (manual) {
+                say("v" + m.version + " 已設定為跳過。要安裝請輸入 .update download。",
+                        "v" + m.version + " is skipped. Type .update download to install it anyway.");
+            }
+            return;
+        }
+        if (skip != null) {
+            /* A newer version than the skipped one: the skip is over. */
+            skipped = null;
+            saveSettings();
+        }
         if (mode == Mode.AUTO) {
             say("發現新版 v" + m.version + "（目前 v" + current + "），正在背景下載…",
                     "Version v" + m.version + " is out (you have v" + current + "). Downloading in the background...");
@@ -276,15 +312,28 @@ public final class Updater {
 
     // --------------------------------------------------------------- download
 
+    /** A download the player asked for (".update download", or switching to auto): it also undoes a skip. */
     public void downloadAsync() {
+        startDownload(true);
+    }
+
+    private void startDownload(boolean undoSkip) {
         final UpdateManifest m = latest;
-        if (m == null || state == State.DOWNLOADING || state == State.READY) {
+        if (m == null || state == State.READY || !working.compareAndSet(false, true)) {
             return;
+        }
+        if (undoSkip && skipped != null) {
+            skipped = null;
+            saveSettings();
         }
         Thread t = new Thread(new Runnable() {
             @Override
             public void run() {
-                download(m);
+                try {
+                    download(m);
+                } finally {
+                    working.set(false);
+                }
             }
         }, "Atlas-Updater-Download");
         t.setDaemon(true);
@@ -313,7 +362,6 @@ public final class Updater {
                 throw new IOException("downloaded file does not match the signed hash");
             }
             Files.move(part.toPath(), done.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            writeMarker(m);
         } catch (Exception e) {
             part.delete();
             state = State.FAILED;
@@ -325,27 +373,38 @@ public final class Updater {
         pendingJar = done;
         installCancelled = false;
         state = State.READY;
-        say("§av" + m.version + " 已下載並驗證完成，關閉遊戲後會自動更新。§r輸入 .update cancel 可取消。",
-                "§av" + m.version + " is downloaded and verified; it installs when you close the game.§r Type .update cancel to skip.");
-    }
-
-    private void writeMarker(UpdateManifest m) throws IOException {
-        Properties p = new Properties();
-        p.setProperty("version", m.version.toString());
-        p.setProperty("file", m.file);
-        p.setProperty("sha256", m.sha256);
-        OutputStream out = new FileOutputStream(new File(workDir, "pending/pending.properties"));
-        try {
-            p.store(out, null);
-        } finally {
-            out.close();
-        }
+        say("§av" + m.version + " 已下載並驗證完成，關閉遊戲後會自動更新。§r輸入 .update cancel 可跳過這個版本。",
+                "§av" + m.version + " is downloaded and verified; it installs when you close the game.§r Type .update cancel to skip this version.");
     }
 
     // ---------------------------------------------------------------- install
 
+    /**
+     * ".update cancel": not installed when the game closes, and this version is
+     * skipped on later starts too (2026-10-26; it used to come back on the next
+     * start and install then).
+     */
     public void cancelInstall() {
         installCancelled = true;
+        UpdateManifest m = latest;
+        if (m != null && m.version.isNewerThan(current)) {
+            skipped = m.version;
+            saveSettings();
+        }
+    }
+
+    /** ".update download" after a cancel in the same session: install it after all. */
+    public void uncancelInstall() {
+        installCancelled = false;
+        if (skipped != null) {
+            skipped = null;
+            saveSettings();
+        }
+    }
+
+    /** The version ".update cancel" skipped, or null. */
+    public UpdateVersion getSkipped() {
+        return skipped;
     }
 
     public boolean isInstallCancelled() {

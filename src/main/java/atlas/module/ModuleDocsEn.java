@@ -383,6 +383,8 @@ final class ModuleDocsEn {
         d("ClientSpoofer", "Changes the client brand reported to the server.");
         // ------------------------------------------------------------ CLIENT
         d("ClickGUIModule", "Click menu style: look, colours and window size.");
+        help("ClickGUIModule", "glide-accent", "Glide style: the colour of enabled modules, switches and sliders.");
+        help("ClickGUIModule", "glide-blur", "Glide style: blur the world behind the panels. Off is lighter on weak PCs.");
         d("GuiModule", "Opens the click menu (Right Shift by default).");
         d("FlagDetector", "Detects server corrections, refused blocks and reduced damage, and works out which module caused them.");
         d("FlagResponder", "Switches off a module the server keeps correcting.");

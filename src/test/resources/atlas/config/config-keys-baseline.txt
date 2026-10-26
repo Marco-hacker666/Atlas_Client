@@ -695,6 +695,8 @@ ClickGUIModule Shadow
 ClickGUIModule Style
 ClickGUIModule Window Height
 ClickGUIModule Window Width
+ClickGUIModule glide-accent
+ClickGUIModule glide-blur
 ClickGUIModule slinky-accent
 ClientSpoofer #name ClientSpoofer
 ClientSpoofer custom-brand

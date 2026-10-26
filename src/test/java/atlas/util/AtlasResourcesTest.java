@@ -38,10 +38,12 @@ public class AtlasResourcesTest {
     }
 
     @Test
-    public void watermarkImagesAreServed() throws Exception {
+    public void logoIsServed() throws Exception {
         AtlasResources pack = pack();
-        assertTrue(pack.resourceExists(new ResourceLocation("atlas", "assets/textvape.png")));
-        assertTrue(pack.resourceExists(new ResourceLocation("atlas", "assets/textv4.png")));
+        assertTrue(pack.resourceExists(new ResourceLocation("atlas", "assets/atlas-logo.png")));
+        /* 2026-10-26: another client's wordmark images were removed with the WaterMark mode that drew them. */
+        assertFalse(pack.resourceExists(new ResourceLocation("atlas", "assets/textvape.png")));
+        assertFalse(pack.resourceExists(new ResourceLocation("atlas", "assets/textv4.png")));
     }
 
     @Test

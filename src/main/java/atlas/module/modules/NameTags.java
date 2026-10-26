@@ -63,7 +63,8 @@ public class NameTags extends Module {
     public final BooleanProperty autoScale = new BooleanProperty("auto-scale", true, () -> this.mode.getValue() == 0);
     public final PercentProperty backgroundOpacity = new PercentProperty("background", 25, () -> this.mode.getValue() == 0);
     public final BooleanProperty shadow = new BooleanProperty("shadow", true, () -> this.mode.getValue() == 0);
-    public final ModeProperty distanceMode = new ModeProperty("distance", 0, new String[]{"NONE", "DEFAULT", "VAPE"}, () -> this.mode.getValue() == 0);
+    public final ModeProperty distanceMode = new ModeProperty("distance", 0, new String[]{"NONE", "DEFAULT", "BRACKETS"}, () -> this.mode.getValue() == 0)
+            .alias("VAPE", "BRACKETS");
     public final ModeProperty healthMode = new ModeProperty("health", 2, new String[]{"NONE", "HP", "HEARTS", "TAB"}, () -> this.mode.getValue() == 0);
     public final BooleanProperty armor = new BooleanProperty("armor", true, () -> this.mode.getValue() == 0);
     public final BooleanProperty effects = new BooleanProperty("effects", true, () -> this.mode.getValue() == 0);

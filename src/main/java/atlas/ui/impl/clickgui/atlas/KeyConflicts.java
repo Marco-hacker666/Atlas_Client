@@ -18,7 +18,7 @@ import java.util.Map;
  *
  * Only a warning: binding still binds, as it always did.
  */
-final class KeyConflicts {
+public final class KeyConflicts {
 
     private KeyConflicts() {
     }
@@ -27,7 +27,7 @@ final class KeyConflicts {
      * The names bound to {@code key}, other than {@code self}, in the order of
      * {@code bindings}. No key (0) is bound to nothing.
      */
-    static List<String> find(int key, String self, Map<String, Integer> bindings) {
+    public static List<String> find(int key, String self, Map<String, Integer> bindings) {
         if (key == 0) {
             return Collections.emptyList();
         }
@@ -42,7 +42,7 @@ final class KeyConflicts {
     }
 
     /** "A", "A and B", "A, B and C". */
-    static String join(List<String> names) {
+    public static String join(List<String> names) {
         StringBuilder out = new StringBuilder();
         for (int i = 0; i < names.size(); i++) {
             if (i > 0) {
@@ -58,13 +58,13 @@ final class KeyConflicts {
      * shows. The old "ClickGui" opener is left out: it shares Right Shift with
      * ClickGUI on purpose and stands aside for it (GuiModule).
      */
-    static Map<String, Integer> bindings() {
+    public static Map<String, Integer> bindings() {
         /* One list for the bind warning and the conflict warnings (M5). */
         return atlas.management.Conflicts.bindings();
     }
 
     /** How a key setting is named in a warning: "Clutch (Hold Key)". */
-    static String nameOf(Module owner, Property<?> property) {
+    public static String nameOf(Module owner, Property<?> property) {
         return nameOf(owner.getName(), property.getLabel());
     }
 

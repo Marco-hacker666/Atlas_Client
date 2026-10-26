@@ -24,18 +24,18 @@ import java.util.List;
  * A reset sets the base, the value that is saved, through setValue as any
  * change in the menu does. A tuner's override (AutoTune) stays on top of it.
  */
-final class SettingFacts {
+public final class SettingFacts {
 
     private SettingFacts() {
     }
 
-    static boolean resettable(Property<?> property) {
+    public static boolean resettable(Property<?> property) {
         Object fallback = property.getDefault();
         return fallback instanceof Boolean || fallback instanceof Number || fallback instanceof String;
     }
 
     /** Whether the saved value differs from the default. A colour compares its RGB only, as it is saved. */
-    static boolean changed(Property<?> property) {
+    public static boolean changed(Property<?> property) {
         if (!resettable(property)) {
             return false;
         }
@@ -48,7 +48,7 @@ final class SettingFacts {
     }
 
     /** Puts a changed setting back to its default. False when it was not changed or refused it. */
-    static boolean reset(Property<?> property) {
+    public static boolean reset(Property<?> property) {
         return changed(property) && property.setValue(property.getDefault());
     }
 
@@ -74,7 +74,7 @@ final class SettingFacts {
     }
 
     /** A value of this setting as the menu writes it: "On", "3.5", "Full", "40%", "#DD4747". */
-    static String format(Property<?> property, Object value) {
+    public static String format(Property<?> property, Object value) {
         if (value == null) {
             return "none";
         }
@@ -101,12 +101,12 @@ final class SettingFacts {
         return String.valueOf(value);
     }
 
-    static String defaultText(Property<?> property) {
+    public static String defaultText(Property<?> property) {
         return format(property, property.getDefault());
     }
 
     /** "0 to 6.0", "0% to 100%", "4 options"; empty when a setting has no range to tell. */
-    static String range(Property<?> property) {
+    public static String range(Property<?> property) {
         if (property instanceof IntProperty) {
             IntProperty p = (IntProperty) property;
             return p.getMinimum() + " to " + p.getMaximum();

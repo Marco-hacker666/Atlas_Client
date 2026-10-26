@@ -35,7 +35,10 @@ public class UpdateCommand extends Command {
             say("正在檢查更新…", "Checking for updates...");
             u.checkAsync(true);
         } else if (sub.equals("download") || sub.equals("dl") || sub.equals("get")) {
-            if (u.getState() == Updater.State.READY) {
+            if (u.getState() == Updater.State.READY && u.isInstallCancelled()) {
+                u.uncancelInstall();
+                say("已經下載好了，取消跳過，關閉遊戲後會安裝。", "Already downloaded; no longer skipped, it installs when the game closes.");
+            } else if (u.getState() == Updater.State.READY) {
                 say("已經下載好了，關閉遊戲後會安裝。", "Already downloaded; it installs when the game closes.");
             } else if (u.getLatest() == null || u.getState() != Updater.State.AVAILABLE) {
                 say("目前沒有可下載的新版，先輸入 .update check", "No new version to download; try .update check first");
@@ -45,7 +48,12 @@ public class UpdateCommand extends Command {
             }
         } else if (sub.equals("cancel")) {
             u.cancelInstall();
-            say("這次關閉遊戲時不會安裝更新。", "The update will not be installed when the game closes this time.");
+            if (u.getSkipped() != null) {
+                say("不會安裝 v" + u.getSkipped() + "，之後啟動也不會再下載它；有更新的版本時照常更新。輸入 .update download 可改回安裝。",
+                        "v" + u.getSkipped() + " will not be installed, and later starts will not fetch it again; a newer version updates as usual. Type .update download to install it after all.");
+            } else {
+                say("這次關閉遊戲時不會安裝更新。", "The update will not be installed when the game closes this time.");
+            }
         } else if (sub.equals("mode")) {
             Updater.Mode m = args.size() < 3 ? null : Updater.parseMode(args.get(2));
             if (m == null) {

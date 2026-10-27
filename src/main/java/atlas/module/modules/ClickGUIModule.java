@@ -51,6 +51,16 @@ public class ClickGUIModule extends Module {
     public IntProperty windowWidth = new IntProperty("Window Width", 600, 300, 1200);
     public IntProperty windowHeight = new IntProperty("Window Height", 400, 200, 800);
     public FloatProperty cornerRadius = new FloatProperty("Corner Radius", 8.0f, 0.0f, 20.0f);
+    /* 2026-10-27 (owner: "can the mouse wheel scroll faster?"): rows (or 16 px) per wheel notch in the menus. */
+    public IntProperty scrollSpeed = new IntProperty("Scroll Speed", 3, 1, 10);
+
+    /** Rows a wheel event moves the menus (notches times Scroll Speed); 1 before the module exists. */
+    public static int wheelSteps(int wheel) {
+        int notches = Math.max(1, Math.abs(wheel) / 120);
+        ClickGUIModule gui = atlas.Atlas.moduleManager == null ? null
+                : (ClickGUIModule) atlas.Atlas.moduleManager.modules.get(ClickGUIModule.class);
+        return notches * (gui == null ? 1 : gui.scrollSpeed.getValue());
+    }
 
     public Color getAccentColor() {
         int idx = accentColor.getValue();

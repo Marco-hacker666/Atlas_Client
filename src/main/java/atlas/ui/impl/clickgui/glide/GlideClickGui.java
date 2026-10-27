@@ -710,7 +710,7 @@ public class GlideClickGui extends GuiScreen {
         for (int i = this.frames.size() - 1; i >= 0; i--) {
             GlideFrame frame = this.frames.get(i);
             if (visible(frame) && frame.over(mx, my)) {
-                float step = GlideTheme.ROW * 3;
+                float step = GlideTheme.ROW * atlas.module.modules.ClickGUIModule.wheelSteps(wheel);
                 frame.scroll = Math.max(0.0F, Math.min(frame.maxScroll, frame.scroll + (wheel > 0 ? -step : step)));
                 return;
             }

@@ -159,6 +159,7 @@ public class AimAssist extends Module {
 
     @Override
     public void onDisabled() {
+        this.humanizer.reset();
         this.silentActive = false;
         this.silentQueued = false;
         this.framedAim.reset();
@@ -183,6 +184,8 @@ public class AimAssist extends Module {
         }
         return actual + delta;
     }
+
+    private final atlas.humanize.Humanizer humanizer = new atlas.humanize.Humanizer(atlas.humanize.Humanizer.CONSUMER_AIMASSIST);
 
     public AimAssist() {
         super("AimAssist", false , false, "Assists your aim by subtly adjusting your view towards nearby targets when attacking.");
@@ -215,6 +218,11 @@ public class AimAssist extends Module {
                                 inRange.removeIf(entityPlayer -> !this.isInReach(entityPlayer));
                             }
                             EntityPlayer player = inRange.get(0);
+                            /* 2026-10-26 (review: apply-aimassist was never read): no turn toward a target until
+                               Humanization's reaction to it is over. */
+                            if (!this.humanizer.reacted(player.getEntityId(), System.currentTimeMillis())) {
+                                return;
+                            }
                             if (!(RotationUtil.distanceToEntity(player) <= 0.0)) {
                                 AxisAlignedBB axisAlignedBB = player.getEntityBoundingBox();
                                 double collisionBorderSize = player.getCollisionBorderSize();
@@ -253,10 +261,30 @@ public class AimAssist extends Module {
                                         yawStep = Math.min(1.0F, yawStep * 1.6F);
                                     }
                                 }
+                                float pitchStep = 0.1F * pitch;
+                                float humanYaw = 0.0F;
+                                float humanPitch = 0.0F;
+                                atlas.humanize.AimError.Adjust adjust = this.humanizer.aim(
+                                        MathHelper.wrapAngleTo180_float(rotation[0] - mc.thePlayer.rotationYaw),
+                                        rotation[1] - mc.thePlayer.rotationPitch,
+                                        (float) Math.toDegrees(Math.atan2(Math.hypot(player.posX - player.lastTickPosX,
+                                                player.posZ - player.lastTickPosZ), Math.max(0.5, RotationUtil.distanceToEntity(player)))));
+                                if (adjust != null) {
+                                    if (adjust.lapsing) {
+                                        /* A lapse: the hand stops following for a moment. */
+                                        return;
+                                    }
+                                    yawStep = Math.min(1.0F, yawStep * adjust.speed);
+                                    pitchStep = Math.min(1.0F, pitchStep * adjust.speed);
+                                    humanYaw = adjust.yaw;
+                                    humanPitch = adjust.pitch;
+                                }
+                                /* The tremor/overshoot moves the point aimed at, not the step (the camera keeps
+                                   its turn, so a per-step offset would walk away). */
                                 float nextYaw = mc.thePlayer.rotationYaw
-                                        + (rotation[0] - mc.thePlayer.rotationYaw) * yawStep;
+                                        + (rotation[0] + humanYaw - mc.thePlayer.rotationYaw) * yawStep;
                                 float nextPitch = mc.thePlayer.rotationPitch
-                                        + (rotation[1] - mc.thePlayer.rotationPitch) * 0.1F * pitch;
+                                        + (rotation[1] + humanPitch - mc.thePlayer.rotationPitch) * pitchStep;
 
                                 if (this.mode.getValue() == 1) {
                                     this.silentYaw = limit(nextYaw, mc.thePlayer.rotationYaw);

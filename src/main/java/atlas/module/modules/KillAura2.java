@@ -228,6 +228,7 @@ public class KillAura2 extends Module {
     /** This module turned the look last tick, so a release has to ease back. */
     private boolean aiming;
     private boolean attackPending;
+    private final atlas.humanize.Humanizer humanizer = new atlas.humanize.Humanizer(atlas.humanize.Humanizer.CONSUMER_KILLAURA2);
     private double[] eyesAtPre;
 
     /** A press kept for the tick the target can be hurt, or one a release took: the last tick it may wait to. */
@@ -307,6 +308,7 @@ public class KillAura2 extends Module {
 
     @Override
     public void onDisabled() {
+        this.humanizer.reset();
         this.stopBlock(false);
         this.finishSlotBack();
         this.resetState();
@@ -743,7 +745,24 @@ public class KillAura2 extends Module {
             if (!this.canAttackNow()) {
                 break;
             }
+            /* 2026-10-26 (review: apply-killaura2 was never read): Humanization's verdict on this click. A miss
+               swings at the air (aimed-off misses too: this aura does not turn away for one); a skip spends it. */
+            long humanNow = System.currentTimeMillis();
+            atlas.humanize.Humanizer.Verdict human = this.humanizer.click(atlas.humanize.Situations.of(hit), humanNow);
+            if (human != null && human.land && this.humanizer.dropClick()) {
+                human = new atlas.humanize.Humanizer.Verdict(false, atlas.humanize.Misses.Style.SKIP);
+            }
+            if (human != null && !human.land) {
+                this.humanizer.missed(human.miss, humanNow);
+                if (human.miss != atlas.humanize.Misses.Style.SKIP) {
+                    this.swingAtAir();
+                }
+                continue;
+            }
             this.attack(hit, opens == 0);
+            if (human != null) {
+                this.humanizer.landed(humanNow);
+            }
             attacked = true;
             if (opens == 0) {
                 this.planBlock();

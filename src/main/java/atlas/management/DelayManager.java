@@ -141,6 +141,13 @@ public class DelayManager {
             if (Minecraft.getMinecraft().getNetHandler() != null && this.delayedPacket.isEmpty()) {
                 return true;
             }
+            if (Minecraft.getMinecraft().getNetHandler() == null) {
+                /* 2026-10-26 (review): disconnected with packets still held -- they belong to a connection
+                   that is gone. processPacket(null) threw a NullPointerException here (releaseDelayed already
+                   checked for this). */
+                this.delayedPacket.clear();
+                return false;
+            }
             while (true) {
                 Packet<INetHandlerPlayClient> packet = this.delayedPacket.poll();
                 if (packet == null) {

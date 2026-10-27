@@ -40,6 +40,9 @@ public class AutoClicker extends Module {
     /* Human (2026-10-25, HumanClicks): a mean-reverting CPS walk, log-normal gaps, cadence repeats, hesitations. */
     public final ModeProperty randomization = new ModeProperty("randomization", 3, new String[]{"Normal", "Extra", "Extra+", "Human"});
     private final atlas.util.HumanClicks humanClicks = new atlas.util.HumanClicks();
+    /* 2026-10-26 (review: apply-autoclicker was never read): Humanization's click-drop and click-double. The
+       player aims, so no hit-rate verdict here. */
+    private final atlas.humanize.Humanizer humanizer = new atlas.humanize.Humanizer(atlas.humanize.Humanizer.CONSUMER_AUTOCLICKER);
     public final IntProperty lowMaxCPS = new IntProperty("low-max-cps", 6, 1, 20, () -> this.clickMode.getValue() == 1);
     public final BooleanProperty jitter = new BooleanProperty("jitter", false);
     public final FloatProperty jitterStrength = new FloatProperty("jitter-strength", 0.3F, 0.0F, 2.0F, this.jitter::getValue);
@@ -303,6 +306,11 @@ public class AutoClicker extends Module {
                             this.clickDelay = this.clickDelay + this.getNextClickDelay();
                         } else {
                             while (this.clickDelay <= 0L) {
+                                if (this.humanizer.dropClick()) {
+                                    /* A press the finger did not make. */
+                                    this.clickDelay = this.clickDelay + this.getNextClickDelay();
+                                    continue;
+                                }
                                 this.clickPending = true;
                                 this.moduleClickThisTick = true;
                                 this.clickDelay = this.clickDelay + this.getNextClickDelay();
@@ -313,6 +321,8 @@ public class AutoClicker extends Module {
                                 if (this.doubleClick.getValue()
                                         && RandomUtil.nextInt(1, 100) <= this.doubleChance.getValue()) {
                                     this.doubleClickAtMs = System.currentTimeMillis() + (long) this.doubleGapMs.getValue();
+                                } else if (this.humanizer.doubleClick()) {
+                                    this.doubleClickAtMs = System.currentTimeMillis() + RandomUtil.nextInt(18, 40);
                                 }
                                 if (this.clickSound.getValue()) {
                                     SoundUtil.playSound("random.click");

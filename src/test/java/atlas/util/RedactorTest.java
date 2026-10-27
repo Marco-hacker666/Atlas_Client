@@ -59,4 +59,21 @@ public class RedactorTest {
         String line = "22:15:20  LAGBACK x4 1.39 | speed 0.06/t | walk | air | Scaffold 42%";
         assertEquals(line, redactor.apply(line));
     }
+
+    @Test
+    public void ipv6IsMaskedButTimesAndMethodRefsStay() {
+        assertEquals("server <ip> port", redactor.apply("server 2001:db8:85a3::8a2e:370:7334 port"));
+        assertEquals("[<ip>]:25565", redactor.apply("[2a01:4f8:c0c:1234::1]:25565"));
+        assertEquals("<lan-ip> and ::1", redactor.apply("fe80::1c2b:3cff:fe4d:5e6f and ::1"));
+        assertEquals("19:23:01.544  HIT", redactor.apply("19:23:01.544  HIT"));
+        assertEquals("Foo::bar a :: b", redactor.apply("Foo::bar a :: b"));
+    }
+
+    @Test
+    public void namesInTheClientsOwnLogsGo() {
+        assertEquals("HIT-DMG target=<player> dealt=2.00", redactor.apply("HIT-DMG target=Gone_Player dealt=2.00"));
+        assertEquals("FIGHT vs <player> | 2.5s", redactor.apply("FIGHT vs Somebody22 | 2.5s"));
+        assertEquals("HIT blocked | by <player> d=2.10", redactor.apply("HIT blocked | by Elysio31 d=2.10"));
+        assertEquals("target=#73960 by unknown", redactor.apply("target=#73960 by unknown"));
+    }
 }

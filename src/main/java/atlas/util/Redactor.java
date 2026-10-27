@@ -21,6 +21,14 @@ public final class Redactor {
     private static final Pattern JWT = Pattern.compile("[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{8,}");
     private static final Pattern LONG_TOKEN = Pattern.compile("\\b[A-Za-z0-9_-]{40,}\\b");
     private static final Pattern IPV4 = Pattern.compile("\\b(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\b");
+    /* 2026-10-26 (review): IPv6, which went out as it was. Hex groups with "::" or at least five colons, so
+       times ("19:23:01") and Java's "Type::method" (letters around it) are left alone. */
+    private static final Pattern IPV6 = Pattern.compile(
+            "(?<![A-Za-z0-9_:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![A-Za-z0-9_:])");
+    /* 2026-10-26 (review): names the client's own logs write (flags, fights, noslow), so a player no longer on
+       the tab list -- whom the name list cannot know -- is still taken out. */
+    private static final Pattern LOG_NAME = Pattern.compile(
+            "(?<=\\btarget[= ]|\\bFIGHT vs |\\bby |\\bguard )([A-Za-z0-9_]{3,16})\\b");
     private static final Pattern UUID_DASHED = Pattern.compile(
             "\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\b");
 
@@ -86,8 +94,43 @@ public final class Redactor {
         if (this.account != null) {
             out = replaceWord(out, this.account, "<user>");
         }
+        out = maskLogNames(out);
         out = maskIps(out);
+        out = maskIpv6(out);
         return out;
+    }
+
+    private static String maskLogNames(String text) {
+        Matcher m = LOG_NAME.matcher(text);
+        StringBuffer sb = new StringBuffer();
+        while (m.find()) {
+            String name = m.group(1);
+            boolean keep = name.equals("unknown") || name.startsWith("<") || name.chars().allMatch(Character::isDigit);
+            m.appendReplacement(sb, Matcher.quoteReplacement(keep ? name : "<player>"));
+        }
+        m.appendTail(sb);
+        return sb.toString();
+    }
+
+    /** Loopback stays readable, link-local and unique-local (fe80::/10, fc00::/7) become a LAN address. */
+    private static String maskIpv6(String text) {
+        Matcher m = IPV6.matcher(text);
+        StringBuffer sb = new StringBuffer();
+        while (m.find()) {
+            String ip = m.group();
+            int colons = ip.length() - ip.replace(":", "").length();
+            if (!ip.contains("::") && colons < 5 || ip.replace(":", "").isEmpty()) {
+                m.appendReplacement(sb, Matcher.quoteReplacement(ip));
+                continue;
+            }
+            String lower = ip.toLowerCase(Locale.ROOT);
+            String replacement = lower.equals("::1") ? "::1"
+                    : lower.startsWith("fe8") || lower.startsWith("fe9") || lower.startsWith("fea") || lower.startsWith("feb")
+                    || lower.startsWith("fc") || lower.startsWith("fd") ? "<lan-ip>" : "<ip>";
+            m.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+        }
+        m.appendTail(sb);
+        return sb.toString();
     }
 
     /** Keeps loopback and private ranges readable as such; every other address is masked. */

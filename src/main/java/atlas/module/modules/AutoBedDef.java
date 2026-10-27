@@ -19,6 +19,8 @@ import atlas.property.properties.ModeProperty;
 import atlas.util.MoveUtil;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockBed;
+import net.minecraft.block.BlockContainer;
+import net.minecraft.block.BlockFalling;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
@@ -37,38 +39,71 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Covers your own bed with blocks: both sides, both ends, then the top.
+ *
+ * 2026-10-27 (report: "AutoBedDef does not work"), what was wrong:
+ *  - any bed within 8 blocks was "ours" -- an enemy's too, so with BedNuker
+ *    it walled up the bed being broken. Now the first bed found in a world is
+ *    yours (you spawn next to it, the waiting lobby has none) and only that one
+ *    is covered (own-bed-only; off: the nearest bed, as before).
+ *  - near a bed the hand was forced onto wool every tick, and every scroll
+ *    was cancelled while the module was on, covered bed or not: no sword in a
+ *    fight at home. Now the block is taken only while there is a block to
+ *    place, and the slot you had (or scrolled to meanwhile) comes back after.
+ *  - only wool counted: no wool, nothing happened. Now any full solid block
+ *    (wool first) unless wool-only.
+ *  - the top went onto the bed with sneaking faked on the client only: the
+ *    server, never told, used the bed instead ("you can only sleep at night")
+ *    and the client showed a block that was not there. Now the sneak is real
+ *    (held through the movement input, so the server gets it a tick before the
+ *    click), and a block beside is clicked instead when there is one.
+ *  - the top's aim picked the spot FARTHEST from the current look; now the
+ *    nearest, as for the sides.
+ *  - the click was checked against a look guessed from this module's own
+ *    numbers; with a module of higher priority turning (Clutch, Scaffold) the
+ *    server had another one. Now it is checked against the look the server
+ *    last received (the movement packet's, UpdateEvent POST).
+ *  - range 5 by default: past vanilla's 4.5 block reach. Default 4.5 now.
+ */
 public class AutoBedDef extends Module {
 
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final FloatProperty range = new FloatProperty("range", 5.0f, 3.0f, 7.0f);
+    public final FloatProperty range = new FloatProperty("range", 4.5f, 3.0f, 7.0f);
     public final IntProperty placeDelay = new IntProperty("place-delay", 80, 0, 300);
     public final IntProperty speed = new IntProperty("speed", 100, 30, 100);
     public final IntProperty rotTol = new IntProperty("rot-tolerance", 35, 5, 180);
     public final BooleanProperty swing = new BooleanProperty("swing", true);
     public final BooleanProperty showProgress = new BooleanProperty("show-progress", true);
     public final ModeProperty moveFix = new ModeProperty("move-fix", 1, new String[]{"NONE", "SILENT", "REAL"});
+    public final BooleanProperty ownBedOnly = new BooleanProperty("own-bed-only", true);
+    public final BooleanProperty woolOnly = new BooleanProperty("wool-only", false);
 
     private static final int ROT_PRIORITY = 6;
-    private static final int BED_SEARCH_RADIUS = 8;
+    private static final int BED_SEARCH_RADIUS = 12;
 
-    private float serverYaw;
-    private float serverPitch;
+    /** The look the server last received (the movement packet's). */
+    private float sentYaw;
+    private float sentPitch;
     private float aimYaw;
     private float aimPitch;
-    private float lastSteppedYaw;
-    private float lastSteppedPitch;
 
     private BlockPos targetBlock;
     private EnumFacing targetFacing;
     private Vec3 targetHitVec;
+    /** The click goes onto the bed's top: the server must know we sneak, or it uses the bed. */
+    private boolean needSneak;
 
     private long lastPlaceTime = 0;
-    private int lastSlot = -1;
+    /** The slot to give back once nothing is left to place; -1: the hand is the player's. */
+    private int restoreSlot = -1;
     private float progress = 0f;
 
     private BlockPos lockedBedFoot = null;
     private EnumFacing lockedBedFacing = null;
+    /** A bed was taken as ours in this world: once it is gone, no other bed is. */
+    private boolean bedSeen;
 
     public AutoBedDef() {
         super("AutoBedDef", false);
@@ -77,27 +112,23 @@ public class AutoBedDef extends Module {
     @Override
     public void onEnabled() {
         if (mc.thePlayer != null) {
-            serverYaw = mc.thePlayer.rotationYaw;
-            serverPitch = mc.thePlayer.rotationPitch;
-            aimYaw = serverYaw;
-            aimPitch = serverPitch;
-            lastSteppedYaw = serverYaw;
-            lastSteppedPitch = serverPitch;
-            lastSlot = mc.thePlayer.inventory.currentItem;
+            sentYaw = mc.thePlayer.rotationYaw;
+            sentPitch = mc.thePlayer.rotationPitch;
+            aimYaw = sentYaw;
+            aimPitch = sentPitch;
         }
         progress = 0f;
         resetTarget();
+        restoreSlot = -1;
         lockedBedFoot = null;
         lockedBedFacing = null;
+        bedSeen = false;
     }
 
     @Override
     public void onDisabled() {
-        if (lastSlot != -1 && mc.thePlayer != null && mc.thePlayer.inventory.currentItem != lastSlot) {
-            mc.thePlayer.inventory.currentItem = lastSlot;
-        }
+        idle();
         progress = 0f;
-        resetTarget();
         lockedBedFoot = null;
         lockedBedFacing = null;
     }
@@ -107,8 +138,11 @@ public class AutoBedDef extends Module {
     @EventTarget(whenDisabled = true)
     public void onLoadWorld(LoadWorldEvent event) {
         resetTarget();
+        needSneak = false;
+        restoreSlot = -1;
         lockedBedFoot = null;
         lockedBedFacing = null;
+        bedSeen = false;
     }
 
     private void resetTarget() {
@@ -117,63 +151,82 @@ public class AutoBedDef extends Module {
         targetHitVec = null;
     }
 
+    /** Nothing to place now: no target, no sneak, the player's slot back. */
+    private void idle() {
+        resetTarget();
+        needSneak = false;
+        if (restoreSlot != -1 && mc.thePlayer != null) {
+            mc.thePlayer.inventory.currentItem = restoreSlot;
+        }
+        restoreSlot = -1;
+    }
+
     @EventTarget(Priority.HIGH)
     public void onUpdate(UpdateEvent event) {
         if (!isEnabled()) return;
-        if (event.getType() != EventType.PRE) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
+        if (event.getType() == EventType.POST) {
+            sentYaw = event.getYaw();
+            sentPitch = event.getPitch();
+            return;
+        }
         if (mc.currentScreen != null) return;
-
-        serverYaw = event.getYaw();
-        serverPitch = event.getPitch();
-
-        updateProgress();
 
         if (!isValidBed(lockedBedFoot)) {
             lockedBedFoot = null;
             lockedBedFacing = null;
-            findNearestBed();
+            if (!ownBedOnly.getValue() || !bedSeen) {
+                findNearestBed();
+            }
         }
-        if (lockedBedFoot == null) return;
-
-        int woolSlot = findWoolSlot();
-        if (woolSlot == -1) {
-            resetTarget();
+        updateProgress();
+        if (lockedBedFoot == null) {
+            idle();
             return;
-        }
-        if (mc.thePlayer.inventory.currentItem != woolSlot) {
-            mc.thePlayer.inventory.currentItem = woolSlot;
         }
 
         List<BlockPos> defensePositions = getDefensePositions();
         int nextIdx = findNextDefensePosIndex(defensePositions);
         if (nextIdx == -1) {
-            resetTarget();
+            idle();
             return;
         }
-        BlockPos nextTarget = defensePositions.get(nextIdx);
-
+        int blockSlot = findBlockSlot();
+        if (blockSlot == -1) {
+            idle();
+            return;
+        }
         boolean isRoof = nextIdx >= 6;
-        computePlacement(nextTarget, isRoof);
-        if (targetBlock == null) return;
+        computePlacement(defensePositions.get(nextIdx), isRoof);
+        if (targetBlock == null) {
+            /* Not reachable from here: the hand stays the player's. */
+            idle();
+            return;
+        }
+        if (mc.thePlayer.inventory.currentItem != blockSlot) {
+            if (restoreSlot == -1) {
+                restoreSlot = mc.thePlayer.inventory.currentItem;
+            }
+            mc.thePlayer.inventory.currentItem = blockSlot;
+        }
 
-        float yawDiff = MathHelper.wrapAngleTo180_float(aimYaw - serverYaw);
-        float pitchDiff = aimPitch - serverPitch;
+        float yawDiff = MathHelper.wrapAngleTo180_float(aimYaw - sentYaw);
+        float pitchDiff = aimPitch - sentPitch;
         float maxTurn = (float) speed.getValue();
 
-        lastSteppedYaw = serverYaw + MathHelper.clamp_float(yawDiff, -maxTurn, maxTurn);
-        lastSteppedPitch = MathHelper.clamp_float(
-                serverPitch + MathHelper.clamp_float(pitchDiff, -maxTurn, maxTurn), -90f, 90f);
+        float yaw = sentYaw + MathHelper.clamp_float(yawDiff, -maxTurn, maxTurn);
+        float pitch = MathHelper.clamp_float(sentPitch + MathHelper.clamp_float(pitchDiff, -maxTurn, maxTurn), -90f, 90f);
 
-        event.setRotation(lastSteppedYaw, lastSteppedPitch, ROT_PRIORITY);
-        event.setPervRotation(moveFix.getValue() != 0 ? lastSteppedYaw : mc.thePlayer.rotationYaw, ROT_PRIORITY);
+        event.setRotation(yaw, pitch, ROT_PRIORITY);
+        event.setPervRotation(moveFix.getValue() != 0 ? yaw : mc.thePlayer.rotationYaw, ROT_PRIORITY);
         if (moveFix.getModeString().equals("REAL")) {
             /* REAL: the camera turns as well, spread over this tick's frames by
                RotationManager; the mouse still works (not forced). */
-            Atlas.rotationManager.setRotation(lastSteppedYaw, lastSteppedPitch, ROT_PRIORITY, false);
+            Atlas.rotationManager.setRotation(yaw, pitch, ROT_PRIORITY, false);
         }
     }
 
+    /** Start of the tick, before vanilla's input: the click, along the look the server already has. */
     @EventTarget(Priority.HIGH)
     public void onTick(TickEvent event) {
         if (!isEnabled()) return;
@@ -182,18 +235,16 @@ public class AutoBedDef extends Module {
         if (mc.currentScreen != null) return;
         if (targetBlock == null || targetFacing == null || targetHitVec == null) return;
 
-        float useYaw = RotationState.isActived() && RotationState.getPriority() == ROT_PRIORITY
-                ? RotationState.getSmoothedYaw() : lastSteppedYaw;
-        float usePitch = lastSteppedPitch;
-
-        if (!withinRotationTolerance(useYaw, usePitch, aimYaw, aimPitch)) return;
+        if (!withinRotationTolerance(sentYaw, sentPitch, aimYaw, aimPitch)) return;
+        if (needSneak && !mc.thePlayer.isSneaking()) {
+            /* The sneak goes to the server with this tick's movement; the click next tick. */
+            return;
+        }
 
         long now = System.currentTimeMillis();
         if (now - lastPlaceTime < placeDelay.getValue()) return;
 
-        double reach = range.getValue();
-        MovingObjectPosition mop = rayTrace(useYaw, usePitch, reach);
-
+        MovingObjectPosition mop = rayTrace(sentYaw, sentPitch, range.getValue());
         if (mop == null
                 || mop.typeOfHit != MovingObjectPosition.MovingObjectType.BLOCK
                 || !mop.getBlockPos().equals(targetBlock)
@@ -204,15 +255,9 @@ public class AutoBedDef extends Module {
 
         float savedYaw = mc.thePlayer.rotationYaw;
         float savedPitch = mc.thePlayer.rotationPitch;
-        boolean wasSneaking = mc.thePlayer.isSneaking();
-
-        mc.thePlayer.rotationYaw = useYaw;
-        mc.thePlayer.rotationPitch = usePitch;
-        mc.thePlayer.setSneaking(true);
-
+        mc.thePlayer.rotationYaw = sentYaw;
+        mc.thePlayer.rotationPitch = sentPitch;
         mc.playerController.onPlayerRightClick(mc.thePlayer, mc.theWorld, held, targetBlock, targetFacing, mop.hitVec);
-
-        mc.thePlayer.setSneaking(wasSneaking);
         mc.thePlayer.rotationYaw = savedYaw;
         mc.thePlayer.rotationPitch = savedPitch;
 
@@ -231,7 +276,13 @@ public class AutoBedDef extends Module {
 
     @EventTarget
     public void onMove(MoveInputEvent event) {
-        if (!isEnabled()) return;
+        if (!isEnabled() || mc.thePlayer == null) return;
+        if (needSneak && !mc.thePlayer.movementInput.sneak) {
+            /* A real sneak, slowed as vanilla slows it, so the server knows before the click on the bed. */
+            mc.thePlayer.movementInput.sneak = true;
+            mc.thePlayer.movementInput.moveStrafe *= 0.3F;
+            mc.thePlayer.movementInput.moveForward *= 0.3F;
+        }
         if (moveFix.getValue() == 1
                 && RotationState.isActived()
                 && RotationState.getPriority() == ROT_PRIORITY
@@ -240,10 +291,11 @@ public class AutoBedDef extends Module {
         }
     }
 
+    /** While the hand holds our block, a scroll picks the slot that comes back after. */
     @EventTarget
     public void onSwap(SwapItemEvent event) {
-        if (isEnabled()) {
-            lastSlot = event.setSlot(lastSlot);
+        if (isEnabled() && restoreSlot != -1) {
+            restoreSlot = event.setSlot(restoreSlot);
             event.setCancelled(true);
         }
     }
@@ -251,7 +303,7 @@ public class AutoBedDef extends Module {
     @EventTarget
     public void onRender2D(Render2DEvent event) {
         if (!isEnabled() || mc.currentScreen != null) return;
-        if (!showProgress.getValue()) return;
+        if (!showProgress.getValue() || lockedBedFoot == null) return;
         if (mc.fontRendererObj == null) return;
 
         String text = String.format("%.0f%%", progress * 100.0f);
@@ -284,12 +336,13 @@ public class AutoBedDef extends Module {
                 MathHelper.floor_double(mc.thePlayer.posX),
                 MathHelper.floor_double(mc.thePlayer.posY),
                 MathHelper.floor_double(mc.thePlayer.posZ));
+        int radius = ownBedOnly.getValue() ? BED_SEARCH_RADIUS : 8;
 
         double bestDist = Double.MAX_VALUE;
 
-        for (int dx = -BED_SEARCH_RADIUS; dx <= BED_SEARCH_RADIUS; dx++) {
-            for (int dy = -2; dy <= 2; dy++) {
-                for (int dz = -BED_SEARCH_RADIUS; dz <= BED_SEARCH_RADIUS; dz++) {
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -3; dy <= 3; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
                     BlockPos p = origin.add(dx, dy, dz);
                     if (!isBedFoot(p)) continue;
 
@@ -304,6 +357,9 @@ public class AutoBedDef extends Module {
                     }
                 }
             }
+        }
+        if (lockedBedFoot != null) {
+            bedSeen = true;
         }
     }
 
@@ -365,19 +421,32 @@ public class AutoBedDef extends Module {
         return -1;
     }
 
+    /**
+     * The click that puts a block at {@code wantPlace}: the face of a block
+     * next to it, reachable along a look that lands there. The nearest look
+     * to the current one wins; a bed is clicked only for the top and only
+     * when nothing else is there (it needs the sneak).
+     */
     private void computePlacement(BlockPos wantPlace, boolean isRoof) {
         resetTarget();
+        needSneak = false;
 
         Vec3 eyes = mc.thePlayer.getPositionEyes(1.0f);
         double reach = range.getValue();
         double reachSq = reach * reach;
+
+        float bestDiff = Float.MAX_VALUE;
+        boolean bestOnBed = true;
+        double[] offsets = {0.2, 0.4, 0.5, 0.6, 0.8};
 
         for (EnumFacing face : EnumFacing.values()) {
             BlockPos support = wantPlace.offset(face);
 
             if (isReplaceable(support)) continue;
             Block supportBlock = mc.theWorld.getBlockState(support).getBlock();
-            if (!isRoof && supportBlock instanceof BlockBed) continue;
+            boolean onBed = supportBlock instanceof BlockBed;
+            if (onBed && !isRoof) continue;
+            if (onBed && targetBlock != null && !bestOnBed) continue;
 
             double dx = support.getX() + 0.5 - eyes.xCoord;
             double dy = support.getY() + 0.5 - eyes.yCoord;
@@ -385,12 +454,6 @@ public class AutoBedDef extends Module {
             if (dx * dx + dy * dy + dz * dz > (reach + 1.5) * (reach + 1.5)) continue;
 
             EnumFacing clickFace = face.getOpposite();
-            double[] offsets = {0.2, 0.4, 0.5, 0.6, 0.8};
-
-            float bestDiff = isRoof ? Float.MIN_VALUE : Float.MAX_VALUE;
-            float bestYaw = Float.NaN;
-            float bestPitch = Float.NaN;
-            Vec3 bestHit = null;
 
             for (double u : offsets) {
                 for (double v : offsets) {
@@ -409,27 +472,21 @@ public class AutoBedDef extends Module {
                             || !mop.getBlockPos().equals(support)
                             || mop.sideHit != clickFace) continue;
 
-                    float diff = Math.abs(MathHelper.wrapAngleTo180_float(rot[0] - serverYaw)) + Math.abs(rot[1] - serverPitch);
-
-                    boolean better = isRoof ? (diff > bestDiff) : (diff < bestDiff);
+                    float diff = Math.abs(MathHelper.wrapAngleTo180_float(rot[0] - sentYaw)) + Math.abs(rot[1] - sentPitch);
+                    boolean better = targetBlock == null || bestOnBed && !onBed || bestOnBed == onBed && diff < bestDiff;
                     if (better) {
                         bestDiff = diff;
-                        bestYaw = rot[0];
-                        bestPitch = rot[1];
-                        bestHit = mop.hitVec;
+                        bestOnBed = onBed;
+                        aimYaw = rot[0];
+                        aimPitch = rot[1];
+                        targetBlock = support;
+                        targetFacing = clickFace;
+                        targetHitVec = mop.hitVec;
                     }
                 }
             }
-
-            if (bestHit != null) {
-                aimYaw = bestYaw;
-                aimPitch = bestPitch;
-                targetBlock = support;
-                targetFacing = clickFace;
-                targetHitVec = bestHit;
-                return;
-            }
         }
+        needSneak = targetBlock != null && bestOnBed;
     }
 
     private Vec3 getFacePoint(BlockPos block, EnumFacing face, double u, double v) {
@@ -478,14 +535,24 @@ public class AutoBedDef extends Module {
         return dy <= rotTol.getValue() && dp <= rotTol.getValue();
     }
 
-    private int findWoolSlot() {
+    /** Wool first; else (unless wool-only) any full solid block that places plainly. */
+    private int findBlockSlot() {
+        int other = -1;
         for (int slot = 0; slot < 9; slot++) {
             ItemStack stack = mc.thePlayer.inventory.getStackInSlot(slot);
             if (stack == null || stack.stackSize == 0) continue;
             if (!(stack.getItem() instanceof ItemBlock)) continue;
-            if (((ItemBlock) stack.getItem()).getBlock() == Blocks.wool) return slot;
+            Block block = ((ItemBlock) stack.getItem()).getBlock();
+            if (block == Blocks.wool) return slot;
+            if (other == -1 && !woolOnly.getValue() && defends(block)) other = slot;
         }
-        return -1;
+        return other;
+    }
+
+    private static boolean defends(Block block) {
+        return block.isFullCube() && block.getMaterial().isSolid() && !(block instanceof BlockFalling)
+                && !(block instanceof BlockContainer) && block != Blocks.tnt && block != Blocks.crafting_table
+                && block != Blocks.ice && block != Blocks.slime_block;
     }
 
     private boolean isReplaceable(BlockPos pos) {
@@ -532,8 +599,9 @@ public class AutoBedDef extends Module {
         else return new Color(85, 255, 85);
     }
 
+    /** The slot the player has: the one that comes back while our block is in hand. */
     public int getSlot() {
-        return lastSlot;
+        return restoreSlot != -1 ? restoreSlot : mc.thePlayer != null ? mc.thePlayer.inventory.currentItem : -1;
     }
 
     /* Merged modules (2026-10-11, ModuleBundle). */

@@ -136,11 +136,23 @@ public abstract class MixinMinecraft {
         if (Atlas.moduleManager != null && atlas.module.ModuleBundle.of(atlas.module.modules.NoHitDelay.class).isEnabled()) {
             this.leftClickCounter = 0;
         }
+        /* 2026-10-26 (VanillaInput): a click a module pressed this tick takes its crosshair, in order. */
+        net.minecraft.util.MovingObjectPosition managed = atlas.util.VanillaInput.nextAttack();
         LeftClickMouseEvent event = new LeftClickMouseEvent();
         EventManager.call(event);
         if (event.isCancelled()) {
             callbackInfo.cancel();
+            return;
         }
+        atlas.util.VanillaInput.apply(managed);
+    }
+
+    @Inject(
+            method = {"clickMouse"},
+            at = {@At("RETURN")}
+    )
+    private void clickMouseReturn(CallbackInfo callbackInfo) {
+        atlas.util.VanillaInput.restore();
     }
 
     @Inject(
@@ -158,6 +170,8 @@ public abstract class MixinMinecraft {
         /* ItemUseFix: while a block is being broken, the game ignores right
            click; it is told it is not breaking for this one call. */
         atlas.module.modules.ItemUseFix.beforeRightClick();
+        /* 2026-10-27 (V3): a sword's right click while an aura fights goes along its look (VanillaInput.applyUse). */
+        atlas.util.VanillaInput.applyUse();
     }
 
     @Inject(
@@ -165,6 +179,7 @@ public abstract class MixinMinecraft {
             at = {@At("RETURN")}
     )
     private void rightClickMouseReturn(CallbackInfo callbackInfo) {
+        atlas.util.VanillaInput.restoreUse();
         atlas.module.modules.ItemUseFix.afterRightClick();
     }
 
@@ -174,6 +189,12 @@ public abstract class MixinMinecraft {
             cancellable = true
     )
     private void sendClickBlockToController(CallbackInfo callbackInfo) {
+        if (atlas.util.VanillaInput.holdsBlockBreaking()) {
+            /* 2026-10-27: an aura fights along its own look; the camera's crosshair digs nothing meanwhile. */
+            callbackInfo.cancel();
+            this.playerController.resetBlockRemoving();
+            return;
+        }
         HitBlockEvent event = new HitBlockEvent();
         EventManager.call(event);
         if (event.isCancelled()) {

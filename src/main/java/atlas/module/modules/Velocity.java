@@ -102,7 +102,7 @@ public class Velocity extends Module {
         return Math.max(0.0, Math.min(1.0, share));
     }
 
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"Vanilla", "Jump", "Hypixel", "Slap_Attack", "Intave", "GrimAC", "Matrix", "PolarJump", "Legit", "Delay", "Tick", "Zip", "Karhu", "MatrixReverse", "MatrixFull", "Intave14", "XZSwitch", "OldGrim", "Vulcan", "BlocksMC", "GrimC03", "IntaveTimer", "Lag"});
+    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"Vanilla", "Jump", "Hypixel", "Slap_Attack", "Intave", "GrimAC", "Matrix", "PolarJump", "Legit", "Delay", "Tick", "Zip", "Karhu", "MatrixReverse", "MatrixFull", "Intave14", "XZSwitch", "OldGrim", "Vulcan", "BlocksMC", "GrimC03", "IntaveTimer", "Lag", "Polar"});
 
     public final PercentProperty chance = new PercentProperty("chance", 100, () -> mode.getValue() <= 1);
     /* Lag (2026-10-24, VelocityLag, after Rise's DelayVelocity): own knockback and the transactions after it
@@ -114,6 +114,29 @@ public class Velocity extends Module {
     public final IntProperty lagPingBudget = new IntProperty("lag-ping-budget", 250, 0, 600, () -> mode.getValue() == LAG);
     public final IntProperty lagCooldown = new IntProperty("lag-cooldown", 500, 0, 3000, () -> mode.getValue() == LAG);
     public final BooleanProperty lagOnlyInFight = new BooleanProperty("lag-only-in-fight", true, () -> mode.getValue() == LAG);
+    /* Polar (2026-10-26, VelocityPolarPlan): no motion change and no held packet. A knockback may be answered by a
+       sprint counter-hit before the tick's movement -- Silent Aura's vanilla click along the look the server already
+       has, so 1.8's own attack code takes 40 % off the speed in the order a hand makes it -- and/or a jump reset on
+       the knockback tick, at a capped, uneven rate. */
+    private static final int POLAR = 23;
+    public final PercentProperty polarCounterChance = new PercentProperty("polar-counter-chance", 70, () -> mode.getValue() == POLAR);
+    public final PercentProperty polarJumpChance = new PercentProperty("polar-jump-chance", 60, () -> mode.getValue() == POLAR);
+    public final PercentProperty polarBothChance = new PercentProperty("polar-both-chance", 20, () -> mode.getValue() == POLAR);
+    public final IntProperty polarReactMin = new IntProperty("polar-react-min", 0, 0, 3, () -> mode.getValue() == POLAR);
+    public final IntProperty polarReactMax = new IntProperty("polar-react-max", 1, 0, 3, () -> mode.getValue() == POLAR);
+    public final PercentProperty polarMaxRate = new PercentProperty("polar-max-rate", 50, () -> mode.getValue() == POLAR);
+    public final IntProperty polarMaxStreak = new IntProperty("polar-max-streak", 3, 0, 10, () -> mode.getValue() == POLAR);
+    public final IntProperty polarMinInterval = new IntProperty("polar-min-interval", 300, 0, 2000, () -> mode.getValue() == POLAR);
+    public final BooleanProperty polarOnlyInFight = new BooleanProperty("polar-only-in-fight", true, () -> mode.getValue() == POLAR);
+    private final VelocityPolarPlan polarPlan = new VelocityPolarPlan();
+    private final java.util.Random polarRandom = new java.util.Random();
+    /** Ticks until the counter-hit, -1 for none. */
+    private int polarCounterIn = -1;
+    private boolean polarJumpPending;
+    private int polarJumpAge;
+    /** Answers of the last knockback still to happen, and whether one did. */
+    private int polarOutstanding;
+    private boolean polarLanded;
     private static final int LAG_MAX_QUEUE = 200;
     private final VelocityLag<Packet<?>> lag = new VelocityLag<Packet<?>>();
     private volatile int lagTick;
@@ -322,6 +345,8 @@ public class Velocity extends Module {
                     }
                 } else if (this.mode.getValue() == 5) {
                     this.grimPending = this.grimTimes.getValue();
+                } else if (this.mode.getValue() == POLAR) {
+                    this.polarKnockback(event);
                 } else if (this.mode.getValue() == 6) {
                     event.setX(event.getX() * this.matrixScale.getValue());
                     event.setZ(event.getZ() * this.matrixScale.getValue());
@@ -1060,6 +1085,133 @@ public class Velocity extends Module {
         this.dig = false;
     }
 
+    // ---- Polar ----------------------------------------------------------
+
+    /** Velocity is on in Polar mode (JumpReset stands aside then: one module answers a knockback). */
+    public boolean polarActive() {
+        return this.isEnabled() && this.mode.getValue() == POLAR;
+    }
+
+    private void polarKnockback(KnockbackEvent event) {
+        if (mc.thePlayer == null || mc.theWorld == null
+                || this.polarOnlyInFight.getValue() && !this.lagInFight()) {
+            return;
+        }
+        VelocityPolarPlan plan = this.polarPlan;
+        plan.counterChance = this.polarCounterChance.getValue();
+        plan.jumpChance = this.polarJumpChance.getValue();
+        plan.bothChance = this.polarBothChance.getValue();
+        plan.reactMin = this.polarReactMin.getValue();
+        plan.reactMax = this.polarReactMax.getValue();
+        plan.maxRate = this.polarMaxRate.getValue();
+        plan.maxStreak = this.polarMaxStreak.getValue();
+        plan.minIntervalMs = this.polarMinInterval.getValue();
+        KillAuraLB aura = atlas.module.ModuleBundle.of(KillAuraLB.class);
+        boolean canCounter = mc.thePlayer.isSprinting() && aura != null && aura.isEnabled() && aura.canCounterHit();
+        boolean canJump = event.getY() > 0.0 && mc.thePlayer.onGround && !this.polarJumpBlocked()
+                && this.polarJumpHelps(event.getX(), event.getZ());
+        VelocityPolarPlan.Decision d = plan.decide(System.currentTimeMillis(), canCounter, canJump, this.polarRandom);
+        this.polarCounterIn = d.counter ? d.counterTick : -1;
+        this.polarJumpPending = d.jump;
+        this.polarJumpAge = 0;
+        this.polarOutstanding = (d.counter ? 1 : 0) + (d.jump ? 1 : 0);
+        this.polarLanded = false;
+        if (this.debugLog.getValue() && d.any()) {
+            ChatUtil.sendFormatted(String.format("%sPolar: %s%s (in %d t), %d/10 answered&r", Atlas.clientName,
+                    d.counter ? "counter" : "", d.jump ? (d.counter ? " + jump" : "jump") : "",
+                    Math.max(0, d.counterTick), plan.answeredInWindow()));
+        }
+    }
+
+    /** One answer went out (or could not): when none of this knockback's did, the plan does not count it. */
+    private void polarResolved(boolean happened) {
+        if (this.polarOutstanding <= 0) {
+            return;
+        }
+        this.polarLanded |= happened;
+        if (--this.polarOutstanding == 0 && !this.polarLanded) {
+            this.polarPlan.didNotHappen();
+        }
+    }
+
+    private void polarClear() {
+        this.polarCounterIn = -1;
+        this.polarJumpPending = false;
+        this.polarOutstanding = 0;
+    }
+
+    /** Start of the tick, before the player moves: the counter-hit goes out here, where vanilla clicks. */
+    @EventTarget
+    public void onPolarTick(TickEvent event) {
+        if (event.getType() != EventType.PRE || mc.thePlayer == null || this.mode.getValue() != POLAR) {
+            return;
+        }
+        if (this.polarJumpPending && ++this.polarJumpAge > 1) {
+            /* Only the knockback tick can reset. */
+            this.polarJumpPending = false;
+            this.polarResolved(false);
+        }
+        if (this.polarCounterIn > 0) {
+            this.polarCounterIn--;
+        } else if (this.polarCounterIn == 0) {
+            this.polarCounterIn = -1;
+            KillAuraLB aura = atlas.module.ModuleBundle.of(KillAuraLB.class);
+            boolean hit = aura != null && aura.isEnabled() && aura.counterHit();
+            if (hit) {
+                atlas.util.ActionLedger.note(this.getName(), "attack");
+            }
+            this.polarResolved(hit);
+        }
+    }
+
+    @EventTarget
+    public void onPolarMove(MoveInputEvent event) {
+        if (!this.polarJumpPending || mc.thePlayer == null || this.mode.getValue() != POLAR) {
+            return;
+        }
+        this.polarJumpPending = false;
+        boolean ok = mc.thePlayer.onGround && !this.polarJumpBlocked();
+        if (ok) {
+            mc.thePlayer.movementInput.jump = true;
+            atlas.util.ActionLedger.note(this.getName(), "move");
+        }
+        this.polarResolved(ok);
+    }
+
+    @EventTarget
+    public void onPolarPacket(PacketEvent event) {
+        if (event.getType() == EventType.RECEIVE && this.mode.getValue() == POLAR
+                && event.getPacket() instanceof net.minecraft.network.play.server.S08PacketPlayerPosLook) {
+            /* Set back: nothing planned for the old position goes out. */
+            this.polarClear();
+        }
+    }
+
+    /** Places and states a jump would be wrong or pointless in (as JumpReset's). */
+    private boolean polarJumpBlocked() {
+        if (mc.thePlayer.isPotionActive(Potion.jump) || mc.thePlayer.isInWater() || mc.thePlayer.isInLava()
+                || mc.thePlayer.isOnLadder() || mc.thePlayer.capabilities.isFlying
+                || ((IAccessorEntity) mc.thePlayer).getIsInWeb() || mc.currentScreen instanceof GuiInventory) {
+            return true;
+        }
+        Module scaffold = Atlas.moduleManager.getModule(Scaffold.class);
+        return scaffold != null && scaffold.isEnabled();
+    }
+
+    /** The sprint jump's 0.2 push along the jump's yaw takes at least 3 % off the horizontal knockback (as JumpReset's). */
+    private boolean polarJumpHelps(double kbX, double kbZ) {
+        double kb = Math.sqrt(kbX * kbX + kbZ * kbZ);
+        if (kb < 1.0E-3) {
+            return false;
+        }
+        float yaw = atlas.management.RotationState.isActived()
+                ? atlas.management.RotationState.getSmoothedYaw() : mc.thePlayer.rotationYaw;
+        double rad = Math.toRadians(yaw);
+        double x = kbX - Math.sin(rad) * 0.2;
+        double z = kbZ + Math.cos(rad) * 0.2;
+        return (kb - Math.sqrt(x * x + z * z)) / kb >= 0.03;
+    }
+
     @EventTarget
     public void onLoadWorld(LoadWorldEvent event) {
         this.onDisabled();
@@ -1067,6 +1219,8 @@ public class Velocity extends Module {
 
     @Override
     public void onEnabled() {
+        this.polarClear();
+        this.polarPlan.reset();
         this.pendingExplosion = false;
         this.allowNext = true;
         this.rotatoTickCounter = 0;
@@ -1110,6 +1264,8 @@ public class Velocity extends Module {
 
     @Override
     public void onDisabled() {
+        this.polarClear();
+        this.polarPlan.reset();
         /* Lag: nothing held may be lost -- the transactions above all. */
         this.lagRelease(this.lag.drain(System.currentTimeMillis(), 0));
         this.pendingExplosion = false;

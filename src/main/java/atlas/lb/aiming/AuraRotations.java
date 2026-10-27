@@ -155,6 +155,18 @@ public final class AuraRotations {
         return this.current;
     }
 
+    /**
+     * This tick's look is {@code look} after all (2026-10-26: Velocity Polar's
+     * counter-hit went out along it, so the movement packet keeps it). The
+     * next step turns on from there. Only while this aura holds a rotation.
+     */
+    public Rotation hold(Rotation look) {
+        if (this.current != null) {
+            this.current = look;
+        }
+        return look;
+    }
+
     /** Ticks the smoother needs from {@code from} to {@code to} (LiquidBounce's calculateTicks). */
     public int calculateTicks(Rotation from, Rotation to) {
         return this.smooth.calculateTicks(SmoothContext.estimate(this.previous), from, to);

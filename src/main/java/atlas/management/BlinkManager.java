@@ -106,7 +106,12 @@ public class BlinkManager {
     public boolean offerPacket(Packet<?> packet) {
         if (this.releasing || this.blinkModule == BlinkModules.NONE || packet instanceof C00PacketKeepAlive || packet instanceof C01PacketChatMessage) {
             return false;
-        } else if (packet instanceof C0FPacketConfirmTransaction && holdTransactions.getAsBoolean()) {
+        } else if (packet instanceof C0FPacketConfirmTransaction
+                && (holdTransactions.getAsBoolean() || this.blinkModule == BlinkModules.RHYTHM)) {
+            /* RHYTHM (2026-10-27): its hold is a few ticks around a hit taken, and the knockback's reply has to
+               reach the server with the movement that answers it, not ahead of it -- with the replies flowing, the
+               server would see the knockback confirmed and then movement that ignores it. A few ticks of late
+               replies are plain ping (the Pika disconnect below came from replies held for seconds). */
             /* Held, from whichever thread sent it, so that no reply can overtake
                one already in the queue: replies out of order are a flag of their
                own (Grim TransactionOrder). This is what keeps Grim's clock for

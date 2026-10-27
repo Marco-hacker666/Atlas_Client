@@ -20,9 +20,12 @@ public final class HumanStats {
 
     private final ArrayDeque<long[]> clicks = new ArrayDeque<long[]>();
     private final ArrayDeque<long[]> reactions = new ArrayDeque<long[]>();
-    private int overshoots;
-    private int undershoots;
-    private int lapses;
+    /* 2026-10-26 (review): overshoots, undershoots and lapses kept their whole-session counts while the rest of
+       the line was the last 30 s. Now the same window: {time, kind}. */
+    private static final int AIM_OVER = 0;
+    private static final int AIM_UNDER = 1;
+    private static final int AIM_LAPSE = 2;
+    private final ArrayDeque<long[]> aims = new ArrayDeque<long[]>();
 
     public synchronized void hit(long now) {
         add(CLICK_HIT, now);
@@ -42,16 +45,26 @@ public final class HumanStats {
     }
 
     public synchronized void aim(AimError.Adjust adjust) {
+        aim(adjust, System.currentTimeMillis());
+    }
+
+    public synchronized void aim(AimError.Adjust adjust, long now) {
         if (adjust.overshot) {
-            this.overshoots++;
+            this.aims.addLast(new long[]{now, AIM_OVER});
         }
         if (adjust.undershot) {
-            this.undershoots++;
+            this.aims.addLast(new long[]{now, AIM_UNDER});
         }
+        trim(now);
     }
 
     public synchronized void lapse() {
-        this.lapses++;
+        lapse(System.currentTimeMillis());
+    }
+
+    public synchronized void lapse(long now) {
+        this.aims.addLast(new long[]{now, AIM_LAPSE});
+        trim(now);
     }
 
     private void add(int kind, long now) {
@@ -65,6 +78,9 @@ public final class HumanStats {
         }
         while (!this.reactions.isEmpty() && now - this.reactions.peekFirst()[0] > SPAN_MS) {
             this.reactions.pollFirst();
+        }
+        while (!this.aims.isEmpty() && now - this.aims.peekFirst()[0] > SPAN_MS) {
+            this.aims.pollFirst();
         }
     }
 
@@ -97,8 +113,12 @@ public final class HumanStats {
             sum += r[1];
         }
         String react = this.reactions.isEmpty() ? "-" : (sum / this.reactions.size()) + "ms";
+        int[] a = new int[3];
+        for (long[] e : this.aims) {
+            a[(int) e[1]]++;
+        }
         return String.format(Locale.ROOT, "hit %s (%d/%d) | miss aim %d swing %d skip %d unlucky %d | react %s | over %d under %d lapse %d",
                 clicked == 0 ? "-" : Math.round(100.0 * n[0] / clicked) + "%", n[0], clicked, n[1], n[2], n[3], n[4],
-                react, this.overshoots, this.undershoots, this.lapses);
+                react, a[AIM_OVER], a[AIM_UNDER], a[AIM_LAPSE]);
     }
 }

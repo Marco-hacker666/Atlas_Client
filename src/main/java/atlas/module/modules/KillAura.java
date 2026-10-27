@@ -88,6 +88,8 @@ public class KillAura extends Module {
        whatever the crosshair is on, swings at the air otherwise (and a miss
        costs vanilla's 10-tick miss delay unless NoDelay is on). */
     public final BooleanProperty simulateClicks = new BooleanProperty("simulate-clicks", false);
+    /* 2026-10-26: the Atlas engine's humanization (Humanization > apply-silent-aura covers both engines). */
+    private final atlas.humanize.Humanizer atlasHumanizer = new atlas.humanize.Humanizer(atlas.humanize.Humanizer.CONSUMER_ATLAS_AURA);
     private final KillAuraYuri yuri = new KillAuraYuri();
     private boolean yuriBlockAfterMove;
     /* LEGIT autoblock (2026-10-16), after LiquidBounce NextGen's KillAuraAutoBlock:
@@ -822,6 +824,20 @@ public class KillAura extends Module {
                    1 and 2). The remainder is at most one tick: the countdown
                    above stops at zero or just under. */
                 this.attackDelayMS += this.getAttackDelay();
+                /* 2026-10-26 (review: the Atlas engine never read Humanization): this click's verdict. */
+                long humanNow = System.currentTimeMillis();
+                atlas.humanize.Humanizer.Verdict human = this.atlasHumanizer.click(
+                        atlas.humanize.Situations.of(this.target.getEntity()), humanNow);
+                if (human != null && human.land && this.atlasHumanizer.dropClick()) {
+                    human = new atlas.humanize.Humanizer.Verdict(false, atlas.humanize.Misses.Style.SKIP);
+                }
+                if (human != null && !human.land) {
+                    this.atlasHumanizer.missed(human.miss, humanNow);
+                    if (human.miss != atlas.humanize.Misses.Style.SKIP) {
+                        mc.thePlayer.swingItem();
+                    }
+                    return false;
+                }
                 if (this.simulateClicks.getValue()) {
                     /* Yuri: the click is vanilla's own (swing, then whatever the
                        crosshair is on); AttackEvent fires from attackEntity. */
@@ -831,6 +847,13 @@ public class KillAura extends Module {
                     ((atlas.mixin.IAccessorMinecraft) mc).callClickMouse();
                     this.hitRegistered = mc.objectMouseOver != null
                             && mc.objectMouseOver.entityHit == this.target.getEntity();
+                    if (human != null) {
+                        if (this.hitRegistered) {
+                            this.atlasHumanizer.landed(humanNow);
+                        } else {
+                            this.atlasHumanizer.unlucky(humanNow);
+                        }
+                    }
                     return this.hitRegistered;
                 }
                 mc.thePlayer.swingItem();
@@ -862,6 +885,9 @@ public class KillAura extends Module {
                 PacketUtil.sendPacket(new C02PacketUseEntity(this.target.getEntity(), Action.ATTACK));
                 if (mc.playerController.getCurrentGameType() != GameType.SPECTATOR) {
                     PlayerUtil.attackEntity(this.target.getEntity());
+                }
+                if (human != null) {
+                    this.atlasHumanizer.landed(humanNow);
                 }
                 this.hitRegistered = true;
                 return true;
@@ -963,6 +989,10 @@ public class KillAura extends Module {
                     if (bedNuker.isEnabled() && bedNuker.isReady()) {
                         return false;
                     } else if (Atlas.moduleManager.modules.get(Scaffold.class).isEnabled()) {
+                        return false;
+                    } else if (atlas.management.Arbiter.catching()) {
+                        /* 2026-10-26: Clutch's catch comes first (owner: "Clutch above Silent Aura"). */
+                        atlas.management.Arbiter.yielded("Silent Aura");
                         return false;
                     } else if (this.requirePress.getValue()) {
                         return PlayerUtil.isAttacking();

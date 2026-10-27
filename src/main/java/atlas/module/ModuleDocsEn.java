@@ -100,6 +100,15 @@ final class ModuleDocsEn {
         help("Velocity", "lag-ping-budget", "Lag: ping plus the hold never goes past this (ms); the hold is cut, and on a high enough ping there is none. 0 = off.");
         help("Velocity", "lag-cooldown", "Lag: after a release, no new hold for this long (ms), so a combo does not keep you lagging.");
         help("Velocity", "lag-only-in-fight", "Lag: only with another player (not a bot or teammate) within 6 blocks.");
+        help("Velocity", "polar-counter-chance", "Polar: chance a knockback is answered by hitting back while sprinting, before the tick's movement (needs Silent Aura with a target in 3.0 along the look the server has). The game's own attack takes 40% off your speed.");
+        help("Velocity", "polar-jump-chance", "Polar: chance a knockback on the ground is answered by a jump on that tick (a jump reset).");
+        help("Velocity", "polar-both-chance", "Polar: when both would happen, chance to do both; otherwise one of them.");
+        help("Velocity", "polar-react-min", "Polar: fewest ticks after the knockback the counter-hit waits (0 = that tick).");
+        help("Velocity", "polar-react-max", "Polar: most ticks after the knockback the counter-hit waits.");
+        help("Velocity", "polar-max-rate", "Polar: at most this share of the last 10 knockbacks is answered.");
+        help("Velocity", "polar-max-streak", "Polar: a run of answered knockbacks ends somewhere between half this and this. 0 = no limit.");
+        help("Velocity", "polar-min-interval", "Polar: shortest time between two answers, in milliseconds.");
+        help("Velocity", "polar-only-in-fight", "Polar: only with another player (not a bot or teammate) within 6 blocks.");
         d("Humanization", "Makes combat modules look human: they miss, aim off and take time to react. One global set of rules that Silent Aura and others apply.");
         help("Humanization", "preset", "Fills every value at once: Legit (40 %), Good (55 %), Tryhard (70 %). Each can still be changed; Custom overwrites nothing.");
         help("Humanization", "apply-silent-aura", "Applies to Silent Aura (both engines, LiquidBounce and Atlas).");
@@ -266,6 +275,8 @@ final class ModuleDocsEn {
         help("NoSlow", "HW Guard", "Hit-Window: before the first hit of an exchange, raise the sword in short windows while an enemy close by faces you.");
         help("NoSlow", "HW Guard Range", "Hit-Window: how close that enemy must be.");
         help("NoSlow", "HW Log", "Hit-Window: each window and whether each hit taken was blocked, in config/Atlas/noslow-*.txt.");
+        help("NoSlow", "HW Aura Blocks", "Hit-Window: also steer a block an aura or AutoBlock raises (Silent Aura's AutoBlocking, AutoBlock modes), not only your right button.");
+        help("NoSlow", "HW Priority", "Hit-Window with Silent Aura's block: Hit = a window opens only with the aura's next click 3+ ticks away and closes a tick before it (no click waits); Block = the aura holds its click while the sword is up.");
         help("HUD", "hud-theme", "How every HUD draws. JELLO: LiquidBounce's JelloBounce theme (black at 45%, soft shadow, rounded cards, flush module list). CLASSIC: each HUD's older drawing.");
         // Mobile-safe mode (2026-10-15, util.render.MobileSafe): Client Settings > Performance > mobile-safe
         help("HUD", "blur", "Blurs the background. Not drawn in mobile-safe mode (Client Settings > Performance > mobile-safe; on by itself on phones running gl4es / Krypton Wrapper).");
@@ -331,6 +342,8 @@ final class ModuleDocsEn {
         help("AutoBlockIn", "debug", "For troubleshooting: writes each step to config/Atlas/placedebug-*.txt, on a background thread, so frames are not affected. Not needed for normal play.");
         help("AutoBlockIn", "debug-chat", "Also print debug lines to chat (up to 4 a second). With chat mods installed this can cost a lot of fps; turn it on only when you need to watch live.");
         d("AutoBedDef", "Places blocks around your own bed to defend it.");
+        help("AutoBedDef", "own-bed-only", "Only the first bed found in this world (yours: you spawn next to it). Off: the nearest bed, an enemy's too.");
+        help("AutoBedDef", "wool-only", "Only wool. Off: any full solid block when there is no wool.");
         d("AutoHeadHitter", "Keeps head-hitter jumps going when a block is above you.");
         d("BedNuker", "Breaks nearby enemy beds (and the blocks protecting them).");
         help("BedNuker", "outside-first", "Dig from the outside in: the first block between you and the bed, layer by layer, until the bed is open. Off: the easiest block touching the bed.");
@@ -468,6 +481,7 @@ final class ModuleDocsEn {
         heading("Reduce 模式", "Reduce mode");
         heading("Jump / Rotate", "Jump / Rotate");
         heading("Lag 模式", "Lag mode");
+        heading("Polar 模式", "Polar mode");
         heading("預設與套用", "Preset and modules");
         heading("命中率", "Hit rate");
         heading("情境修正", "Situations");

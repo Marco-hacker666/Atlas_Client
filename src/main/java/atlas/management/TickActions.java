@@ -94,6 +94,15 @@ public final class TickActions {
         return 0;
     }
 
+    /**
+     * A packet sent past the event bus (PacketUtil.sendPacketNoEvent) that
+     * still counts as this tick's action (2026-10-26: NoSlow Hit-Window's own
+     * C08/C07, or the aura attacked right after a release Grim then flagged).
+     */
+    public static void noteDirect(Packet<?> packet) {
+        noteSent(packet);
+    }
+
     /** A packet that left. Package-private for tests. */
     static void noteSent(Packet<?> packet) {
         int kind = kindOf(packet);

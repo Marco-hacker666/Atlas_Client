@@ -550,8 +550,36 @@ public final class BugReport {
                 || line.contains("Vulcan") || line.contains("Polar");
     }
 
+    /* 2026-10-26 (review): every name seen on the tab list this session, so a player who has left is still
+       taken out of the logs in the report (the tab list alone only knew who was there at report time). */
+    private static final java.util.Set<String> SEEN = java.util.Collections.newSetFromMap(
+            new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
+    private static final int SEEN_MAX = 5000;
+
+    /** Records the tab list's names once a second. */
+    public static final class SeenNames {
+        private int ticks;
+
+        @atlas.event.EventTarget
+        public void onTick(atlas.events.TickEvent event) {
+            if (event.getType() != atlas.event.types.EventType.PRE || ++this.ticks % 20 != 0
+                    || mc.getNetHandler() == null || SEEN.size() >= SEEN_MAX) {
+                return;
+            }
+            try {
+                for (NetworkPlayerInfo info : mc.getNetHandler().getPlayerInfoMap()) {
+                    if (info.getGameProfile() != null && info.getGameProfile().getName() != null) {
+                        SEEN.add(info.getGameProfile().getName());
+                    }
+                }
+            } catch (Throwable ignored) {
+                // The tab list can change under us; next second again.
+            }
+        }
+    }
+
     private static Redactor redactor() {
-        List<String> names = new ArrayList<String>();
+        List<String> names = new ArrayList<String>(SEEN);
         String self = null;
         String uuid = null;
         String token = null;

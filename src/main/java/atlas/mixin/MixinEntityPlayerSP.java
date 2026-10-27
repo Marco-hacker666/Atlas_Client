@@ -172,6 +172,12 @@ public abstract class MixinEntityPlayerSP extends MixinEntityPlayer {
             )
     )
     private boolean isUsing(EntityPlayerSP entityPlayerSP) {
+        if (atlas.module.modules.KillAuraLB.rhythmRuns()) {
+            /* 2026-10-27: Silent Aura's Rhythm block is a real block the server sees; it moves exactly as vanilla
+               moves with the sword up (slowed, no sprint), never as NoSlow would -- except while Rhythm-Lag holds the
+               movement: the server gets that movement only after the sword is down, so it is made unslowed. */
+            return !atlas.module.modules.KillAuraLB.rhythmUnslowed() && entityPlayerSP.isUsingItem();
+        }
         NoSlow noSlow = (NoSlow) Atlas.moduleManager.modules.get(NoSlow.class);
         if (noSlow.isEnabled()) {
             if (noSlow.isMiauAnyActive()) {

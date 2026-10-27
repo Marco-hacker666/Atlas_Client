@@ -249,6 +249,19 @@ public class BlinkManagerTest {
     }
 
     @Test
+    public void rhythmHoldsItsRepliesInOrderWithoutTheSwitch() throws Exception {
+        RecordingAll blink = new RecordingAll();
+        blink.setBlinkState(true, BlinkModules.RHYTHM);
+        assertTrue(offerOnClientThread(blink, new Numbered(1)));
+        assertTrue(blink.offerPacket(new C0FPacketConfirmTransaction()));
+        assertTrue(offerOnClientThread(blink, new Numbered(2)));
+        assertFalse(offerOnClientThread(blink, new C00PacketKeepAlive()));
+        blink.release(new Numbered(0));
+        blink.setBlinkState(false, BlinkModules.RHYTHM);
+        assertEquals(Arrays.asList("0", "1", "C0F", "2"), blink.sent);
+    }
+
+    @Test
     public void keepAlivesStayUnheldEvenWithTransactionsHeld() throws Exception {
         BlinkManager.holdTransactions = () -> true;
         RecordingAll blink = new RecordingAll();

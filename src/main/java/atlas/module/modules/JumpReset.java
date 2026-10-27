@@ -101,6 +101,11 @@ public class JumpReset extends Module {
         if (event.getY() <= 0.0D || !mc.thePlayer.onGround) {
             return;
         }
+        Velocity velocity = (Velocity) Atlas.moduleManager.getModule(Velocity.class);
+        if (velocity != null && velocity.polarActive()) {
+            /* 2026-10-26: Velocity's Polar mode answers knockback itself (jump resets included, under its own caps). */
+            return;
+        }
         if (!this.conditionsMet() || !this.allowed() || !this.helps(event.getX(), event.getZ())) {
             this.streak = 0;
             this.remember(false);

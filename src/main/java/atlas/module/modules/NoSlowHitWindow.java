@@ -60,6 +60,27 @@ import java.util.Date;
  * Only a block the player holds with their own right button is managed;
  * an aura or AutoBlock pressing the key is left alone (vanilla behaviour).
  * Each window is logged to config/Atlas/noslow-*.txt.
+ *
+ * 2026-10-26 (owner: H1 + H4 of "Hit-Window for Polar"):
+ *  H4 -- with HW Aura Blocks (default) any sword block is steered, also one
+ *        an aura (Silent Aura's AutoBlocking, an AutoBlock mode it drives) or
+ *        the AutoBlock module raises: its use waits for a window the same
+ *        way. This mode's own C08/C07 go to TickActions, so an aura does not
+ *        attack in the tick a window closed (Grim PacketOrderI).
+ *  H1 -- every hit taken while this mode is chosen is logged with who hit,
+ *        how far and how they faced, how long since their last hit on this
+ *        player, the ping, and where the window was; once a minute a SUMMARY
+ *        of hits blocked and ticks slowed.
+ *
+ * 2026-10-26 (A1-A5, after the Interact test: every window was closed by
+ * Silent Aura's own release in the tick it opened -- 15 of 15 "open 0t" --
+ * a block toggled within one tick, and damage dealt fell from 3.44 to 1.38 a
+ * hit): with HW Aura Blocks the LiquidBounce engine's block is DELEGATED.
+ * The aura sends no use or release of its own and only shows the pose; this
+ * mode is the only one that raises the sword on the server, also with no
+ * client-side use at all (delegated()), and times its windows around the
+ * aura's planned clicks (HW Priority: Hit -- open only with the next click 3+
+ * ticks away, close one tick before it; Block -- the aura holds its click).
  */
 final class NoSlowHitWindow {
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -86,6 +107,17 @@ final class NoSlowHitWindow {
     private File logTarget;
     private int blockedHits;
     private int openHits;
+    /* H1 */
+    private int closedAt = -100;
+    private String closeReason = "";
+    private final java.util.Map<String, Integer> lastHitBy = new java.util.HashMap<String, Integer>();
+    private int sumHits;
+    private int sumBlocked;
+    private int sumManaged;
+    private int sumSlowed;
+    private int sumWindows;
+    private int sumStart;
+    private int sumPostponed;
 
     NoSlowHitWindow(NoSlow module) {
         this.module = module;
@@ -110,10 +142,59 @@ final class NoSlowHitWindow {
         return code < 0 ? Mouse.isButtonDown(code + 100) : code > 0 && Keyboard.isKeyDown(code);
     }
 
+    /** Whose block this mode steers: the right button's, and with HW Aura Blocks any (an aura's, AutoBlock's). */
+    private boolean claims() {
+        return physicalUseKey() || this.module.hwAura.getValue();
+    }
+
+    /** An aura's own block is left alone, unless HW Aura Blocks takes it too. */
+    private boolean leftToAura() {
+        return !this.module.hwAura.getValue() && atlas.util.Auras.blocksByItself();
+    }
+
     private boolean wantsToManage() {
         return this.module.isEnabled() && this.selected() && mc.thePlayer != null && ItemUtil.isHoldingSword()
-                && mc.thePlayer.isUsingItem() && physicalUseKey() && !atlas.util.Auras.blocksByItself()
-                && !BlockHit.fullManaging();
+                && (mc.thePlayer.isUsingItem() && claims() && !leftToAura() || delegated())
+                && !BlockHit.fullManaging() && !NoSlow.swordYields();
+    }
+
+    private static KillAuraLB aura() {
+        KillAuraLB aura = atlas.module.ModuleBundle.of(KillAuraLB.class);
+        return aura != null && aura.isEnabled() ? aura : null;
+    }
+
+    /** A1: Silent Aura (LiquidBounce engine) wants the sword up and leaves the server side to this mode. */
+    boolean delegated() {
+        if (!this.module.hitWindowTakesAura()) {
+            return false;
+        }
+        KillAuraLB aura = aura();
+        return aura != null && aura.wantsServerBlock();
+    }
+
+    /** A2, pure: may a window open with the aura's next click {@code ticksUntilClick} ticks away. */
+    static boolean mayOpenForAura(boolean hitFirst, int ticksUntilClick) {
+        /* Open now, the earliest close is MIN_GAP ticks on, and the click must come a tick after the close. */
+        return !hitFirst || ticksUntilClick >= MIN_GAP + 1;
+    }
+
+    /** A2, pure: must an open window close now, the aura's next click {@code ticksUntilClick} ticks away. */
+    static boolean mustCloseForAura(boolean hitFirst, int ticksUntilClick) {
+        return hitFirst && ticksUntilClick <= 1;
+    }
+
+    private boolean hitFirst() {
+        return this.module.hwPriority.getValue() == 0;
+    }
+
+    /** The aura's next planned click in ticks (20: none soon), while it is delegating. */
+    private int auraClickIn() {
+        KillAuraLB aura = aura();
+        return aura == null ? 20 : aura.ticksUntilClick();
+    }
+
+    void postponed() {
+        this.sumPostponed++;
     }
 
     // ---- each tick, before the game handles input and moves (TickEvent PRE) ----
@@ -135,12 +216,34 @@ final class NoSlowHitWindow {
                 } else {
                     this.openHits++;
                 }
-                log("HIT " + (this.serverBlocking ? "blocked" : "NOT blocked") + " | blocked " + this.blockedHits
-                        + " of " + (this.blockedHits + this.openHits));
+            }
+            if (this.selected()) {
+                logHit();
+            }
+        }
+        if (this.selected()) {
+            if (this.managing) {
+                this.sumManaged++;
+            }
+            if (this.serverBlocking) {
+                this.sumSlowed++;
+            }
+            if (this.tick - this.sumStart >= 1200) {
+                summary();
             }
         }
         boolean wanted = this.wantsToManage();
         if (!wanted) {
+            if (this.managing && this.serverBlocking && !mc.thePlayer.isUsingItem()) {
+                /* A delegated block ended (no target, aura off, sword away): the client shows nothing, so the
+                   server must not keep the sword up either. */
+                sendRelease();
+                this.serverBlocking = false;
+                this.lastToggle = this.tick;
+                this.closedAt = this.tick;
+                this.closeReason = "aura stopped blocking";
+                log("CLOSE aura stopped blocking | open " + (this.tick - this.openedAt) + "t");
+            }
             if (this.managing) {
                 this.managing = false;
                 if (mc.thePlayer.isUsingItem() && ItemUtil.isHoldingSword() && !this.serverBlocking) {
@@ -170,12 +273,20 @@ final class NoSlowHitWindow {
                     reason = "guard " + enemy.getName() + String.format(" %.1f", mc.thePlayer.getDistanceToEntity(enemy));
                 }
             }
-            if (reason != null && since >= MIN_GAP) {
+            boolean delegatedNow = delegated();
+            if (reason != null && delegatedNow && !mayOpenForAura(hitFirst(), auraClickIn())) {
+                reason = null;
+            }
+            if (reason != null && since >= MIN_GAP
+                    && !atlas.management.TickActions.any(atlas.management.TickActions.ATTACK | atlas.management.TickActions.DIG)
+                    && !atlas.util.VanillaInput.attackQueued()) {
+                /* (2026-10-26: not under a click Silent Aura's Input path pressed for this tick's runTick.) */
                 sendUse();
                 this.serverBlocking = true;
                 this.lastToggle = this.tick;
                 this.openedAt = this.tick;
                 this.openReason = reason;
+                this.sumWindows++;
                 if (inCycle) {
                     this.windowSpent = true;
                 }
@@ -183,7 +294,9 @@ final class NoSlowHitWindow {
             }
         } else {
             String reason = null;
-            if (hurtAgain && this.tick - this.openedAt > 0) {
+            if (delegated() && mustCloseForAura(hitFirst(), auraClickIn())) {
+                reason = "click due";
+            } else if (hurtAgain && this.tick - this.openedAt > 0) {
                 reason = "hit taken";
             } else if (this.tick - this.openedAt >= this.module.hwHold.getValue()) {
                 reason = "held " + this.module.hwHold.getValue() + "t";
@@ -192,6 +305,8 @@ final class NoSlowHitWindow {
                 sendRelease();
                 this.serverBlocking = false;
                 this.lastToggle = this.tick;
+                this.closedAt = this.tick;
+                this.closeReason = reason;
                 log("CLOSE " + reason + " | open " + (this.tick - this.openedAt) + "t (" + this.openReason + ")");
             }
         }
@@ -209,6 +324,84 @@ final class NoSlowHitWindow {
         }
         int ping = atlas.util.Ping.own();
         return ping <= 0 ? 0 : Math.round(ping / 50.0F);
+    }
+
+    // ---- H1: what each hit looked like ----
+
+    /** How far off pointing at this player {@code p}'s head is, in degrees (0 = straight at). */
+    private static float facingOff(EntityPlayer p) {
+        double dx = mc.thePlayer.posX - p.posX;
+        double dz = mc.thePlayer.posZ - p.posZ;
+        float toUs = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
+        return Math.abs(MathHelper.wrapAngleTo180_float(toUs - p.rotationYawHead));
+    }
+
+    /** The player who most likely hit: the nearest enemy within 6 facing this player, else the nearest. */
+    private static EntityPlayer likelyAttacker() {
+        EntityPlayer facing = null;
+        EntityPlayer nearest = null;
+        double facingSq = 36.0;
+        double nearestSq = 36.0;
+        for (EntityPlayer p : mc.theWorld.playerEntities) {
+            if (p == mc.thePlayer || p.isDead || TeamUtil.isFriend(p) || TeamUtil.isSameTeam(p) || TeamUtil.isBot(p)) {
+                continue;
+            }
+            double d = mc.thePlayer.getDistanceSqToEntity(p);
+            if (d < nearestSq) {
+                nearestSq = d;
+                nearest = p;
+            }
+            if (d < facingSq && facingOff(p) <= 60.0F) {
+                facingSq = d;
+                facing = p;
+            }
+        }
+        return facing != null ? facing : nearest;
+    }
+
+    private void logHit() {
+        this.sumHits++;
+        if (this.serverBlocking) {
+            this.sumBlocked++;
+        }
+        EntityPlayer by = likelyAttacker();
+        String who = "unknown";
+        if (by != null) {
+            Integer last = this.lastHitBy.put(by.getName(), this.tick);
+            who = String.format("%s d=%.2f facing %.0f deg | since their last %s", by.getName(),
+                    mc.thePlayer.getDistanceToEntity(by), facingOff(by), last == null ? "-" : (this.tick - last) + "t");
+        }
+        String window;
+        if (this.serverBlocking) {
+            window = "open " + (this.tick - this.openedAt) + "t (" + this.openReason + ")";
+        } else if (this.closedAt > this.openedAt) {
+            window = "closed " + (this.tick - this.closedAt) + "t ago (" + this.closeReason + ", was open "
+                    + (this.closedAt - this.openedAt) + "t)";
+        } else {
+            window = "none yet";
+        }
+        String whose = !this.managing ? "not steering (" + (ItemUtil.isHoldingSword() && mc.thePlayer.isUsingItem()
+                ? "block not ours" : "no block") + ")" : delegated() ? "aura (delegated)"
+                : physicalUseKey() ? "right button" : "aura/AutoBlock";
+        log("HIT " + (this.serverBlocking ? "blocked" : "NOT blocked") + " | by " + who + " | ping "
+                + atlas.util.Ping.own() + "ms | window " + window + " | " + whose + " | blocked " + this.blockedHits
+                + " of " + (this.blockedHits + this.openHits));
+    }
+
+    private void summary() {
+        if (this.sumHits > 0 || this.sumManaged > 0) {
+            log(String.format("SUMMARY %ds | hits %d, blocked %d (%d%%) | steered %dt, slowed %dt (%d%% of steered) | windows %d | aura clicks held %d",
+                    (this.tick - this.sumStart) / 20, this.sumHits, this.sumBlocked,
+                    this.sumHits == 0 ? 0 : this.sumBlocked * 100 / this.sumHits, this.sumManaged, this.sumSlowed,
+                    this.sumManaged == 0 ? 0 : this.sumSlowed * 100 / this.sumManaged, this.sumWindows, this.sumPostponed));
+        }
+        this.sumStart = this.tick;
+        this.sumHits = 0;
+        this.sumBlocked = 0;
+        this.sumManaged = 0;
+        this.sumSlowed = 0;
+        this.sumWindows = 0;
+        this.sumPostponed = 0;
     }
 
     /** The nearest enemy within guard-range whose head turns toward this player (within 60 degrees). */
@@ -254,12 +447,12 @@ final class NoSlowHitWindow {
             this.serverBlocking = false;
             return;
         }
-        if (mc.thePlayer == null || !ItemUtil.isHoldingSword() || atlas.util.Auras.blocksByItself()) {
+        if (mc.thePlayer == null || !ItemUtil.isHoldingSword() || leftToAura()) {
             return;
         }
         if (packet instanceof C08PacketPlayerBlockPlacement
                 && ((C08PacketPlayerBlockPlacement) packet).getPlacedBlockDirection() == 255) {
-            if (physicalUseKey() && !BlockHit.fullManaging()) {
+            if (claims() && !BlockHit.fullManaging()) {
                 /* The right button went down: the block waits for a window. (2026-10-22: not while AutoBlock
                    Full has the sword -- two modules timing one block made a ban report's sword state
                    unknowable: Full raised it, Hit-Window held the raise back.) */
@@ -276,7 +469,9 @@ final class NoSlowHitWindow {
                 /* Released between windows: the server never had the sword up. */
                 event.setCancelled(true);
             } else if (this.serverBlocking) {
-                log("CLOSE released by the player | open " + (this.tick - this.openedAt) + "t");
+                this.closedAt = this.tick;
+                this.closeReason = physicalUseKey() ? "released by the player" : "released (aura/AutoBlock)";
+                log("CLOSE " + this.closeReason + " | open " + (this.tick - this.openedAt) + "t");
             }
             this.serverBlocking = false;
             this.managing = false;
@@ -285,12 +480,16 @@ final class NoSlowHitWindow {
 
     private void sendUse() {
         ItemStack held = mc.thePlayer.getHeldItem();
-        PacketUtil.sendPacketNoEvent(new C08PacketPlayerBlockPlacement(held));
+        C08PacketPlayerBlockPlacement use = new C08PacketPlayerBlockPlacement(held);
+        PacketUtil.sendPacketNoEvent(use);
+        atlas.management.TickActions.noteDirect(use);
     }
 
     private static void sendRelease() {
-        PacketUtil.sendPacketNoEvent(new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.RELEASE_USE_ITEM,
-                BlockPos.ORIGIN, EnumFacing.DOWN));
+        C07PacketPlayerDigging release = new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.RELEASE_USE_ITEM,
+                BlockPos.ORIGIN, EnumFacing.DOWN);
+        PacketUtil.sendPacketNoEvent(release);
+        atlas.management.TickActions.noteDirect(release);
     }
 
     /** Off, or switched to another mode, while the client still blocks: the server gets the block back. */
@@ -306,6 +505,8 @@ final class NoSlowHitWindow {
     }
 
     void worldChanged() {
+        summary();
+        this.lastHitBy.clear();
         this.managing = false;
         this.serverBlocking = false;
         this.windowSpent = false;

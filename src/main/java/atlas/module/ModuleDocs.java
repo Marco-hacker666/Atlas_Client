@@ -477,6 +477,15 @@ public final class ModuleDocs {
         help("Velocity", "lag-ping-budget", "Lag：ping 加延後不超過這個值（ms）；會自動縮短，ping 太高就不延後。0＝不限制。");
         help("Velocity", "lag-cooldown", "Lag：放出後隔多久（ms）才能再延後，連段時不會一直卡著。");
         help("Velocity", "lag-only-in-fight", "Lag：6 格內有其他玩家（不是 bot、不是隊友）才延後。");
+        help("Velocity", "polar-counter-chance", "Polar：被擊退時，在這一 tick 移動之前疾跑反擊的機率（需要 Silent Aura 有目標，且沿著伺服器知道的角度在 3.0 內打得到）。原版的攻擊會讓你自己的速度少 40%。");
+        help("Velocity", "polar-jump-chance", "Polar：在地上被擊退時，當下那一 tick 起跳（跳躍重置）的機率。");
+        help("Velocity", "polar-both-chance", "Polar：兩種都能做時，兩種一起做的機率；否則只做其中一種。");
+        help("Velocity", "polar-react-min", "Polar：反擊最少等幾 tick（0 = 被打的那一 tick）。");
+        help("Velocity", "polar-react-max", "Polar：反擊最多等幾 tick。");
+        help("Velocity", "polar-max-rate", "Polar：最近 10 次擊退中，最多處理這個比例。");
+        help("Velocity", "polar-max-streak", "Polar：連續處理的次數會在這個數的一半到這個數之間斷掉。0 = 不限。");
+        help("Velocity", "polar-min-interval", "Polar：兩次處理之間最短間隔（毫秒）。");
+        help("Velocity", "polar-only-in-fight", "Polar：6 格內有其他玩家（不是 bot、不是隊友）才作用。");
         d("Wtap", "打中後真的放開 W 鍵再按回去（W-tap），由遊戲自己重置衝刺，下一下擊退更大。");
         help("Wtap", "chance", "打中後有多少機率 W-tap。");
         help("Wtap", "release-delay", "打中後幾毫秒放開 W（每次隨機 ±20%）。");
@@ -512,6 +521,8 @@ public final class ModuleDocs {
         help("NoSlow", "HW Guard", "Hit-Window：還沒被打之前，附近有敵人面向你時，短暫舉劍防第一刀。");
         help("NoSlow", "HW Guard Range", "Hit-Window：那個敵人要多近才算。");
         help("NoSlow", "HW Log", "Hit-Window：每次舉劍和每一刀有沒有擋到，寫進 config/Atlas/noslow-*.txt。");
+        help("NoSlow", "HW Aura Blocks", "Hit-Window：也接管 aura 或 AutoBlock 舉的劍（Silent Aura 的 AutoBlocking、AutoBlock 模式），不只你自己按右鍵的格擋。");
+        help("NoSlow", "HW Priority", "Hit-Window 接管 Silent Aura 的格擋時誰讓誰：Hit = 只有 aura 下一下至少 3 tick 後才舉劍，並在出手前一 tick 放下（不耽誤出手）；Block = 舉劍時 aura 先不出手。");
         help("HUD", "hud-theme", "所有 HUD 的外觀。JELLO：LiquidBounce JelloBounce 主題（黑 45%、柔和陰影、圓角卡片、模組清單貼齊）。CLASSIC：各 HUD 原本的畫法。");
         // 手機安全模式（2026-10-15，util.render.MobileSafe）：Client Settings > Performance > mobile-safe
         help("HUD", "blur", "背景模糊。手機安全模式（Client Settings > Performance > mobile-safe，手機 gl4es / Krypton Wrapper 自動開啟）下不畫。");
@@ -577,6 +588,8 @@ public final class ModuleDocs {
         help("AutoBlockIn", "debug", "開發用：把每一步的判斷寫進 config/Atlas/placedebug-*.txt（背景寫入，不影響 fps）。平常不用開。");
         help("AutoBlockIn", "debug-chat", "debug 時也印到聊天欄（每秒最多 4 行）。裝了聊天相關模組時很吃 fps，只在需要即時看時才開。");
         d("AutoBedDef", "自動在自己的床周圍放方塊防守。");
+        help("AutoBedDef", "own-bed-only", "只守這個世界裡第一張找到的床（你出生在它旁邊）。關掉：守最近的床，敵人的也算。");
+        help("AutoBedDef", "wool-only", "只用羊毛。關掉：沒有羊毛時用任何完整的實心方塊。");
         d("AutoHeadHitter", "跳躍時頭頂碰到方塊會自動調整，維持頂頭跳加速。");
         d("BedNuker", "自動挖附近敵方的床（可以先挖外圍的保護方塊）。");
         help("BedNuker", "outside-first", "從外面開始挖：一層一層挖你和床之間最先擋住的方塊，直到床露出來。關掉時挖貼著床、最好挖的那塊。");
@@ -744,6 +757,7 @@ public final class ModuleDocs {
                 h("Reduce 模式", "reduce", "attack-times", "only-sprinting", "reduce-when-can-attack", "slap-reduce"),
                 h("Jump / Rotate", "jump", "rotate", "rotate-ticks", "tickExact"),
                 h("Lag 模式", "lag-*"),
+                h("Polar 模式", "polar-*"),
                 h("依延遲調整（毫秒）", "500", "1000", "2000", "3000", "4000", "5000", "6000", "7000", "8000",
                         "9000", "10000"),
                 h("其他", "fake-check", "debug-log"));

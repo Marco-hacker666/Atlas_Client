@@ -24,7 +24,10 @@ public enum BlinkModules {
     NO_SLOW("NoSlow", 2000L),
     /* A short hold while a target is in range, ended as soon as a release
        condition fires; the ceiling is the longest it may run unwatched. */
-    SMART_BLINKER("SmartBlinker", 5000L);
+    SMART_BLINKER("SmartBlinker", 5000L),
+    /* Silent Aura's Rhythm-Lag (2026-10-27): the movement while the sword is up on the server, a few ticks
+       (Rhythm-LagMax at most 10), replies held in order with it (BlinkManager.offerPacket). */
+    RHYTHM("Silent Aura", 1000L);
 
     private final String moduleName;
     private final long leaseMs;

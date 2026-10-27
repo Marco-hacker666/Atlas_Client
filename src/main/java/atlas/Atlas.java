@@ -83,6 +83,8 @@ public class Atlas {
         EventManager.register(new atlas.management.ServerSession());
         /* What action packets this tick has already sent (Rise item 2). */
         EventManager.register(new atlas.management.TickActions.Listener());
+        EventManager.register(new atlas.util.BugReport.SeenNames());
+        EventManager.register(new atlas.util.VanillaInput.Listener());
         /* Ends holds that outlive their reason (PacketHolds leases, 2026-09-28). */
         EventManager.register(new atlas.management.PacketHolds.Watchdog(name -> {
             atlas.module.Module module = moduleManager.getModule(name);

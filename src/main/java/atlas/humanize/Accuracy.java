@@ -59,6 +59,11 @@ public final class Accuracy {
         this.state = STATE_NORMAL;
         this.stateLeft = 0;
         this.hitTimes.clear();
+        /* 2026-10-26 (review): the drift, its clock, the last hit and the last aim also start over. */
+        this.drift = 0.0;
+        this.lastDriftAt = Long.MIN_VALUE;
+        this.lastHitAt = Long.MIN_VALUE;
+        this.lastAim = 0.0;
     }
 
     /** The measured rate over the window (0..1), or -1 before 5 clicks. */

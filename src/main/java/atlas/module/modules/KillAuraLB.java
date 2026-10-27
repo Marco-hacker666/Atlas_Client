@@ -27,6 +27,7 @@ import atlas.property.properties.ModeProperty;
 import atlas.property.properties.PercentProperty;
 import atlas.property.properties.TextProperty;
 import atlas.util.ItemUtil;
+import atlas.util.KeyBindUtil;
 import atlas.util.MoveUtil;
 import atlas.util.PacketUtil;
 import atlas.util.PlayerUtil;
@@ -100,6 +101,12 @@ public class KillAuraLB extends Module {
     /* Defaults 0 here, not LiquidBounce's 1.0 / 3.0 (4.0 reach, hits through walls): those flag at once on a 1.8
        server. A Silent Aura profile from before the port brings its own reach and walls rule (seedLiquidBounce). */
     public final FloatProperty rangeIncrease = new FloatProperty("RangeIncrease", 0.0F, 0.0F, 5.0F);
+    /* LagAware (2026-10-26, LagCompensation): attack only when the hit holds against both the box the client
+       shows and the box the server has when the hit lands (its latest position moved on by the target's speed for
+       the round trip), with Margin blocks of reach given up per 100 ms of ping; aim into the part they share. */
+    public final BooleanProperty lagAware = new BooleanProperty("LagAware", true);
+    public final FloatProperty lagMargin = new FloatProperty("LagAware-Margin", 0.05F, 0.0F, 0.3F, this.lagAware::getValue);
+    public final IntProperty lagMaxLead = new IntProperty("LagAware-MaxLead", 6, 0, 10, this.lagAware::getValue);
     public final FloatProperty throughWallsRange = new FloatProperty("ThroughWallsRange", 0.0F, 0.0F, 8.0F);
     public final FloatRange scanRangeIncrease = new FloatRange("ScanRangeIncrease", 2.0F, 3.0F, 0.0F, 7.0F);
     // ---- target
@@ -236,30 +243,64 @@ public class KillAuraLB extends Module {
     /* AttackPath (2026-10-26): Packet = the swing and the attack packet sent here (LiquidBounce); Vanilla = the
        crosshair rebuilt along the rotation the server gets this tick and vanilla's own left click, so what is
        hit, the miss delay, the sprint reset and the packets are all vanilla's (vanillaClick). */
-    public final ModeProperty attackPath = new ModeProperty("AttackPath", 0, new String[]{"Packet", "Vanilla"});
+    /* Input (2026-10-26, V2): the look is decided and the attack key pressed at the start of the tick
+       (TickEvent PRE); vanilla's runTick then clicks with the crosshair along that look (VanillaInput), before the
+       player moves, and the movement packet carries the same look -- vanilla's own order. New default. */
+    public final ModeProperty attackPath = new ModeProperty("AttackPath", 2, new String[]{"Packet", "Vanilla", "Input"});
     public final ModeProperty criticals = new ModeProperty("Criticals", 0, new String[]{"Smart", "Ignore", "Always"});
     public final BooleanProperty keepSprint = new BooleanProperty("KeepSprint", true);
     public final BooleanProperty ignoreOpenInventory = new BooleanProperty("IgnoreOpenInventory", true);
     public final BooleanProperty simulateInventoryClosing = new BooleanProperty("SimulateInventoryClosing", true);
     // ---- L3: AutoBlocking (KillAuraAutoBlock)
     public final BooleanProperty autoBlocking = new BooleanProperty("AutoBlocking", false);
-    public final ModeProperty blockMode = new ModeProperty("BlockMode", 1, new String[]{"Basic", "Interact", "Fake"},
+    public final ModeProperty blockMode = new ModeProperty("BlockMode", 1, new String[]{"Basic", "Interact", "Fake",
+            "Helper", "Auto", "Lag", "Predict", "Manual", "Slinky", "Full", "Yuri", "Rhythm"},
             this.autoBlocking::getValue);
-    public final BooleanProperty simulateVanillaUse = new BooleanProperty("SimulateVanillaUse", true, this.autoBlocking::getValue);
+    /* 2026-10-26 (owner: "my AutoBlock module's block modes in Silent Aura too"): BlockMode 3.. are the AutoBlock
+       module's modes, run through that module (BlockHit.driveFromAura) with its own settings, whether it is switched
+       on or not. LiquidBounce's own blocking (and the settings below) then stands aside. Appended, so saved
+       BlockModes keep their index. Index in BlockHit's Mode for each (Swing, hidden there, is left out). */
+    private static final int[] AUTOBLOCK_MODES = {0, 1, 2, 4, 5, 6, 7, 8};
+    private static final int FIRST_AUTOBLOCK_MODE = 3;
+    private final java.util.function.BooleanSupplier lbBlocking =
+            () -> this.autoBlocking.getValue() && this.blockMode.getValue() < FIRST_AUTOBLOCK_MODE;
+    public final BooleanProperty simulateVanillaUse = new BooleanProperty("SimulateVanillaUse", true, this.lbBlocking);
     /* SwapHand is LiquidBounce's offhand unblock; 1.8 has no offhand. */
     public final ModeProperty unblockMode = new ModeProperty("UnblockMode", 0, new String[]{"StopUsingItem", "ChangeSlot", "None"},
-            this.autoBlocking::getValue);
-    public final IntRange reblock = new IntRange("Reblock", 0, 0, 0, 3, this.autoBlocking::getValue);
-    public final IntRange pauseOnUnblock = new IntRange("PauseOnUnblock", 0, 0, 0, 3, this.autoBlocking::getValue);
-    public final PercentProperty blockChance = new PercentProperty("AutoBlock-Chance", 100, this.autoBlocking::getValue);
-    public final IntProperty blockBlink = new IntProperty("Blink", 0, 0, 10, this.autoBlocking::getValue);
-    public final BooleanProperty prioritizeBlocking = new BooleanProperty("PrioritizeBlocking", true, this.autoBlocking::getValue);
-    public final BooleanProperty onScanRange = new BooleanProperty("OnScanRange", true, this.autoBlocking::getValue);
-    public final BooleanProperty onlyWhenInDanger = new BooleanProperty("OnlyWhenInDanger", false, this.autoBlocking::getValue);
+            this.lbBlocking);
+    public final IntRange reblock = new IntRange("Reblock", 0, 0, 0, 3, this.lbBlocking);
+    public final IntRange pauseOnUnblock = new IntRange("PauseOnUnblock", 0, 0, 0, 3, this.lbBlocking);
+    public final PercentProperty blockChance = new PercentProperty("AutoBlock-Chance", 100, this.lbBlocking);
+    public final IntProperty blockBlink = new IntProperty("Blink", 0, 0, 10, this.lbBlocking);
+    public final BooleanProperty prioritizeBlocking = new BooleanProperty("PrioritizeBlocking", true, this.lbBlocking);
+    public final BooleanProperty onScanRange = new BooleanProperty("OnScanRange", true, this.lbBlocking);
+    public final BooleanProperty onlyWhenInDanger = new BooleanProperty("OnlyWhenInDanger", false, this.lbBlocking);
     public final FloatProperty dangerTolerance = new FloatProperty("Danger-Tolerance", 0.3F, 0.0F, 1.0F,
-            () -> this.autoBlocking.getValue() && this.onlyWhenInDanger.getValue());
+            () -> this.lbBlocking.getAsBoolean() && this.onlyWhenInDanger.getValue());
     public final FloatRange dangerForceActive = new FloatRange("Danger-ForceActiveRange", 0.0F, 1.0F, 0.0F, 6.0F,
-            () -> this.autoBlocking.getValue() && this.onlyWhenInDanger.getValue());
+            () -> this.lbBlocking.getAsBoolean() && this.onlyWhenInDanger.getValue());
+    /* Rhythm (2026-10-27, owner: "a good auto block that actually works, no garbage"): the sword up through
+       vanilla's own use key whenever an enemy can hit us, down only for the one click per invulnerability window
+       that deals damage (timed for ping), and up again after it in the same tick, in the order vanilla's runTick
+       clicks and uses (RhythmBlock). Always on the Input path. Appended, so saved BlockModes keep their index. */
+    private static final int BLOCK_RHYTHM = 11;
+    private final java.util.function.BooleanSupplier rhythmShown =
+            () -> this.autoBlocking.getValue() && this.blockMode.getValue() == BLOCK_RHYTHM;
+    public final IntProperty rhythmMinHold = new IntProperty("Rhythm-MinHold", 2, 1, 5, this.rhythmShown);
+    public final IntProperty rhythmPatience = new IntProperty("Rhythm-Patience", 3, 0, 10, this.rhythmShown);
+    /* 2026-10-27 (owner: "not stiff all the time -- hold it when it is needed"; then "try using lag"): the sword is
+       up only while an enemy can land a hit now (RhythmDanger: its look, as far as its hit reaches, on our body, and
+       clicking) and, after a hit taken, only around the tick its next one can land (Guard). Rhythm-Lag: while the
+       sword is up the movement is held, the player is not slowed, and on lowering the release goes out first, then
+       the held movement -- the server sees the sword up while we stand, then lowered, then the movement. */
+    public final IntProperty rhythmGuard = new IntProperty("Rhythm-Guard", 2, 1, 10, this.rhythmShown);
+    public final FloatProperty rhythmEnemyReach = new FloatProperty("Rhythm-EnemyReach", 3.3F, 3.0F, 4.5F, this.rhythmShown);
+    public final FloatProperty rhythmAimTolerance = new FloatProperty("Rhythm-AimTolerance", 0.3F, 0.0F, 1.0F, this.rhythmShown);
+    public final BooleanProperty rhythmOnlyClicking = new BooleanProperty("Rhythm-OnlyWhenClicking", true, this.rhythmShown);
+    public final BooleanProperty rhythmLag = new BooleanProperty("Rhythm-Lag", true, this.rhythmShown);
+    public final IntProperty rhythmLagMax = new IntProperty("Rhythm-LagMax", 5, 1, 10,
+            () -> this.rhythmShown.getAsBoolean() && this.rhythmLag.getValue());
+    public final BooleanProperty rhythmLog = new BooleanProperty("Rhythm-Log", true, this.rhythmShown);
     // ---- L3: FailSwing (KillAuraFailSwing) and NotifyWhenFail
     public final BooleanProperty failSwing = new BooleanProperty("FailSwing", false);
     public final FloatRange failSwingRange = new FloatRange("FailSwing-AdditionalRange", 2.5F, 3.0F, 0.0F, 10.0F, this.failSwing::getValue);
@@ -372,6 +413,18 @@ public class KillAuraLB extends Module {
     private int pauseOnUnblockTicks = -1;
     private int flushTicks;
     private boolean blinking;
+    // Rhythm state
+    private final atlas.lb.combat.RhythmBlock rhythm = new atlas.lb.combat.RhythmBlock();
+    private final RhythmLog rhythmLogger = new RhythmLog();
+    /** Counts TickEvent PREs: the decision and the attack packets of one runTick share a number. */
+    private int rhythmTick;
+    /** This tick's decision (made in the attack, or for threats only when there was none). */
+    private atlas.lb.combat.RhythmBlock.Decision rhythmDecision;
+    private atlas.lb.combat.RhythmBlock.Input rhythmInput;
+    private boolean rhythmDecided;
+    /** The use key is down because Rhythm put it there. */
+    private boolean rhythmOwnsKey;
+    private boolean rhythmRunning;
     // FailSwing / NotifyWhenFail
     private float failSwingAddition = -1.0F;
     private final List<double[]> failedHits = new ArrayList<double[]>();
@@ -383,6 +436,37 @@ public class KillAuraLB extends Module {
         super("LiquidAura", false, false, "LiquidBounce's KillAura");
     }
 
+    // ---- 2026-10-26: placing blocks by hand comes first ----
+    /* The owner's REJECTs and setbacks (20:36:07, 20:36:27): blocks placed by hand while this aura held a silent
+       rotation. The server judges a placement by the look of the movement packets around it -- the aura's, not
+       the camera's the click was aimed with. While a block is being placed (and PLACE_YIELD_TICKS after the last
+       try) the aura stands down and turns back to the camera; a placement waits (one tick at a time) until the
+       look the server has is within PLACE_LOOK_TOLERANCE of the camera. */
+    private static final int PLACE_YIELD_TICKS = 10;
+    private static final float PLACE_LOOK_TOLERANCE = 5.0F;
+    private int placeYieldTicks;
+
+    @EventTarget
+    public void onRightClickPlace(atlas.events.RightClickMouseEvent event) {
+        if (!this.isEnabled() || mc.thePlayer == null || event.isCancelled()) {
+            return;
+        }
+        ItemStack held = mc.thePlayer.getHeldItem();
+        if (held == null || !(held.getItem() instanceof net.minecraft.item.ItemBlock)) {
+            return;
+        }
+        this.placeYieldTicks = PLACE_YIELD_TICKS;
+        this.rotations.expire();
+        Rotation sent = this.serverLook;
+        if (sent != null && this.rotations.current() != null) {
+            float[] d = sent.deltaTo(new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch));
+            if (Math.abs(d[0]) > PLACE_LOOK_TOLERANCE || Math.abs(d[1]) > PLACE_LOOK_TOLERANCE) {
+                /* Still turning back: this placement would be judged along the aura's look. Next tick again. */
+                event.setCancelled(true);
+            }
+        }
+    }
+
     /** The current target, or null. */
     public EntityLivingBase getTarget() {
         return this.targetTracker.target();
@@ -390,14 +474,22 @@ public class KillAuraLB extends Module {
 
     /** May attack now: not paused for another module, and the requirements are met. */
     public boolean isAttackAllowed() {
-        return mc.thePlayer != null && !shouldPauseCombat() && requirementsMet();
+        return mc.thePlayer != null && !shouldPauseCombat() && this.placeYieldTicks <= 0 && requirementsMet();
     }
 
     /**
      * LiquidBounce's CombatManager.shouldPauseCombat, with Atlas's modules:
-     * Scaffold building, BedNuker breaking, AutoHeal swapping to heal.
+     * Scaffold building, BedNuker breaking, AutoHeal swapping to heal, and
+     * Clutch catching a fall (2026-10-26, owner: "Clutch above Silent Aura"):
+     * Clutch already has the rotation (priority 7), but the aura kept clicking
+     * along Clutch's look -- with AttackPath Vanilla that started digging the
+     * block being placed -- and kept its sword block up through the catch.
      */
     private static boolean shouldPauseCombat() {
+        if (atlas.management.Arbiter.catching()) {
+            atlas.management.Arbiter.yielded("Silent Aura");
+            return true;
+        }
         Module scaffold = atlas.Atlas.moduleManager.modules.get(Scaffold.class);
         if (scaffold != null && scaffold.isEnabled()) {
             return true;
@@ -422,6 +514,12 @@ public class KillAuraLB extends Module {
 
     /** A sword block of ours is up on the server (LiquidBounce: enforcedBlockingHand / isBlockingServerside). */
     public boolean isAuraBlocking() {
+        if (rhythmSelected()) {
+            return this.rhythmOwnsKey && mc.thePlayer != null && mc.thePlayer.isUsingItem() && ItemUtil.isHoldingSword();
+        }
+        if (delegatesBlock()) {
+            return noSlowServerBlocking() && ItemUtil.isHoldingSword();
+        }
         return this.enforcedBlocking && ItemUtil.isHoldingSword();
     }
 
@@ -434,6 +532,18 @@ public class KillAuraLB extends Module {
     public void onDisabled() {
         if (mc.thePlayer != null) {
             stopBlocking(false);
+        }
+        /* Rhythm: a hold ends (release first), the use key back to the button; vanilla lowers the sword next. */
+        rhythmEndHold("off");
+        rhythmLetGo(mc.currentScreen == null);
+        this.rhythm.reset();
+        if (this.rhythmRunning) {
+            this.rhythmRunning = false;
+            this.rhythmLogger.stop();
+        }
+        BlockHit autoBlock = (BlockHit) atlas.Atlas.moduleManager.modules.get(BlockHit.class);
+        if (autoBlock != null) {
+            autoBlock.driveFromAura(-1);
         }
         setBlink(false);
         this.hasBlockedSinceAttack = false;
@@ -451,15 +561,46 @@ public class KillAuraLB extends Module {
 
     @EventTarget
     public void onWorld(atlas.events.LoadWorldEvent event) {
+        this.serverSamples.clear();
         this.rotations.reset();
         this.enforcedBlocking = false;
         this.blockVisual = false;
         setBlink(false);
+        /* Rhythm: the key back to the button, and what it knew of the old world's fight is stale. BlinkManager
+           drops a hold on a world change itself (first, at HIGHEST). */
+        this.rhythmHolding = false;
+        this.enemySwings.clear();
+        rhythmLetGo(true);
+        this.rhythm.reset();
+        if (this.rhythmRunning) {
+            /* One summary per game. */
+            this.rhythmRunning = false;
+            this.rhythmLogger.stop();
+        }
     }
 
     /** A slot change ends a sword block (LiquidBounce's changeSlot handler). */
     @EventTarget
     public void onPacket(atlas.events.PacketEvent event) {
+        if (this.isEnabled() && event.getType() == EventType.SEND && !event.isCancelled()
+                && event.getPacket() instanceof C02PacketUseEntity
+                && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK
+                && rhythmSelected() && mc.theWorld != null) {
+            /* Rhythm: any attack on the target -- ours, AutoClicker's, the finger's, a counter-hit -- that went out
+               while it was due is the window's damaging hit; the next is ten ticks on. */
+            EntityLivingBase target = this.targetTracker.target();
+            Entity hit = ((C02PacketUseEntity) event.getPacket()).getEntityFromWorld(mc.theWorld);
+            if (target != null && hit == target) {
+                boolean due = this.rhythmDecision != null && this.rhythmInput != null
+                        && this.rhythmInput.tick == this.rhythmTick && this.rhythmDecision.wait <= 0;
+                this.rhythm.attackSent(this.rhythmTick);
+                if (this.rhythmRunning && this.rhythmLog.getValue()) {
+                    this.rhythmLogger.attack(this.rhythmTick, target.getName(), target.hurtTime,
+                            this.rhythmDecision == null ? 99 : this.rhythmDecision.wait,
+                            this.rhythmDecision == null ? rttTicks() : this.rhythmDecision.rtt, due);
+                }
+            }
+        }
         if (this.isEnabled() && event.getType() == EventType.SEND
                 && event.getPacket() instanceof net.minecraft.network.play.client.C09PacketHeldItemChange
                 && this.enforcedBlocking) {
@@ -645,7 +786,16 @@ public class KillAuraLB extends Module {
         if (!this.isEnabled() || event.getType() != EventType.PRE || mc.thePlayer == null) {
             return;
         }
+        this.rhythmTick++;
         applySettings();
+        sampleServerPositions();
+        if (this.placeYieldTicks > 0) {
+            this.placeYieldTicks--;
+        }
+        BlockHit autoBlock = (BlockHit) atlas.Atlas.moduleManager.modules.get(BlockHit.class);
+        if (autoBlock != null) {
+            autoBlock.driveFromAura(autoBlockModuleMode());
+        }
         atlas.humanize.HumanProfile human = this.humanizer.profile();
         int clickTechnique = human != null && human.humanClicks ? Clicker.TECHNIQUE_ATLAS_HUMAN : this.technique.getValue();
         this.clicker.tick(clickTechnique, this.cps.low(), this.cps.high(), this.maxPerTick.getValue(),
@@ -656,7 +806,7 @@ public class KillAuraLB extends Module {
         }
         /* AutoBlock's game tick: danger, and Blink while only the fake block shows. */
         this.flushTicks++;
-        this.inDanger = this.autoBlocking.getValue() && this.onlyWhenInDanger.getValue() && isInDanger();
+        this.inDanger = this.lbBlocking.getAsBoolean() && this.onlyWhenInDanger.getValue() && isInDanger();
         int blink = this.blockBlink.getValue();
         if (blink > 0 && isBlockVisual() && !this.enforcedBlocking && this.flushTicks < blink) {
             setBlink(true);
@@ -666,6 +816,32 @@ public class KillAuraLB extends Module {
             }
             setBlink(false);
         }
+        Rotation sent = null;
+        if (inputPath()) {
+            /* V2: target, turn and click now, before vanilla's input and the move. */
+            this.inputRotation = think();
+            this.inputThought = true;
+            sent = this.inputRotation != null ? this.inputRotation
+                    : new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
+            if (this.targetTracker.target() != null && !this.attackPaused) {
+                /* Every left click this tick (and no block-breaking) goes along this look (VanillaInput.fighting). */
+                atlas.util.VanillaInput.fighting(pick(sent));
+            }
+            if (this.attackPending) {
+                this.attackPending = false;
+                attackPhase(sent);
+            }
+        }
+        rhythmApply(sent);
+    }
+
+    /** V2: this tick's look, decided at TickEvent PRE; onUpdate only hands it to the movement packet. */
+    private Rotation inputRotation;
+    private boolean inputThought;
+
+    private boolean inputPath() {
+        /* Rhythm times its click and its block against vanilla's runTick, which only the Input path clicks in. */
+        return this.attackPath.getValue() == 2 || rhythmSelected();
     }
 
     private void setBlink(boolean on) {
@@ -685,6 +861,11 @@ public class KillAuraLB extends Module {
             return;
         }
         if (!this.isEnabled()) {
+            if (this.rhythmOwnsKey || this.rhythmHolding) {
+                /* Another engine picked without onDisabled: Rhythm's hold ends and its use key goes back. */
+                rhythmEndHold("off");
+                rhythmLetGo(mc.currentScreen == null);
+            }
             /* Switched off (or another engine picked) mid-turn: turn back as on a lost target, then let go. */
             if (this.rotations.current() != null) {
                 Rotation back = this.rotations.update(new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch),
@@ -696,13 +877,28 @@ public class KillAuraLB extends Module {
             }
             return;
         }
+        if (inputPath()) {
+            if (this.inputThought) {
+                this.inputThought = false;
+                applyRotation(event, this.inputRotation);
+            }
+            return;
+        }
+        applyRotation(event, think());
+    }
+
+    /**
+     * Choose the target, decide the click verdict, turn. Returns this tick's
+     * look (null: the camera's), and arms the attack (attackPending/Paused).
+     */
+    private Rotation think() {
         if (this.waitTicks > 0) {
             this.waitTicks--;
         }
         Rotation player = new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
         boolean inventory = mc.currentScreen instanceof GuiContainer;
         boolean dead = mc.thePlayer.isDead || mc.thePlayer.getHealth() <= 0.0F || mc.thePlayer.isSpectator();
-        boolean paused = shouldPauseCombat();
+        boolean paused = shouldPauseCombat() || this.placeYieldTicks > 0;
         this.verdict = null;
         this.rotations.speedScale = 1.0F;
         EntityLivingBase previousTarget = this.targetTracker.target();
@@ -726,6 +922,18 @@ public class KillAuraLB extends Module {
 
         Rotation rotation = inventory && !this.ignoreOpenInventory.getValue() ? this.rotations.current()
                 : this.rotations.update(player, RotationUtil.gcd());
+        boolean held = this.heldLook != null;
+        if (held) {
+            /* Velocity Polar's counter-hit went out at the start of this tick along this look: keep it. */
+            rotation = this.rotations.hold(this.heldLook);
+            this.heldLook = null;
+        }
+        this.attackPending = !dead && !held;
+        this.attackPaused = paused;
+        return rotation;
+    }
+
+    private void applyRotation(UpdateEvent event, Rotation rotation) {
         if (rotation != null) {
             if (this.rotations.movementCorrection == AuraRotations.CORRECTION_CHANGE_LOOK) {
                 mc.thePlayer.rotationYaw = rotation.yaw;
@@ -738,12 +946,153 @@ public class KillAuraLB extends Module {
             mc.thePlayer.rotationYawHead = rotation.yaw;
             mc.thePlayer.renderYawOffset = rotation.yaw;
         }
-        this.attackPending = !dead;
-        this.attackPaused = paused;
     }
 
     private boolean attackPending;
     private boolean attackPaused;
+
+    // ---- Velocity Polar's counter-hit (2026-10-26) ------------------------
+    /** The look the server last received (UpdateEvent POST carries lastReportedYaw/Pitch). */
+    private Rotation serverLook;
+    /** Set by counterHit: this tick's movement packet keeps the look the hit went out along. */
+    private Rotation heldLook;
+
+    @EventTarget(whenDisabled = true)
+    public void onUpdatePost(UpdateEvent event) {
+        if (event.getType() == EventType.POST) {
+            this.serverLook = new Rotation(event.getYaw(), event.getPitch());
+        }
+    }
+
+    /** Whether a counter-hit could go out: a target within vanilla reach, nothing in the hand's way. */
+    public boolean canCounterHit() {
+        EntityLivingBase target = this.targetTracker.target();
+        return mc.thePlayer != null && target != null && !mc.thePlayer.isUsingItem() && !shouldPauseCombat()
+                && this.placeYieldTicks <= 0
+                && requirementsMet() && lagOk(target)
+                && RotationUtil.distanceToBox(target, mc.thePlayer.getPositionEyes(1.0F)) <= VANILLA_REACH;
+    }
+
+    /**
+     * Velocity Polar: one vanilla left click at the start of the tick -- where
+     * vanilla clicks, before the player moves -- along the look the server
+     * already has; this tick's movement packet keeps that look (heldLook) and
+     * the aura's own attack waits for the next tick. Sprinting, 1.8's attack
+     * code then takes 40 % off the speed, in the order a hand would. Only when
+     * that look already lands on the target within 3.0 (no turn just for the
+     * hit). True when the click hit an entity.
+     */
+    public boolean counterHit() {
+        if (!this.isEnabled() || this.serverLook == null || !mc.thePlayer.isSprinting() || !canCounterHit()
+                || atlas.management.TickActions.any(atlas.management.TickActions.DIG | atlas.management.TickActions.USE)) {
+            return false;
+        }
+        EntityLivingBase target = this.targetTracker.target();
+        /* Input: this tick's look is already decided and is what the movement packet will carry. */
+        Rotation look = inputPath() && this.inputRotation != null ? this.inputRotation : this.serverLook;
+        if (lookingAt(target, look, VANILLA_REACH, 0.0) == null) {
+            return false;
+        }
+        Entity hit = clickAlong(look);
+        if (hit == null) {
+            return false;
+        }
+        if (!inputPath()) {
+            this.heldLook = look;
+        }
+        if (this.humanizer.profile() != null) {
+            this.humanizer.landed(System.currentTimeMillis());
+        }
+        return true;
+    }
+
+    private static final double VANILLA_REACH = 3.0;
+
+    // ---- LagAware (2026-10-26) --------------------------------------------
+    /** Each nearby player's latest server positions: {tick, x, y, z}, oldest first, at most SAMPLES. */
+    private final java.util.Map<Integer, java.util.ArrayDeque<double[]>> serverSamples =
+            new java.util.HashMap<Integer, java.util.ArrayDeque<double[]>>();
+    private static final int SAMPLES = 4;
+    private static final int SAMPLE_MAX_AGE = 10;
+
+    /** Once a tick: where the server last put each player within 10 blocks (Entity.serverPosX, from S14/S18). */
+    private void sampleServerPositions() {
+        int tick = mc.thePlayer.ticksExisted;
+        java.util.Set<Integer> seen = new java.util.HashSet<Integer>();
+        for (EntityPlayer p : mc.theWorld.playerEntities) {
+            if (!(p instanceof EntityOtherPlayerMP) || mc.thePlayer.getDistanceSqToEntity(p) > 100.0) {
+                continue;
+            }
+            seen.add(p.getEntityId());
+            java.util.ArrayDeque<double[]> q = this.serverSamples.get(p.getEntityId());
+            if (q == null) {
+                q = new java.util.ArrayDeque<double[]>();
+                this.serverSamples.put(p.getEntityId(), q);
+            }
+            double x = p.serverPosX / 32.0;
+            double y = p.serverPosY / 32.0;
+            double z = p.serverPosZ / 32.0;
+            double[] last = q.peekLast();
+            if (last == null || last[1] != x || last[2] != y || last[3] != z) {
+                q.addLast(new double[]{tick, x, y, z});
+            }
+            while (q.size() > SAMPLES || !q.isEmpty() && tick - q.peekFirst()[0] > SAMPLE_MAX_AGE && q.size() > 1) {
+                q.pollFirst();
+            }
+        }
+        this.serverSamples.keySet().retainAll(seen);
+    }
+
+    /** The target's box on the server when a hit sent now lands, or null without samples. */
+    private double[] predictedBox(Entity entity) {
+        double[] at = predictedPosition(entity);
+        if (at == null) {
+            return null;
+        }
+        return atlas.lb.combat.LagCompensation.offset(box(hitBox(entity)), at[0] - entity.posX, at[1] - entity.posY,
+                at[2] - entity.posZ);
+    }
+
+    /** Where the server will have this player (its feet) a round trip from now, or null without samples. */
+    private double[] predictedPosition(Entity entity) {
+        java.util.ArrayDeque<double[]> q = this.serverSamples.get(entity.getEntityId());
+        if (q == null || q.isEmpty()) {
+            return null;
+        }
+        double[][] samples = q.toArray(new double[0][]);
+        double[] last = samples[samples.length - 1];
+        /* A sample older than the last few ticks: the target stood still since; no speed to carry on. */
+        double[] velocity = mc.thePlayer.ticksExisted - last[0] > 3 ? new double[]{0.0, 0.0, 0.0}
+                : atlas.lb.combat.LagCompensation.velocity(samples);
+        double lead = atlas.lb.combat.LagCompensation.leadTicks(atlas.util.Ping.own(), this.lagMaxLead.getValue());
+        return atlas.lb.combat.LagCompensation.predict(new double[]{last[1], last[2], last[3]}, velocity, lead);
+    }
+
+    /** The hit holds on the server's side too (always true with LagAware off or nothing known yet). */
+    private boolean lagOk(Entity entity) {
+        if (!this.lagAware.getValue() || !(entity instanceof EntityOtherPlayerMP)) {
+            return true;
+        }
+        double[] predicted = predictedBox(entity);
+        if (predicted == null) {
+            return true;
+        }
+        Vec3 e = mc.thePlayer.getPositionEyes(1.0F);
+        double[] eyes = {e.xCoord, e.yCoord, e.zCoord};
+        return atlas.lb.combat.LagCompensation.bothInReach(eyes, box(hitBox(entity)), predicted, interactionRange(),
+                atlas.lb.combat.LagCompensation.margin(atlas.util.Ping.own(), this.lagMargin.getValue()));
+    }
+
+    /** The box to aim into: the part the shown and the predicted box share, else the shown one. */
+    private double[] aimBox(Entity entity) {
+        double[] shown = box(hitBox(entity));
+        if (!this.lagAware.getValue() || !(entity instanceof EntityOtherPlayerMP)) {
+            return shown;
+        }
+        double[] predicted = predictedBox(entity);
+        double[] shared = predicted == null ? null : atlas.lb.combat.LagCompensation.overlap(shown, predicted);
+        return shared != null ? shared : shown;
+    }
 
     /**
      * The attack, once every module has set this tick's look (MixinEntityPlayerSP
@@ -752,7 +1101,7 @@ public class KillAuraLB extends Module {
      * module with a higher priority (Clutch, Scaffold) took it this tick.
      */
     public void afterRotations(UpdateEvent event) {
-        if (!this.attackPending) {
+        if (!this.attackPending || inputPath()) {
             return;
         }
         this.attackPending = false;
@@ -761,6 +1110,11 @@ public class KillAuraLB extends Module {
         }
         Rotation sent = event.isRotated() ? new Rotation(event.getNewYaw(), event.getNewPitch())
                 : new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
+        attackPhase(sent);
+    }
+
+    /** The attack along {@code sent}: after every module's look (Packet/Vanilla), or at tick start (Input). */
+    private void attackPhase(Rotation sent) {
         if (this.attackPaused) {
             stopBlocking(false);
             return;
@@ -1131,7 +1485,7 @@ public class KillAuraLB extends Module {
                     : new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
             point = aimAssistPoint(entity, eyes, from);
         } else {
-            point = this.pointTracker.findPoint(new double[]{eyes.xCoord, eyes.yCoord, eyes.zCoord}, box(hitBox(entity)));
+            point = this.pointTracker.findPoint(new double[]{eyes.xCoord, eyes.yCoord, eyes.zCoord}, aimBox(entity));
         }
         Object[] found = raytraceBox(eyes, point, range, wallsRange);
         if (found == null && this.aimThroughWalls.getValue()) {
@@ -1271,10 +1625,21 @@ public class KillAuraLB extends Module {
     }
 
     private void attackTarget(Entity target, Rotation rotation) {
+        if (rhythmSelected()) {
+            /* Rhythm decides both the click and the block; none of the paths below runs. */
+            this.verdict = null;
+            rhythmAttack(target, rotation);
+            return;
+        }
         makeSeemBlock();
         Vec3 hit = lookingAt(target, rotation, interactionRange(), wallsRange());
         Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
         boolean inRange = hit != null && eyes.distanceTo(hit) <= interactionRange();
+        if (inRange && !lagOk(target)) {
+            /* LagAware: in reach as shown, not where the server will have the target when the hit lands. Hold
+               the click (nothing sent, the click plan keeps it) rather than land a hit valid only on an old place. */
+            return;
+        }
         atlas.humanize.Humanizer.Verdict verdict = this.verdict;
         this.verdict = null;
         if (verdict != null && this.clicker.isClickTick() && canAttackNow(target)
@@ -1288,7 +1653,7 @@ public class KillAuraLB extends Module {
                 long now = System.currentTimeMillis();
                 prepareForAttack(rotation, () -> {
                     if (vanillaPath()) {
-                        if (vanillaClick(rotation) == target) {
+                        if (clickAlong(rotation) == target) {
                             this.humanizer.landed(now);
                         } else {
                             this.humanizer.unlucky(now);
@@ -1325,7 +1690,7 @@ public class KillAuraLB extends Module {
                 }
                 if (vanillaPath()) {
                     /* Vanilla decides what the click lands on; only a hit on an entity counts as one. */
-                    Entity clicked = vanillaClick(rotation);
+                    Entity clicked = clickAlong(rotation);
                     if (this.humanizer.profile() != null) {
                         if (clicked != null) {
                             this.humanizer.landed(System.currentTimeMillis());
@@ -1342,6 +1707,16 @@ public class KillAuraLB extends Module {
                         this.humanizer.landed(System.currentTimeMillis());
                     }
                 }
+                if (this.humanizer.doubleClick()) {
+                    /* 2026-10-26 (review: click-double was never read): a second press in the same tick, as a
+                       finger's double click does; vanilla takes both clicks of a tick. The target is invulnerable
+                       from the first, so it deals nothing and is not counted. */
+                    if (vanillaPath()) {
+                        clickAlong(rotation);
+                    } else {
+                        attackEntity(target);
+                    }
+                }
                 this.scanAddition = this.scanRangeIncrease.random();
                 this.failSwingAddition = this.failSwingRange.random();
                 this.failedHitsIncrement = 0;
@@ -1351,6 +1726,337 @@ public class KillAuraLB extends Module {
         } else if (this.clicker.ticksSinceLastClick() >= reblockTicks()) {
             startBlocking();
         }
+    }
+
+    // ---- Rhythm (2026-10-27) ----------------------------------------------
+
+    private boolean rhythmSelected() {
+        return this.autoBlocking.getValue() && this.blockMode.getValue() == BLOCK_RHYTHM;
+    }
+
+    /**
+     * Silent Aura's Rhythm runs the sword block (on, BlockMode Rhythm, a sword
+     * in hand): nothing else raises, lowers or un-slows it -- NoSlow's sword
+     * modes and Hit-Window, the AutoBlock module.
+     */
+    public static boolean rhythmRuns() {
+        if (mc.thePlayer == null || atlas.Atlas.moduleManager == null) {
+            return false;
+        }
+        KillAuraLB aura = atlas.module.ModuleBundle.of(KillAuraLB.class);
+        return aura != null && aura.isEnabled() && aura.rhythmSelected() && ItemUtil.isHoldingSword();
+    }
+
+    /** Our round trip in whole ticks; 2 without a reading (a click sent early is wasted, one sent late only late). */
+    private static int rttTicks() {
+        int ping = atlas.util.Ping.own();
+        return ping < 0 ? 2 : Math.min(10, Math.round(ping / 50.0F));
+    }
+
+    /**
+     * Rhythm's part of the attack: whether this tick's look lands on the
+     * target for a click vanilla will take, the decision, and the damaging
+     * click when it is due -- pressed for this tick's runTick, which clicks
+     * before it reads the use key, so the sword goes back up after it.
+     */
+    private void rhythmAttack(Entity target, Rotation rotation) {
+        if (!(target instanceof EntityLivingBase) || !shouldBeAttacked((EntityLivingBase) target)) {
+            /* Raycast put someone else (a teammate) in the way: no hit on them, the rhythm stays with the target. */
+            EntityLivingBase tracked = this.targetTracker.target();
+            decideRhythm(tracked, false, tracked != null && inReachSoon(tracked));
+            return;
+        }
+        EntityLivingBase living = (EntityLivingBase) target;
+        MovingObjectPosition over = pick(rotation);
+        Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
+        boolean onTarget = over != null && over.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY
+                && over.entityHit == target && eyes.distanceTo(over.hitVec) <= interactionRange();
+        /* Only a click vanilla will take this runTick: no screen, no miss delay left after its own countdown
+           (or NoHitDelay clears it), criticals and LagAware agreeing. */
+        boolean reachNow = onTarget && mc.currentScreen == null && vanillaTakesClick() && lagOk(target)
+                && canAttackNow(target) && this.reacted;
+        boolean reachSoon = inReachSoon(target);
+        atlas.lb.combat.RhythmBlock.Decision d = decideRhythm(living, reachNow, reachSoon);
+        if (!d.hitNow) {
+            return;
+        }
+        atlas.util.VanillaInput.pressAttack(over);
+        if (this.humanizer.profile() != null) {
+            this.humanizer.landed(System.currentTimeMillis());
+        }
+        this.scanAddition = this.scanRangeIncrease.random();
+        this.failSwingAddition = this.failSwingRange.random();
+        this.failedHitsIncrement = 0;
+        this.hasBlockedSinceAttack = false;
+    }
+
+    /** runTick counts the miss delay down once before it clicks; NoHitDelay clears it in clickMouse. */
+    private static boolean vanillaTakesClick() {
+        Module noHitDelay = atlas.module.ModuleBundle.of(NoHitDelay.class);
+        return noHitDelay != null && noHitDelay.isEnabled() || ((IAccessorMinecraft) mc).getLeftClickCounter() <= 1;
+    }
+
+    /**
+     * While Rhythm fights with a sword, its click is the only left click: one
+     * from a finger or AutoClicker between the windows deals nothing (the
+     * target is invulnerable), costs the sprint, and on a miss starts
+     * vanilla's ten-tick miss delay that would hold back the next damaging
+     * click a whole window. Clicks pressed by a module (Rhythm's, a
+     * counter-hit) pass.
+     */
+    @EventTarget
+    public void onRhythmLeftClick(atlas.events.LeftClickMouseEvent event) {
+        if (this.isEnabled() && rhythmSelected() && !event.isCancelled() && atlas.util.VanillaInput.isFighting()
+                && !atlas.util.VanillaInput.ownClick() && ItemUtil.isHoldingSword()) {
+            event.setCancelled(true);
+        }
+    }
+
+    private atlas.lb.combat.RhythmBlock.Decision decideRhythm(EntityLivingBase target, boolean reachNow,
+                                                             boolean reachSoon) {
+        atlas.lb.combat.RhythmBlock.Input in = new atlas.lb.combat.RhythmBlock.Input();
+        in.tick = this.rhythmTick;
+        in.sword = ItemUtil.isHoldingSword();
+        in.using = mc.thePlayer.isUsingItem();
+        in.targetId = target == null ? -1 : target.getEntityId();
+        in.targetHurt = target == null ? 0 : target.hurtTime;
+        in.reachNow = reachNow;
+        in.reachSoon = reachSoon;
+        in.threat = threatened();
+        in.selfHurt = mc.thePlayer.hurtTime;
+        in.rtt = rttTicks();
+        this.rhythm.minHold = this.rhythmMinHold.getValue();
+        this.rhythm.patience = this.rhythmPatience.getValue();
+        this.rhythm.guard = this.rhythmGuard.getValue();
+        this.rhythmInput = in;
+        this.rhythmDecision = this.rhythm.tick(in);
+        this.rhythmDecided = true;
+        return this.rhythmDecision;
+    }
+
+    /** The nearest enemy's eyes to our box at the last threat check (for the log). */
+    private double rhythmNearest = Double.MAX_VALUE;
+
+    /** Each enemy's last tick seen swinging (its arm animation), by entity id. */
+    private final java.util.Map<Integer, Integer> enemySwings = new java.util.HashMap<Integer, Integer>();
+    private static final int SWING_MEMORY = 8;
+
+    /**
+     * Rhythm's danger: an enemy that can land a hit now (RhythmDanger). Its
+     * look, from its eyes and as far as Rhythm-EnemyReach, meets our body
+     * grown by Rhythm-AimTolerance; for a player also from where the server
+     * will have it when a block sent now arrives (LagAware's prediction), and
+     * -- Rhythm-OnlyWhenClicking -- its arm swung within the last ticks.
+     */
+    private boolean threatened() {
+        double reach = this.rhythmEnemyReach.getValue();
+        double around = (reach + 6.0) * (reach + 6.0);
+        AxisAlignedBB b = mc.thePlayer.getEntityBoundingBox();
+        double[] body = {b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ};
+        double[] grown = atlas.lb.combat.RhythmDanger.expand(body, this.rhythmAimTolerance.getValue());
+        double nearest = Double.MAX_VALUE;
+        boolean threat = false;
+        for (Entity entity : mc.theWorld.loadedEntityList) {
+            if (!(entity instanceof EntityLivingBase) || entity == mc.thePlayer
+                    || mc.thePlayer.getDistanceSqToEntity(entity) > around
+                    || !shouldBeAttacked((EntityLivingBase) entity)) {
+                continue;
+            }
+            EntityLivingBase enemy = (EntityLivingBase) entity;
+            if (enemy.isSwingInProgress) {
+                this.enemySwings.put(enemy.getEntityId(), this.rhythmTick);
+            }
+            double eye = enemy.getEyeHeight();
+            double[] look = atlas.lb.combat.RhythmDanger.look(enemy.rotationYawHead, enemy.rotationPitch);
+            double[] eyes = {enemy.posX, enemy.posY + eye, enemy.posZ};
+            double distance = atlas.lb.combat.LagCompensation.distanceToBox(eyes, body);
+            boolean aimed = atlas.lb.combat.RhythmDanger.lookHits(eyes, look, reach, grown);
+            double[] ahead = enemy instanceof EntityOtherPlayerMP ? predictedPosition(enemy) : null;
+            if (ahead != null) {
+                double[] eyesAhead = {ahead[0], ahead[1] + eye, ahead[2]};
+                distance = Math.min(distance, atlas.lb.combat.LagCompensation.distanceToBox(eyesAhead, body));
+                aimed |= atlas.lb.combat.RhythmDanger.lookHits(eyesAhead, look, reach, grown);
+            }
+            nearest = Math.min(nearest, distance);
+            /* Mobs hit by touch, without a swing to see. */
+            boolean clicking = !(enemy instanceof EntityPlayer) || !this.rhythmOnlyClicking.getValue()
+                    || atlas.lb.combat.RhythmDanger.clicking(this.enemySwings.getOrDefault(enemy.getEntityId(),
+                    atlas.lb.combat.RhythmDanger.NEVER), this.rhythmTick, SWING_MEMORY);
+            if (aimed && clicking) {
+                threat = true;
+            }
+        }
+        final int now = this.rhythmTick;
+        this.enemySwings.values().removeIf(tick -> now - tick > 100);
+        this.rhythmNearest = nearest;
+        return threat;
+    }
+
+    /** By distance alone: the target within reach now, or after one more tick of its motion and ours. */
+    private boolean inReachSoon(Entity target) {
+        Vec3 e = mc.thePlayer.getPositionEyes(1.0F);
+        double[] eyes = {e.xCoord, e.yCoord, e.zCoord};
+        double[] shown = box(hitBox(target));
+        double range = interactionRange();
+        if (atlas.lb.combat.LagCompensation.distanceToBox(eyes, shown) <= range) {
+            return true;
+        }
+        double[] next = atlas.lb.combat.LagCompensation.offset(shown,
+                target.posX - target.lastTickPosX - mc.thePlayer.motionX, 0.0,
+                target.posZ - target.lastTickPosZ - mc.thePlayer.motionZ);
+        return atlas.lb.combat.LagCompensation.distanceToBox(eyes, next) <= range;
+    }
+
+    /**
+     * After the attack, at the start of the tick: the use key as Rhythm
+     * decided, before vanilla's runTick reads it (a raise is a press, so
+     * vanilla raises at once, after this tick's clicks). Not running -- a
+     * screen open, the button held by hand, combat paused (Clutch, Scaffold,
+     * a block being placed), the aura's requirements not met -- the key goes
+     * back to the button. Rhythm-Lag: a hold that is over (the sword to come
+     * down, or Rhythm-LagMax reached) ends here, release first.
+     */
+    private void rhythmApply(Rotation sent) {
+        boolean decided = this.rhythmDecided;
+        this.rhythmDecided = false;
+        if (!rhythmSelected()) {
+            rhythmEndHold("mode");
+            rhythmLetGo(mc.currentScreen == null);
+            if (this.rhythmRunning) {
+                this.rhythmRunning = false;
+                this.rhythmLogger.stop();
+            }
+            return;
+        }
+        int use = mc.gameSettings.keyBindUseItem.getKeyCode();
+        boolean running = mc.currentScreen == null && !KeyBindUtil.isKeyDown(use) && !this.attackPaused
+                && mc.thePlayer.getHealth() > 0.0F && !mc.thePlayer.isSpectator() && requirementsMet();
+        if (!running) {
+            rhythmEndHold("paused");
+            rhythmLetGo(mc.currentScreen == null);
+            return;
+        }
+        if (!decided) {
+            /* No attack this tick (no target, or held back): the block for threats alone. */
+            decideRhythm(null, false, false);
+        }
+        atlas.lb.combat.RhythmBlock.Decision d = this.rhythmDecision;
+        if (this.rhythmHolding) {
+            if (!d.key) {
+                rhythmEndHold("lowered");
+            } else if (this.rhythmTick - this.rhythmHoldSince >= this.rhythmLagMax.getValue()) {
+                /* Long enough without movement on the server: down and the movement out; vanilla raises again in
+                   this runTick (the key stays down), and a new hold starts after this tick's movement. */
+                rhythmEndHold("max");
+            }
+        }
+        boolean wasOwned = this.rhythmOwnsKey;
+        if (d.key) {
+            if (!mc.thePlayer.isUsingItem()) {
+                /* The right click that raises goes along the aura's look, never onto a block (VanillaInput.applyUse). */
+                Rotation look = sent != null ? sent : new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
+                atlas.util.VanillaInput.fighting(pick(look));
+            }
+            KeyBindUtil.setKeyBindState(use, true);
+            if (d.raise) {
+                KeyBindUtil.pressKeyOnce(use);
+            }
+            this.rhythmOwnsKey = true;
+        } else if (this.rhythmOwnsKey) {
+            KeyBindUtil.setKeyBindState(use, false);
+            this.rhythmOwnsKey = false;
+        }
+        if (this.rhythmLog.getValue()) {
+            if (!this.rhythmRunning) {
+                this.rhythmLogger.start("ping " + atlas.util.Ping.own() + " minHold " + this.rhythmMinHold.getValue()
+                        + " patience " + this.rhythmPatience.getValue() + " guard " + this.rhythmGuard.getValue()
+                        + " enemyReach " + this.rhythmEnemyReach.getValue() + " aimTolerance "
+                        + this.rhythmAimTolerance.getValue() + " onlyClicking " + this.rhythmOnlyClicking.getValue()
+                        + " lag " + this.rhythmLag.getValue() + "/" + this.rhythmLagMax.getValue()
+                        + " reach " + interactionRange() + " lagAware " + this.lagAware.getValue());
+            }
+            EntityLivingBase target = this.targetTracker.target();
+            atlas.lb.combat.RhythmBlock.Input in = this.rhythmInput;
+            this.rhythmLogger.tick(this.rhythmTick, in.using && in.sword, in.threat, in.selfHurt,
+                    mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount(), d.rtt, atlas.util.Ping.own(),
+                    d.raise, wasOwned && !d.key, target == null ? -1 : target.getEntityId(),
+                    target == null ? 0 : target.hurtTime, this.rhythmNearest);
+        }
+        this.rhythmRunning = true;
+    }
+
+    // ---- Rhythm-Lag ------------------------------------------------------
+
+    /** Rhythm-Lag holds the movement now: the sword is up on the server and the player moves unslowed. */
+    private boolean rhythmHolding;
+    private int rhythmHoldSince;
+
+    /** For MixinEntityPlayerSP: the sword is up, the movement held -- move as if it were down. */
+    public static boolean rhythmUnslowed() {
+        KillAuraLB aura = atlas.module.ModuleBundle.of(KillAuraLB.class);
+        return aura != null && aura.rhythmHolding && aura.isEnabled();
+    }
+
+    /**
+     * End of the tick: once the sword is up on the server -- the use went out
+     * in runTick and this tick's movement after it, slowed as vanilla moves
+     * -- the movement from the next tick on is held (BlinkManager, owner
+     * RHYTHM, transaction replies in order with it).
+     */
+    @EventTarget
+    public void onRhythmTickEnd(TickEvent event) {
+        if (event.getType() != EventType.POST || !this.isEnabled() || mc.thePlayer == null || this.rhythmHolding
+                || !rhythmSelected() || !this.rhythmLag.getValue() || !this.rhythmOwnsKey || mc.currentScreen != null
+                || !mc.thePlayer.isUsingItem() || !ItemUtil.isHoldingSword()) {
+            return;
+        }
+        if (atlas.Atlas.blinkManager.setBlinkState(true, atlas.enums.BlinkModules.RHYTHM)) {
+            this.rhythmHolding = true;
+            this.rhythmHoldSince = this.rhythmTick;
+        }
+    }
+
+    /**
+     * The hold ends: the sword's release goes out first, past the hold, then
+     * everything held in order. The server sees the sword up while we stood,
+     * then down, then the movement that was made unslowed.
+     */
+    private void rhythmEndHold(String why) {
+        if (!this.rhythmHolding) {
+            return;
+        }
+        this.rhythmHolding = false;
+        atlas.management.BlinkManager blink = atlas.Atlas.blinkManager;
+        if (blink.getBlinkingModule() != atlas.enums.BlinkModules.RHYTHM) {
+            /* Ended from outside (a world change, the lease): nothing of ours is held any more. */
+            return;
+        }
+        int packets = blink.blinkedPackets.size();
+        long moves = blink.countMovement();
+        if (mc.thePlayer != null && mc.thePlayer.isUsingItem()) {
+            net.minecraft.network.play.client.C07PacketPlayerDigging release =
+                    new net.minecraft.network.play.client.C07PacketPlayerDigging(
+                            net.minecraft.network.play.client.C07PacketPlayerDigging.Action.RELEASE_USE_ITEM,
+                            net.minecraft.util.BlockPos.ORIGIN, net.minecraft.util.EnumFacing.DOWN);
+            blink.release(release);
+            atlas.management.TickActions.noteDirect(release);
+            mc.thePlayer.stopUsingItem();
+        }
+        blink.setBlinkState(false, atlas.enums.BlinkModules.RHYTHM);
+        if (this.rhythmLog.getValue() && this.rhythmRunning) {
+            this.rhythmLogger.hold(this.rhythmTick - this.rhythmHoldSince, (int) moves, packets, why);
+        }
+    }
+
+    /** The use key back to the button's own state, if Rhythm had it ({@code touchKey} false: a screen did that). */
+    private void rhythmLetGo(boolean touchKey) {
+        if (this.rhythmOwnsKey) {
+            if (touchKey && mc.gameSettings != null) {
+                KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
+            }
+            this.rhythmOwnsKey = false;
+        }
+        this.rhythm.released(this.rhythmTick);
     }
 
     // ---- AutoBlocking (KillAuraAutoBlock) --------------------------------
@@ -1369,14 +2075,48 @@ public class KillAuraLB extends Module {
         return this.pauseOnUnblockTicks;
     }
 
+    /** The AutoBlock module's mode this aura runs (an index into its Mode), or -1 for LiquidBounce's own blocking. */
+    private int autoBlockModuleMode() {
+        int m = this.blockMode.getValue() - FIRST_AUTOBLOCK_MODE;
+        return this.autoBlocking.getValue() && m >= 0 && m < AUTOBLOCK_MODES.length ? AUTOBLOCK_MODES[m] : -1;
+    }
+
     private void makeSeemBlock() {
-        if (this.autoBlocking.getValue()) {
+        if (this.lbBlocking.getAsBoolean()) {
             this.blockVisual = true;
         }
     }
 
     private boolean blockingServerside() {
-        return this.enforcedBlocking || mc.thePlayer.isBlocking();
+        return this.enforcedBlocking || mc.thePlayer.isBlocking() || delegatesBlock() && noSlowServerBlocking();
+    }
+
+    // ---- A1/A4 (2026-10-26): the server block handed to NoSlow Hit-Window ----
+
+    private static NoSlow noSlow() {
+        return atlas.Atlas.moduleManager == null ? null : (NoSlow) atlas.Atlas.moduleManager.modules.get(NoSlow.class);
+    }
+
+    /** NoSlow Hit-Window with HW Aura Blocks takes this aura's own block: no use or release of ours goes out. */
+    private boolean delegatesBlock() {
+        NoSlow noSlow = noSlow();
+        return this.lbBlocking.getAsBoolean() && noSlow != null && noSlow.hitWindowTakesAura();
+    }
+
+    private static boolean noSlowServerBlocking() {
+        NoSlow noSlow = noSlow();
+        return noSlow != null && noSlow.hitWindowServerBlocking();
+    }
+
+    /** Hit-Window asks: the aura wants the sword up (pose shown, a target, a sword). */
+    public boolean wantsServerBlock() {
+        return this.isEnabled() && this.lbBlocking.getAsBoolean() && this.blockVisual && ItemUtil.isHoldingSword()
+                && this.targetTracker.target() != null;
+    }
+
+    /** Hit-Window asks: ticks until this aura's next planned click (up to 20). */
+    public int ticksUntilClick() {
+        return this.targetTracker.target() == null ? 20 : this.clicker.ticksUntilClick();
     }
 
     /** Fewer clicks for a block first: no block since the last hit (and in danger, with OnlyWhenInDanger). */
@@ -1384,7 +2124,7 @@ public class KillAuraLB extends Module {
         if (mc.thePlayer.isUsingItem()) {
             this.hasBlockedSinceAttack = true;
         }
-        if (!this.autoBlocking.getValue() || !this.prioritizeBlocking.getValue() || this.blockMode.getValue() == 2
+        if (!this.lbBlocking.getAsBoolean() || !this.prioritizeBlocking.getValue() || this.blockMode.getValue() == 2
                 || !ItemUtil.isHoldingSword()) {
             return false;
         }
@@ -1393,7 +2133,7 @@ public class KillAuraLB extends Module {
 
     /** Raises the sword (Basic: use; Interact: the entity in the crosshair first; Fake: only the animation). */
     private boolean startBlocking() {
-        if (!this.autoBlocking.getValue()) {
+        if (!this.lbBlocking.getAsBoolean()) {
             return false;
         }
         if (this.onlyWhenInDanger.getValue() && !this.inDanger) {
@@ -1413,6 +2153,13 @@ public class KillAuraLB extends Module {
         }
         if (this.blockMode.getValue() == 2) {
             this.blockVisual = true;
+            return false;
+        }
+        if (delegatesBlock()) {
+            /* A1: only the pose; Hit-Window decides when the server sees the sword up. */
+            this.blockVisual = true;
+            this.hasBlockedSinceAttack = true;
+            this.reblockTicks = this.reblock.random();
             return false;
         }
         if (this.blockMode.getValue() == 1) {
@@ -1444,6 +2191,23 @@ public class KillAuraLB extends Module {
 
     /** Lowers the sword; {@code pauses}: only to hit, the animation stays. True when it let go. */
     private boolean stopBlocking(boolean pauses) {
+        if (rhythmSelected() && !this.enforcedBlocking) {
+            /* Rhythm holds the use key itself (rhythmApply); no release of ours past vanilla's. */
+            this.blockVisual = false;
+            return false;
+        }
+        if (autoBlockModuleMode() >= 0 && !this.enforcedBlocking) {
+            /* The AutoBlock module's mode raises and lowers the sword itself. */
+            this.blockVisual = false;
+            return false;
+        }
+        if (delegatesBlock() && !this.enforcedBlocking) {
+            /* A1: no release of ours; Hit-Window closes its window itself. Only the pose goes. */
+            if (!pauses) {
+                this.blockVisual = false;
+            }
+            return false;
+        }
         if (!pauses) {
             this.blockVisual = false;
             if (mc.gameSettings.keyBindUseItem.isKeyDown()) {
@@ -1750,6 +2514,18 @@ public class KillAuraLB extends Module {
             return;
         }
         if (blockingServerside()) {
+            if (delegatesBlock() && !this.enforcedBlocking) {
+                /* A2: a Hit-Window window has the sword up on the server: no hit until it closes. */
+                NoSlow noSlow = noSlow();
+                if (noSlow != null) {
+                    noSlow.hitWindowPostponed();
+                }
+                return;
+            }
+            if (autoBlockModuleMode() >= 0 && !this.enforcedBlocking) {
+                /* The AutoBlock module's mode holds the block and lowers it on the tick it lets the hit through. */
+                return;
+            }
             /* 1. Lower the sword to hit (no MultiActions in this port: blocking without AutoBlock means no hit). */
             if (!this.autoBlocking.getValue()) {
                 return;
@@ -1782,8 +2558,9 @@ public class KillAuraLB extends Module {
                     mc.thePlayer.getEntityBoundingBox().minY, mc.thePlayer.posZ, mc.thePlayer.rotationYaw,
                     mc.thePlayer.rotationPitch, mc.thePlayer.onGround));
         }
-        /* 2. Raise it again at once (Reblock 0). */
-        if (reblockTicks() == 0) {
+        /* 2. Raise it again at once (Reblock 0). Not on Input: the click goes out later this tick, in runTick, and
+           vanilla drops an attack while the sword is up. */
+        if (reblockTicks() == 0 && !inputPath()) {
             startBlocking();
         }
         if (closeInventory) {
@@ -1792,7 +2569,65 @@ public class KillAuraLB extends Module {
     }
 
     private boolean vanillaPath() {
-        return this.attackPath.getValue() == 1;
+        return this.attackPath.getValue() >= 1;
+    }
+
+    /** One vanilla click along {@code rotation}: now (Vanilla) or by the key, in this tick's runTick (Input). */
+    private Entity clickAlong(Rotation rotation) {
+        return inputPath() ? inputClick(rotation) : vanillaClick(rotation);
+    }
+
+    /**
+     * V2: what vanilla's crosshair would point at along {@code rotation} from
+     * here (getMouseOver, with Reach/HitBox), then the attack key pressed with
+     * that as the click's crosshair (VanillaInput). Nothing on a block or a
+     * friend. Returns the entity the click will hit, or null.
+     */
+    private Entity inputClick(Rotation rotation) {
+        if (mc.currentScreen != null) {
+            /* 2026-10-27: vanilla clicks nothing under a screen; a press now would wait in the key and go off on
+               the camera's crosshair once it closes. */
+            return null;
+        }
+        MovingObjectPosition over = pick(rotation);
+        Entity hit = over != null && over.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY ? over.entityHit : null;
+        if (hit instanceof EntityPlayer && atlas.util.TeamUtil.isFriend((EntityPlayer) hit)) {
+            return null;
+        }
+        if (over != null && over.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) {
+            return null;
+        }
+        atlas.util.VanillaInput.pressAttack(over);
+        return hit;
+    }
+
+    /** Vanilla's crosshair along {@code rotation}; the camera's crosshair is left as it was. */
+    private MovingObjectPosition pick(Rotation rotation) {
+        net.minecraft.client.entity.EntityPlayerSP p = mc.thePlayer;
+        MovingObjectPosition saved = mc.objectMouseOver;
+        Entity savedPointed = mc.pointedEntity;
+        float yaw = p.rotationYaw;
+        float pitch = p.rotationPitch;
+        float head = p.rotationYawHead;
+        float prevYaw = p.prevRotationYaw;
+        float prevPitch = p.prevRotationPitch;
+        float prevHead = p.prevRotationYawHead;
+        p.rotationYaw = p.prevRotationYaw = rotation.yaw;
+        p.rotationYawHead = p.prevRotationYawHead = rotation.yaw;
+        p.rotationPitch = p.prevRotationPitch = rotation.pitch;
+        try {
+            mc.entityRenderer.getMouseOver(1.0F);
+            return mc.objectMouseOver;
+        } finally {
+            p.rotationYaw = yaw;
+            p.rotationPitch = pitch;
+            p.rotationYawHead = head;
+            p.prevRotationYaw = prevYaw;
+            p.prevRotationPitch = prevPitch;
+            p.prevRotationYawHead = prevHead;
+            mc.objectMouseOver = saved;
+            mc.pointedEntity = savedPointed;
+        }
     }
 
     /**
@@ -1831,6 +2666,12 @@ public class KillAuraLB extends Module {
         Entity hit = over != null && over.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY ? over.entityHit : null;
         try {
             if (hit instanceof EntityPlayer && atlas.util.TeamUtil.isFriend((EntityPlayer) hit)) {
+                return null;
+            }
+            if (over != null && over.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) {
+                /* 2026-10-26 (owner's setbacks at 20:46, each "dug 0-5t ago", KillAuraLB dig x4): a block is in
+                   front of the look, and vanilla's click would start digging it in the middle of a fight. No click;
+                   the aura was not trying to mine. Velocity Polar's counter-hit comes through here too. */
                 return null;
             }
             ((IAccessorMinecraft) mc).callClickMouse();

@@ -64,6 +64,13 @@ public class NoSlow extends Module {
     public final atlas.property.properties.FloatProperty hwGuardRange = new atlas.property.properties.FloatProperty("HW Guard Range", 3.4F, 2.0F, 6.0F,
             () -> hwShown.getAsBoolean() && this.hwGuard.getValue());
     public final BooleanProperty hwLog = new BooleanProperty("HW Log", true, hwShown);
+    /* 2026-10-26: also steer the block an aura or AutoBlock raises (it used to manage only the right button). */
+    public final BooleanProperty hwAura = new BooleanProperty("HW Aura Blocks", true, hwShown);
+    /* 2026-10-26 (A2): with Silent Aura's block handed over, who gives way. Hit: a window opens only with the
+       aura's next click at least 3 ticks off and closes a tick before it. Block: the aura holds its click while
+       a window is open. */
+    public final ModeProperty hwPriority = new ModeProperty("HW Priority", 0, new String[]{"Hit", "Block"},
+            () -> hwShown.getAsBoolean() && this.hwAura.getValue());
     private final NoSlowHitWindow hitWindow = new NoSlowHitWindow(this);
     public final IntProperty swapDelay = new IntProperty("Swap Delay", 0, 0, 3, () -> swordMode.getValue() == 2);
     public final BooleanProperty noAttack = new BooleanProperty("No Attack", false, () -> swordMode.getValue() == 2);
@@ -229,7 +236,17 @@ public class NoSlow extends Module {
     }
 
     public boolean isSwordActive() {
-        return this.swordMode.getValue() != 0 && ItemUtil.isHoldingSword() && (!this.onlyKillAuraAutoBlock.getValue() || this.isKillAuraAutoBlocking());
+        return this.swordMode.getValue() != 0 && ItemUtil.isHoldingSword() && !swordYields()
+                && (!this.onlyKillAuraAutoBlock.getValue() || this.isKillAuraAutoBlocking());
+    }
+
+    /**
+     * 2026-10-27: Silent Aura's Rhythm runs the sword block (its own use key, vanilla's slowdown): every sword mode
+     * here stands aside -- no slot swaps, re-uses or releases of its own, no speed back, no Hit-Window windows.
+     * Food and bow modes are untouched.
+     */
+    static boolean swordYields() {
+        return KillAuraLB.rhythmRuns();
     }
 
     public boolean isFoodActive() {
@@ -261,10 +278,28 @@ public class NoSlow extends Module {
         return aura.isBlocking() || aura.isAuraBlocking();
     }
 
+    /** Hit-Window takes Silent Aura's own block (A1: the aura only shows the pose; this mode alone sends). */
+    public boolean hitWindowTakesAura() {
+        return this.isEnabled() && this.hitWindow.selected() && this.hwAura.getValue();
+    }
+
+    /** What the server believes while Hit-Window steers: the sword is up. */
+    public boolean hitWindowServerBlocking() {
+        return this.hitWindow.slowed();
+    }
+
+    /** The aura held a click back because a window had the sword up. */
+    public void hitWindowPostponed() {
+        this.hitWindow.postponed();
+    }
+
     public boolean isAnyActive() {
+        if (ItemUtil.isHoldingSword() && swordYields()) {
+            return false;
+        }
         if (this.hitWindow.selected() && ItemUtil.isHoldingSword()) {
             /* Hit-Window replaces vanilla's slowdown only while it steers the block (slowed() then). */
-            return this.hitWindow.managing() && mc.thePlayer.isUsingItem();
+            return this.hitWindow.managing() && (mc.thePlayer.isUsingItem() || this.hitWindow.delegated());
         }
         if (this.ng2371Prevent && this.ngIdx(this.swordMode) == NG_GRIM2371 && ItemUtil.isHoldingSword()) {
             /* NG-Grim2371: every third tick is taken slowed. */
@@ -397,7 +432,8 @@ public class NoSlow extends Module {
         if (!alternate) {
             this.alternateTick = 0;
         }
-        if (this.isEnabled() && this.hitWindow.managing() && ItemUtil.isHoldingSword() && mc.thePlayer.isUsingItem()) {
+        if (this.isEnabled() && this.hitWindow.managing() && ItemUtil.isHoldingSword()
+                && (mc.thePlayer.isUsingItem() || this.hitWindow.delegated())) {
             /* Hit-Window: exactly vanilla while the server has the sword up, full speed while it does not.
                Sprint is left to vanilla's own path, only dropped on a slowed tick as vanilla drops it. */
             if (this.hitWindow.slowed()) {
@@ -640,7 +676,7 @@ public class NoSlow extends Module {
     }
 
     private boolean ravenSwordActive(int mode) {
-        return this.ravenIdx(this.swordMode) == mode && ItemUtil.isHoldingSword()
+        return this.ravenIdx(this.swordMode) == mode && ItemUtil.isHoldingSword() && !swordYields()
                 && (!this.onlyKillAuraAutoBlock.getValue() || this.isKillAuraAutoBlocking());
     }
 
@@ -670,7 +706,7 @@ public class NoSlow extends Module {
             return -1;
         }
         if (ItemUtil.isHoldingSword()) {
-            return this.miauIdx(this.swordMode);
+            return swordYields() ? -1 : this.miauIdx(this.swordMode);
         }
         if (ItemUtil.isEating() || held.getItem() instanceof ItemFood || held.getItem() instanceof ItemPotion) {
             return this.miauIdx(this.foodMode);
@@ -682,7 +718,7 @@ public class NoSlow extends Module {
     }
 
     private boolean miauSwordActive(int mode) {
-        return this.miauIdx(this.swordMode) == mode && ItemUtil.isHoldingSword()
+        return this.miauIdx(this.swordMode) == mode && ItemUtil.isHoldingSword() && !swordYields()
                 && (!this.onlyKillAuraAutoBlock.getValue() || this.isKillAuraAutoBlocking());
     }
 
@@ -783,7 +819,7 @@ public class NoSlow extends Module {
 
     /** NextGen's blockingHand != null: blocking with a sword right now. */
     private boolean ngBlocking() {
-        return this.isEnabled() && ItemUtil.isHoldingSword() && mc.thePlayer.isUsingItem()
+        return this.isEnabled() && ItemUtil.isHoldingSword() && mc.thePlayer.isUsingItem() && !swordYields()
                 && (!this.onlyKillAuraAutoBlock.getValue() || this.isKillAuraAutoBlocking());
     }
 
@@ -1292,7 +1328,7 @@ public class NoSlow extends Module {
     }
 
     private boolean donorSwordActive(int mode) {
-        return this.donorIdx(this.swordMode) == mode && ItemUtil.isHoldingSword()
+        return this.donorIdx(this.swordMode) == mode && ItemUtil.isHoldingSword() && !swordYields()
                 && (!this.onlyKillAuraAutoBlock.getValue() || this.isKillAuraAutoBlocking());
     }
 

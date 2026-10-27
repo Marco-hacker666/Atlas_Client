@@ -95,6 +95,7 @@ public class MouseRawInput extends Module {
                     Thread.sleep(1L);
                 } catch (Throwable ignored) {
                     mouse = null;
+                    candidates = null;
                     try {
                         Thread.sleep(250L);
                     } catch (InterruptedException ignoredInterrupted) {
@@ -116,15 +117,30 @@ public class MouseRawInput extends Module {
         return constructor.newInstance();
     }
 
+    /* 2026-10-26 (review): the mice found by the last scan, and when. findMouse used to build a new controller
+       environment and list every device on each call -- every millisecond while no mouse moved. Now the list is
+       built at most every RESCAN_MS (a mouse plugged in later is still found) and only polled in between. */
+    private static final long RESCAN_MS = 5000L;
+    private static Mouse[] candidates;
+    private static long candidatesAt;
+
     private static Mouse findMouse() throws ReflectiveOperationException {
-        Controller[] controllers = createDefaultEnvironment().getControllers();
-        for (Controller controller : controllers) {
-            if (controller.getType() == Controller.Type.MOUSE && controller instanceof Mouse) {
-                controller.poll();
-                Mouse candidate = (Mouse) controller;
-                if (candidate.getX().getPollData() != 0.0F || candidate.getY().getPollData() != 0.0F) {
-                    return candidate;
+        long now = System.currentTimeMillis();
+        if (candidates == null || now - candidatesAt >= RESCAN_MS) {
+            java.util.List<Mouse> found = new java.util.ArrayList<Mouse>();
+            for (Controller controller : createDefaultEnvironment().getControllers()) {
+                if (controller.getType() == Controller.Type.MOUSE && controller instanceof Mouse) {
+                    found.add((Mouse) controller);
                 }
+            }
+            candidates = found.toArray(new Mouse[0]);
+            candidatesAt = now;
+        }
+        /* The one that moves is the one in use (a laptop lists its touchpad too). */
+        for (Mouse candidate : candidates) {
+            if (candidate.poll()
+                    && (candidate.getX().getPollData() != 0.0F || candidate.getY().getPollData() != 0.0F)) {
+                return candidate;
             }
         }
         return null;

@@ -4858,7 +4858,7 @@ public class AtlasClickGui extends GuiScreen {
         if (wheel == 0) {
             return;
         }
-        int step = wheel > 0 ? -1 : 1;
+        int step = (wheel > 0 ? -1 : 1) * atlas.module.modules.ClickGUIModule.wheelSteps(wheel);
         if (this.dropdown != null) {
             /* An open list takes the wheel: it scrolls its options. */
             this.dropScroll = Math.max(0, Math.min(this.dropMaxScroll, this.dropScroll + step));

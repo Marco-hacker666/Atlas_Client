@@ -17,6 +17,12 @@ import net.minecraft.network.play.server.S00PacketKeepAlive;
  * let them through; this covers the modules that hold through PacketHub:
  * FakeLag, LagRange, Backtrack, KnockbackDelay, ServerLag, TimerRange,
  * Freeze, NoSlow's blink modes, Criticals, PingSpoof, Disabler.)
+ *
+ * 2026-10-27 check: every holder of keep-alives goes through PacketHub or
+ * never holds them (BlinkManager, LagManager, DelayManager, KnockbackDelay,
+ * Velocity Lag, SmartBlinker); Silent Aura's Rhythm-Lag holds transaction
+ * replies but never keep-alives. Disabler's Cancel C00 and its Polar preset
+ * dropped keep-alives outright, past PacketHub: they now ask exempt() too.
  */
 public class PingFix extends Module {
     private static volatile boolean on;

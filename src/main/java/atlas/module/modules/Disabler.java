@@ -188,7 +188,7 @@ public class Disabler extends Module {
             }
 
             if (this.basicDisabler.getValue()) {
-                if (packet instanceof C00PacketKeepAlive && this.cancelC00.getValue()) {
+                if (packet instanceof C00PacketKeepAlive && this.cancelC00.getValue() && !PingFix.exempt(packet)) {
                     event.setCancelled(true);
                     this.debugMessage("Cancelled C00-KeepAlive");
                 } else if (packet instanceof C0FPacketConfirmTransaction && this.cancelC0F.getValue()) {
@@ -648,10 +648,11 @@ public class Disabler extends Module {
         boolean receive = event.getType() == EventType.RECEIVE;
         if (p == PRESET_POLAR) {
             // Adapted from Raven S+ PolarDisabler. UNTESTED, needs live server.
-            if (send && packet instanceof C00PacketKeepAlive) {
+            /* 2026-10-27: PingFix keeps keep-alives untouched both ways, these included. */
+            if (send && packet instanceof C00PacketKeepAlive && !PingFix.exempt(packet)) {
                 event.setCancelled(true);
                 this.debugMessage("Polar cancelled C00");
-            } else if (receive && packet instanceof S00PacketKeepAlive) {
+            } else if (receive && packet instanceof S00PacketKeepAlive && !PingFix.exempt(packet)) {
                 event.setCancelled(true);
                 PacketUtil.sendPacket(new C00PacketKeepAlive(0));
                 this.debugMessage("Polar spoofed keepalive");

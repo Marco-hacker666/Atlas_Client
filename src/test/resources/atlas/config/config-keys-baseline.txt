@@ -691,6 +691,7 @@ ClickGUIModule #name ClickGUI
 ClickGUIModule Color
 ClickGUIModule Corner Radius
 ClickGUIModule Save GUI State
+ClickGUIModule Scroll Speed
 ClickGUIModule Shadow
 ClickGUIModule Style
 ClickGUIModule Window Height
@@ -1614,11 +1615,13 @@ NoSlow GrimSemi Interval
 NoSlow GrimSemi Swap
 NoSlow GrimTest Buffer
 NoSlow GrimTest MaxTicks
+NoSlow HW Aura Blocks
 NoSlow HW Guard
 NoSlow HW Hold
 NoSlow HW Log
 NoSlow HW Open Hurt
 NoSlow HW Ping Aware
+NoSlow HW Priority
 NoSlow Intave14 Interval
 NoSlow Intave14 Sprint
 NoSlow IntaveBlink Interval
@@ -2217,8 +2220,17 @@ Velocity oldgrim-reduce
 Velocity only-sprinting
 Velocity only-while-targeting
 Velocity pause-on-S
+Velocity polar-both-chance
+Velocity polar-counter-chance
 Velocity polar-force-change
 Velocity polar-hurt-count
+Velocity polar-jump-chance
+Velocity polar-max-rate
+Velocity polar-max-streak
+Velocity polar-min-interval
+Velocity polar-only-in-fight
+Velocity polar-react-max
+Velocity polar-react-min
 Velocity reduce
 Velocity reduce-when-can-attack
 Velocity rotate

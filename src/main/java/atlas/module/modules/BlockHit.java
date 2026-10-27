@@ -38,10 +38,10 @@ public class BlockHit extends Module {
        right click alone blocks as usual. Optionally, on lowering, every
        outgoing packet is held for lag-ticks (lag-chance of the time), and
        let go the moment you attack. */
-    private final java.util.function.BooleanSupplier slinky = () -> this.mode.getValue() == 6;
+    private final java.util.function.BooleanSupplier slinky = () -> this.modeIndex() == 6;
     /* ---- Yuri (2026-10-24, BlockHitYuri): after your hit, the use key down
        combo-delay ms later (forward held), up block-delay ms after that. */
-    private final java.util.function.BooleanSupplier yuriMode = () -> this.mode.getValue() == 8;
+    private final java.util.function.BooleanSupplier yuriMode = () -> this.modeIndex() == 8;
     private final FloatProperty yRange = new FloatProperty("yuri-range", 3.0F, 1.0F, 6.0F, yuriMode);
     private final PercentProperty yChance = new PercentProperty("yuri-chance", 100, yuriMode);
     private final IntProperty yBlockDelay = new IntProperty("yuri-block-delay", 30, 1, 300, yuriMode);
@@ -66,7 +66,7 @@ public class BlockHit extends Module {
             () -> slinky.getAsBoolean() && this.sLagChance.getValue() > 0);
     /* ---- Full (2026-10-21): sword up whenever an enemy is in range, every hit swapped in within
        one tick (release, hit, block again), so the server has it up for every hit taken. See AutoBlockFull. */
-    private final java.util.function.BooleanSupplier full = () -> this.mode.getValue() == 7;
+    private final java.util.function.BooleanSupplier full = () -> this.modeIndex() == 7;
     final FloatProperty fullRange = new FloatProperty("full-range", 3.5F, 2.0F, 6.0F, full);
     /* Second version (2026-10-21): vanilla block-hit order only, and the sword up only when it protects
        (windows before the next hit, guard, in the air). full-blink is gone (Grim PacketOrderI / NoSlow). */
@@ -101,21 +101,21 @@ public class BlockHit extends Module {
        ms), as a player tapping right click after left click. Blocks per
        second = CPS x chance. Does nothing while KillAura blocks by itself. */
     private final PercentProperty manualChance = new PercentProperty("ManualChance", 80,
-            () -> this.mode.getValue() == 5);
+            () -> this.modeIndex() == 5);
     private int manualTicks;
-    private final IntProperty stopTime = new IntProperty("StopTicks", 2, 1, 5, () -> this.mode.getValue() == 0);
-    private final ModeProperty autoBlockTime = new ModeProperty("AutoBlockTime", 0, new String[]{"Delay", "HurtTime", "Sag"}, () -> this.mode.getValue() == 1);
-    private final ModeProperty autoMode = new ModeProperty("AutoMode", 0, new String[]{"Spam", "Hold"}, () -> this.mode.getValue() == 1 && this.autoBlockTime.getValue() == 0);
-    private final IntProperty holdTick = new IntProperty("HoldTick", 2, 2, 5, () -> this.mode.getValue() == 1 && this.autoMode.getValue() == 1 && this.autoBlockTime.getValue() == 0);
-    private final IntProperty blockDelay = new IntProperty("BlockDelay", 100, 0, 1000, () -> this.mode.getValue() == 1 && this.autoBlockTime.getValue() == 0);
-    private final IntProperty minHurtTime = new IntProperty("MinHurtTime", 10, 1, 10, () -> this.mode.getValue() == 1 && this.autoBlockTime.getValue() == 1);
-    private final IntProperty maxHurtTime = new IntProperty("MaxHurtTime", 10, 1, 10, () -> this.mode.getValue() == 1 && this.autoBlockTime.getValue() == 1);
-    private final IntProperty delayPacketTick = new IntProperty("DelayPacketTick", 2, 1, 10, () -> this.mode.getValue() == 2);
-    private final IntProperty blockTick = new IntProperty("BlockTick", 3, 1, 5, () -> this.mode.getValue() == 2);
-    private final PercentProperty chance = new PercentProperty("BlockHitChance", 50, () -> this.mode.getValue() == 1);
-    private final BooleanProperty smart = new BooleanProperty("Smart", true, () -> this.mode.getValue() == 1);
-    private final BooleanProperty autoBlockRange = new BooleanProperty("AutoBlockRange", true, () -> this.mode.getValue() == 1);
-    private final FloatProperty range = new FloatProperty("Range", 3.0f, 1f, 4f, () -> autoBlockRange.getValue() && mode.getValue() == 1);
+    private final IntProperty stopTime = new IntProperty("StopTicks", 2, 1, 5, () -> this.modeIndex() == 0);
+    private final ModeProperty autoBlockTime = new ModeProperty("AutoBlockTime", 0, new String[]{"Delay", "HurtTime", "Sag"}, () -> this.modeIndex() == 1);
+    private final ModeProperty autoMode = new ModeProperty("AutoMode", 0, new String[]{"Spam", "Hold"}, () -> this.modeIndex() == 1 && this.autoBlockTime.getValue() == 0);
+    private final IntProperty holdTick = new IntProperty("HoldTick", 2, 2, 5, () -> this.modeIndex() == 1 && this.autoMode.getValue() == 1 && this.autoBlockTime.getValue() == 0);
+    private final IntProperty blockDelay = new IntProperty("BlockDelay", 100, 0, 1000, () -> this.modeIndex() == 1 && this.autoBlockTime.getValue() == 0);
+    private final IntProperty minHurtTime = new IntProperty("MinHurtTime", 10, 1, 10, () -> this.modeIndex() == 1 && this.autoBlockTime.getValue() == 1);
+    private final IntProperty maxHurtTime = new IntProperty("MaxHurtTime", 10, 1, 10, () -> this.modeIndex() == 1 && this.autoBlockTime.getValue() == 1);
+    private final IntProperty delayPacketTick = new IntProperty("DelayPacketTick", 2, 1, 10, () -> this.modeIndex() == 2);
+    private final IntProperty blockTick = new IntProperty("BlockTick", 3, 1, 5, () -> this.modeIndex() == 2);
+    private final PercentProperty chance = new PercentProperty("BlockHitChance", 50, () -> this.modeIndex() == 1);
+    private final BooleanProperty smart = new BooleanProperty("Smart", true, () -> this.modeIndex() == 1);
+    private final BooleanProperty autoBlockRange = new BooleanProperty("AutoBlockRange", true, () -> this.modeIndex() == 1);
+    private final FloatProperty range = new FloatProperty("Range", 3.0f, 1f, 4f, () -> autoBlockRange.getValue() && this.modeIndex() == 1);
     /* ---- Predict --------------------------------------------------------
 
        The other three modes all block because this player swung. This one
@@ -137,10 +137,10 @@ public class BlockHit extends Module {
        millisecond ping into an advantage. */
 
     private final FloatProperty predictRange = new FloatProperty("PredictRange", 4.0f, 2.0f, 8.0f,
-            () -> this.mode.getValue() == 3);
+            () -> this.modeIndex() == 3);
     /** Ticks the block is held once a swing has been seen. */
     private final IntProperty predictHold = new IntProperty("PredictHold", 4, 1, 12,
-            () -> this.mode.getValue() == 3);
+            () -> this.modeIndex() == 3);
     /**
      * How far off from facing this player an attacker may be and still count.
      *
@@ -150,14 +150,14 @@ public class BlockHit extends Module {
      * from the attacker's yaw toward this player.
      */
     private final IntProperty predictAngle = new IntProperty("PredictAngle", 70, 10, 180,
-            () -> this.mode.getValue() == 3);
+            () -> this.modeIndex() == 3);
     /**
      * Chance of reacting to any given swing.
      *
      * Reacting to every single one is the tell. A hand misses some.
      */
     private final PercentProperty predictChance = new PercentProperty("PredictChance", 80,
-            () -> this.mode.getValue() == 3);
+            () -> this.modeIndex() == 3);
 
     private int predictTicks = 0;
 
@@ -183,17 +183,17 @@ public class BlockHit extends Module {
        halves the damage; it also stops attacks while it is up, which is the
        price. */
     private final IntProperty rhythmEarly = new IntProperty("RhythmEarly", 50, 0, 500,
-            () -> this.mode.getValue() == 4);
+            () -> this.modeIndex() == 4);
     private final BooleanProperty rhythmPing = new BooleanProperty("RhythmPing", true,
-            () -> this.mode.getValue() == 4);
+            () -> this.modeIndex() == 4);
     private final IntProperty rhythmHold = new IntProperty("RhythmHold", 1, 0, 10,
-            () -> this.mode.getValue() == 4);
+            () -> this.modeIndex() == 4);
     /* The longest one block may stay up, in ticks; after that it comes down
        and stays down until the next hit. At 230 ms the first version held
        about eight ticks a round -- 0.4 s every half second with no attacks
        -- and felt like it (2026-09-25). */
     private final IntProperty rhythmMax = new IntProperty("RhythmMax", 5, 1, 20,
-            () -> this.mode.getValue() == 4);
+            () -> this.modeIndex() == 4);
     private int rhythmHeld;
     private boolean rhythmSpent;
     private static final int DAMAGEABLE = 10;
@@ -231,7 +231,7 @@ public class BlockHit extends Module {
         if (event.getType() != EventType.PRE || mc.thePlayer == null || mc.theWorld == null) {
             return;
         }
-        if (this.isEnabled() && this.mode.getValue() == 7) {
+        if (this.isRunning() && this.modeIndex() == 7) {
             this.fullBlock.tick();
         } else if (this.fullBlock.active()) {
             this.fullBlock.reset();
@@ -250,8 +250,55 @@ public class BlockHit extends Module {
         }
     }
 
+    /* 2026-10-26 (owner: "add my AutoBlock modes to Silent Aura"): Silent Aura's BlockMode can name one of this
+       module's modes. The module then runs that mode for the aura -- switched on or not, with its own settings --
+       and while it does, that mode wins over the module's own Mode. -1 when no aura is driving it. */
+    private int drivenMode = -1;
+
+    /** The mode in effect: the one Silent Aura drives, else this module's own. */
+    private int modeIndex() {
+        return this.drivenMode >= 0 ? this.drivenMode : this.mode.getValue();
+    }
+
+    /** Runs while switched on, or while Silent Aura drives a mode through it (EventManager asks this). */
+    @Override
+    public boolean isRunning() {
+        if (this.drivenMode < 0 && KillAuraLB.rhythmRuns()) {
+            /* 2026-10-27: Silent Aura's Rhythm has the use key and the sword block; this module, switched on by
+               itself, would raise and lower the same sword against it. */
+            return false;
+        }
+        return super.isRunning() || this.drivenMode >= 0 && mc.thePlayer != null;
+    }
+
+    /**
+     * Silent Aura runs {@code modeIndex} (an index into Mode) through this
+     * module; -1 stops. A change lets go of whatever the old mode held (the
+     * use key, a lag, a predicted block) before the new one starts.
+     */
+    public void driveFromAura(int modeIndex) {
+        if (modeIndex == this.drivenMode) {
+            return;
+        }
+        int before = modeIndex();
+        boolean wasRunning = isRunning();
+        this.drivenMode = modeIndex;
+        if (wasRunning && (before != modeIndex() || !isRunning())) {
+            resetModes();
+        }
+    }
+
+    /** The mode index Silent Aura drives, or -1. */
+    public int drivenMode() {
+        return this.drivenMode;
+    }
+
     @Override
     public void onDisabled() {
+        resetModes();
+    }
+
+    private void resetModes() {
         clearOwnDelay();
         if (this.yuri.blocking) {
             KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), false);
@@ -276,9 +323,9 @@ public class BlockHit extends Module {
 
     @EventTarget
     public void onTick(TickEvent event) {
-        if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null) return;
+        if (!this.isRunning() || mc.thePlayer == null || mc.theWorld == null) return;
         if (event.getType() == EventType.PRE) {
-            if (this.mode.getValue() == 0) {
+            if (this.modeIndex() == 0) {
                 if (mc.gameSettings.keyBindAttack.isKeyDown()) {
                     if (mc.thePlayer.isBlocking()) {
                         startBlocking = true;
@@ -295,7 +342,7 @@ public class BlockHit extends Module {
                     stopTick = 0;
                 }
             }
-            if (this.mode.getValue() == 1) {
+            if (this.modeIndex() == 1) {
                 if (target == null) return;
                 if (attacking) {
                     attackTicks++;
@@ -365,7 +412,7 @@ public class BlockHit extends Module {
                     }
                 }
             }
-            if (this.mode.getValue() == 2) {
+            if (this.modeIndex() == 2) {
                 if (mc.thePlayer.hurtTime == 10) {
                     blockTicks = 1;
                 }
@@ -388,19 +435,19 @@ public class BlockHit extends Module {
                 }
             } else clearOwnDelay();
 
-            if (this.mode.getValue() == 3) {
+            if (this.modeIndex() == 3) {
                 predict();
             }
             if (this.manualTicks > 0 && --this.manualTicks == 0) {
                 /* Back to whatever the player is really holding. */
                 KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
             }
-            if (this.mode.getValue() == 4) {
+            if (this.modeIndex() == 4) {
                 rhythm();
             } else if (this.rhythmBlocking) {
                 rhythmBlock(false);
             }
-            if (this.mode.getValue() == 6) {
+            if (this.modeIndex() == 6) {
                 slinkyTick();
             } else if (this.sActive) {
                 slinkyReset(true);
@@ -645,7 +692,7 @@ public class BlockHit extends Module {
     /** While held packets wait, a right click must not raise the sword on its own. */
     @EventTarget
     public void onSlinkyRightClick(atlas.events.RightClickMouseEvent event) {
-        if (this.isEnabled() && this.sLagging && mc.currentScreen == null && ItemUtil.isHoldingSword()) {
+        if (this.isRunning() && this.sLagging && mc.currentScreen == null && ItemUtil.isHoldingSword()) {
             event.setCancelled(true);
         }
     }
@@ -880,17 +927,17 @@ public class BlockHit extends Module {
     public void onAttack(AttackEvent event) {
         /* Hitting a boat, minecart or item frame with a sword used to throw a
            ClassCastException here. */
-        if (this.isEnabled() && ItemUtil.isHoldingSword() && event.getTarget() instanceof EntityLivingBase) {
+        if (this.isRunning() && ItemUtil.isHoldingSword() && event.getTarget() instanceof EntityLivingBase) {
             attacking = true;
             attackTicks = 0;
             target = (EntityLivingBase) event.getTarget();
-            if (this.mode.getValue() == 7) {
+            if (this.modeIndex() == 7) {
                 this.fullBlock.attacked();
             }
-            if (this.mode.getValue() == 5) {
+            if (this.modeIndex() == 5) {
                 manualBlock();
             }
-            if (this.mode.getValue() == 8) {
+            if (this.modeIndex() == 8) {
                 this.yuri.hit(true, mc.thePlayer.getDistanceToEntity(event.getTarget()), this.yRange.getValue(),
                         Math.random(), this.yChance.getValue(), System.currentTimeMillis());
             }
@@ -903,7 +950,7 @@ public class BlockHit extends Module {
         if (event.getType() != EventType.PRE || mc.thePlayer == null) {
             return;
         }
-        if (!this.isEnabled() || this.mode.getValue() != 8 || !mc.inGameHasFocus) {
+        if (!this.isRunning() || this.modeIndex() != 8 || !mc.inGameHasFocus) {
             if (this.yuri.blocking) {
                 KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), false);
             }

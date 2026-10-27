@@ -319,7 +319,11 @@ public final class ModuleDocs {
         d("AutoClicker", "按住左鍵時自動連點，CPS 在設定範圍內隨機，可順便格擋或挖方塊。");
         help("AutoClicker", "randomization", "Human（建議）：CPS 在範圍內慢慢漂移再回來，每一下的間隔像手一樣偏斜（很少太快、偶爾慢一點），會重複節奏、偶爾停頓，每場一開始稍快。Normal / Extra / Extra+：舊的均勻隨機。");
         d("KnockbackDelay", "把收到的擊退延後一小段時間才吃下去，讓被打飛的時機變晚。");
-        help("KnockbackDelay", "HoldTransactions", "壓住擊退時，後面的交易確認封包也一起等，伺服器就不會以為你收到擊退卻沒反應（Polar、Grim 用交易確認計時的擊退檢查）。預設開。");
+        help("KnockbackDelay", "Mode", "Steady：打架時伺服器送來的所有封包都照順序晚一段時間（keep-alive、交易封包也是），延遲慢慢加上去、慢慢退掉，伺服器看來就是網路比較慢，不會有哪一次擊退特別突出。Spike：只在每次擊退時，把擊退和後面所有封包一起壓住。");
+        help("KnockbackDelay", "SteadyDelay", "打架時所有封包晚多久（毫秒），不超過 LatencyBudget 減掉你的 ping。");
+        help("KnockbackDelay", "Ramp", "Steady 延遲每 tick 最多變多少（毫秒）：開始和結束有多平順。");
+        help("KnockbackDelay", "HoldTransactions", "Spike 且 HoldOthers 關掉時：壓住擊退後的交易確認封包也一起等。");
+        help("KnockbackDelay", "RealtimeDamage", "自己受傷的封包照常即時到，比擊退早。關掉（預設）才像真的網路慢：受傷和擊退一起到，JumpReset 會在擊退時跳。");
         d("AutoHeal", "血量低時自動使用治療物品（湯、藥水、頭）。");
         d("BackTrack", "對手往後退時，暫時把他留在你最後看到的位置，讓攻擊還能打到伺服器記錄中的位置。");
         d("Hitflick", "改變你打出去的擊退方向：FLICK 打中瞬間甩開視角再轉回；HAZARD 靜默轉向附近的虛空或岩漿；DISPLACE 攻擊瞬間轉向虛空或指定角度。");

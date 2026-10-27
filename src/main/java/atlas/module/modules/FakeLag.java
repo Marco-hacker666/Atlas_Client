@@ -66,11 +66,12 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  *   a two hundred and fifty millisecond connection, in both directions, all
  *   the time.
  *
- *   DYNAMIC asks whether there is anyone to gain anything against. Packets are
- *   held only while an opponent is within range, and the queue empties the
- *   moment an attack is sent. Out of a fight it adds nothing at all, which is
- *   the point of it: a connection that is only ever bad during a fight is a
- *   smaller thing for anyone to notice than one that is always bad.
+ *   DYNAMIC (2026-10-27: what was LIQUID; the first DYNAMIC is gone) holds
+ *   only on the approach to an opponent and lets the queue out before melee
+ *   distance; the fight itself goes out honest, and after any release a
+ *   recoil passes before it holds again. Out of a fight it adds nothing at
+ *   all: a connection that is only ever late on the way in is a smaller
+ *   thing for anyone to notice than one that is always late.
  *
  *   REPEL (since 2026-09-25 Vape's Repel, not the old position game) holds
  *   no movement at all. It holds one thing: an attack on someone who cannot
@@ -159,9 +160,13 @@ public class FakeLag extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     private static final int LATENCY = 0;
-    private static final int DYNAMIC = 1;
-    private static final int REPEL = 2;
     /**
+     * DYNAMIC (2026-10-27, owner: "rename Liquid to Dynamic and delete the
+     * original"): the mode that was LIQUID. The old DYNAMIC -- hold while an
+     * opponent is in range and not yet in melee, release everything at once
+     * -- is gone; a config saying LIQUID loads as this, one saying DYNAMIC
+     * gets this too. Below, "LIQUID" in older notes means this mode.
+     *
      * LiquidBounce's gating (legacy FakeLag.kt and nextgen ModuleFakeLag.kt).
      *
      * The other combat modes hold hardest exactly while hits are being traded,
@@ -177,10 +182,11 @@ public class FakeLag extends Module {
      * an S08 arrives. NOTES §2 says to discard stale positions on a
      * correction, so this mode uses the existing S08/C06 handling instead.
      */
-    private static final int LIQUID = 3;
+    private static final int DYNAMIC = 1;
+    private static final int REPEL = 2;
 
     public final ModeProperty mode = new ModeProperty("mode", 0,
-            new String[]{"LATENCY", "DYNAMIC", "REPEL", "LIQUID"});
+            new String[]{"LATENCY", "DYNAMIC", "REPEL"}).alias("LIQUID", "DYNAMIC");
 
     /**
      * Milliseconds each eligible packet waits.
@@ -196,7 +202,7 @@ public class FakeLag extends Module {
      * plus this module's delay, and Pika's mitigation starts once that total
      * is past about a quarter of a second. Each hold waits at most this many
      * milliseconds minus the ping (Ping.own()), so the total stays under it;
-     * when less than MIN_WORTH_HOLDING would be left, LIQUID does not hold at
+     * when less than MIN_WORTH_HOLDING would be left, DYNAMIC does not hold at
      * all ("ping", let out gradually). 0 turns it off; with no ping reading
      * the delay is used as set.
      */
@@ -233,7 +239,7 @@ public class FakeLag extends Module {
     public final IntProperty maxHeld = new IntProperty("max-held", 20, 4, 100);
 
     /**
-     * LIQUID: an opponent this close to the server-side position ends the hold.
+     * DYNAMIC: an opponent this close to the server-side position ends the hold.
      *
      * LiquidBounce legacy's MinAllowedDistToEnemy upper bound (3.5). Inside
      * this, hits are being exchanged, and holding would mean the server
@@ -243,7 +249,7 @@ public class FakeLag extends Module {
             () -> this.mode.getValue() != LATENCY);
 
     /**
-     * LIQUID: milliseconds after any release during which nothing is held.
+     * DYNAMIC: milliseconds after any release during which nothing is held.
      *
      * LiquidBounce legacy's RecoilTime (750; nextgen uses 250). This is what
      * stops the hold, release, hold, release cycle within one exchange: each
@@ -252,20 +258,20 @@ public class FakeLag extends Module {
     public final IntProperty recoilTime = new IntProperty("recoil-time", 750, 0, 2000);
 
     /**
-     * LIQUID: blocks before melee distance over which the delay runs down to
+     * DYNAMIC: blocks before melee distance over which the delay runs down to
      * nothing, so the queue is already empty when the fight starts. 0 keeps
      * the full delay up to melee distance and then releases it all at once.
      */
     public final FloatProperty taper = new FloatProperty("taper", 1.5F, 0.0F, 4.0F,
-            () -> this.mode.getValue() == LIQUID);
+            () -> this.mode.getValue() == DYNAMIC);
 
     /**
-     * LIQUID: positions a tick while the queue is let out -- one is what the
+     * DYNAMIC: positions a tick while the queue is let out -- one is what the
      * client makes, so one more than that is the queue shrinking by one a
      * tick. Releases that must be immediate ignore it.
      */
     public final IntProperty catchUp = new IntProperty("catch-up", 2, 2, 5,
-            () -> this.mode.getValue() == LIQUID);
+            () -> this.mode.getValue() == DYNAMIC);
 
     /**
      * How a release sends what was held.
@@ -298,7 +304,7 @@ public class FakeLag extends Module {
        that is always late is what got Pika to close the connection) and
        never in REPEL (it holds no movement). */
     public final BooleanProperty holdTransactions = new BooleanProperty("hold-transactions", true,
-            () -> this.mode.getValue() == DYNAMIC || this.mode.getValue() == LIQUID);
+            () -> this.mode.getValue() == DYNAMIC);
     /* After a correction (S08), nothing is held for at least this long: a
        setback says the server is watching this player's movement right now. */
     public final IntProperty flagPause = new IntProperty("flag-pause", 2000, 0, 5000);
@@ -371,16 +377,16 @@ public class FakeLag extends Module {
         return this.queue.size();
     }
 
-    /** LIQUID: no holding before this wall-clock time. Written from the network thread too. */
+    /** DYNAMIC: no holding before this wall-clock time. Written from the network thread too. */
     private volatile long recoilUntil;
-    /** LIQUID: whether the conditions to hold were met at the last tick. */
+    /** DYNAMIC: whether the conditions to hold were met at the last tick. */
     private boolean holdAllowed;
-    /** LIQUID: the queue is being let out rather than dropped; new packets wait behind it. */
+    /** DYNAMIC: the queue is being let out rather than dropped; new packets wait behind it. */
     private volatile boolean easing;
     /* 2026-10-21 (FakeLag/Backtrack review). Of 2,744 holds on 10-18..10-21, the ones the tick ended at once
        went out in one tick: "melee" 619 (155 with 6+ positions), "hurt" 51; and a dig (126) or a right-click
        on a block (51) emptied the queue ahead of itself. The setbacks naming FakeLag were those bursts.
-       LIQUID now drains instead: DRAIN_POSITIONS a tick, and what is sent meanwhile -- a dig, a click --
+       DYNAMIC now drains instead: DRAIN_POSITIONS a tick, and what is sent meanwhile -- a dig, a click --
        waits its turn behind, in order, so the server judges it where it was made. Only an attack,
        knockback, a catch or a correction still empty the queue at once. */
     private volatile boolean drainingOut;
@@ -556,7 +562,7 @@ public class FakeLag extends Module {
     private boolean holdsReply(Packet<?> packet) {
         int mode = this.mode.getValue();
         return packet instanceof net.minecraft.network.play.client.C0FPacketConfirmTransaction
-                && this.holdTransactions.getValue() && (mode == DYNAMIC || mode == LIQUID);
+                && this.holdTransactions.getValue() && mode == DYNAMIC;
     }
 
     private static boolean keepsOrder(Packet<?> packet) {
@@ -683,7 +689,7 @@ public class FakeLag extends Module {
                head of the send call, so anything released here reaches the
                server first and this one is judged against it. */
             this.recoilUntil = System.currentTimeMillis() + this.recoilTime.getValue();
-            if (this.mode.getValue() == LIQUID && !this.queue.isEmpty() && !Arbiter.catching()) {
+            if (this.mode.getValue() == DYNAMIC && !this.queue.isEmpty() && !Arbiter.catching()) {
                 /* Behind what is held, in order, and the queue drains (drainingOut). */
                 if (!atlas.management.PacketHub.take(event, HUB)) {
                     return;
@@ -777,7 +783,7 @@ public class FakeLag extends Module {
                packet goes, so nothing overtakes what was held. */
             if (!this.queue.isEmpty()) {
                 if (this.easing && System.currentTimeMillis() >= this.recoilUntil
-                        || this.drainingOut && this.mode.getValue() == LIQUID) {
+                        || this.drainingOut && this.mode.getValue() == DYNAMIC) {
                     /* Being let out: this one takes its place at the back. */
                     if (!atlas.management.PacketHub.take(event, HUB)) {
                                     return;
@@ -901,8 +907,8 @@ public class FakeLag extends Module {
         enforceLimits();
 
         int current = this.mode.getValue();
-        if (current == LIQUID) {
-            liquidTick();
+        if (current == DYNAMIC) {
+            dynamicTick();
             return;
         }
         if (current == LATENCY) {
@@ -922,32 +928,10 @@ public class FakeLag extends Module {
             }
             return;
         }
-
-        /* DYNAMIC: hold only with an opponent in range who is not
-           yet within melee distance of the server-side position. Out of a
-           fight, or once it has started, the connection is honest; reaching
-           melee distance starts the recoil, as in LIQUID. */
-        EntityPlayer target = nearestTarget();
-        boolean armed = !this.weaponsOnly.getValue() || atlas.util.ItemUtil.hasRawUnbreakingEnchant();
-        boolean hold = target != null && armed && !inMelee(target);
-        String blocked = target == null ? "no-target" : !armed ? "no-weapon" : hold ? null : "melee";
-        if (hold && System.currentTimeMillis() < this.recoilUntil) {
-            blocked = "recoil";
-        }
-        observe(target, blocked);
-        this.holdAllowed = hold;
-        if (!hold) {
-            if (!this.queue.isEmpty()) {
-                releaseAll(blocked);
-            }
-            return;
-        }
-
-        releaseOlderThan(holdDelay());
     }
 
     /**
-     * LIQUID, once a tick: decide whether the next tick may hold, and release
+     * DYNAMIC, once a tick: decide whether the next tick may hold, and release
      * what is due.
      *
      * Holds only while all of these are true -- each is a LiquidBounce
@@ -968,7 +952,7 @@ public class FakeLag extends Module {
      * to the last position. Several positions in one tick is a known §1 cost;
      * the recoil is what keeps it rare.
      */
-    private void liquidTick() {
+    private void dynamicTick() {
         long now = System.currentTimeMillis();
         this.drainingAhead = false;
         boolean hold = false;
@@ -1148,18 +1132,8 @@ public class FakeLag extends Module {
         return new Vec3(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ);
     }
 
-    /** Opponent within melee distance of the server-side position; starts the recoil if so. */
-    private boolean inMelee(EntityPlayer target) {
-        Vec3 server = heldServerPosition().addVector(0.0, mc.thePlayer.getEyeHeight(), 0.0);
-        if (RotationUtil.distanceToBox(target, server) <= this.meleeDistance.getValue()) {
-            this.recoilUntil = System.currentTimeMillis() + this.recoilTime.getValue();
-            return true;
-        }
-        return false;
-    }
-
     /**
-     * LIQUID: the first of LiquidBounce's player conditions that rules holding
+     * DYNAMIC: the first of LiquidBounce's player conditions that rules holding
      * out, or null when none does.
      */
     private String ineligibility() {

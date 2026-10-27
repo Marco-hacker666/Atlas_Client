@@ -250,6 +250,29 @@ public class BackTrack extends Module {
         espCurrent = null;
     }
 
+    /**
+     * 2026-10-27: a new world -- leaving by the menu (no S40 to flush on), a
+     * server switch -- drops what is held instead of keeping it. Kept, it was
+     * processed on the next server's first packet: transactions answered there
+     * with ids that server never sent. Dropped, not released: what is held
+     * describes the world being left. Runs off too, so a hold left when the
+     * module was switched off mid-world cannot survive either.
+     */
+    @EventTarget(whenDisabled = true)
+    public void onLoadWorld(atlas.events.LoadWorldEvent event) {
+        synchronized (lock) {
+            incomingQueue.clear();
+            backtrackStartTime = 0L;
+            rolledDelay = 0;
+            realPosition = null;
+        }
+        target = null;
+        espPrevious = null;
+        espCurrent = null;
+        espAlpha = 0.0F;
+        espAlphaPrevious = 0.0F;
+    }
+
     private int baseDelay() {
         return adaptive.getValue() ? adaptiveDelay.getValue() : normalDelay.getValue();
     }

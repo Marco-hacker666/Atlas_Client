@@ -60,7 +60,11 @@ final class ModuleDocsEn {
         d("AutoClicker", "Clicks for you while the attack key is held, at a random CPS within your range; can block-hit or break blocks.");
         help("AutoClicker", "randomization", "Human (best): the CPS wanders inside your range and drifts back, each gap skewed like a hand's (rarely too fast, sometimes slow), with cadence repeats, short hesitations and a quicker start to each fight. Normal / Extra / Extra+: the older uniform draws.");
         d("KnockbackDelay", "Holds incoming knockback for a moment so the push lands late.");
-        help("KnockbackDelay", "HoldTransactions", "While a push is held, the transaction packets after it wait with it, so the server never hears the push arrived before you reacted to it (transaction-timed velocity checks on Polar and Grim). On by default.");
+        help("KnockbackDelay", "Mode", "Steady: in a fight everything the server sends runs a set delay late, in order, keep-alives and transactions too, the delay easing in and out -- to the server just a slower connection, so no single knockback stands out. Spike: only around each knockback, everything behind it waiting with it.");
+        help("KnockbackDelay", "SteadyDelay", "How late everything arrives while in a fight (ms), within LatencyBudget minus your ping.");
+        help("KnockbackDelay", "Ramp", "The most the Steady delay changes in one tick (ms): how gently it starts and stops.");
+        help("KnockbackDelay", "HoldTransactions", "Spike with HoldOthers off: the transaction packets after a held push still wait with it.");
+        help("KnockbackDelay", "RealtimeDamage", "Your own hurt arrives on time, ahead of the push. Off (default) is what a slow connection does: hurt and push together, so JumpReset jumps on the push.");
         d("AutoHeal", "Uses healing items (soup, potions, heads) when health is low.");
         d("BackTrack", "Keeps a retreating target where you last saw them a moment longer, so a swing reaches the position the server still has.");
         d("Hitflick", "Steers the knockback of your hits: FLICK flicks the view away on a hit and back; HAZARD silently aims it at nearby void or lava; DISPLACE turns at the hit toward the void or a set angle.");

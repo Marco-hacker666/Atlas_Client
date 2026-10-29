@@ -589,6 +589,10 @@ public class KillAuraLB extends Module {
     /** A slot change ends a sword block (LiquidBounce's changeSlot handler). */
     @EventTarget
     public void onPacket(atlas.events.PacketEvent event) {
+        if (event.getType() == EventType.SEND && !event.isCancelled() && event.getPacket() instanceof C02PacketUseEntity
+                && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK) {
+            this.lbLastAttackTick = this.rhythmTick;
+        }
         if (this.isEnabled() && event.getType() == EventType.SEND && !event.isCancelled()
                 && event.getPacket() instanceof C02PacketUseEntity
                 && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK
@@ -1655,6 +1659,16 @@ public class KillAuraLB extends Module {
                the click (nothing sent, the click plan keeps it) rather than land a hit valid only on an old place. */
             return;
         }
+        if (inRange && this.lbOwnsKey && mc.thePlayer.isUsingItem() && this.clicker.isClickTick()
+                && !lbWorthLowering(target)) {
+            /* 2026-10-29 (Pika/Polar cut every hit to ~0.7 with Basic on, ~4 with it off): the key path lowered the
+               sword for every click -- 269 clicks for 139 hits, half of them on a target still immune -- each one
+               release, hit, raise in the same few ticks. A click that cannot hurt now keeps the sword up and is
+               spent as vanilla spends one while an item is in use: nothing goes out. */
+            this.verdict = null;
+            this.clicker.click(this::missOk, () -> false);
+            return;
+        }
         atlas.humanize.Humanizer.Verdict verdict = this.verdict;
         this.verdict = null;
         if (verdict != null && this.clicker.isClickTick() && canAttackNow(target)
@@ -2191,6 +2205,32 @@ public class KillAuraLB extends Module {
     /** The tick the key path let the sword down: vanilla releases in that runTick, the hit goes the next. */
     private int lbLoweredAt = Integer.MIN_VALUE;
 
+    /** The tick (rhythmTick) of our last attack packet, whoever sent it. */
+    private int lbLastAttackTick = Integer.MIN_VALUE / 2;
+
+    /**
+     * Whether lowering the key path's sword for a click on {@code target} can do damage now: its hurt nearly over,
+     * and our last hit not still on its way back (its hurt shows a round trip later).
+     */
+    private boolean lbWorthLowering(Entity target) {
+        if (!(target instanceof EntityLivingBase)) {
+            return true;
+        }
+        EntityLivingBase living = (EntityLivingBase) target;
+        int since = this.rhythmTick - this.lbLastAttackTick;
+        int back = Math.max(3, Math.round(atlas.util.Ping.own() / 50.0F) + 2);
+        if (since < back && living.hurtTime == 0) {
+            return false;
+        }
+        return since >= 10 || atlas.management.HitTimer.canHurt(living);
+    }
+
+    /** A few ticks more, now and then, on the key path's gaps: 55 % none, 30 % one, 15 % two. */
+    private static int lbJitter() {
+        double roll = Math.random();
+        return roll < 0.55 ? 0 : roll < 0.85 ? 1 : 2;
+    }
+
     /** Basic or Interact on the Input path: the block goes through vanilla's use key, in vanilla's order. */
     private boolean lbKeyBlock() {
         return inputPath() && this.lbBlocking.getAsBoolean() && this.blockMode.getValue() < 2;
@@ -2266,7 +2306,8 @@ public class KillAuraLB extends Module {
             KeyBindUtil.setKeyBindState(use, true);
             KeyBindUtil.pressKeyOnce(use);
             this.lbOwnsKey = true;
-            this.reblockTicks = this.reblock.random();
+            /* 2026-10-29: the gaps vary, as a hand's do (a fixed release-hit-raise was the Polar cut, see attackTarget). */
+            this.reblockTicks = this.reblock.random() + lbJitter();
             this.enforcedBlocking = true;
             this.hasBlockedSinceAttack = true;
             this.blockVisual = true;
@@ -2335,7 +2376,7 @@ public class KillAuraLB extends Module {
             if (!pauses) {
                 this.blockVisual = false;
             }
-            this.pauseOnUnblockTicks = this.pauseOnUnblock.random();
+            this.pauseOnUnblockTicks = this.pauseOnUnblock.random() + lbJitter();
             if (this.unblockMode.getValue() == 1 && mc.thePlayer.isUsingItem()) {
                 int slot = mc.thePlayer.inventory.currentItem;
                 PacketUtil.sendPacket(new net.minecraft.network.play.client.C09PacketHeldItemChange((slot + 1) % 9));

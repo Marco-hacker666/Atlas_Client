@@ -57,6 +57,12 @@ public final class Updater {
     private static final int CONNECT_TIMEOUT_MS = 8000;
     private static final int READ_TIMEOUT_MS = 20000;
     private static final int MAX_MANIFEST_BYTES = 16 * 1024;
+    /**
+     * Waits before each further attempt, ms (2026-10-29: a connection reset half way, a name that would not
+     * resolve, a stall -- each used to end the update until the next start, and the half-downloaded jar was thrown
+     * away). A jar download goes on from where it stopped.
+     */
+    static long[] retryDelaysMs = {1000L, 3000L, 8000L};
 
     private static Updater instance;
 
@@ -538,7 +544,15 @@ public final class Updater {
         return releasesBase + "/download/v" + m.version + "/" + m.file;
     }
 
-    private static URLConnection open(String url) throws IOException {
+    /** A failure another attempt cannot fix: the file is not there, or is not the signed size. */
+    static final class PermanentFailure extends IOException {
+        PermanentFailure(String message) {
+            super(message);
+        }
+    }
+
+    /** {@code from} > 0: ask for the rest of the file from that byte on. */
+    private static URLConnection open(String url, long from) throws IOException {
         URLConnection c = new URL(url).openConnection();
         c.setConnectTimeout(CONNECT_TIMEOUT_MS);
         c.setReadTimeout(READ_TIMEOUT_MS);
@@ -547,6 +561,9 @@ public final class Updater {
         /* 2026-10-22: GitHub answers 406 to Java's default Accept header (text/html, image/gif, image/jpeg and
            two wildcards) on release downloads; every "update check" failed with HTTP 406. Ask for the file. */
         c.setRequestProperty("Accept", "application/octet-stream");
+        if (from > 0) {
+            c.setRequestProperty("Range", "bytes=" + from + "-");
+        }
         if (c instanceof HttpURLConnection) {
             HttpURLConnection h = (HttpURLConnection) c;
             h.setInstanceFollowRedirects(true);
@@ -554,10 +571,13 @@ public final class Updater {
             if (code == 404) {
                 /* Usually a release just published: its files are attached by
                    the release Action a minute or two later (2026-10-13). */
-                throw new IOException("not on the latest release yet (404); it may still be building,"
+                throw new PermanentFailure("not on the latest release yet (404); it may still be building,"
                         + " try again in a minute or two");
             }
-            if (code != 200) {
+            if (code != 200 && !(from > 0 && code == 206)) {
+                if (code >= 400 && code < 500 && code != 408 && code != 429) {
+                    throw new PermanentFailure("HTTP " + code);
+                }
                 throw new IOException("HTTP " + code);
             }
         }
@@ -565,25 +585,74 @@ public final class Updater {
     }
 
     static byte[] download(String url, int maxBytes) throws IOException {
-        InputStream in = open(url).getInputStream();
-        try {
-            return UpdateSignature.readAll(in, maxBytes);
-        } finally {
-            in.close();
+        for (int attempt = 0; ; attempt++) {
+            try {
+                InputStream in = open(url, 0L).getInputStream();
+                try {
+                    return UpdateSignature.readAll(in, maxBytes);
+                } finally {
+                    in.close();
+                }
+            } catch (PermanentFailure e) {
+                throw e;
+            } catch (IOException e) {
+                waitBeforeRetry(attempt, e);
+            }
         }
     }
 
     static void downloadToFile(String url, File out, long expectedSize) throws IOException {
-        InputStream in = open(url).getInputStream();
-        OutputStream os = new FileOutputStream(out);
+        for (int attempt = 0; ; attempt++) {
+            try {
+                downloadOnce(url, out, expectedSize);
+                return;
+            } catch (PermanentFailure e) {
+                throw e;
+            } catch (IOException e) {
+                waitBeforeRetry(attempt, e);
+            }
+        }
+    }
+
+    /** Rethrows {@code failure} when the attempts are used up; else waits this attempt's delay. */
+    private static void waitBeforeRetry(int attempt, IOException failure) throws IOException {
+        long[] delays = retryDelaysMs;
+        if (attempt >= delays.length) {
+            throw failure;
+        }
+        try {
+            Thread.sleep(delays[attempt]);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw failure;
+        }
+    }
+
+    /** One attempt, going on from what {@code out} already holds when the server allows it. */
+    private static void downloadOnce(String url, File out, long expectedSize) throws IOException {
+        long have = out.isFile() ? out.length() : 0L;
+        if (have > expectedSize) {
+            have = 0L;
+        }
+        if (have == expectedSize) {
+            return;
+        }
+        URLConnection c = open(url, have);
+        boolean resumed = have > 0 && c instanceof HttpURLConnection
+                && ((HttpURLConnection) c).getResponseCode() == 206;
+        if (!resumed) {
+            have = 0L;
+        }
+        InputStream in = c.getInputStream();
+        OutputStream os = new FileOutputStream(out, resumed);
         try {
             byte[] buf = new byte[65536];
-            long total = 0;
+            long total = have;
             int r;
             while ((r = in.read(buf)) != -1) {
                 total += r;
                 if (total > expectedSize) {
-                    throw new IOException("download is larger than the signed size");
+                    throw new PermanentFailure("download is larger than the signed size");
                 }
                 os.write(buf, 0, r);
             }

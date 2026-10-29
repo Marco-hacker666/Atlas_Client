@@ -35,6 +35,14 @@ public class UpdaterTest {
     private final Map<String, byte[]> served = new HashMap<String, byte[]>();
     private final Map<String, Integer> hits = new java.util.concurrent.ConcurrentHashMap<String, Integer>();
     private volatile long jarDelayMs;
+    /* 2026-10-29 retry tests: the next this-many jar requests are cut after dropAfterBytes; ranges honoured or not;
+       the next this-many manifest requests answer 503. */
+    private final java.util.concurrent.atomic.AtomicInteger jarDrops = new java.util.concurrent.atomic.AtomicInteger();
+    private volatile int dropAfterBytes;
+    private volatile boolean rangesHonoured = true;
+    private final java.util.concurrent.atomic.AtomicInteger manifestErrors = new java.util.concurrent.atomic.AtomicInteger();
+    private final List<String> ranges = new java.util.concurrent.CopyOnWriteArrayList<String>();
+    private long[] savedDelays;
     private KeyPair keys;
 
     @Before
@@ -54,7 +62,27 @@ public class UpdaterTest {
                 }
             }
             byte[] body = served.get(path);
-            if (body == null) {
+            String range = exchange.getRequestHeaders().getFirst("Range");
+            if (path.endsWith(".jar")) {
+                ranges.add(String.valueOf(range));
+            }
+            if (body != null && path.endsWith("update.properties") && manifestErrors.getAndDecrement() > 0) {
+                exchange.sendResponseHeaders(503, -1);
+            } else if (body != null && path.endsWith(".jar") && jarDrops.getAndDecrement() > 0) {
+                /* Promise the whole file, send part of it, hang up. */
+                exchange.sendResponseHeaders(200, body.length);
+                OutputStream os = exchange.getResponseBody();
+                os.write(body, 0, dropAfterBytes);
+                os.flush();
+                exchange.close();
+            } else if (body != null && range != null && rangesHonoured && range.startsWith("bytes=")) {
+                int from = Integer.parseInt(range.substring(6, range.length() - 1));
+                exchange.getResponseHeaders().add("Content-Range", "bytes " + from + "-" + (body.length - 1) + "/" + body.length);
+                exchange.sendResponseHeaders(206, body.length - from);
+                OutputStream os = exchange.getResponseBody();
+                os.write(body, from, body.length - from);
+                os.close();
+            } else if (body == null) {
                 exchange.sendResponseHeaders(404, -1);
             } else {
                 exchange.sendResponseHeaders(200, body.length);
@@ -65,11 +93,14 @@ public class UpdaterTest {
             exchange.close();
         });
         server.start();
+        savedDelays = Updater.retryDelaysMs;
+        Updater.retryDelaysMs = new long[]{5L, 5L, 5L};
         Updater.setReleasesBaseForTests("http://127.0.0.1:" + server.getAddress().getPort() + "/r");
     }
 
     @After
     public void tearDown() {
+        Updater.retryDelaysMs = savedDelays;
         server.stop(0);
         Updater.setReleasesBaseForTests("https://github.com/" + Updater.REPO + "/releases");
         deleteTree(dir);
@@ -396,6 +427,63 @@ public class UpdaterTest {
         Thread.sleep(300L);
         assertEquals(Updater.State.AVAILABLE, next.getState());
         assertNull(hits.get("/r/download/v2.2.0/Atlas-v2.2.0.jar"));
+    }
+
+    // ------------------------------------------------- 2026-10-29 retries
+
+    private static byte[] bytes(int n) {
+        byte[] b = new byte[n];
+        new java.util.Random(7).nextBytes(b);
+        return b;
+    }
+
+    @Test
+    public void aCutDownloadGoesOnFromWhereItStopped() throws Exception {
+        Fixture f = publish("2.2.0", bytes(200000), keys.getPrivate());
+        jarDrops.set(1);
+        dropAfterBytes = 70000;
+        Updater u = updater("2.1.1");
+        u.check(false);
+        assertEquals(u.getLastError(), Updater.State.READY, u.getState());
+        assertArrayEquals(f.jar, Files.readAllBytes(new File(u.workDir(), "pending/" + f.file).toPath()));
+        assertEquals(Integer.valueOf(2), hits.get("/r/download/v2.2.0/" + f.file));
+        assertEquals("bytes=70000-", ranges.get(1));
+    }
+
+    @Test
+    public void withoutRangesItStartsOver() throws Exception {
+        Fixture f = publish("2.2.0", bytes(200000), keys.getPrivate());
+        rangesHonoured = false;
+        jarDrops.set(2);
+        dropAfterBytes = 50000;
+        Updater u = updater("2.1.1");
+        u.check(false);
+        assertEquals(u.getLastError(), Updater.State.READY, u.getState());
+        assertArrayEquals(f.jar, Files.readAllBytes(new File(u.workDir(), "pending/" + f.file).toPath()));
+        assertEquals(Integer.valueOf(3), hits.get("/r/download/v2.2.0/" + f.file));
+    }
+
+    @Test
+    public void aManifestErrorIsTriedAgain() throws Exception {
+        publish("2.2.0", bytes(1000), keys.getPrivate());
+        manifestErrors.set(2);
+        Updater u = updater("2.1.1");
+        u.check(false);
+        assertEquals(u.getLastError(), Updater.State.READY, u.getState());
+        assertEquals(Integer.valueOf(3), hits.get("/r/latest/download/update.properties"));
+    }
+
+    @Test
+    public void itGivesUpAfterTheLastAttempt() throws Exception {
+        Fixture f = publish("2.2.0", bytes(100000), keys.getPrivate());
+        jarDrops.set(100);
+        dropAfterBytes = 1000;
+        Updater u = updater("2.1.1");
+        u.check(false);
+        assertEquals(Updater.State.FAILED, u.getState());
+        assertEquals(Integer.valueOf(Updater.retryDelaysMs.length + 1), hits.get("/r/download/v2.2.0/" + f.file));
+        File[] left = new File(u.workDir(), "pending").listFiles();
+        assertTrue(left == null || left.length == 0);
     }
 
     // ---------------------------------------------------------------- helpers

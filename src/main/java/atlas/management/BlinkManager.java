@@ -177,6 +177,12 @@ public class BlinkManager {
             return false;
         }
         if (state) {
+            if (this.blinkModule != module && !LagGuard.mayHold(module.moduleName(), false, null)) {
+                /* 2026-10-28 LagGuard: no new hold now (a knockback, a dig, a correction). */
+                this.refusals++;
+                this.lastRefusal = module.name() + " refused by LagGuard";
+                return false;
+            }
             if (Arbiter.catching()) {
                 /* A catch is on: its clicks are judged against the movement
                    this would hold. See Arbiter. */
@@ -258,6 +264,21 @@ public class BlinkManager {
                 release(packet);
             }
         }
+    }
+
+    /**
+     * A correction (LagGuard): the movement held is stale -- sent, it asks for
+     * another correction. Dropped, transaction replies still sent in order,
+     * and the blink ends; its owner's own end later finds nothing to do.
+     */
+    public void abortForSetback() {
+        if (this.blinkModule == BlinkModules.NONE) {
+            return;
+        }
+        ActionLedger.note(this.blinkModule.moduleName(), "dropped on a correction", this.blinkedPackets.size());
+        discardHeld();
+        this.blinking = false;
+        this.blinkModule = BlinkModules.NONE;
     }
 
     public BlinkModules getBlinkingModule() {

@@ -101,8 +101,19 @@ public final class VanillaInput {
 
     /** rightClickMouse HEAD, not cancelled: with a sword while an aura fights, the crosshair is its look. */
     public static void applyUse() {
-        MovingObjectPosition managed = fighting && ItemUtil.isHoldingSword() ? fightOver : null;
+        MovingObjectPosition managed = useOver != null && ItemUtil.isHoldingSword() ? useOver
+                : fighting && ItemUtil.isHoldingSword() ? fightOver : null;
         mc.objectMouseOver = USES.swapIn(mc.objectMouseOver, managed);
+    }
+
+    /* 2026-10-28 (Silent Aura BlockMode Basic/Interact on the Input path): what this tick's sword right clicks point
+       at, when a module decides it -- Basic a miss (only the use), Interact the target (interact-at, interact, use, as
+       vanilla's right click on a player sends them). Cleared at the end of the tick. */
+    private static MovingObjectPosition useOver;
+
+    /** This tick's right clicks with a sword point at {@code over} (null: the aura's look, as before). */
+    public static void useOver(MovingObjectPosition over) {
+        useOver = over;
     }
 
     /** rightClickMouse RETURN: the crosshair back. */
@@ -118,6 +129,7 @@ public final class VanillaInput {
                 ATTACKS.clear();
                 fighting = false;
                 fightOver = null;
+                useOver = null;
             }
         }
     }

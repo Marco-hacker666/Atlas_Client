@@ -162,7 +162,7 @@ public class BackTrack extends Module {
         super("Backtrack", false);
 
         /* Incoming holder: one at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
-        atlas.management.PacketHub.registerIncoming("Backtrack", () -> this.incomingQueue.size());
+        atlas.management.PacketHub.registerIncoming("Backtrack", () -> this.incomingQueue.size(), this::releaseIncoming);
         /* What is held, for PacketHolds (plan step 13). */
         atlas.management.PacketHolds.register(() -> {
             int count = this.incomingQueue.size();

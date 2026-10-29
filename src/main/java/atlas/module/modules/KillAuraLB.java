@@ -298,6 +298,12 @@ public class KillAuraLB extends Module {
     public final FloatProperty rhythmAimTolerance = new FloatProperty("Rhythm-AimTolerance", 0.3F, 0.0F, 1.0F, this.rhythmShown);
     public final BooleanProperty rhythmOnlyClicking = new BooleanProperty("Rhythm-OnlyWhenClicking", true, this.rhythmShown);
     public final BooleanProperty rhythmLag = new BooleanProperty("Rhythm-Lag", true, this.rhythmShown);
+    /* Rhythm-FreeRaise (2026-10-28, owner: "less slowdown, no flags"; off by default): the tick the sword goes up
+       moves unslowed when Grim's NoSlow would let it. Grim judges only the movement it receives while it has the
+       sword up, and flags two such ticks in a row that miss the slowed prediction; one passes when the last one before
+       it was slowed (grimUnslowedLast mirrors that). With Rhythm-Lag the raise tick is the only movement of a block it
+       receives. Pika runs Polar, whose rule cannot be read: for trying, with the log's summary to check. */
+    public final BooleanProperty rhythmFreeRaise = new BooleanProperty("Rhythm-FreeRaise", false, this.rhythmShown);
     public final IntProperty rhythmLagMax = new IntProperty("Rhythm-LagMax", 5, 1, 10,
             () -> this.rhythmShown.getAsBoolean() && this.rhythmLag.getValue());
     public final BooleanProperty rhythmLog = new BooleanProperty("Rhythm-Log", true, this.rhythmShown);
@@ -533,6 +539,7 @@ public class KillAuraLB extends Module {
         if (mc.thePlayer != null) {
             stopBlocking(false);
         }
+        lbLetGo();
         /* Rhythm: a hold ends (release first), the use key back to the button; vanilla lowers the sword next. */
         rhythmEndHold("off");
         rhythmLetGo(mc.currentScreen == null);
@@ -833,6 +840,14 @@ public class KillAuraLB extends Module {
             }
         }
         rhythmApply(sent);
+        if (this.lbOwnsKey) {
+            if (!lbKeyBlock() || !this.enforcedBlocking || mc.currentScreen != null || !ItemUtil.isHoldingSword()) {
+                lbLetGo();
+                this.enforcedBlocking = false;
+            } else {
+                atlas.util.VanillaInput.useOver(lbUseOver());
+            }
+        }
     }
 
     /** V2: this tick's look, decided at TickEvent PRE; onUpdate only hands it to the movement packet. */
@@ -1823,6 +1838,7 @@ public class KillAuraLB extends Module {
         in.reachNow = reachNow;
         in.reachSoon = reachSoon;
         in.threat = threatened();
+        in.enemyNear = this.rhythmEnemyNear;
         in.selfHurt = mc.thePlayer.hurtTime;
         in.rtt = rttTicks();
         this.rhythm.minHold = this.rhythmMinHold.getValue();
@@ -1834,6 +1850,8 @@ public class KillAuraLB extends Module {
         return this.rhythmDecision;
     }
 
+    /** An enemy's eyes within Rhythm-EnemyReach of our box (now or predicted), at the last threat check. */
+    private boolean rhythmEnemyNear;
     /** The nearest enemy's eyes to our box at the last threat check (for the log). */
     private double rhythmNearest = Double.MAX_VALUE;
 
@@ -1856,6 +1874,7 @@ public class KillAuraLB extends Module {
         double[] grown = atlas.lb.combat.RhythmDanger.expand(body, this.rhythmAimTolerance.getValue());
         double nearest = Double.MAX_VALUE;
         boolean threat = false;
+        boolean near = false;
         for (Entity entity : mc.theWorld.loadedEntityList) {
             if (!(entity instanceof EntityLivingBase) || entity == mc.thePlayer
                     || mc.thePlayer.getDistanceSqToEntity(entity) > around
@@ -1878,6 +1897,9 @@ public class KillAuraLB extends Module {
                 aimed |= atlas.lb.combat.RhythmDanger.lookHits(eyesAhead, look, reach, grown);
             }
             nearest = Math.min(nearest, distance);
+            if (distance <= reach) {
+                near = true;
+            }
             /* Mobs hit by touch, without a swing to see. */
             boolean clicking = !(enemy instanceof EntityPlayer) || !this.rhythmOnlyClicking.getValue()
                     || atlas.lb.combat.RhythmDanger.clicking(this.enemySwings.getOrDefault(enemy.getEntityId(),
@@ -1889,6 +1911,7 @@ public class KillAuraLB extends Module {
         final int now = this.rhythmTick;
         this.enemySwings.values().removeIf(tick -> now - tick > 100);
         this.rhythmNearest = nearest;
+        this.rhythmEnemyNear = near;
         return threat;
     }
 
@@ -1917,6 +1940,7 @@ public class KillAuraLB extends Module {
      * down, or Rhythm-LagMax reached) ends here, release first.
      */
     private void rhythmApply(Rotation sent) {
+        this.rhythmFreeTick = false;
         boolean decided = this.rhythmDecided;
         this.rhythmDecided = false;
         if (!rhythmSelected()) {
@@ -1941,6 +1965,14 @@ public class KillAuraLB extends Module {
             decideRhythm(null, false, false);
         }
         atlas.lb.combat.RhythmBlock.Decision d = this.rhythmDecision;
+        if (this.rhythmHolding && atlas.Atlas.blinkManager.getBlinkingModule() != atlas.enums.BlinkModules.RHYTHM) {
+            /* 2026-10-28: the hold was ended from outside (LagGuard dropped it on a correction): move as vanilla now. */
+            this.rhythmHolding = false;
+        }
+        if (this.rhythmHolding && !atlas.management.LagGuard.mayHold("Silent Aura", false, null)) {
+            /* LagGuard: a knockback or a dig -- the hold ends now, the release first, as on any end. */
+            rhythmEndHold("guard");
+        }
         if (this.rhythmHolding) {
             if (!d.key) {
                 rhythmEndHold("lowered");
@@ -1953,6 +1985,8 @@ public class KillAuraLB extends Module {
         boolean wasOwned = this.rhythmOwnsKey;
         if (d.key) {
             if (!mc.thePlayer.isUsingItem()) {
+                /* The tick the sword goes up: unslowed if FreeRaise is on and Grim's last using-tick was slowed. */
+                this.rhythmFreeTick = this.rhythmFreeRaise.getValue() && !this.grimUnslowedLast;
                 /* The right click that raises goes along the aura's look, never onto a block (VanillaInput.applyUse). */
                 Rotation look = sent != null ? sent : new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
                 atlas.util.VanillaInput.fighting(pick(look));
@@ -1973,6 +2007,7 @@ public class KillAuraLB extends Module {
                         + " enemyReach " + this.rhythmEnemyReach.getValue() + " aimTolerance "
                         + this.rhythmAimTolerance.getValue() + " onlyClicking " + this.rhythmOnlyClicking.getValue()
                         + " lag " + this.rhythmLag.getValue() + "/" + this.rhythmLagMax.getValue()
+                        + " freeRaise " + this.rhythmFreeRaise.getValue()
                         + " reach " + interactionRange() + " lagAware " + this.lagAware.getValue());
             }
             EntityLivingBase target = this.targetTracker.target();
@@ -1990,11 +2025,19 @@ public class KillAuraLB extends Module {
     /** Rhythm-Lag holds the movement now: the sword is up on the server and the player moves unslowed. */
     private boolean rhythmHolding;
     private int rhythmHoldSince;
+    /** FreeRaise: this tick's raise moves unslowed. */
+    private boolean rhythmFreeTick;
+    /** Mirror of Grim's NoSlow flaggedLastTick: the last movement the server judged with the sword up was unslowed. */
+    private boolean grimUnslowedLast;
 
-    /** For MixinEntityPlayerSP: the sword is up, the movement held -- move as if it were down. */
+    /**
+     * For MixinEntityPlayerSP: move as if the sword were down -- while
+     * Rhythm-Lag holds the movement, and on a FreeRaise tick.
+     */
     public static boolean rhythmUnslowed() {
         KillAuraLB aura = atlas.module.ModuleBundle.of(KillAuraLB.class);
-        return aura != null && aura.rhythmHolding && aura.isEnabled();
+        return aura != null && aura.isEnabled() && (aura.rhythmHolding
+                && atlas.Atlas.blinkManager.getBlinkingModule() == atlas.enums.BlinkModules.RHYTHM || aura.rhythmFreeTick);
     }
 
     /**
@@ -2005,6 +2048,16 @@ public class KillAuraLB extends Module {
      */
     @EventTarget
     public void onRhythmTickEnd(TickEvent event) {
+        if (event.getType() == EventType.POST && this.isEnabled() && mc.thePlayer != null) {
+            /* This tick's movement went out unheld with the sword up: the server judges it (Grim's NoSlow mirror). */
+            if (!this.rhythmHolding && mc.thePlayer.isUsingItem() && ItemUtil.isHoldingSword()) {
+                this.grimUnslowedLast = this.rhythmFreeTick;
+                if (this.rhythmLog.getValue() && this.rhythmRunning) {
+                    this.rhythmLogger.usingTick(this.rhythmFreeTick);
+                }
+            }
+            this.rhythmFreeTick = false;
+        }
         if (event.getType() != EventType.POST || !this.isEnabled() || mc.thePlayer == null || this.rhythmHolding
                 || !rhythmSelected() || !this.rhythmLag.getValue() || !this.rhythmOwnsKey || mc.currentScreen != null
                 || !mc.thePlayer.isUsingItem() || !ItemUtil.isHoldingSword()) {
@@ -2131,6 +2184,44 @@ public class KillAuraLB extends Module {
         return !this.hasBlockedSinceAttack && (!this.onlyWhenInDanger.getValue() || this.inDanger);
     }
 
+    // ---- 2026-10-28: Basic / Interact through vanilla's use key on the Input path ----
+
+    /** The use key is down because Basic/Interact put it there. */
+    private boolean lbOwnsKey;
+    /** The tick the key path let the sword down: vanilla releases in that runTick, the hit goes the next. */
+    private int lbLoweredAt = Integer.MIN_VALUE;
+
+    /** Basic or Interact on the Input path: the block goes through vanilla's use key, in vanilla's order. */
+    private boolean lbKeyBlock() {
+        return inputPath() && this.lbBlocking.getAsBoolean() && this.blockMode.getValue() < 2;
+    }
+
+    /** What this tick's sword right click points at: Interact the target along the look, Basic (or no target) a miss. */
+    private MovingObjectPosition lbUseOver() {
+        Rotation look = this.inputRotation != null ? this.inputRotation
+                : new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
+        MovingObjectPosition over = this.blockMode.getValue() == 1 ? pick(look) : null;
+        if (over != null && over.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY
+                && over.entityHit instanceof EntityLivingBase
+                && shouldBeAttacked((EntityLivingBase) over.entityHit)) {
+            return over;
+        }
+        Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
+        return new MovingObjectPosition(MovingObjectPosition.MovingObjectType.MISS, eyes, null, null);
+    }
+
+    /** The key path's use key back to the button. */
+    private void lbLetGo() {
+        if (this.lbOwnsKey) {
+            this.lbOwnsKey = false;
+            if (mc.gameSettings != null) {
+                if (mc.currentScreen == null) {
+                    KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
+                }
+            }
+        }
+    }
+
     /** Raises the sword (Basic: use; Interact: the entity in the crosshair first; Fake: only the animation). */
     private boolean startBlocking() {
         if (!this.lbBlocking.getAsBoolean()) {
@@ -2162,14 +2253,41 @@ public class KillAuraLB extends Module {
             this.reblockTicks = this.reblock.random();
             return false;
         }
+        if (lbKeyBlock()) {
+            if (this.lbLoweredAt == this.rhythmTick) {
+                /* Let down this tick: a press now would keep it up through vanilla's release. */
+                return false;
+            }
+            /* 2026-10-28: on the Input path the sword goes up through vanilla's use key, in this tick's runTick
+               after its clicks -- Interact's right click on the target sends interact-at, interact and the use in
+               vanilla's order; Basic's points at nothing, the use alone. */
+            int use = mc.gameSettings.keyBindUseItem.getKeyCode();
+            atlas.util.VanillaInput.useOver(lbUseOver());
+            KeyBindUtil.setKeyBindState(use, true);
+            KeyBindUtil.pressKeyOnce(use);
+            this.lbOwnsKey = true;
+            this.reblockTicks = this.reblock.random();
+            this.enforcedBlocking = true;
+            this.hasBlockedSinceAttack = true;
+            this.blockVisual = true;
+            return true;
+        }
         if (this.blockMode.getValue() == 1) {
             Rotation rotation = this.rotations.current() != null ? this.rotations.current()
                     : new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
             Entity facing = this.raycast.getValue() == 0 ? null
                     : entityInCrosshair(interactionRange(), rotation, this.raycast.getValue() == 1);
             if (facing != null) {
-                /* Vanilla's right click on an entity: the interact, then the item's own use. */
-                mc.playerController.interactWithEntitySendPacket(mc.thePlayer, facing);
+                /* Vanilla's right click on an entity: interact-at (2026-10-28: was left out), then interact, then the
+                   item's own use -- unless the entity takes either (an armour stand), as vanilla stops there. */
+                Vec3 at = lookingAt(facing, rotation, interactionRange() + 1.0, 0.0);
+                MovingObjectPosition onEntity = new MovingObjectPosition(facing,
+                        at != null ? at : new Vec3(facing.posX, facing.posY + facing.height / 2.0, facing.posZ));
+                if (mc.playerController.isPlayerRightClickingOnEntity(mc.thePlayer, facing, onEntity)
+                        || mc.playerController.interactWithEntitySendPacket(mc.thePlayer, facing)) {
+                    this.reblockTicks = this.reblock.random();
+                    return false;
+                }
             }
         }
         useItem(held);
@@ -2207,6 +2325,27 @@ public class KillAuraLB extends Module {
                 this.blockVisual = false;
             }
             return false;
+        }
+        if (this.lbOwnsKey) {
+            /* 2026-10-28: the key path's block comes down through the same key: vanilla sends the release in this
+               tick's runTick (and takes no click in it), so the hit waits for the next tick (lbLoweredAt). */
+            if (pauses && this.unblockMode.getValue() == 2) {
+                return false;
+            }
+            if (!pauses) {
+                this.blockVisual = false;
+            }
+            this.pauseOnUnblockTicks = this.pauseOnUnblock.random();
+            if (this.unblockMode.getValue() == 1 && mc.thePlayer.isUsingItem()) {
+                int slot = mc.thePlayer.inventory.currentItem;
+                PacketUtil.sendPacket(new net.minecraft.network.play.client.C09PacketHeldItemChange((slot + 1) % 9));
+                PacketUtil.sendPacket(new net.minecraft.network.play.client.C09PacketHeldItemChange(slot));
+                mc.thePlayer.stopUsingItem();
+            }
+            lbLetGo();
+            this.lbLoweredAt = this.rhythmTick;
+            this.enforcedBlocking = false;
+            return true;
         }
         if (!pauses) {
             this.blockVisual = false;
@@ -2538,8 +2677,9 @@ public class KillAuraLB extends Module {
             /* As vanilla 1.8: no attack while another item is in use. */
             return;
         }
-        if (atlas.management.TickActions.any(atlas.management.TickActions.DIG)) {
-            /* Just unblocked above (PauseOnUnblock 0): the hit is next tick's, as above. */
+        if (atlas.management.TickActions.any(atlas.management.TickActions.DIG) || this.lbLoweredAt == this.rhythmTick) {
+            /* Just unblocked above (PauseOnUnblock 0): the hit is next tick's, as above. On the key path the
+               release is vanilla's own, later in this runTick, which takes no click with it. */
             return;
         }
         boolean closeInventory = this.simulateInventoryClosing.getValue() && mc.currentScreen instanceof GuiInventory;
@@ -2560,7 +2700,8 @@ public class KillAuraLB extends Module {
         }
         /* 2. Raise it again at once (Reblock 0). Not on Input: the click goes out later this tick, in runTick, and
            vanilla drops an attack while the sword is up. */
-        if (reblockTicks() == 0 && !inputPath()) {
+        if (reblockTicks() == 0 && (!inputPath() || lbKeyBlock())) {
+            /* On the key path the use is pressed after this tick's click and vanilla's runTick keeps that order. */
             startBlocking();
         }
         if (closeInventory) {

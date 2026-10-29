@@ -23,6 +23,9 @@ import java.util.Locale;
  *  - HIT: each attack on the target, whether it was due; LAND when its hurt
  *    came back (and how many ticks later), NOSHOW when it did not.
  *  - LAG: each Rhythm-Lag hold, its ticks and the movement it held.
+ *  - SUMMARY also counts the movement ticks the server judged with the sword
+ *    up, how many were unslowed (FreeRaise) and the longest unslowed run --
+ *    Grim's NoSlow flags at two in a row, so it must stay at 1.
  *  - SUMMARY each minute of fighting and when Rhythm stops.
  */
 final class RhythmLog {
@@ -79,6 +82,10 @@ final class RhythmLog {
     private int holds;
     private int holdTicks;
     private int maxHold;
+    private int usingTicks;
+    private int unslowedTicks;
+    private int unslowedRun;
+    private int longestUnslowedRun;
 
     void start(String settings) {
         this.started = true;
@@ -190,6 +197,18 @@ final class RhythmLog {
                 due ? "due" : "early"));
     }
 
+    /** A movement tick the server judged with the sword up; {@code unslowed}: FreeRaise moved it at full speed. */
+    void usingTick(boolean unslowed) {
+        this.usingTicks++;
+        if (unslowed) {
+            this.unslowedTicks++;
+            this.unslowedRun++;
+            this.longestUnslowedRun = Math.max(this.longestUnslowedRun, this.unslowedRun);
+        } else {
+            this.unslowedRun = 0;
+        }
+    }
+
     /** A Rhythm-Lag hold ended. */
     void hold(int ticks, int moves, int packets, String why) {
         this.holds++;
@@ -273,6 +292,10 @@ final class RhythmLog {
                     this.holds, this.holdTicks, Math.round(100.0 * this.holdTicks / Math.max(1, this.ticks)),
                     this.maxHold));
         }
+        if (this.usingTicks > 0) {
+            write(String.format(Locale.ROOT, "        sword-up moves the server judged %d: slowed %d, unslowed %d, longest unslowed run %d",
+                    this.usingTicks, this.usingTicks - this.unslowedTicks, this.unslowedTicks, this.longestUnslowedRun));
+        }
         this.ticks = 0;
         this.taken = 0;
         this.takenNoThreat = 0;
@@ -295,6 +318,9 @@ final class RhythmLog {
         this.holds = 0;
         this.holdTicks = 0;
         this.maxHold = 0;
+        this.usingTicks = 0;
+        this.unslowedTicks = 0;
+        this.longestUnslowedRun = 0;
     }
 
     private static String avg(float sum, int count) {

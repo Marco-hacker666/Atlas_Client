@@ -29,6 +29,8 @@ public abstract class MixinNetworkManager {
     )
     private void channelRead0(ChannelHandlerContext channelHandlerContext, Packet<?> packet, CallbackInfo callbackInfo) {
         if (!packet.getClass().getName().startsWith("net.minecraft.network.play.client")) {
+            /* 2026-10-28 LagGuard: a knockback or a correction lets the delay modules' holds go before anyone sees it. */
+            atlas.management.LagGuard.onReceive(packet);
             if (Atlas.delayManager != null && Atlas.delayManager.shouldDelay((Packet<INetHandlerPlayClient>) packet)) {
                 callbackInfo.cancel();
             } else {
@@ -48,6 +50,8 @@ public abstract class MixinNetworkManager {
     )
     private void sendPacket(Packet<?> packet, CallbackInfo callbackInfo) {
         if (!packet.getClass().getName().startsWith("net.minecraft.network.play.server")) {
+            /* 2026-10-28 LagGuard: our own dig or placement lets the outgoing holds go ahead of it. */
+            atlas.management.LagGuard.onSend(packet);
             /* Who sent this. The game loop sends movement every tick and says
                nothing; a module sending an attack, a placement or a dig of its
                own is exactly what a correction usually needs explaining by, and

@@ -155,6 +155,29 @@ public final class PacketHolds {
         ENTRIES.add(new Entry(source, lease));
     }
 
+    /**
+     * Ends the leased hold reported under {@code holder} (LagGuard's ceiling).
+     * True when one was ended. Client thread.
+     */
+    public static boolean expire(String holder) {
+        for (Entry entry : ENTRIES) {
+            if (entry.lease == null) {
+                continue;
+            }
+            Hold hold = read(entry.source);
+            if (hold != null && hold.holder.equals(holder)) {
+                try {
+                    entry.lease.expire();
+                    return true;
+                } catch (RuntimeException e) {
+                    failures++;
+                    return false;
+                }
+            }
+        }
+        return false;
+    }
+
     /** Everything held now, in registration order. */
     public static List<Hold> snapshot() {
         List<Hold> holds = new ArrayList<Hold>();

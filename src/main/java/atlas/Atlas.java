@@ -85,6 +85,8 @@ public class Atlas {
         EventManager.register(new atlas.management.TickActions.Listener());
         EventManager.register(new atlas.util.BugReport.SeenNames());
         EventManager.register(new atlas.util.VanillaInput.Listener());
+        /* When the delay modules may hold at all (LagGuard, 2026-10-28). */
+        EventManager.register(new atlas.management.LagGuard.Listener());
         /* Ends holds that outlive their reason (PacketHolds leases, 2026-09-28). */
         EventManager.register(new atlas.management.PacketHolds.Watchdog(name -> {
             atlas.module.Module module = moduleManager.getModule(name);

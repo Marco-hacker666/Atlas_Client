@@ -40,7 +40,7 @@ public class ServerLag extends Module {
         super("ServerLag", false, false, "I feel the lag ");
 
         /* Incoming holder: one at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
-        atlas.management.PacketHub.registerIncoming("ServerLag", () -> this.packetQueue.size());
+        atlas.management.PacketHub.registerIncoming("ServerLag", () -> this.packetQueue.size(), this::releaseAllPackets);
         /* What is held, for PacketHolds (plan step 13). */
         atlas.management.PacketHolds.register(() -> {
             int count = this.packetQueue.size();

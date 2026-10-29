@@ -223,6 +223,29 @@ public class RhythmBlockTest {
     }
 
     @Test
+    public void afterAHitAnyEnemyInReachCountsOnlyInTheGuardWindow() {
+        RhythmBlock rb = new RhythmBlock();
+        rb.guard = 2;
+        int rtt = 2;
+        // Hit at tick 0 (hurt 10). What we send at tick 8 reaches the server as our invulnerability ends.
+        for (int t = 0; t <= 14; t++) {
+            RhythmBlock.Input in = fight(t, false, 8, rtt);
+            in.threat = false;
+            in.enemyNear = true;
+            in.selfHurt = Math.max(0, 10 - t);
+            boolean key = rb.tick(in).key;
+            boolean window = t >= 7 && t <= 10;
+            assertEquals("tick " + t, window, key);
+        }
+        // No hit taken: an enemy merely near is not enough.
+        RhythmBlock fresh = new RhythmBlock();
+        RhythmBlock.Input in = fight(0, false, 8, rtt);
+        in.threat = false;
+        in.enemyNear = true;
+        assertFalse(fresh.tick(in).key);
+    }
+
+    @Test
     public void releasedFromOutsideRaisesAgainWithAPress() {
         RhythmBlock rb = new RhythmBlock();
         assertTrue(rb.tick(fight(0, false, 8, 2)).raise);

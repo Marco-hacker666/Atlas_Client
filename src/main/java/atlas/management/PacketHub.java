@@ -97,6 +97,44 @@ public final class PacketHub {
     }
 
     /**
+     * An incoming holder that can be told to let everything go, in order
+     * (2026-10-28, LagGuard): from the network thread, ahead of the packet
+     * being received there.
+     */
+    public static void registerIncoming(String name, IntSupplier held, Runnable letGo) {
+        HOLDERS.put(name, new Holder(name, MOVEMENT, held, letGo, true, true));
+    }
+
+    /**
+     * LagGuard: every guarded movement or incoming holder that holds anything
+     * lets it all go, in order. Returns how many did.
+     */
+    public static int letGoGuarded(boolean outgoing, boolean incoming) {
+        return letGoGuarded(outgoing, incoming, false);
+    }
+
+    /** {@code keepStreams}: an incoming holder holding the whole stream in order goes on (a knockback). */
+    public static int letGoGuarded(boolean outgoing, boolean incoming, boolean keepStreams) {
+        int n = 0;
+        for (Holder holder : HOLDERS.values()) {
+            if (!holder.exclusive || holder.letGo == null || !LagGuardRules.guarded(holder.name)
+                    || (holder.incoming ? !incoming : !outgoing) || held(holder) == 0) {
+                continue;
+            }
+            if (keepStreams && holder.incoming && LagGuard.isWholeStream(holder.name)) {
+                continue;
+            }
+            try {
+                holder.letGo.run();
+                n++;
+            } catch (RuntimeException e) {
+                e.printStackTrace();
+            }
+        }
+        return n;
+    }
+
+    /**
      * A module that holds packets of its own kind on its own schedule -- replies
      * (PingSpoof, Disabler), inventory clicks (InvWalk) -- whose lateness is the
      * point. Rule 1 only: it never takes what another has taken, and a movement
@@ -127,6 +165,16 @@ public final class PacketHub {
             return false;
         }
         Holder self = HOLDERS.get(holder);
+        if (self != null && self.exclusive && !LagGuard.mayHold(holder, incoming, event.getPacket())) {
+            /* 2026-10-28 LagGuard: not now (a knockback, a dig, a correction). Whatever this holder still holds goes
+               first, so this packet does not pass it. */
+            if (held(self) > 0 && self.letGo != null) {
+                self.letGo.run();
+            }
+            last = holder + ": LagGuard";
+            lastAt = System.currentTimeMillis();
+            return false;
+        }
         if (self == null || !self.exclusive || self.incoming != incoming) {
             event.setCancelled(true);
             return true;

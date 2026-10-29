@@ -60,7 +60,8 @@ final class ModuleDocsEn {
         d("AutoClicker", "Clicks for you while the attack key is held, at a random CPS within your range; can block-hit or break blocks.");
         help("AutoClicker", "randomization", "Human (best): the CPS wanders inside your range and drifts back, each gap skewed like a hand's (rarely too fast, sometimes slow), with cadence repeats, short hesitations and a quicker start to each fight. Normal / Extra / Extra+: the older uniform draws.");
         d("KnockbackDelay", "Holds incoming knockback for a moment so the push lands late.");
-        help("KnockbackDelay", "Mode", "Steady: in a fight everything the server sends runs a set delay late, in order, keep-alives and transactions too, the delay easing in and out -- to the server just a slower connection, so no single knockback stands out. Spike: only around each knockback, everything behind it waiting with it.");
+        help("LiquidAura", "Rhythm-FreeRaise", "Rhythm: the tick the sword goes up moves at full speed when Grim would allow it (never two such ticks in a row). Off by default; made for Grim, untested on Polar.");
+        help("KnockbackDelay", "Mode", "Steady: in a fight everything the server sends runs a set delay late, in order, keep-alives and transactions too, the delay easing in and out -- to the server just a slower connection, so no single knockback stands out. Spike (default): only around some knockbacks -- the world freezes for a moment (everything behind the push waits with it) while your own movement goes out as usual.");
         help("KnockbackDelay", "SteadyDelay", "How late everything arrives while in a fight (ms), within LatencyBudget minus your ping.");
         help("KnockbackDelay", "Ramp", "The most the Steady delay changes in one tick (ms): how gently it starts and stops.");
         help("KnockbackDelay", "HoldTransactions", "Spike with HoldOthers off: the transaction packets after a held push still wait with it.");

@@ -319,7 +319,8 @@ public final class ModuleDocs {
         d("AutoClicker", "按住左鍵時自動連點，CPS 在設定範圍內隨機，可順便格擋或挖方塊。");
         help("AutoClicker", "randomization", "Human（建議）：CPS 在範圍內慢慢漂移再回來，每一下的間隔像手一樣偏斜（很少太快、偶爾慢一點），會重複節奏、偶爾停頓，每場一開始稍快。Normal / Extra / Extra+：舊的均勻隨機。");
         d("KnockbackDelay", "把收到的擊退延後一小段時間才吃下去，讓被打飛的時機變晚。");
-        help("KnockbackDelay", "Mode", "Steady：打架時伺服器送來的所有封包都照順序晚一段時間（keep-alive、交易封包也是），延遲慢慢加上去、慢慢退掉，伺服器看來就是網路比較慢，不會有哪一次擊退特別突出。Spike：只在每次擊退時，把擊退和後面所有封包一起壓住。");
+        help("LiquidAura", "Rhythm-FreeRaise", "Rhythm：舉劍那一 tick 在 Grim 允許時不減速（不會連續兩次）。預設關；照 Grim 的規則做，Polar 沒測過。");
+        help("KnockbackDelay", "Mode", "Steady：打架時伺服器送來的所有封包都照順序晚一段時間（keep-alive、交易封包也是），延遲慢慢加上去、慢慢退掉，伺服器看來就是網路比較慢，不會有哪一次擊退特別突出。Spike（預設）：只在部分擊退時，把擊退和後面所有封包一起壓住，畫面會定格一下，你自己的移動照常送出。");
         help("KnockbackDelay", "SteadyDelay", "打架時所有封包晚多久（毫秒），不超過 LatencyBudget 減掉你的 ping。");
         help("KnockbackDelay", "Ramp", "Steady 延遲每 tick 最多變多少（毫秒）：開始和結束有多平順。");
         help("KnockbackDelay", "HoldTransactions", "Spike 且 HoldOthers 關掉時：壓住擊退後的交易確認封包也一起等。");

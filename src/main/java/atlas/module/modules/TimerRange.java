@@ -106,7 +106,7 @@ public class TimerRange extends Module {
       super("TimerRange", false);
 
       /* Incoming holder: one at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
-      atlas.management.PacketHub.registerIncoming("TimerRange", () -> this.packetsReceived.size());
+      atlas.management.PacketHub.registerIncoming("TimerRange", () -> this.packetsReceived.size(), this::unblink);
    }
 
    @Override

@@ -106,8 +106,13 @@ public class Stasis extends Module {
         if (mc.thePlayer == null || mc.thePlayer.hurtTime != 0) {
             return;
         }
+        if (!atlas.management.LagGuard.mayHold("Stasis", false, null)) {
+            /* 2026-10-28 LagGuard: no dropping movement now (after a knockback or a correction, or struck out). */
+            return;
+        }
 
         if (!(e.getPacket() instanceof C03PacketPlayer.C05PacketPlayerLook)) {
+            atlas.management.LagGuard.noteHeld("Stasis");
             e.setCancelled(true);
         }
     }

@@ -58,7 +58,7 @@ public class Freeze extends Module {
             synchronized (this.held) {
                 return this.held.size();
             }
-        });
+        }, this::flush);
     }
 
     @Override

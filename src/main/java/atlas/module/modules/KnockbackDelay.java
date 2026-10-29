@@ -63,21 +63,35 @@ import java.util.List;
  *  - RealtimeDamage let the hurt arrive two ticks before the push, so
  *    JumpReset jumped before there was anything to reset.
  *
- * Steady (the default): while in a fight, the whole incoming stream runs a
+ * Steady: while in a fight, the whole incoming stream runs a
  * set delay late -- every packet, in order, keep-alives and transactions
  * included -- the delay ramping in and out a few milliseconds a tick and
  * wandering a little, as a real round trip does. The knockback is late
  * because everything is: there is no reply the server can single out.
  *
- * Spike: the old idea, made consistent: a hold opens on a knockback and
- * everything that arrives behind it waits with it, in order, keep-alives and
- * block changes included (HoldOthers and HoldTransactions still narrow it).
+ * Spike (the default since 2026-10-29): the old idea, made consistent: a hold
+ * opens on a knockback and everything that arrives behind it waits with it, in
+ * order, keep-alives and block changes included (HoldOthers and
+ * HoldTransactions still narrow it). Its defaults follow the commercial
+ * client's lag-on-hit studied 2026-10-29 (owner's request; behaviour only):
+ * 40 % of pushes, at least 475 ms apart, only with an enemy within 5 blocks
+ * and 90 degrees; 50-100 ms in the air, 200-250 ms after three ticks on the
+ * ground; no early end on drift or on an upward push, no water check. The one
+ * difference asked for: a ping budget (LatencyBudget 450), so on a slow
+ * connection the hold shrinks instead of stacking on the ping.
  *
  * In both, held packets go out from a thread of their own the moment they are
  * due, through vanilla's own handlers, which queue them for the client thread:
  * they are processed where vanilla processes packets, at the start of the next
  * frame, before the tick. A correction, a respawn, a join or a disconnect lets
  * everything out first; a catch (Arbiter) ends it; a new world drops it.
+ *
+ * LagGuard (2026-10-29): Steady, and Spike with HoldOthers, hold the whole
+ * stream in order, so LagGuard lets them run through the knockback window (a
+ * slow connection does not speed up when it is hit) and they ramp to its
+ * allowance instead of being cut: nothing in the pause after a correction or
+ * once struck out. Spike with only the push held is stopped in the window --
+ * a lone late push is the fingerprint.
  *
  * Not seen by other modules: a held packet goes out past the event bus, so a
  * module that reacts to the velocity packet itself (Velocity) does not see a
@@ -89,7 +103,7 @@ public class KnockbackDelay extends Module {
 
     private static final int STEADY = 0;
     private static final int SPIKE = 1;
-    public final ModeProperty mode = new ModeProperty("Mode", STEADY, new String[]{"Steady", "Spike"});
+    public final ModeProperty mode = new ModeProperty("Mode", SPIKE, new String[]{"Steady", "Spike"});
     private final java.util.function.BooleanSupplier steady = () -> this.mode.getValue() == STEADY;
     private final java.util.function.BooleanSupplier spike = () -> this.mode.getValue() == SPIKE;
 
@@ -99,7 +113,7 @@ public class KnockbackDelay extends Module {
     public final IntProperty ramp = new IntProperty("Ramp", 10, 2, 50, this.steady);
 
     public final IntProperty airDelay = new IntProperty("AirDelay", 75, 0, 1000, this.spike);
-    public final IntProperty groundDelay = new IntProperty("GroundDelay", 150, 0, 1000, this.spike);
+    public final IntProperty groundDelay = new IntProperty("GroundDelay", 225, 0, 1000, this.spike);
     /** Spike: half-width of the window each delay is drawn from. Steady: how far the delay wanders. */
     public final IntProperty randomize = new IntProperty("Randomize", 25, 0, 200);
     /** Consecutive grounded ticks before the ground figure replaces the air one. */
@@ -108,12 +122,12 @@ public class KnockbackDelay extends Module {
     public final IntProperty chance = new IntProperty("Chance", 40, 0, 100, this.spike);
 
     /** Spike: blocks of drift allowed before the hold ends early, whatever the timer says. */
-    public final FloatProperty maxDivergence = new FloatProperty("MaxDivergence", 0.40F, 0.1F, 3.0F, this.spike);
+    public final FloatProperty maxDivergence = new FloatProperty("MaxDivergence", 3.0F, 0.1F, 3.0F, this.spike);
     /**
      * Total staleness the server's view is allowed, ms. The round trip
      * already spends part of it; the delay may only use what is left.
      */
-    public final IntProperty latencyBudget = new IntProperty("LatencyBudget", 380, 100, 1200);
+    public final IntProperty latencyBudget = new IntProperty("LatencyBudget", 450, 100, 1200);
     public final BooleanProperty pingAware = new BooleanProperty("PingAware", true);
 
     public final BooleanProperty requireTarget = new BooleanProperty("RequireTarget", true);
@@ -125,9 +139,9 @@ public class KnockbackDelay extends Module {
     /** Spike: hold the rest of the stream behind the knockback (as real latency does), or only the knockback. */
     public final BooleanProperty holdOthers = new BooleanProperty("HoldOthers", true, this.spike);
     /** Spike: knockback with a larger upward part than this is not held. */
-    public final FloatProperty maxVertical = new FloatProperty("MaxVertical", 0.4F, 0.0F, 2.0F, this.spike);
+    public final FloatProperty maxVertical = new FloatProperty("MaxVertical", 2.0F, 0.0F, 2.0F, this.spike);
 
-    public final BooleanProperty waterCheck = new BooleanProperty("WaterCheck", true);
+    public final BooleanProperty waterCheck = new BooleanProperty("WaterCheck", false);
     /**
      * Your own hurt goes through on time. Off is what a slow connection does
      * (hurt and push arrive together, so JumpReset jumps on the push); on
@@ -170,7 +184,7 @@ public class KnockbackDelay extends Module {
                 "Holds incoming knockback for a short window so the push lands late");
 
         /* Incoming holder: one at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
-        atlas.management.PacketHub.registerIncoming("KnockbackDelay", () -> this.line.size());
+        atlas.management.PacketHub.registerIncoming("KnockbackDelay", () -> this.line.size(), this::flush);
         /* What is held, for PacketHolds (plan step 13). */
         atlas.management.PacketHolds.register(() -> {
             int count = this.line.size();
@@ -255,6 +269,8 @@ public class KnockbackDelay extends Module {
         }
         this.groundedTicks = mc.thePlayer.onGround ? this.groundedTicks + 1 : 0;
         this.selfEntityId = mc.thePlayer.getEntityId();
+        atlas.management.LagGuard.wholeStream(this.getName(), this.isEnabled()
+                && (this.mode.getValue() == STEADY || this.holdOthers.getValue()));
         if (!this.isEnabled()) {
             return;
         }
@@ -313,7 +329,8 @@ public class KnockbackDelay extends Module {
         this.delayBase = this.groundedTicks >= this.groundTicks.getValue()
                 ? this.groundDelay.getValue()
                 : this.airDelay.getValue();
-        this.delayCeiling = this.computeCeiling();
+        this.delayCeiling = (int) Math.min(this.computeCeiling(),
+                atlas.management.LagGuard.streamAllowanceMs(this.getName()));
 
         if (this.waterCheck.getValue() && (mc.thePlayer.isInWater() || mc.thePlayer.isInLava())) {
             this.conditionsMet = false;

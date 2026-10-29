@@ -32,6 +32,9 @@ package atlas.lb.combat;
  *    the sword up a whole round trip more every exchange. When no hit shows
  *    up after that round trip, the enemy did not land it on time and the
  *    sword goes back up for as long as it threatens.
+ *    In that window any enemy within reach counts as a threat (who hit us is
+ *    about to again; its look as we see it is late), outside it only one
+ *    looking at us and swinging.
  *  - our release must not fall on the enemy's next hit: a fast enemy lands
  *    it on the first tick we can take one, which after a hit taken is known
  *    (selfHurt - roundTripTicks reaching 0). When the release would leave the
@@ -93,6 +96,8 @@ public final class RhythmBlock {
         public boolean reachSoon;
         /** An enemy close enough and facing us. */
         public boolean threat;
+        /** An enemy within its hit's reach of us, by distance alone (for the guard window). */
+        public boolean enemyNear;
         public int selfHurt;
         public int rtt;
     }
@@ -237,12 +242,18 @@ public final class RhythmBlock {
         }
         this.lastSelfHurt = in.selfHurt;
         boolean guardSpent = false;
+        boolean inGuard = false;
         if (this.hurtSeenAt != NONE) {
             /* since 0: what we send this tick reaches the server as our invulnerability ends. */
             int since = in.tick - (this.hurtSeenAt + 10 - rtt);
             guardSpent = since > this.guard && since <= rtt + 1;
+            inGuard = since >= -1 && since <= this.guard;
         }
-        boolean needBlock = in.sword && in.threat && in.selfHurt - rtt <= 1 && !guardSpent;
+        /* 2026-10-28 (owner's log: 6 of 8 hits taken with no threat seen): in the guard window someone has just
+           been hitting us, so any enemy within reach counts -- the look and swing we see of them run a round trip
+           late. Outside it the strict danger check still decides. */
+        boolean danger = in.threat || inGuard && in.enemyNear;
+        boolean needBlock = in.sword && danger && in.selfHurt - rtt <= 1 && !guardSpent;
         /* The enemy's next hit lands on what we send now or next tick. */
         boolean enemyHitDue = needBlock && in.selfHurt > 0 && in.selfHurt - rtt >= 0;
         int held = in.tick - this.changedAt;

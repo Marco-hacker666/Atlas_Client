@@ -109,6 +109,14 @@ public class LagManager {
                 if (!all && this.tickDelay > 0 && lagPacket.delay <= this.tickDelay) {
                     break;
                 }
+                if (!all && lagPacket.packet instanceof C03PacketPlayer && this.movesThisTick >= MOVES_PER_TICK) {
+                    /* 2026-10-28 LagGuard: a delay that drops lets the queue out two positions a tick, catching up
+                       one a tick, never as a burst (FakeLag's 26 "exceeds travel" corrections). */
+                    break;
+                }
+                if (lagPacket.packet instanceof C03PacketPlayer) {
+                    this.movesThisTick++;
+                }
                 send(lagPacket.packet);
                 sent++;
                 if (lagPacket.packet instanceof C03PacketPlayer) {
@@ -157,7 +165,8 @@ public class LagManager {
         this.flushQueue();
         if (packet instanceof C00PacketKeepAlive || packet instanceof C01PacketChatMessage) {
             return false;
-        } else if ((long) this.tickDelay > 0L) {
+        } else if ((long) this.tickDelay > 0L || !this.packetQueue.isEmpty()) {
+            /* (2026-10-28: or still letting a queue out, two positions a tick -- this one waits its turn behind it.) */
             /* Same blind spot as the blink path: this swallows the packet
                through the mixin rather than by cancelling an event, so without
                saying so here nothing that withholds packets through the lag
@@ -194,7 +203,16 @@ public class LagManager {
                 this.holder = caller;
             }
         }
+        if (delay > 0 && !LagGuard.mayHold(this.holder, false, null)) {
+            /* 2026-10-28 LagGuard: no delay now (a knockback, a dig, a correction). */
+            delay = 0;
+        }
         this.tickDelay = delay;
+    }
+
+    /** Everything held, in order, now (LagGuard). */
+    public void releaseAll() {
+        this.flushQueue(true);
     }
 
     /** The module that last asked for a delay; "LagManager" if unknown. */
@@ -237,9 +255,13 @@ public class LagManager {
         }
     }
 
+    private static final int MOVES_PER_TICK = 2;
+    private volatile int movesThisTick;
+
     @EventTarget
     public void onTick(TickEvent event) {
         if (event.getType() == EventType.POST) {
+            this.movesThisTick = 0;
             if (mc.thePlayer.isDead) {
                 this.setDelay(0);
             }

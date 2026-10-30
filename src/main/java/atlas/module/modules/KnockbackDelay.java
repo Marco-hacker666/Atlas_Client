@@ -103,9 +103,14 @@ public class KnockbackDelay extends Module {
 
     private static final int STEADY = 0;
     private static final int SPIKE = 1;
-    public final ModeProperty mode = new ModeProperty("Mode", SPIKE, new String[]{"Steady", "Spike"});
+    /* 2026-10-30 (after Slinky's Knockback Delay, owner: "the limit may be higher, not everything that strict"): a hold
+       only while in the air -- the push is late where a late push cannot show -- for AirMax times a log-normal
+       factor (0.75-1.35) drawn each time, the whole stream held as in Spike. No vertical, cooldown or drift limit. */
+    private static final int AIR = 2;
+    public final ModeProperty mode = new ModeProperty("Mode", SPIKE, new String[]{"Steady", "Spike", "Air"});
     private final java.util.function.BooleanSupplier steady = () -> this.mode.getValue() == STEADY;
     private final java.util.function.BooleanSupplier spike = () -> this.mode.getValue() == SPIKE;
+    private final java.util.function.BooleanSupplier air = () -> this.mode.getValue() == AIR;
 
     /** Steady: how late the whole stream runs while in a fight, ms. */
     public final IntProperty steadyDelay = new IntProperty("SteadyDelay", 100, 0, 400, this.steady);
@@ -120,6 +125,9 @@ public class KnockbackDelay extends Module {
     public final IntProperty groundTicks = new IntProperty("GroundTicks", 3, 1, 20, this.spike);
     public final IntProperty cooldown = new IntProperty("Cooldown", 475, 0, 2000, this.spike);
     public final IntProperty chance = new IntProperty("Chance", 40, 0, 100, this.spike);
+    /** Air: the typical hold, ms (each one is drawn around it, 0.75x-1.35x). */
+    public final IntProperty airMax = new IntProperty("AirMax", 100, 10, 400, this.air);
+    public final IntProperty airChance = new IntProperty("AirChance", 100, 0, 100, this.air);
 
     /** Spike: blocks of drift allowed before the hold ends early, whatever the timer says. */
     public final FloatProperty maxDivergence = new FloatProperty("MaxDivergence", 3.0F, 0.1F, 3.0F, this.spike);
@@ -203,7 +211,8 @@ public class KnockbackDelay extends Module {
             /* The longest any packet may wait, and a second more. */
             @Override
             public long ceilingMs() {
-                return Math.max(Math.max(airDelay.getValue(), groundDelay.getValue()), steadyDelay.getValue())
+                return Math.max(Math.max(Math.max(airDelay.getValue(), groundDelay.getValue()), steadyDelay.getValue()),
+                        Math.round(airMax.getValue() * 1.35F))
                         + randomize.getValue() + atlas.management.PacketHolds.LEASE_MARGIN_MS;
             }
 
@@ -221,6 +230,9 @@ public class KnockbackDelay extends Module {
         }
         if (!this.line.isEmpty()) {
             return new String[]{"&cholding"};
+        }
+        if (this.mode.getValue() == AIR) {
+            return new String[]{"Air " + this.airMax.getValue() + "ms"};
         }
         return new String[]{this.airDelay.getValue() + "/" + this.groundDelay.getValue() + "ms"};
     }
@@ -270,7 +282,7 @@ public class KnockbackDelay extends Module {
         this.groundedTicks = mc.thePlayer.onGround ? this.groundedTicks + 1 : 0;
         this.selfEntityId = mc.thePlayer.getEntityId();
         atlas.management.LagGuard.wholeStream(this.getName(), this.isEnabled()
-                && (this.mode.getValue() == STEADY || this.holdOthers.getValue()));
+                && (this.mode.getValue() != SPIKE || this.holdOthers.getValue()));
         if (!this.isEnabled()) {
             return;
         }
@@ -326,7 +338,8 @@ public class KnockbackDelay extends Module {
     }
 
     private void evaluateConditions() {
-        this.delayBase = this.groundedTicks >= this.groundTicks.getValue()
+        this.delayBase = this.mode.getValue() == AIR ? this.airMax.getValue()
+                : this.groundedTicks >= this.groundTicks.getValue()
                 ? this.groundDelay.getValue()
                 : this.airDelay.getValue();
         this.delayCeiling = (int) Math.min(this.computeCeiling(),
@@ -345,7 +358,8 @@ public class KnockbackDelay extends Module {
             this.conditionsMet = false;
             return;
         }
-        if (this.mode.getValue() == SPIKE && this.onlyInAir.getValue() && mc.thePlayer.onGround) {
+        if ((this.mode.getValue() == AIR || this.mode.getValue() == SPIKE && this.onlyInAir.getValue())
+                && mc.thePlayer.onGround) {
             this.conditionsMet = false;
             return;
         }
@@ -406,7 +420,7 @@ public class KnockbackDelay extends Module {
     private void spikePacket(PacketEvent event, Packet<?> packet, boolean holding) {
         if (holding) {
             boolean push = this.isPlayerKnockbackPacket(packet);
-            boolean others = this.holdOthers.getValue();
+            boolean others = this.mode.getValue() == AIR || this.holdOthers.getValue();
             if (!others && !push && !(packet instanceof S32PacketConfirmTransaction && this.holdTransactions.getValue())) {
                 /* HoldOthers off: only the push (and the replies behind it) are late. */
                 return;
@@ -469,6 +483,11 @@ public class KnockbackDelay extends Module {
         if (base <= 0) {
             return 0;
         }
+        if (this.mode.getValue() == AIR) {
+            double factor = Math.max(0.75, Math.min(1.35, Math.exp(java.util.concurrent.ThreadLocalRandom.current()
+                    .nextGaussian() * 0.12)));
+            return Math.max(1, Math.min((int) Math.round(this.delayBase * factor), this.delayCeiling));
+        }
         int spread = Math.min(this.randomize.getValue(), base);
         if (spread <= 0) {
             return base;
@@ -481,6 +500,9 @@ public class KnockbackDelay extends Module {
     private boolean canStart() {
         if (!this.conditionsMet) {
             return false;
+        }
+        if (this.mode.getValue() == AIR) {
+            return RandomUtil.nextInt(0, 100) < this.airChance.getValue();
         }
         if (System.currentTimeMillis() - this.lastTrigger < (long) this.cooldown.getValue()) {
             return false;
@@ -510,7 +532,7 @@ public class KnockbackDelay extends Module {
         if (packet instanceof S12PacketEntityVelocity) {
             /* The wire format is blocks per tick scaled by 8000. */
             double motionY = ((S12PacketEntityVelocity) packet).getMotionY() / 8000.0;
-            return motionY <= this.maxVertical.getValue();
+            return this.mode.getValue() == AIR || motionY <= this.maxVertical.getValue();
         }
         return true;
     }

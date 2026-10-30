@@ -50,6 +50,8 @@ final class ModuleDocsEn {
         help("AimAssist", "hitbox-v", "Up and down: pull the aim from eye height toward the nearest point (0-1).");
         help("AimAssist", "dead-zone", "No turning for the last this many degrees.");
         help("AimAssist", "target-mode", "Single: keep one target. Switch: pick the best each tick by sort-by.");
+        help("AimAssist", "mode", "Smooth only. NORMAL turns your view. SILENT leaves the view alone and turns only the look the server gets; clicks hit along that look.");
+        help("AimAssist", "max-offset", "SILENT: the most degrees the server's look may be from your view; with no target it eases back.");
         help("AimAssist", "sort-by", "Switch: which target is best.");
         help("AimAssist", "exceed-fov", "Single: keep the target even outside fov.");
         help("AimAssist", "require-click", "Only while the attack button is held.");
@@ -60,8 +62,11 @@ final class ModuleDocsEn {
         d("AutoClicker", "Clicks for you while the attack key is held, at a random CPS within your range; can block-hit or break blocks.");
         help("AutoClicker", "randomization", "Human (best): the CPS wanders inside your range and drifts back, each gap skewed like a hand's (rarely too fast, sometimes slow), with cadence repeats, short hesitations and a quicker start to each fight. Normal / Extra / Extra+: the older uniform draws.");
         d("KnockbackDelay", "Holds incoming knockback for a moment so the push lands late.");
+        help("LiquidAura", "BlockHurtTime", "Basic/Interact: the sword stays down while your own hurt time is above this. Right after a hit you cannot be hurt for ten ticks, so blocking then only slows you. Lower blocks less; 10 turns it off. Each hit draws the exact tick a little around it, as a hand varies.");
         help("LiquidAura", "Rhythm-FreeRaise", "Rhythm: the tick the sword goes up moves at full speed when Grim would allow it (never two such ticks in a row). Off by default; made for Grim, untested on Polar.");
-        help("KnockbackDelay", "Mode", "Steady: in a fight everything the server sends runs a set delay late, in order, keep-alives and transactions too, the delay easing in and out -- to the server just a slower connection, so no single knockback stands out. Spike (default): only around some knockbacks -- the world freezes for a moment (everything behind the push waits with it) while your own movement goes out as usual.");
+        help("KnockbackDelay", "Mode", "Steady: in a fight everything the server sends runs a set delay late, in order, keep-alives and transactions too, the delay easing in and out -- to the server just a slower connection, so no single knockback stands out. Spike (default): only around some knockbacks -- the world freezes for a moment (everything behind the push waits with it) while your own movement goes out as usual. Air: held only when you are hit in the air (never on the ground), each hold drawn around AirMax -- the most careful.");
+        help("KnockbackDelay", "AirMax", "Air: the typical hold (ms); each one is 0.75x-1.35x of it, and never past the ping budget.");
+        help("KnockbackDelay", "AirChance", "Air: the chance a hit taken in the air is delayed.");
         help("KnockbackDelay", "SteadyDelay", "How late everything arrives while in a fight (ms), within LatencyBudget minus your ping.");
         help("KnockbackDelay", "Ramp", "The most the Steady delay changes in one tick (ms): how gently it starts and stops.");
         help("KnockbackDelay", "HoldTransactions", "Spike with HoldOthers off: the transaction packets after a held push still wait with it.");
@@ -95,7 +100,7 @@ final class ModuleDocsEn {
         help("BlockHit", "full-style", "Full: Always = up whenever an enemy is in range (most protection, slowest); Smart = up only when a hit can land, when someone faces you, or in the air (far less slowdown).");
         help("BlockHit", "full-open-hurt", "Full Smart: after a hit, raise when your hurt time is down to this (the next hit is about to be possible).");
         help("BlockHit", "full-ping-aware", "Full Smart: raise earlier by your ping, so it is up on the server in time.");
-        help("BlockHit", "full-hold", "Full Smart: the most ticks one raise lasts; down as soon as the hit lands.");
+        help("BlockHit", "full-hold", "Full Smart: the fewest ticks one raise lasts; then it stays up until the hit lands, the enemy leaves range or the exchange is over.");
         help("BlockHit", "full-guard", "Full Smart: before a fight starts, short raises while an enemy in range faces you.");
         help("FakeLag", "ping-budget", "The most your ping and FakeLag's delay may add up to (ms). Each hold is cut to "
                 + "this minus your ping; with under 40 ms left it does not hold. 0 turns it off.");
@@ -216,7 +221,7 @@ final class ModuleDocsEn {
         help("LagRange", "show-position", "Draws where the server has you, in third person.");
         help("LagRange", "log", "File: each hold and let-out with its reason in config/Atlas/lagrange-*.txt.");
         help("LagRange", "release-on-sprint-reset", "When to let go: a W-tap (sprint stopping) lets everything out at once, so the hit after it is judged from where you are. (From Slinky)");
-        help("BackTrack", "only-in-combat", "Hold the target back only within a second of your own last hit. (From Slinky)");
+        help("BackTrack", "only-in-combat", "Hold the target back only within a second of hitting that target (on by default), so it is not holding through a whole fight. (From Slinky)");
         help("BackTrack", "require-attack-key", "Hold the target back only while the attack key is held. (From Slinky)");
         help("KnockbackDelay", "RequireAttackKey", "Delay knockback only while the attack key is held. (From Slinky)");
         help("KnockbackDelay", "OnlyInAir", "Delay knockback only in the air; on the ground it lands as usual. (From Slinky)");

@@ -275,6 +275,11 @@ public class KillAuraLB extends Module {
     public final BooleanProperty prioritizeBlocking = new BooleanProperty("PrioritizeBlocking", true, this.lbBlocking);
     public final BooleanProperty onScanRange = new BooleanProperty("OnScanRange", true, this.lbBlocking);
     public final BooleanProperty onlyWhenInDanger = new BooleanProperty("OnlyWhenInDanger", false, this.lbBlocking);
+    /* 2026-10-30 (owner, after comparing with the original client's auto block): Basic and Interact keep the sword
+       down while our own hurt is above this -- a hit taken makes us immune for ten ticks, so a block in the first
+       of them protects nothing and only slows and shows. 10 is off. */
+    public final IntProperty blockHurtTime = new IntProperty("BlockHurtTime", 6, 0, 10,
+            () -> this.lbBlocking.getAsBoolean() && this.blockMode.getValue() < 2);
     public final FloatProperty dangerTolerance = new FloatProperty("Danger-Tolerance", 0.3F, 0.0F, 1.0F,
             () -> this.lbBlocking.getAsBoolean() && this.onlyWhenInDanger.getValue());
     public final FloatRange dangerForceActive = new FloatRange("Danger-ForceActiveRange", 0.0F, 1.0F, 0.0F, 6.0F,
@@ -2205,6 +2210,31 @@ public class KillAuraLB extends Module {
     /** The tick the key path let the sword down: vanilla releases in that runTick, the hit goes the next. */
     private int lbLoweredAt = Integer.MIN_VALUE;
 
+    private int lbHurtSeen;
+    private int lbHurtGate = -1;
+
+    /**
+     * BlockHurtTime for the hit taken now (2026-10-30): the setting times a small right-skewed factor (log-normal,
+     * 0.82-1.22), its fraction rounded at random, drawn again with every new hit -- so the tick the sword goes up
+     * after a hit is not the same every time. 10 stays off.
+     */
+    private int lbHurtGate() {
+        int setting = this.blockHurtTime.getValue();
+        int hurt = mc.thePlayer.hurtTime;
+        if (setting >= 10) {
+            this.lbHurtSeen = hurt;
+            return 10;
+        }
+        if (this.lbHurtGate < 0 || hurt > this.lbHurtSeen) {
+            java.util.Random random = java.util.concurrent.ThreadLocalRandom.current();
+            double scaled = setting * Math.max(0.82, Math.min(1.22, Math.exp(random.nextGaussian() * 0.10)));
+            int whole = (int) scaled;
+            this.lbHurtGate = Math.min(9, whole + (random.nextDouble() < scaled - whole ? 1 : 0));
+        }
+        this.lbHurtSeen = hurt;
+        return this.lbHurtGate;
+    }
+
     /** The tick (rhythmTick) of our last attack packet, whoever sent it. */
     private int lbLastAttackTick = Integer.MIN_VALUE / 2;
 
@@ -2268,6 +2298,11 @@ public class KillAuraLB extends Module {
             return false;
         }
         if (this.onlyWhenInDanger.getValue() && !this.inDanger) {
+            stopBlocking(false);
+            return false;
+        }
+        if (this.blockMode.getValue() < 2 && mc.thePlayer.hurtTime > lbHurtGate()) {
+            /* Still immune from the last hit taken: nothing to block yet (BlockHurtTime). */
             stopBlocking(false);
             return false;
         }
@@ -2785,31 +2820,7 @@ public class KillAuraLB extends Module {
 
     /** Vanilla's crosshair along {@code rotation}; the camera's crosshair is left as it was. */
     private MovingObjectPosition pick(Rotation rotation) {
-        net.minecraft.client.entity.EntityPlayerSP p = mc.thePlayer;
-        MovingObjectPosition saved = mc.objectMouseOver;
-        Entity savedPointed = mc.pointedEntity;
-        float yaw = p.rotationYaw;
-        float pitch = p.rotationPitch;
-        float head = p.rotationYawHead;
-        float prevYaw = p.prevRotationYaw;
-        float prevPitch = p.prevRotationPitch;
-        float prevHead = p.prevRotationYawHead;
-        p.rotationYaw = p.prevRotationYaw = rotation.yaw;
-        p.rotationYawHead = p.prevRotationYawHead = rotation.yaw;
-        p.rotationPitch = p.prevRotationPitch = rotation.pitch;
-        try {
-            mc.entityRenderer.getMouseOver(1.0F);
-            return mc.objectMouseOver;
-        } finally {
-            p.rotationYaw = yaw;
-            p.rotationPitch = pitch;
-            p.rotationYawHead = head;
-            p.prevRotationYaw = prevYaw;
-            p.prevRotationPitch = prevPitch;
-            p.prevRotationYawHead = prevHead;
-            mc.objectMouseOver = saved;
-            mc.pointedEntity = savedPointed;
-        }
+        return atlas.util.VanillaInput.pick(rotation.yaw, rotation.pitch);
     }
 
     /**

@@ -466,14 +466,17 @@ public class BlockHit extends Module {
         return blockTarget(this.sRange.getValue());
     }
 
-    /** The enemy within range: the one under the crosshair, else the nearest within 70 degrees of the view. */
+    /** Within this box distance an enemy counts whatever the view angle. */
+    private static final double CLOSE_ANY_ANGLE = 1.5;
+
+    /** The enemy within range: the one under the crosshair, else the nearest within 70 degrees of the view (any angle when close). */
     net.minecraft.entity.player.EntityPlayer blockTarget(float range) {
         if (mc.objectMouseOver != null
                 && mc.objectMouseOver.entityHit instanceof net.minecraft.entity.player.EntityPlayer) {
             net.minecraft.entity.player.EntityPlayer hit =
                     (net.minecraft.entity.player.EntityPlayer) mc.objectMouseOver.entityHit;
-            if (hostile(hit)) {
-                return boxDistance(hit) <= range ? hit : null;
+            if (hostile(hit) && boxDistance(hit) <= range) {
+                return hit;
             }
         }
         net.minecraft.entity.player.EntityPlayer best = null;
@@ -484,6 +487,13 @@ public class BlockHit extends Module {
             }
             double distance = boxDistance(player);
             if (distance > bestDistance) {
+                continue;
+            }
+            /* Hugging: the angle to the feet is 60-70 degrees down, outside the cone, and Full let go while the
+               enemy was closest (10-30 19:22, "no enemy in range" at 0.34 and 0.64). Anyone this close can hit. */
+            if (distance <= CLOSE_ANY_ANGLE) {
+                bestDistance = distance;
+                best = player;
                 continue;
             }
             double dx = player.posX - mc.thePlayer.posX;

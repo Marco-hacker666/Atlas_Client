@@ -33,8 +33,9 @@ import java.util.Date;
  * Less slowdown, same protection, by choosing when the sword is up:
  * - Windows (full-style Smart): an opponent can damage this player again ten
  *   ticks after their last hit. The sword goes up open-hurt ticks before
- *   that (plus the round trip with ping-aware) and comes down after hold
- *   ticks or as soon as the hit lands. Outside an exchange, guard: short
+ *   that (plus the round trip with ping-aware) and stays up (at least hold
+ *   ticks) until the hit lands, the enemy leaves full-range or the exchange
+ *   is over. Outside an exchange, guard: short
  *   windows while an enemy within guard-range faces this player.
  * - In the air (full-air): blocking scales the movement input by 0.2, and in
  *   the air the input adds only 0.02 a tick against the momentum already
@@ -60,6 +61,12 @@ final class AutoBlockFull {
     private static final int CYCLE_TICKS = 30;
     /** Damage again this many ticks after the last hit (1.8). */
     private static final int IMMUNE_TICKS = 10;
+    /**
+     * Once engaged, how far past full-range the enemy may be before this lets go (2026-10-30: the 10-30 games went
+     * ON/OFF 150 times, "no enemy in range" 90 of them -- an exchange knocks both apart past 3.5 -- and the window
+     * opened while the enemy was out there was spent before they came back: 9 of 64 hits blocked).
+     */
+    private static final float ENGAGED_EXTRA = 1.5F;
 
     private final BlockHit module;
     /** The use key is this mode's. */
@@ -72,7 +79,8 @@ final class AutoBlockFull {
     private int lastAttackTick = -100;
     private int lastHurt;
     private int lastHurtAt = -1000;
-    private boolean windowSpent;
+    /** A Smart window is up (opened once per stretch in reach, so hold counts from the opening). */
+    private boolean windowOpen;
     private int windowUntil = -1;
     private int guardRestUntil;
     private float lastHealth = -1.0F;
@@ -118,7 +126,8 @@ final class AutoBlockFull {
         this.upAt[this.tick % HISTORY] = using;
         boolean hurtAgain = noteHits();
 
-        EntityPlayer enemy = wanted() ? this.module.blockTarget(this.module.fullRange.getValue()) : null;
+        float range = this.module.fullRange.getValue();
+        EntityPlayer enemy = wanted() ? this.module.blockTarget(this.active ? range + ENGAGED_EXTRA : range) : null;
         if (enemy == null) {
             if (this.active) {
                 release(wanted() ? "no enemy in range" : "off");
@@ -152,7 +161,7 @@ final class AutoBlockFull {
             }
         }
 
-        boolean up = shouldBeUp(enemy, hurtAgain);
+        boolean up = shouldBeUp(enemy, hurtAgain, BlockHit.boxDistance(enemy) <= range);
         if (up != this.wantedUp) {
             this.wantedUp = up;
             if (this.module.fullLog.getValue()) {
@@ -189,25 +198,36 @@ final class AutoBlockFull {
         }
     }
 
-    private boolean shouldBeUp(EntityPlayer enemy, boolean hurtAgain) {
+    /** {@code inReach}: the enemy within full-range -- a window opens only then, so it is not spent while they are away. */
+    private boolean shouldBeUp(EntityPlayer enemy, boolean hurtAgain, boolean inReach) {
         if (this.module.fullStyle.getValue() == 0) {
             this.upReason = "always";
             return true;
         }
         if (hurtAgain) {
             this.windowUntil = -1;
-            this.windowSpent = false;
+            this.windowOpen = false;
         }
         int hurt = mc.thePlayer.hurtTime;
         int lead = this.module.fullPingAware.getValue() ? Math.round(atlas.util.Ping.own() / 50.0F) : 0;
         int openAt = Math.max(0, Math.min(9, this.module.fullOpenHurt.getValue() + lead));
         boolean inCycle = this.tick - this.lastHurtAt <= CYCLE_TICKS;
         int hold = this.module.fullHold.getValue();
-        if (inCycle && !this.windowSpent && hurt <= openAt) {
-            this.windowUntil = this.tick + hold;
-            this.windowSpent = true;
-            this.upReason = "window (hurt " + hurt + ", open at " + openAt + ")";
-        } else if (!inCycle && this.module.fullGuard.getValue() && this.tick >= this.guardRestUntil
+        /*
+         * The window stays up until the next hit lands, the enemy leaves reach or the exchange is over, at least
+         * hold ticks (2026-10-30: one raise of hold ticks per hit taken was down long before the next hit -- after
+         * the knockback the enemy needs about a second to come back -- and blocked 1 of 23, sword up 5%).
+         */
+        if (inCycle && hurt <= openAt && inReach) {
+            if (!this.windowOpen) {
+                this.windowOpen = true;
+                this.windowUntil = this.tick + hold;
+                this.upReason = "window (hurt " + hurt + ", open at " + openAt + ")";
+            }
+            return true;
+        }
+        this.windowOpen = false;
+        if (!inCycle && inReach && this.module.fullGuard.getValue() && this.tick >= this.guardRestUntil
                 && this.tick >= this.windowUntil && facesMe(enemy)) {
             this.windowUntil = this.tick + hold;
             this.guardRestUntil = this.tick + hold * 2;

@@ -309,6 +309,8 @@ public final class ModuleDocs {
         help("AimAssist", "hitbox-v", "上下：把瞄準點從眼睛高度往最近點拉（0-1）。");
         help("AimAssist", "dead-zone", "最後這幾度不轉。");
         help("AimAssist", "target-mode", "Single：鎖一個目標。Switch：每 tick 依 sort-by 選最好的。");
+        help("AimAssist", "mode", "Smooth 專用。NORMAL：轉你的畫面。SILENT：畫面不動，只有伺服器收到的視角轉向敵人；點擊照這個視角打。");
+        help("AimAssist", "max-offset", "SILENT：伺服器視角最多偏離你的畫面幾度；沒有目標時會慢慢轉回畫面。");
         help("AimAssist", "sort-by", "Switch：用什麼挑目標。");
         help("AimAssist", "exceed-fov", "Single：目標超出 fov 也繼續。");
         help("AimAssist", "require-click", "要按著攻擊鍵。");
@@ -319,8 +321,11 @@ public final class ModuleDocs {
         d("AutoClicker", "按住左鍵時自動連點，CPS 在設定範圍內隨機，可順便格擋或挖方塊。");
         help("AutoClicker", "randomization", "Human（建議）：CPS 在範圍內慢慢漂移再回來，每一下的間隔像手一樣偏斜（很少太快、偶爾慢一點），會重複節奏、偶爾停頓，每場一開始稍快。Normal / Extra / Extra+：舊的均勻隨機。");
         d("KnockbackDelay", "把收到的擊退延後一小段時間才吃下去，讓被打飛的時機變晚。");
+        help("LiquidAura", "BlockHurtTime", "Basic/Interact：自己的受傷時間高於這個值時不舉劍。剛被打的十個 tick 內不會再受傷，這時舉劍只會減速。數字越小擋越少；10 等於關閉。每次被打都會在這個值附近隨機浮動一點，像手動一樣不固定。");
         help("LiquidAura", "Rhythm-FreeRaise", "Rhythm：舉劍那一 tick 在 Grim 允許時不減速（不會連續兩次）。預設關；照 Grim 的規則做，Polar 沒測過。");
-        help("KnockbackDelay", "Mode", "Steady：打架時伺服器送來的所有封包都照順序晚一段時間（keep-alive、交易封包也是），延遲慢慢加上去、慢慢退掉，伺服器看來就是網路比較慢，不會有哪一次擊退特別突出。Spike（預設）：只在部分擊退時，把擊退和後面所有封包一起壓住，畫面會定格一下，你自己的移動照常送出。");
+        help("KnockbackDelay", "Mode", "Steady：打架時伺服器送來的所有封包都照順序晚一段時間（keep-alive、交易封包也是），延遲慢慢加上去、慢慢退掉，伺服器看來就是網路比較慢，不會有哪一次擊退特別突出。Spike（預設）：只在部分擊退時，把擊退和後面所有封包一起壓住，畫面會定格一下，你自己的移動照常送出。Air：只在空中被打時壓住（地上不延遲），每次延遲在 AirMax 附近隨機，最保守。");
+        help("KnockbackDelay", "AirMax", "Air 模式每次大約壓多久（毫秒），實際在 0.75～1.35 倍之間隨機；也會被 ping 預算限制。");
+        help("KnockbackDelay", "AirChance", "Air 模式在空中被打時有多少機率延遲。");
         help("KnockbackDelay", "SteadyDelay", "打架時所有封包晚多久（毫秒），不超過 LatencyBudget 減掉你的 ping。");
         help("KnockbackDelay", "Ramp", "Steady 延遲每 tick 最多變多少（毫秒）：開始和結束有多平順。");
         help("KnockbackDelay", "HoldTransactions", "Spike 且 HoldOthers 關掉時：壓住擊退後的交易確認封包也一起等。");
@@ -353,7 +358,7 @@ public final class ModuleDocs {
         help("BlockHit", "full-style", "Full：Always＝敵人在範圍內就一直舉著（最安全、最慢）；Smart＝只在快被打到時、被盯上時、在空中時舉（減速少很多）。");
         help("BlockHit", "full-open-hurt", "Full Smart：被打之後，自己的受傷時間剩這麼多時舉劍（下一下快能打到你了）。");
         help("BlockHit", "full-ping-aware", "Full Smart：依 ping 提早舉劍，讓伺服器那邊來得及。");
-        help("BlockHit", "full-hold", "Full Smart：每次最多舉幾 tick；被打到就放下。");
+        help("BlockHit", "full-hold", "Full Smart：每次至少舉幾 tick；之後一直舉著，直到被打到、敵人離開範圍或交戰結束。");
         help("BlockHit", "full-guard", "Full Smart：還沒開打時，範圍內有敵人面向你就短暫舉劍。");
         help("BlockHit", "full-air", "Full Smart：在空中時一直舉著（空中舉劍幾乎不會變慢，因為速度主要靠慣性）。");
         help("BlockHit", "full-log", "Full：寫 fullblock-*.txt（要開 Logs）：每次舉起/放下的原因、每次被打到有沒有擋到、舉劍時間佔比。");
@@ -424,7 +429,7 @@ public final class ModuleDocs {
         help("LagRange", "show-position", "第三人稱時畫出伺服器上你的位置。");
         help("LagRange", "log", "File：每次壓和放的原因寫進 config/Atlas/lagrange-*.txt。");
         help("LagRange", "release-on-sprint-reset", "什麼時候放：W-tap（停止疾跑）時立刻全部放出，接著的攻擊從你真正的位置算。（來源：Slinky）");
-        help("BackTrack", "only-in-combat", "只在你上次出手後 1 秒內才拖住對手。（來源：Slinky）");
+        help("BackTrack", "only-in-combat", "只在你打中這個對手後 1 秒內才拖住他（預設開），整場打架不會一直扣封包。（來源：Slinky）");
         help("BackTrack", "require-attack-key", "只在按著攻擊鍵時才拖住對手。（來源：Slinky）");
         help("KnockbackDelay", "RequireAttackKey", "只在按著攻擊鍵時才延後擊退。（來源：Slinky）");
         help("KnockbackDelay", "OnlyInAir", "只在空中時才延後擊退，在地上照常。（來源：Slinky）");

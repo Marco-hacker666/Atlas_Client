@@ -109,10 +109,23 @@ public class AimAssist extends Module {
     public final ModeProperty moveFix = new ModeProperty("move-fix", 1, new String[]{"NONE", "SILENT"},
             () -> smooth.getAsBoolean() && this.mode.getValue() == 1);
 
+    /*
+     * 2026-10-30 (owner: "fix the silent mode"): the silent look is kept as an offset from the camera, so it follows
+     * the mouse and builds up toward the target. Before, every tick stepped from the camera again, so with speed 3 it
+     * never got past 30 % of the way and never reached the player the camera was not already on; clicks went by the
+     * camera's crosshair, not the look the server got; the angle was not on the mouse grid; and with no target it
+     * jumped back to the camera in one tick (up to max-offset).
+     */
+    private float offsetYaw;
+    private float offsetPitch;
+    /** What the movement packet carried, on the mouse grid. */
     private float silentYaw;
     private float silentPitch;
     private boolean silentActive;
     private boolean silentQueued;
+    /** With no target the offset shrinks by this share a tick, and stops below SETTLED degrees. */
+    private static final float EASE_BACK = 0.35F;
+    private static final float SETTLED = 0.5F;
 
     /* The yaw handed to setPervRotation this tick; NaN on ticks this module
        did not rotate. */
@@ -152,17 +165,48 @@ public class AimAssist extends Module {
 
     @Override
     public void onEnabled() {
-        this.silentActive = false;
-        this.silentQueued = false;
+        this.resetSilent();
         this.framedAim.reset();
     }
 
     @Override
     public void onDisabled() {
         this.humanizer.reset();
+        this.resetSilent();
+        this.framedAim.reset();
+    }
+
+    private void resetSilent() {
         this.silentActive = false;
         this.silentQueued = false;
-        this.framedAim.reset();
+        this.offsetYaw = 0.0F;
+        this.offsetPitch = 0.0F;
+    }
+
+    private boolean silentLook() {
+        return this.style.getValue() == 0 && this.mode.getValue() == 1 && (this.silentQueued
+                || Math.abs(this.offsetYaw) >= SETTLED || Math.abs(this.offsetPitch) >= SETTLED);
+    }
+
+    /**
+     * Clicks go along the silent look: the look this tick's movement packet will carry (the camera plus the offset,
+     * the camera does not turn inside runTick), so what is hit is what the server sees aimed at. Only when the camera
+     * or the silent look is on a player -- otherwise the camera's crosshair stays, for blocks. An aura's look wins.
+     */
+    @EventTarget
+    public void onTickPre(TickEvent event) {
+        if (!this.isEnabled() || event.getType() != EventType.PRE || mc.currentScreen != null || !this.silentLook()
+                || atlas.util.VanillaInput.isFighting()) {
+            return;
+        }
+        float yaw = mc.thePlayer.rotationYaw + this.offsetYaw;
+        float pitch = MathHelper.clamp_float(mc.thePlayer.rotationPitch + this.offsetPitch, -90.0F, 90.0F);
+        net.minecraft.util.MovingObjectPosition over = atlas.util.VanillaInput.pick(yaw, pitch);
+        boolean silentOnEntity = over != null && over.typeOfHit == MovingObjectType.ENTITY;
+        boolean cameraOnEntity = mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectType.ENTITY;
+        if (silentOnEntity || cameraOnEntity) {
+            atlas.util.VanillaInput.fighting(over);
+        }
     }
 
     /** Regular / Linear / Lock On: the view turns every frame. */
@@ -173,16 +217,10 @@ public class AimAssist extends Module {
         }
     }
 
-    /** Clamps an angle so the silent aim stays within max-offset of the camera. */
-    private float limit(float target, float actual) {
+    /** Clamps an offset so the silent aim stays within max-offset of the camera. */
+    private float limit(float offset) {
         float max = this.maxOffset.getValue();
-        float delta = MathHelper.wrapAngleTo180_float(target - actual);
-        if (delta > max) {
-            delta = max;
-        } else if (delta < -max) {
-            delta = -max;
-        }
-        return actual + delta;
+        return MathHelper.clamp_float(offset, -max, max);
     }
 
     private final atlas.humanize.Humanizer humanizer = new atlas.humanize.Humanizer(atlas.humanize.Humanizer.CONSUMER_AIMASSIST);
@@ -232,20 +270,25 @@ public class AimAssist extends Module {
                                     hitbox = hitbox.offset((player.posX - player.lastTickPosX) * ahead, 0.0,
                                             (player.posZ - player.lastTickPosZ) * ahead);
                                 }
+                                /* The look this turns from: the camera, or in SILENT the silent look (camera + offset). */
+                                boolean silent = this.mode.getValue() == 1;
+                                float curYaw = mc.thePlayer.rotationYaw + (silent ? this.offsetYaw : 0.0F);
+                                float curPitch = MathHelper.clamp_float(
+                                        mc.thePlayer.rotationPitch + (silent ? this.offsetPitch : 0.0F), -90.0F, 90.0F);
                                 float[] rotation;
                                 if (this.multipoint.getValue()) {
                                     Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
                                     Vec3 point = RotationEngine.nearestOnBox(RotationEngine.aimBox(hitbox, 0.15, 0.05, 0.85),
-                                            eyes, mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
+                                            eyes, curYaw, curPitch);
                                     rotation = RotationUtil.getRotations(point.xCoord - eyes.xCoord,
                                             point.yCoord - eyes.yCoord, point.zCoord - eyes.zCoord,
-                                            mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch, 180.0F,
+                                            curYaw, curPitch, 180.0F,
                                             (float) this.smoothing.getValue() / 100.0F);
                                 } else {
                                     rotation = RotationUtil.getRotationsToBox(
                                             hitbox,
-                                            mc.thePlayer.rotationYaw,
-                                            mc.thePlayer.rotationPitch,
+                                            curYaw,
+                                            curPitch,
                                             180.0F,
                                             (float) this.smoothing.getValue() / 100.0F
                                     );
@@ -254,7 +297,7 @@ public class AimAssist extends Module {
                                 float pitch = Math.min(Math.abs(this.vSpeed.getValue()), 10.0F);
                                 float yawStep = 0.1F * yaw;
                                 if (this.strafeIncrease.getValue()) {
-                                    float side = MathHelper.wrapAngleTo180_float(rotation[0] - mc.thePlayer.rotationYaw);
+                                    float side = MathHelper.wrapAngleTo180_float(rotation[0] - curYaw);
                                     float strafe = mc.thePlayer.movementInput.moveStrafe;
                                     /* moveStrafe > 0 is left; a target to the right has a positive side. */
                                     if (side > 0.0F && strafe > 0.0F || side < 0.0F && strafe < 0.0F) {
@@ -265,8 +308,8 @@ public class AimAssist extends Module {
                                 float humanYaw = 0.0F;
                                 float humanPitch = 0.0F;
                                 atlas.humanize.AimError.Adjust adjust = this.humanizer.aim(
-                                        MathHelper.wrapAngleTo180_float(rotation[0] - mc.thePlayer.rotationYaw),
-                                        rotation[1] - mc.thePlayer.rotationPitch,
+                                        MathHelper.wrapAngleTo180_float(rotation[0] - curYaw),
+                                        rotation[1] - curPitch,
                                         (float) Math.toDegrees(Math.atan2(Math.hypot(player.posX - player.lastTickPosX,
                                                 player.posZ - player.lastTickPosZ), Math.max(0.5, RotationUtil.distanceToEntity(player)))));
                                 if (adjust != null) {
@@ -281,15 +324,15 @@ public class AimAssist extends Module {
                                 }
                                 /* The tremor/overshoot moves the point aimed at, not the step (the camera keeps
                                    its turn, so a per-step offset would walk away). */
-                                float nextYaw = mc.thePlayer.rotationYaw
-                                        + (rotation[0] + humanYaw - mc.thePlayer.rotationYaw) * yawStep;
-                                float nextPitch = mc.thePlayer.rotationPitch
-                                        + (rotation[1] + humanPitch - mc.thePlayer.rotationPitch) * pitchStep;
+                                float nextYaw = curYaw
+                                        + MathHelper.wrapAngleTo180_float(rotation[0] + humanYaw - curYaw) * yawStep;
+                                float nextPitch = curPitch + (rotation[1] + humanPitch - curPitch) * pitchStep;
 
-                                if (this.mode.getValue() == 1) {
-                                    this.silentYaw = limit(nextYaw, mc.thePlayer.rotationYaw);
-                                    this.silentPitch = MathHelper.clamp_float(
-                                            limit(nextPitch, mc.thePlayer.rotationPitch), -90.0F, 90.0F);
+                                if (silent) {
+                                    /* Kept as an offset, so the next tick turns on from here and the mouse carries it. */
+                                    this.offsetYaw = limit(MathHelper.wrapAngleTo180_float(nextYaw - mc.thePlayer.rotationYaw));
+                                    this.offsetPitch = limit(MathHelper.clamp_float(nextPitch, -90.0F, 90.0F)
+                                            - mc.thePlayer.rotationPitch);
                                     this.silentQueued = true;
                                 } else {
                                     Atlas.rotationManager.setRotation(nextYaw, nextPitch, 0, false);
@@ -316,20 +359,30 @@ public class AimAssist extends Module {
             return;
         }
         this.moveYaw = Float.NaN;
-        if (this.mode.getValue() != 1) {
-            this.silentActive = false;
-            this.silentQueued = false;
+        if (this.mode.getValue() != 1 || this.style.getValue() != 0) {
+            this.resetSilent();
             return;
         }
         if (!this.silentQueued) {
-            // Nothing aimed at this tick: let the real rotation through so the
-            // packet stream returns to the camera instead of holding a stale
-            // angle at a target that is gone.
-            this.silentActive = false;
-            return;
+            /* Nothing aimed at this tick: back to the camera over a few ticks (a jump of up to max-offset in one
+               tick is a snap), then the real rotation goes through again. */
+            this.offsetYaw *= 1.0F - EASE_BACK;
+            this.offsetPitch *= 1.0F - EASE_BACK;
+            if (Math.abs(this.offsetYaw) < SETTLED && Math.abs(this.offsetPitch) < SETTLED) {
+                this.offsetYaw = 0.0F;
+                this.offsetPitch = 0.0F;
+                this.silentActive = false;
+                return;
+            }
         }
         this.silentQueued = false;
         this.silentActive = true;
+        /* On the mouse grid, from the look the server last received. */
+        float[] look = RotationUtil.gcd(mc.thePlayer.rotationYaw + this.offsetYaw,
+                MathHelper.clamp_float(mc.thePlayer.rotationPitch + this.offsetPitch, -90.0F, 90.0F),
+                event.getYaw(), event.getPitch());
+        this.silentYaw = look[0];
+        this.silentPitch = look[1];
         event.setRotation(this.silentYaw, this.silentPitch, 1);
         // Same priority, so whichever module wins the packet also sets the
         // yaw the player moves by.

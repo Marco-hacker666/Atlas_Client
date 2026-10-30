@@ -191,7 +191,10 @@ public class BackTrack extends Module {
         this.range = new FloatProperty("range", 3.0F, 1.0F, 8.0F);
         this.minRange = new FloatProperty("min-range", 0.0F, 0.0F, 4.0F);
         this.maxHurtTime = new IntProperty("max-hurt-time", 10, 0, 10);
-        this.cooldown = new IntProperty("cooldown", 0, 0, 2000);
+        /* 2026-10-30 (after Slinky's Backtrack): 250 ms between holds and only-in-combat on by default -- it holds
+           only in the second after you hit that target, so it is not holding through a whole fight (the 10-29 hits
+           the server dropped came while it held). */
+        this.cooldown = new IntProperty("cooldown", 250, 0, 2000);
         this.weaponsOnly = new BooleanProperty("weapons-only", false);
         this.adaptive = new BooleanProperty("adaptive", true);
         /* Keep both choices editable in the GUI. Adaptive selects which one
@@ -210,7 +213,7 @@ public class BackTrack extends Module {
         this.esp = new BooleanProperty("esp", true);
         this.espHead = new BooleanProperty("esp-head", true, this.esp::getValue);
         this.hitStats = new BooleanProperty("hit-stats", false);
-        this.onlyInCombat = new BooleanProperty("only-in-combat", false);
+        this.onlyInCombat = new BooleanProperty("only-in-combat", true);
         this.requireAttackKey = new BooleanProperty("require-attack-key", false);
         instance = this;
     }
@@ -380,7 +383,7 @@ public class BackTrack extends Module {
 
     /** Whether a new hold may open now: cooldown over, target hittable, weapon in hand. */
     private boolean mayOpen(EntityLivingBase t) {
-        if (onlyInCombat.getValue() && System.currentTimeMillis() - lastAttackTime > 1000L) return false;
+        if (onlyInCombat.getValue() && (lastAttacked != t || System.currentTimeMillis() - lastAttackTime > 1000L)) return false;
         if (requireAttackKey.getValue() && !attackKeyHeld) return false;
         if (cooldown.getValue() > 0 && System.currentTimeMillis() - lastReleaseAt < cooldown.getValue()) return false;
         if (maxHurtTime.getValue() < 10 && t.hurtTime > maxHurtTime.getValue()) return false;

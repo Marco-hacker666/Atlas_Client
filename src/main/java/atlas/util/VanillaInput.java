@@ -42,6 +42,35 @@ public final class VanillaInput {
     private VanillaInput() {
     }
 
+    /** Vanilla's crosshair (getMouseOver, with Reach/HitBox) along a look; the camera's crosshair is left as it was. */
+    public static MovingObjectPosition pick(float lookYaw, float lookPitch) {
+        net.minecraft.client.entity.EntityPlayerSP p = mc.thePlayer;
+        MovingObjectPosition saved = mc.objectMouseOver;
+        net.minecraft.entity.Entity savedPointed = mc.pointedEntity;
+        float yaw = p.rotationYaw;
+        float pitch = p.rotationPitch;
+        float head = p.rotationYawHead;
+        float prevYaw = p.prevRotationYaw;
+        float prevPitch = p.prevRotationPitch;
+        float prevHead = p.prevRotationYawHead;
+        p.rotationYaw = p.prevRotationYaw = lookYaw;
+        p.rotationYawHead = p.prevRotationYawHead = lookYaw;
+        p.rotationPitch = p.prevRotationPitch = lookPitch;
+        try {
+            mc.entityRenderer.getMouseOver(1.0F);
+            return mc.objectMouseOver;
+        } finally {
+            p.rotationYaw = yaw;
+            p.rotationPitch = pitch;
+            p.rotationYawHead = head;
+            p.prevRotationYaw = prevYaw;
+            p.prevRotationPitch = prevPitch;
+            p.prevRotationYawHead = prevHead;
+            mc.objectMouseOver = saved;
+            mc.pointedEntity = savedPointed;
+        }
+    }
+
     /** Presses the attack key once this tick; the click is to point at {@code over}. */
     public static void pressAttack(MovingObjectPosition over) {
         ATTACKS.queue(over);

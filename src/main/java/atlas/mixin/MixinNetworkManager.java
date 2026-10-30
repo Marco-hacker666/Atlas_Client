@@ -28,6 +28,20 @@ public abstract class MixinNetworkManager {
             cancellable = true
     )
     private void channelRead0(ChannelHandlerContext channelHandlerContext, Packet<?> packet, CallbackInfo callbackInfo) {
+        /* 2026-10-30 (audit): this runs for every connection, the server list's pings too. A ping's answer went
+           through the play pipeline, KnockbackDelay held it and replayed it into the play handler
+           (ClassCastException ... INetHandlerStatusClient). Status connections are left alone; at login only the
+           event runs (LogUploader reads the login kick), nothing holds or delays. */
+        net.minecraft.network.INetHandler handler = ((NetworkManager) (Object) this).getNetHandler();
+        if (handler instanceof net.minecraft.network.status.INetHandlerStatusClient) {
+            return;
+        }
+        boolean play = handler instanceof INetHandlerPlayClient;
+        if (!play) {
+            PacketEvent event = new PacketEvent(EventType.RECEIVE, packet);
+            EventManager.call(event);
+            return;
+        }
         if (!packet.getClass().getName().startsWith("net.minecraft.network.play.client")) {
             /* 2026-10-28 LagGuard: a knockback or a correction lets the delay modules' holds go before anyone sees it. */
             atlas.management.LagGuard.onReceive(packet);

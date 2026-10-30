@@ -10,7 +10,6 @@ import atlas.config.online.OnlineConfigEntry;
 import atlas.config.online.OnlineConfigFetcher;
 import atlas.enums.ChatColors;
 import atlas.util.ChatUtil;
-import net.minecraft.event.ClickEvent;
 import net.minecraft.event.HoverEvent;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatStyle;
@@ -78,10 +77,35 @@ public class UserConfigCommand extends Command {
     }
 
     private void load(String source) {
+        if (OnlineConfigFetcher.looksLikeUrl(source)) {
+            /* 2026-10-30 (audit): downloaded off the client thread (it froze the game), applied back on it. */
+            Thread thread = new Thread(() -> {
+                try {
+                    String json = OnlineConfigFetcher.fetch(source);
+                    net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
+                        try {
+                            try {
+                                OnlineConfigCache.save(OnlineConfigCache.sanitize(source), json);
+                            } catch (Exception e) {
+                                ChatUtil.sendFormatted(String.format("%sNote: could not cache download (&o%s&r)&r", Atlas.clientName, clean(e.getMessage())));
+                            }
+                            report(source, new OnlineConfigApplier().apply(json));
+                        } catch (Exception e) {
+                            ChatUtil.sendFormatted(String.format("%sFailed to load user config (&c&o%s&r)&r", Atlas.clientName, clean(e.getMessage())));
+                        }
+                    });
+                } catch (Exception e) {
+                    ChatUtil.sendFormatted(String.format("%sFailed to load user config (&c&o%s&r)&r", Atlas.clientName, clean(e.getMessage())));
+                }
+            }, "Atlas-UserConfig");
+            thread.setDaemon(true);
+            thread.start();
+            return;
+        }
         try {
             String json;
             String label;
-            boolean url = OnlineConfigFetcher.looksLikeUrl(source);
+            boolean url = false;
             boolean fileExists = new File(source).isFile();
             if (!url && !fileExists && OnlineConfigCache.has(source)) {
                 json = OnlineConfigCache.load(source);
@@ -113,6 +137,10 @@ public class UserConfigCommand extends Command {
         if (!result.failedNames.isEmpty()) {
             int show = Math.min(5, result.failedNames.size());
             ChatUtil.sendFormatted(String.format("&cSkipped: &f%s&r", clean(join(result.failedNames.subList(0, show), ", "))));
+        }
+        if (!result.skipped.isEmpty()) {
+            ChatUtil.sendFormatted(String.format("&7Not taken from a shared config: %d (key binds, text settings, "
+                    + "ScriptModule/AutoAuth/chat modules on-off)&r", result.skipped.size()));
         }
     }
 
@@ -152,7 +180,7 @@ public class UserConfigCommand extends Command {
                 String command = ".userconfig load " + entry.getId();
                 String line = String.format("&7»&r &o%s&r &7(%d bytes)&r", entry.getName(), entry.getSize());
                 ChatUtil.send(new ChatComponentText(ChatColors.formatColor(line)).setChatStyle(new ChatStyle()
-                        .setChatClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, command))
+                        .setChatClickEvent(atlas.command.CommandManager.ownClick(command))
                         .setChatHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ChatComponentText(command)))));
             }
         } catch (Exception e) {

@@ -30,7 +30,7 @@ public class FastUse extends Module {
 
     private void resetTimer() {
         try {
-            ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0F;
+            atlas.util.TimerControl.release(this);
         } catch (Exception ignored) {
         }
     }
@@ -76,7 +76,7 @@ public class FastUse extends Module {
                 }
                 break;
             default:
-                ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.18F;
+                atlas.util.TimerControl.set(this, 1.18F);
                 PacketUtil.sendPacketNoEvent(new C03PacketPlayer(mc.thePlayer.onGround));
                 break;
         }

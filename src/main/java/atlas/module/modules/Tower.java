@@ -107,7 +107,7 @@ public class Tower extends Module {
 
     private void restoreTimer() {
         if (this.timerChanged) {
-            ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0F;
+            atlas.util.TimerControl.release(this);
             this.timerChanged = false;
         }
     }
@@ -414,9 +414,9 @@ public class Tower extends Module {
         }
         if (mc.thePlayer.motionY < 0.0) {
             mc.thePlayer.motionY -= 9.45E-6;
-            timer.timerSpeed = this.towerTimer.getValue();
+            atlas.util.TimerControl.set(this, this.towerTimer.getValue());
         } else {
-            timer.timerSpeed = 1.0F;
+            atlas.util.TimerControl.release(this);
         }
         this.timerChanged = timer.timerSpeed != 1.0F;
     }

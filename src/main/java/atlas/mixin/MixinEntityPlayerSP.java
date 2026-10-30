@@ -59,15 +59,28 @@ public abstract class MixinEntityPlayerSP extends MixinEntityPlayer {
             UpdateEvent event = new UpdateEvent(EventType.PRE, this.lastReportedYaw, this.lastReportedPitch, this.rotationYaw, this.rotationPitch);
             EventManager.call(event);
             /* K1 (2026-10-07): KillAura's hit, after every module's rotation. */
+            /* 2026-10-30 (audit): called here directly, not through EventManager, so nothing caught what they
+               threw -- a crash mid-fight, and the rotation hand-over below skipped. Same handling as an event
+               handler now: logged, and the tick goes on. */
             atlas.module.modules.KillAura aura = (atlas.module.modules.KillAura)
                     atlas.Atlas.moduleManager.modules.get(atlas.module.modules.KillAura.class);
             if (aura != null) {
-                aura.afterRotations(event);
+                try {
+                    aura.afterRotations(event);
+                } catch (RuntimeException e) {
+                    System.err.println("[Atlas] KillAura.afterRotations threw:");
+                    e.printStackTrace();
+                }
             }
             atlas.module.modules.KillAura2 aura2 = (atlas.module.modules.KillAura2)
                     atlas.Atlas.moduleManager.modules.get(atlas.module.modules.KillAura2.class);
             if (aura2 != null) {
-                aura2.afterRotations(event);
+                try {
+                    aura2.afterRotations(event);
+                } catch (RuntimeException e) {
+                    System.err.println("[Atlas] KillAura2.afterRotations threw:");
+                    e.printStackTrace();
+                }
             }
             RotationState.applyState(event.isRotated() && !this.isRiding(), event.getNewYaw(), event.getNewPitch(), event.getPreYaw(), event.isRotating());
             if (event.isRotated()) {

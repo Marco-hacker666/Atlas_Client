@@ -8,7 +8,6 @@ import atlas.config.online.OnlineConfigEntry;
 import atlas.config.online.OnlineConfigFetcher;
 import atlas.enums.ChatColors;
 import atlas.util.ChatUtil;
-import net.minecraft.event.ClickEvent;
 import net.minecraft.event.HoverEvent;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatStyle;
@@ -50,10 +49,43 @@ public class OnlineConfigCommand extends Command {
     }
 
     private void load(String source) {
+        if (OnlineConfigFetcher.looksLikeUrl(source)) {
+            /* 2026-10-30 (audit): the download (up to 14 s of timeouts) froze the game on the client thread. It runs
+               on a thread of its own; the config is applied back on the client thread. */
+            Thread thread = new Thread(() -> {
+                try {
+                    String json = OnlineConfigFetcher.fetch(source);
+                    net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> this.applyFetched(source, json));
+                } catch (Exception e) {
+                    ChatUtil.sendFormatted(String.format("%sFailed to load online config (&c&o%s&r)&r", Atlas.clientName, clean(e.getMessage())));
+                }
+            }, "Atlas-OnlineConfig");
+            thread.setDaemon(true);
+            thread.start();
+            return;
+        }
+        this.loadLocal(source);
+    }
+
+    private void applyFetched(String source, String json) {
+        try {
+            try {
+                OnlineConfigCache.save(OnlineConfigCache.sanitize(source), json);
+            } catch (Exception e) {
+                ChatUtil.sendFormatted(String.format("%sNote: could not cache download (&o%s&r)&r", Atlas.clientName, clean(e.getMessage())));
+            }
+            OnlineConfigApplier.Result result = new OnlineConfigApplier().apply(json);
+            report(source, result);
+        } catch (Exception e) {
+            ChatUtil.sendFormatted(String.format("%sFailed to load online config (&c&o%s&r)&r", Atlas.clientName, clean(e.getMessage())));
+        }
+    }
+
+    private void loadLocal(String source) {
         try {
             String json;
             String label;
-            boolean url = OnlineConfigFetcher.looksLikeUrl(source);
+            boolean url = false;
             boolean fileExists = new File(source).isFile();
             if (!url && !fileExists && OnlineConfigCache.has(source)) {
                 json = OnlineConfigCache.load(source);
@@ -86,6 +118,10 @@ public class OnlineConfigCommand extends Command {
             int show = Math.min(5, result.failedNames.size());
             ChatUtil.sendFormatted(String.format("&cSkipped: &f%s&r", clean(join(result.failedNames.subList(0, show), ", "))));
         }
+        if (!result.skipped.isEmpty()) {
+            ChatUtil.sendFormatted(String.format("&7Not taken from a shared config: %d (key binds, text settings, "
+                    + "ScriptModule/AutoAuth/chat modules on-off)&r", result.skipped.size()));
+        }
     }
 
     private void listCache() {
@@ -100,7 +136,7 @@ public class OnlineConfigCommand extends Command {
                 String command = ".onlineconfig load " + entry.getId();
                 String line = String.format("&7»&r &o%s&r &7(%d bytes)&r", entry.getName(), entry.getSize());
                 ChatUtil.send(new ChatComponentText(ChatColors.formatColor(line)).setChatStyle(new ChatStyle()
-                        .setChatClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, command))
+                        .setChatClickEvent(atlas.command.CommandManager.ownClick(command))
                         .setChatHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ChatComponentText(command)))));
             }
         } catch (Exception e) {

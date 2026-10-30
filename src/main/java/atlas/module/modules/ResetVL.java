@@ -51,7 +51,7 @@ public class ResetVL extends Module {
         this.rising = false;
         net.minecraft.util.Timer gameTimer = ((IAccessorMinecraft) mc).getTimer();
         if (gameTimer != null) {
-            gameTimer.timerSpeed = 1.0F;
+            atlas.util.TimerControl.release(this);
         }
     }
 
@@ -63,7 +63,7 @@ public class ResetVL extends Module {
         }
         net.minecraft.util.Timer gameTimer = ((IAccessorMinecraft) mc).getTimer();
         if (gameTimer != null) {
-            gameTimer.timerSpeed = this.timer.getValue();
+            atlas.util.TimerControl.set(this, this.timer.getValue());
         }
         if (this.rising) {
             mc.thePlayer.motionX = 0.0;

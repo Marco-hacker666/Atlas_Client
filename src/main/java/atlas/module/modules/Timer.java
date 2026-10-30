@@ -49,7 +49,7 @@ public class Timer extends Module {
         this.randomizedSpeed = this.speed.getValue();
         net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
         if (timer != null) {
-            timer.timerSpeed = 1.0F;
+            atlas.util.TimerControl.release(this);
         }
     }
 
@@ -73,20 +73,20 @@ public class Timer extends Module {
 
         net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
         if (timer != null && !conditionsMet()) {
-            timer.timerSpeed = 1.0F;
+            atlas.util.TimerControl.release(this);
             return;
         }
         if (timer != null) {
             // Ported from Raven GrimBoatLongJump timer-balance idea: hop and balance variants.
             if (this.timerMode.getValue() == 1 && mc.thePlayer != null) {
-                timer.timerSpeed = mc.thePlayer.onGround ? this.randomizedSpeed : this.hopSpeed.getValue();
+                atlas.util.TimerControl.set(this, mc.thePlayer.onGround ? this.randomizedSpeed : this.hopSpeed.getValue());
             } else if (this.timerMode.getValue() == 2) {
                 this.timerTicks++;
                 int interval = this.balanceInterval.getValue();
-                timer.timerSpeed = (this.timerTicks % (interval * 2)) < interval
-                        ? this.balanceSpeed.getValue() : 1.0F;
+                atlas.util.TimerControl.set(this, (this.timerTicks % (interval * 2)) < interval
+                        ? this.balanceSpeed.getValue() : 1.0F);
             } else {
-                timer.timerSpeed = this.randomizedSpeed;
+                atlas.util.TimerControl.set(this, this.randomizedSpeed);
             }
         }
     }

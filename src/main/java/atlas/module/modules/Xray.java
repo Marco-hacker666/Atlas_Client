@@ -23,16 +23,18 @@ import net.minecraft.util.Vec3i;
 import net.minecraftforge.common.ForgeModContainer;
 
 import java.awt.*;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
-import java.util.concurrent.CopyOnWriteArraySet;
 
 public class Xray extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final LinkedHashSet<Integer> xrayBlocks;
     private static final LinkedHashSet<Vec3i> caveOffsetsSmall;
     private static final LinkedHashSet<Vec3i> caveOffsetsLarge;
-    public final CopyOnWriteArraySet<BlockPos> trackedBlocks = new CopyOnWriteArraySet<>();
+    /* 2026-10-30 (audit): a concurrent set, not copy-on-write. Chunk-render threads add to it for every
+       matching block they draw, and every add to a CopyOnWriteArraySet copied the whole set. */
+    public final java.util.Set<BlockPos> trackedBlocks = java.util.concurrent.ConcurrentHashMap.newKeySet();
     public final CopyOnWriteArraySet<BlockPos> pendingBlocks = new CopyOnWriteArraySet<>();
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"SOFT", "FULL"});
     public final PercentProperty opacity = new PercentProperty("opacity", 50);

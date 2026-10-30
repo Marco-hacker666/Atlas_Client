@@ -454,7 +454,19 @@ public final class BugReport {
         if (property instanceof ModeProperty) {
             return ((ModeProperty) property).getModeString();
         }
-        return String.valueOf(property.getValue());
+        return shownText(property instanceof atlas.property.properties.TextProperty, property.getValue());
+    }
+
+    /**
+     * 2026-10-30 (audit): text settings are left out of reports. They are what the Redactor cannot recognise --
+     * AutoAuth's password went out as it was in every automatic kick log -- and the rest are chat lines, names and
+     * commands nobody needs to see a bug.
+     */
+    static String shownText(boolean text, Object value) {
+        if (!text) {
+            return String.valueOf(value);
+        }
+        return value == null || String.valueOf(value).isEmpty() ? "<empty>" : "<hidden>";
     }
 
     /** When this game started: a log last written before it belongs to another session. */

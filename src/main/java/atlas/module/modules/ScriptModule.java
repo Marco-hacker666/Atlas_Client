@@ -21,13 +21,28 @@ public class ScriptModule extends Module {
     /** Packet summaries are short strings: scripts never see the live packet. */
     private static final int MAX_SUMMARY = 120;
 
+    /** Scripts are being compiled; ScriptManager is locked meanwhile, so the hooks below wait it out unblocked. */
+    private volatile boolean loading;
+
     public ScriptModule() {
         super("ScriptModule", false, false, "Loads script files and runs their hooks.");
     }
 
     @Override
     public void onEnabled() {
-        ScriptManager.getInstance().loadAll();
+        /* 2026-10-30 (audit): compiling every script with javac froze the game on the client thread. Scripts only
+           ever see strings and chat is now safe from any thread, so it runs on a thread of its own. */
+        this.loading = true;
+        Thread thread = new Thread(() -> {
+            try {
+                ScriptManager.getInstance().loadAll();
+                ScriptManager.getInstance().restoreSaved();
+            } finally {
+                this.loading = false;
+            }
+        }, "Atlas-ScriptLoad");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     @Override
@@ -37,6 +52,9 @@ public class ScriptModule extends Module {
 
     @Override
     public String[] getSuffix() {
+        if (this.loading) {
+            return new String[]{"loading"};
+        }
         int loaded = ScriptManager.getInstance().loadedCount();
         if (loaded == 0) {
             return new String[0];
@@ -46,7 +64,7 @@ public class ScriptModule extends Module {
 
     @EventTarget
     public void onTick(TickEvent event) {
-        if (!this.isEnabled() || event.getType() != EventType.POST) {
+        if (!this.isEnabled() || this.loading || event.getType() != EventType.POST) {
             return;
         }
         ScriptManager.getInstance().fireTick();
@@ -54,7 +72,7 @@ public class ScriptModule extends Module {
 
     @EventTarget
     public void onPacket(PacketEvent event) {
-        if (!this.isEnabled() || event.getPacket() == null) {
+        if (!this.isEnabled() || this.loading || event.getPacket() == null) {
             return;
         }
         String packetClass = event.getPacket().getClass().getSimpleName();

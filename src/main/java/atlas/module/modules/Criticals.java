@@ -102,11 +102,11 @@ public class Criticals extends Module {
         }
     }
 
-    private static void resetGameTimer() {
+    private void resetGameTimer() {
         try {
             net.minecraft.util.Timer gameTimer = ((IAccessorMinecraft) mc).getTimer();
             if (gameTimer != null) {
-                gameTimer.timerSpeed = 1.0F;
+                atlas.util.TimerControl.release(this);
             }
         } catch (Exception ignored) {
         }
@@ -284,14 +284,14 @@ public class Criticals extends Module {
                 boolean hurt = (Boolean) this.timerStopHurt.getValue() && mc.thePlayer.hurtTime > 0;
                 if (mc.thePlayer.onGround || hurt || now - this.timerStart > (Integer) this.timerMaxMs.getValue()) {
                     if (gameTimer != null) {
-                        gameTimer.timerSpeed = 1.0F;
+                        atlas.util.TimerControl.release(this);
                     }
                     this.timerStart = -1L;
                 }
             } else if (mc.thePlayer.motionY < 0.0 && !mc.thePlayer.onGround) {
                 if (Math.random() * 100.0 < (Integer) this.timerChance.getValue()) {
                     if (gameTimer != null) {
-                        gameTimer.timerSpeed = (Float) this.timerSpeed.getValue();
+                        atlas.util.TimerControl.set(this, (Float) this.timerSpeed.getValue());
                     }
                     this.timerStart = now;
                 }

@@ -170,6 +170,11 @@ public final class OnlineConfigCache {
             ArrayList<Property<?>> list = Atlas.propertyManager.properties.get(module.getClass());
             if (list != null) {
                 for (Property<?> property : list) {
+                    /* 2026-10-30 (audit): no text settings in a shareable snapshot (AutoAuth's password, chat
+                       lines); OnlineConfigApplier does not apply them either. */
+                    if (property instanceof atlas.property.properties.TextProperty) {
+                        continue;
+                    }
                     try {
                         property.write(moduleObject);
                     } catch (Exception ignored) {

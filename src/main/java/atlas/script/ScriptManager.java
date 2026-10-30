@@ -186,6 +186,11 @@ public class ScriptManager {
     }
 
     public synchronized boolean setEnabled(String name, boolean enabled) {
+        return this.setEnabled(name, enabled, true);
+    }
+
+    /** {@code remember} false: only for now (ScriptModule going off), the saved choice stays. */
+    private synchronized boolean setEnabled(String name, boolean enabled, boolean remember) {
         String clean = this.cleanName(name);
         LoadedScript slot = clean == null ? null : this.scripts.get(clean);
         if (slot == null) {
@@ -193,8 +198,10 @@ public class ScriptManager {
             return false;
         }
         slot.enabled = enabled;
-        this.enabledState.put(clean, enabled);
-        this.saveEnabledState();
+        if (remember) {
+            this.enabledState.put(clean, enabled);
+            this.saveEnabledState();
+        }
         try {
             if (enabled) {
                 slot.instance.onEnable();
@@ -224,11 +231,25 @@ public class ScriptManager {
         return this.scripts.size();
     }
 
-    /** Disables every loaded script without unloading it. */
+    /**
+     * Disables every loaded script without unloading it. 2026-10-30 (audit): without saving that -- it went into
+     * scripts.json, so after ScriptModule was off once every script stayed off.
+     */
     public synchronized void disableAll() {
         for (String name : new ArrayList<String>(this.scripts.keySet())) {
             if (this.scripts.get(name).enabled) {
-                this.setEnabled(name, false);
+                this.setEnabled(name, false, false);
+            }
+        }
+    }
+
+    /** Turns back on what the saved choices say is on (ScriptModule coming back on). */
+    public synchronized void restoreSaved() {
+        for (String name : new ArrayList<String>(this.scripts.keySet())) {
+            LoadedScript slot = this.scripts.get(name);
+            Boolean saved = this.enabledState.get(name);
+            if (!slot.enabled && saved != null && saved) {
+                this.setEnabled(name, true, false);
             }
         }
     }
@@ -364,7 +385,9 @@ public class ScriptManager {
             }
             Script instance = (Script) clazz.newInstance();
             instance.initName(name);
-            boolean enabled = this.enabledState.containsKey(name) ? this.enabledState.get(name) : true;
+            /* 2026-10-30 (audit): a file never seen before is loaded but not run until ".script enable" -- a
+               .java dropped into the folder used to start running by itself. */
+            boolean enabled = this.enabledState.containsKey(name) && this.enabledState.get(name);
             LoadedScript slot = new LoadedScript(name, file, instance, loader, enabled);
             this.scripts.put(name, slot);
             try {
@@ -376,7 +399,8 @@ public class ScriptManager {
                 slot.lastError = this.shortError(t);
                 ChatUtil.sendFormatted("&7[&bScript&7]&r Runtime error in (&o" + name + "&r): " + slot.lastError);
             }
-            ChatUtil.sendFormatted("&7[&bScript&7]&r Loaded (&o" + name + "&r).");
+            ChatUtil.sendFormatted("&7[&bScript&7]&r Loaded (&o" + name + "&r)"
+                    + (enabled ? "." : ", off: &o.script enable " + name + "&r to run it."));
             return true;
         } catch (ClassNotFoundException e) {
             ChatUtil.sendFormatted("&7[&bScript&7]&r Blocked unsafe reference in (&o" + name + "&r): " + e.getMessage());

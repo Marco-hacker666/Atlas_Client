@@ -5,8 +5,6 @@ import atlas.command.Command;
 import atlas.config.Config;
 import atlas.enums.ChatColors;
 import atlas.util.ChatUtil;
-import net.minecraft.event.ClickEvent;
-import net.minecraft.event.ClickEvent.Action;
 import net.minecraft.event.HoverEvent;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatStyle;
@@ -79,7 +77,7 @@ public class ConfigCommand extends Command {
                                     new ChatComponentText(formatted)
                                             .setChatStyle(
                                                     new ChatStyle()
-                                                            .setChatClickEvent(new ClickEvent(Action.RUN_COMMAND, config))
+                                                            .setChatClickEvent(atlas.command.CommandManager.ownClick(config))
                                                             .setChatHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ChatComponentText(config)))
                                             )
                             );

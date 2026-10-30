@@ -200,10 +200,10 @@ final class TimerRangeSlinky {
         if (this.frozen) {
             this.freezeRemaining -= elapsed;
             if (this.freezeRemaining > 0.0) {
-                ((atlas.mixin.IAccessorTimer) timer).setTimerSpeed(0.0F);
+                atlas.util.TimerControl.set(this, 0.0F);
                 return;
             }
-            ((atlas.mixin.IAccessorTimer) timer).setTimerSpeed(1.0F);
+            atlas.util.TimerControl.release(this);
             this.frozen = false;
             this.packetHold = false;
             int flushed = this.held.size();
@@ -321,7 +321,7 @@ final class TimerRangeSlinky {
     }
 
     private void beginFreeze() {
-        ((atlas.mixin.IAccessorTimer) timer()).setTimerSpeed(0.0F);
+        atlas.util.TimerControl.set(this, 0.0F);
         this.frozen = true;
         if (legit()) {
             this.packetHold = true;
@@ -367,7 +367,7 @@ final class TimerRangeSlinky {
 
     void reset() {
         if (this.frozen || ((atlas.mixin.IAccessorTimer) timer()).getTimerSpeed() == 0.0F) {
-            ((atlas.mixin.IAccessorTimer) timer()).setTimerSpeed(1.0F);
+            atlas.util.TimerControl.release(this);
         }
         this.frozen = false;
         this.packetHold = false;

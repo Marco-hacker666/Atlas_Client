@@ -78,7 +78,7 @@ public class NoFall extends Module {
                     case 0:
                         if (this.slowFalling) {
                             this.slowFalling = false;
-                            ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0F;
+                            atlas.util.TimerControl.release(this);
                         } else if (!packet.isOnGround()) {
                             AxisAlignedBB aabb = mc.thePlayer.getEntityBoundingBox().expand(2.0, 0.0, 2.0);
                             if (PlayerUtil.canFly(this.distance.getValue())
@@ -86,7 +86,7 @@ public class NoFall extends Module {
                                     && this.canTrigger()) {
                                 this.packetDelayTimer.reset();
                                 this.slowFalling = true;
-                                ((IAccessorMinecraft) mc).getTimer().timerSpeed = 0.5F;
+                                atlas.util.TimerControl.set(this, 0.5F);
                             }
                         }
                         break;
@@ -149,19 +149,19 @@ public class NoFall extends Module {
                         // Donor TIMER block inside MiauMinus NoFall: re-timed ground spoofs while falling.
                         float fallDist = mc.thePlayer.fallDistance;
                         if (fallDist >= 1.51F && this.timerRepdist == 0.0 && !this.isOverVoid()) {
-                            ((IAccessorMinecraft) mc).getTimer().timerSpeed = 0.45F;
+                            atlas.util.TimerControl.set(this, 0.45F);
                             PacketUtil.sendPacketNoEvent(new C03PacketPlayer(true));
                             this.timerSettick = this.timerTicks + 1;
                             this.timerRepdist = fallDist;
                         }
                         if (fallDist - this.timerRepdist >= 1.51F && !this.isOverVoid()) {
-                            ((IAccessorMinecraft) mc).getTimer().timerSpeed = 0.6F;
+                            atlas.util.TimerControl.set(this, 0.6F);
                             PacketUtil.sendPacketNoEvent(new C03PacketPlayer(true));
                             this.timerSettick = this.timerTicks + this.spoofTicks.getValue();
                             this.timerRepdist = fallDist;
                         }
                         if (mc.thePlayer.onGround) {
-                            ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0F;
+                            atlas.util.TimerControl.release(this);
                             this.timerRepdist = 0.0;
                         }
                         break;
@@ -214,7 +214,7 @@ public class NoFall extends Module {
             }
             if (this.mode.getValue() == 6) {
                 if (this.timerTicks == this.timerSettick) {
-                    ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0F;
+                    atlas.util.TimerControl.release(this);
                 }
                 if (this.timerTicks >= this.timerSettick) {
                     this.timerSettick = 0;
@@ -324,13 +324,13 @@ public class NoFall extends Module {
         Atlas.blinkManager.setBlinkState(false, BlinkModules.NO_FALL);
         if (this.slowFalling) {
             this.slowFalling = false;
-            ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0F;
+            atlas.util.TimerControl.release(this);
         }
         this.timerTicks = 0;
         this.timerSettick = 0;
         this.timerRepdist = 0.0;
         this.voidCacheTick = -1;
-        ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0F;
+        atlas.util.TimerControl.release(this);
     }
 
     @Override

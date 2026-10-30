@@ -16,10 +16,12 @@ public class AutoAuth extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final String[] PASSWORD_TOKENS = {"password", "pass"};
 
-    public final TextProperty password = new TextProperty("password", "12341234");
+    /* 2026-10-30 (audit): empty by default -- "12341234" was registered as is by anyone who switched it on. */
+    public final TextProperty password = new TextProperty("password", "");
     public final IntProperty delay = new IntProperty("delay", 1000, 100, 5000);
 
     private String queuedCommand;
+    private boolean warnedEmpty;
     private long queuedAt;
 
     public AutoAuth() {
@@ -51,6 +53,13 @@ public class AutoAuth extends Module {
             return;
         }
 
+        if (this.password.getValue() == null || this.password.getValue().isEmpty()) {
+            if (!this.warnedEmpty) {
+                this.warnedEmpty = true;
+                atlas.util.ChatUtil.sendFormatted(atlas.Atlas.clientName + "AutoAuth: &cno password set&r (AutoAuth > password).");
+            }
+            return;
+        }
         int repeat = Math.max(1, countPasswordSlots(message));
         queue(prompt.buildCommand(this.password.getValue(), repeat));
     }

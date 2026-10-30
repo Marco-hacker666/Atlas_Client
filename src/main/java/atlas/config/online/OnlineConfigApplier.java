@@ -22,7 +22,21 @@ public class OnlineConfigApplier {
         public int failed;
         public final ArrayList<String> changed = new ArrayList<String>();
         public final ArrayList<String> failedNames = new ArrayList<String>();
+        /** Left as they were on purpose (see SENSITIVE). */
+        public final ArrayList<String> skipped = new ArrayList<String>();
     }
+
+    /*
+     * 2026-10-30 (audit): a config from someone else (or rewritten on the way) is not trusted with everything.
+     * Never applied from one: key binds; any text setting (AutoAuth's password, the lines Spammer, AutoGG, KillSults
+     * and the rest say in your name, commands to run); and switching on or off a module that runs code, holds a
+     * secret or talks for you.
+     */
+    private static final java.util.Set<Class<?>> SENSITIVE = new java.util.HashSet<Class<?>>(java.util.Arrays.asList(
+            atlas.module.modules.ScriptModule.class, atlas.module.modules.AutoAuth.class,
+            atlas.module.modules.Spammer.class, atlas.module.modules.AutoMessage.class,
+            atlas.module.modules.AutoGG.class, atlas.module.modules.KillSults.class,
+            atlas.module.modules.KillMessage.class));
 
     public Result apply(String json) {
         if (json == null || json.trim().isEmpty()) {
@@ -39,18 +53,21 @@ public class OnlineConfigApplier {
             if (object == null) {
                 continue;
             }
-            applyFlag(object, "toggled", module.getName(), result, new FlagWriter() {
-                @Override
-                public void write(boolean value) {
-                    module.setEnabled(value);
+            if (SENSITIVE.contains(module.getClass())) {
+                if (object.has("toggled")) {
+                    result.skipped.add(module.getName() + ".toggled");
                 }
-            });
-            applyInt(object, "key", module.getName(), result, new IntWriter() {
-                @Override
-                public void write(int value) {
-                    module.setKey(value);
-                }
-            });
+            } else {
+                applyFlag(object, "toggled", module.getName(), result, new FlagWriter() {
+                    @Override
+                    public void write(boolean value) {
+                        module.setEnabled(value);
+                    }
+                });
+            }
+            if (object.has("key")) {
+                result.skipped.add(module.getName() + ".key");
+            }
             applyFlag(object, "hidden", module.getName(), result, new FlagWriter() {
                 @Override
                 public void write(boolean value) {
@@ -67,6 +84,10 @@ public class OnlineConfigApplier {
                     continue;
                 }
                 String label = module.getName() + "." + property.getName();
+                if (property instanceof atlas.property.properties.TextProperty) {
+                    result.skipped.add(label);
+                    continue;
+                }
                 try {
                     if (property.read(object)) {
                         result.applied++;

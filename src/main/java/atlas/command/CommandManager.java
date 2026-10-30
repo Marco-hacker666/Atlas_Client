@@ -37,6 +37,41 @@ public class CommandManager {
         }
     }
 
+    /*
+     * 2026-10-30 (audit): commands are taken from outgoing chat, and vanilla sends a clicked RUN_COMMAND (a chat
+     * line, a book) as chat too -- a server's "[click here]" could run .onlineconfig <url> or .config save. A click
+     * that would run one of ours goes through only when this client made that ClickEvent (MixinGuiScreen). Compared
+     * by identity: a server's click is a new object even with the same text; GuiNewChat's line splitting copies the
+     * style shallowly, so ours keep theirs.
+     */
+    private static final java.util.ArrayDeque<net.minecraft.event.ClickEvent> OWN_CLICKS =
+            new java.util.ArrayDeque<net.minecraft.event.ClickEvent>();
+    private static final int OWN_CLICKS_KEPT = 512;
+
+    /** A RUN_COMMAND click this client offers itself (config lists and the like). */
+    public static net.minecraft.event.ClickEvent ownClick(String command) {
+        net.minecraft.event.ClickEvent click =
+                new net.minecraft.event.ClickEvent(net.minecraft.event.ClickEvent.Action.RUN_COMMAND, command);
+        synchronized (OWN_CLICKS) {
+            OWN_CLICKS.addLast(click);
+            while (OWN_CLICKS.size() > OWN_CLICKS_KEPT) {
+                OWN_CLICKS.removeFirst();
+            }
+        }
+        return click;
+    }
+
+    public static boolean isOwnClick(net.minecraft.event.ClickEvent click) {
+        synchronized (OWN_CLICKS) {
+            for (net.minecraft.event.ClickEvent own : OWN_CLICKS) {
+                if (own == click) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public boolean isTypingCommand(String string) {
         if (string == null || string.length() < 2) {
             return false;

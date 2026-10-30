@@ -10,7 +10,8 @@ public abstract class Module {
     protected final boolean defaultEnabled;
     protected final int defaultKey;
     protected final boolean defaultHidden;
-    protected boolean enabled;
+    /* volatile: packet handlers read it on the network thread (2026-10-30, audit). */
+    protected volatile boolean enabled;
     protected int key;
     protected boolean hidden;
 
@@ -87,9 +88,19 @@ public abstract class Module {
     }
 
     public void setEnabled(boolean enabled) {
+        /* 2026-10-30 (audit): Blink, Fly and LongJump switch themselves off from a packet handler, which runs on the
+           network thread, so onDisabled (motion, timer, flushing held packets) raced the tick. From there the switch
+           waits for the client thread. Only from there: the exit hook restores modules on its own thread on purpose,
+           before the config is saved, when no client tick will run again. */
+        if (Thread.currentThread().getName().startsWith("Netty")) {
+            net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> this.setEnabled(enabled));
+            return;
+        }
         if (this.enabled != enabled) {
             this.enabled = enabled;
             if (enabled) {
+                /* Left on if onEnabled throws: at the startup config load several touch mc.thePlayer before there
+                   is one, and they are meant to be on once in a world (Config.loadNow). */
                 this.onEnabled();
             } else {
                 this.onDisabled();

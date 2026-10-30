@@ -64,10 +64,10 @@ public class PingSpoof extends Module {
 
         warnIfStacked();
         if (!atlas.management.PacketHub.take(event, "PingSpoof")) return;
-        queue.add(new PacketData(event.getPacket(), System.currentTimeMillis()));
+        queue.add(new PacketData(event.getPacket(), System.currentTimeMillis(), connection()));
         while (queue.size() > MAX_QUEUE) {
             PacketData dropped = queue.poll();
-            if (dropped != null) PacketUtil.sendPacketNoEvent(dropped.packet);
+            if (dropped != null) send(dropped);
         }
     }
 
@@ -94,7 +94,7 @@ public class PingSpoof extends Module {
             PacketData data = queue.peek();
             if (data == null || now - data.timestamp < delayMs.getValue()) break;
             queue.poll();
-            PacketUtil.sendPacketNoEvent(data.packet);
+            send(data);
         }
     }
 
@@ -105,6 +105,18 @@ public class PingSpoof extends Module {
         }
         PacketData data;
         while ((data = queue.poll()) != null) {
+            send(data);
+        }
+    }
+
+    /* 2026-10-30 (audit): a keep-alive or transaction reply held across a server change went to the next server,
+       with the old server's id. It is sent only on the connection it answers. */
+    private static Object connection() {
+        return mc.getNetHandler() == null ? null : mc.getNetHandler().getNetworkManager();
+    }
+
+    private void send(PacketData data) {
+        if (data.connection != null && data.connection == connection()) {
             PacketUtil.sendPacketNoEvent(data.packet);
         }
     }
@@ -133,10 +145,13 @@ public class PingSpoof extends Module {
     private static class PacketData {
         private final Packet<?> packet;
         private final long timestamp;
+        /** The NetworkManager it was held on. */
+        private final Object connection;
 
-        private PacketData(Packet<?> packet, long timestamp) {
+        private PacketData(Packet<?> packet, long timestamp, Object connection) {
             this.packet = packet;
             this.timestamp = timestamp;
+            this.connection = connection;
         }
     }
 

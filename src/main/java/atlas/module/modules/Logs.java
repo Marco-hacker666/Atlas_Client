@@ -33,6 +33,8 @@ public class Logs extends Module {
     private static final java.util.Set<String> FIXED_DIAGNOSTICS = new java.util.HashSet<String>(
             java.util.Arrays.asList("gui-perf.txt", "servers.txt", "adaptive.txt", "autotune.txt"));
 
+    private static final long FIXED_MAX_BYTES = 1024L * 1024L;
+
     public final IntProperty keepDays = new IntProperty("keep-days", 7, 1, 60);
 
     public Logs() {
@@ -86,6 +88,19 @@ public class Logs extends Module {
             }
             if (deleted > 0) {
                 System.out.println("[Atlas] Logs: deleted " + deleted + " log(s) older than " + days + " day(s)");
+            }
+            /* 2026-10-30 (audit): the fixed-name diagnostics are appended to for good; past FIXED_MAX_BYTES the
+               file becomes <name>.old (one generation kept) and starts again. */
+            for (String name : FIXED_DIAGNOSTICS) {
+                File file = new File(DIR, name);
+                if (file.isFile() && file.length() > FIXED_MAX_BYTES) {
+                    try {
+                        java.nio.file.Files.move(file.toPath(), new File(DIR, name + ".old").toPath(),
+                                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    } catch (java.io.IOException ignored) {
+                        // In use or locked: tried again next start.
+                    }
+                }
             }
         }, "Atlas-LogCleanup");
         thread.setDaemon(true);

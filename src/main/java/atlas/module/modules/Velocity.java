@@ -47,6 +47,10 @@ public class Velocity extends Module {
     private boolean pressed = false;
     private boolean hasReceivedVelocity = false;
     private int ticksSinceVelocity = -1;
+    /** Jump reset holds the jump key (handleJumpReset); given back on every way out. */
+    private boolean jumpForced;
+    /** IntaveTimer moved the game timer off 1.0. */
+    private boolean intaveTimerSet;
 
     private boolean ShouldJump = false;
 
@@ -265,7 +269,7 @@ public class Velocity extends Module {
     private void resetAppendedTimer() {
         try {
             net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
-            if (timer != null) timer.timerSpeed = 1.0F;
+            if (timer != null) atlas.util.TimerControl.release(this);
         } catch (Exception ignored) {
         }
     }
@@ -561,20 +565,42 @@ public class Velocity extends Module {
     }
 
     private void handleJumpReset() {
-        if (!this.ShouldJump) return;
+        if (!this.ShouldJump) {
+            this.releaseForcedJump();
+            return;
+        }
 
         Scaffold scaffold = (Scaffold) Atlas.moduleManager.getModule(Scaffold.class);
-        if (mc.thePlayer == null || mc.currentScreen instanceof GuiInventory || scaffold.isEnabled()) return;
+        if (mc.thePlayer == null || mc.currentScreen instanceof GuiInventory || scaffold.isEnabled()) {
+            /* 2026-10-30 (audit): leaving here between the press (ticks 0-2) and the give-back (4-9) left the jump
+               key held -- the player hopped until they tapped space. */
+            this.releaseForcedJump();
+            return;
+        }
         if (this.ticksSinceVelocity >= 0) {
             if (this.ticksSinceVelocity == 0) {
-                this.pressed = mc.gameSettings.keyBindJump.isPressed();
+                /* Whether the player holds space (isPressed() took a queued press and meant something else). */
+                this.pressed = KeyBindUtil.isKeyDown(mc.gameSettings.keyBindJump.getKeyCode());
             }
             if (this.ticksSinceVelocity <= 2 && mc.thePlayer.onGround) {
                 KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindJump.getKeyCode(), true);
+                this.jumpForced = true;
             }
         }
         if (this.ticksSinceVelocity >= 4 && this.ticksSinceVelocity <= 9) {
-            KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindJump.getKeyCode(), this.pressed);
+            this.releaseForcedJump();
+        } else if (this.ticksSinceVelocity < 0) {
+            this.releaseForcedJump();
+        }
+    }
+
+    /** The jump key as the player holds it, if this module pressed it. */
+    private void releaseForcedJump() {
+        if (this.jumpForced) {
+            this.jumpForced = false;
+            if (mc.gameSettings != null) {
+                KeyBindUtil.updateKeyState(mc.gameSettings.keyBindJump.getKeyCode());
+            }
         }
     }
 
@@ -760,13 +786,19 @@ public class Velocity extends Module {
                     net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
                     if (timer != null) {
                         int hurt = mc.thePlayer.hurtTime;
-                        if (hurt >= 8) timer.timerSpeed = 0.3F;
-                        else if (hurt > 2) timer.timerSpeed = 5.0F;
-                        else timer.timerSpeed = 1.0F;
+                        if (hurt >= 8) atlas.util.TimerControl.set(this, 0.3F);
+                        else if (hurt > 2) atlas.util.TimerControl.set(this, 5.0F);
+                        else atlas.util.TimerControl.release(this);
+                        this.intaveTimerSet = timer.timerSpeed != 1.0F;
                     }
                 } catch (Exception ignored) {
                 }
             }
+        } else if (event.getType() == EventType.PRE && this.intaveTimerSet) {
+            /* 2026-10-30 (audit): paused (S held, crosshair off the target) or another mode now, mid-hurt: the 5x
+               (or 0.3x) used to stay until the module was switched off. */
+            this.intaveTimerSet = false;
+            this.resetAppendedTimer();
         }
     }
 
@@ -1264,6 +1296,8 @@ public class Velocity extends Module {
 
     @Override
     public void onDisabled() {
+        this.releaseForcedJump();
+        this.intaveTimerSet = false;
         this.polarClear();
         this.polarPlan.reset();
         /* Lag: nothing held may be lost -- the transactions above all. */

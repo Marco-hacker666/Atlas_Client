@@ -21,10 +21,16 @@ public class Config {
 
     public Config(String name, boolean newConfig) {
         this.name = name;
-        lastConfig = name;
-        if (name.equals("!") || name.equals("default")) {
+        if (name == null || name.equals("!") || name.equals("default")) {
             this.name = "default";
         }
+        if (!validName(this.name)) {
+            /* 2026-10-30 (audit): ".config save ../../launcher_profiles" wrote outside the folder, and lastConfig
+               then sent every exit save there. Such a name is refused; load and save say so. */
+            this.file = null;
+            return;
+        }
+        lastConfig = name == null ? "default" : name;
         this.file = new File("./config/Atlas/", String.format("%s.json", this.name));
         try {
             file.getParentFile().mkdirs();
@@ -36,10 +42,51 @@ public class Config {
         }
     }
 
+    /**
+     * A profile name that stays one plain file in ./config/Atlas/: no folder separators or other characters
+     * Windows refuses in a name, no "..", no leading dot, no trailing dot or space, no device name (CON, NUL...).
+     * Anything else stays allowed, "default (1)" among them.
+     */
+    public static boolean validName(String name) {
+        return name != null && !name.isEmpty() && name.length() <= 64 && !name.contains("..")
+                && !name.matches(".*[\\\\/:*?\"<>|\\p{Cntrl}].*") && !name.startsWith(".") && !name.endsWith(".")
+                && !name.endsWith(" ") && !name.matches("(?i)(con|prn|aux|nul|com[0-9]|lpt[0-9])(\\..*)?");
+    }
+
+    private boolean refuse() {
+        if (this.file != null) {
+            return false;
+        }
+        ChatUtil.sendFormatted(String.format("%sInvalid config name (&c&o%s&r): letters, digits, space, - _ . only&r",
+                Atlas.clientName, this.name));
+        return true;
+    }
+
+    private static File backupOf(File file) {
+        return new File(file.getParentFile(), file.getName() + ".bak");
+    }
+
+    /** The file's JSON object, or null when it is missing, empty or broken. */
+    private static JsonObject readObject(File file) {
+        if (!file.isFile() || file.length() == 0L) {
+            return null;
+        }
+        try (Reader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file),
+                java.nio.charset.StandardCharsets.UTF_8))) {
+            JsonElement parsed = new JsonParser().parse(reader);
+            return parsed != null && parsed.isJsonObject() ? parsed.getAsJsonObject() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     /** True while a config is being read, so property callbacks can tell a load from a user's change. */
     public static volatile boolean loading;
 
     public void load() {
+        if (this.refuse()) {
+            return;
+        }
         loading = true;
         try {
             loadNow();
@@ -57,13 +104,20 @@ public class Config {
                 return;
             }
 
-            JsonElement parsed = new JsonParser().parse(new BufferedReader(new FileReader(file)));
-            if (parsed == null || !parsed.isJsonObject()) {
-                ChatUtil.sendFormatted(String.format("%sInvalid config format (&c&o%s&r)&r", Atlas.clientName, file.getName()));
-                return;
+            /* 2026-10-30 (audit): read as UTF-8 and closed (the reader used to stay open, the file locked until GC);
+               a file left empty or half written by a crash during a save falls back to the copy the save before it
+               kept. */
+            JsonObject jsonObject = readObject(file);
+            if (jsonObject == null) {
+                JsonObject backup = readObject(backupOf(file));
+                if (backup == null) {
+                    ChatUtil.sendFormatted(String.format("%sInvalid config format (&c&o%s&r)&r", Atlas.clientName, file.getName()));
+                    return;
+                }
+                ChatUtil.sendFormatted(String.format("%s&e%s was damaged; loaded the backup (&o%s&e).&r",
+                        Atlas.clientName, file.getName(), backupOf(file).getName()));
+                jsonObject = backup;
             }
-
-            JsonObject jsonObject = parsed.getAsJsonObject();
             for (Module module : Atlas.moduleManager.modules.values()) {
                 JsonElement moduleObj = jsonObject.get(module.getName());
                 if (moduleObj == null) {
@@ -121,8 +175,6 @@ public class Config {
                         moduleObj != null && moduleObj.isJsonObject() ? moduleObj.getAsJsonObject() : null);
             }
             ChatUtil.sendFormatted(String.format("%sConfig has been loaded (&a&o%s&r)&r", Atlas.clientName, file.getName()));
-        } catch (FileNotFoundException e) {
-            ChatUtil.sendFormatted(String.format("%sConfig file not found (&c&o%s&r)&r", Atlas.clientName, file.getName()));
         } catch (JsonSyntaxException e) {
             ChatUtil.sendFormatted(String.format("%sConfig has invalid JSON syntax (&c&o%s&r)&r", Atlas.clientName, file.getName()));
             ((IAccessorMinecraft) mc).getLogger().error("JSON Syntax Error: " + e.getMessage());
@@ -133,6 +185,9 @@ public class Config {
     }
 
     public void save() {
+        if (this.refuse()) {
+            return;
+        }
         try {
             if (!file.getParentFile().exists()) {
                 file.getParentFile().mkdirs();
@@ -140,9 +195,25 @@ public class Config {
 
             JsonObject object = snapshot();
 
-            PrintWriter printWriter = new PrintWriter(new FileWriter(file));
-            printWriter.println(gson.toJson(object));
-            printWriter.close();
+            /* 2026-10-30 (audit): FileWriter emptied the file and then wrote it, so a crash or a kill in between
+               left an empty profile, every setting at its default on the next start, and the exit save then wrote
+               the defaults over it. Now it is written whole to a temporary file, the previous file is kept as .bak,
+               and the new one is moved into place in one step. UTF-8 whatever the system's code page. */
+            File temp = new File(file.getParentFile(), file.getName() + ".tmp");
+            try (Writer writer = new OutputStreamWriter(new FileOutputStream(temp), java.nio.charset.StandardCharsets.UTF_8)) {
+                writer.write(gson.toJson(object));
+                writer.write(System.lineSeparator());
+            }
+            if (readObject(file) != null) {
+                java.nio.file.Files.copy(file.toPath(), backupOf(file).toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            try {
+                java.nio.file.Files.move(temp.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                java.nio.file.Files.move(temp.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
             ChatUtil.sendFormatted(String.format("%sConfig has been saved (&a&o%s&r)&r", Atlas.clientName, file.getName()));
         } catch (IOException e) {
             ((IAccessorMinecraft) mc).getLogger().error("Error saving config: " + e.getMessage());
@@ -159,18 +230,12 @@ public class Config {
      * cannot be read: nothing to warn about then.
      */
     public static boolean differsFromFile(String name) {
-        File target = new File("./config/Atlas/", String.format("%s.json", "!".equals(name) ? "default" : name));
-        if (!target.exists()) {
+        String clean = name == null || "!".equals(name) ? "default" : name;
+        if (!validName(clean)) {
             return false;
         }
-        JsonObject saved;
-        try (Reader reader = new BufferedReader(new FileReader(target))) {
-            JsonElement parsed = new JsonParser().parse(reader);
-            if (parsed == null || !parsed.isJsonObject()) {
-                return false;
-            }
-            saved = parsed.getAsJsonObject();
-        } catch (Exception e) {
+        JsonObject saved = readObject(new File("./config/Atlas/", String.format("%s.json", clean)));
+        if (saved == null) {
             return false;
         }
         return differs(snapshot(), saved);

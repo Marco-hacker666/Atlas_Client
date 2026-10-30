@@ -36,7 +36,6 @@ import net.minecraft.util.MathHelper;
 import java.awt.Color;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.lang.reflect.Field;
 
 public class TimerRange extends Module {
    private static final Minecraft mc = Minecraft.getMinecraft();
@@ -98,6 +97,9 @@ public class TimerRange extends Module {
    private final Queue<Packet<?>> packetsReceived = new ConcurrentLinkedQueue<>();
    private boolean blinked = false;
    private boolean shouldReset = false;
+   /** A lagback or knockback arrived (network thread): reset on the next client tick. */
+   private volatile boolean resetFromPacket;
+   private volatile String resetWhy = "";
    private boolean confirmTick = false;
    private boolean confirmStop = false;
    private boolean confirmAttack = false;
@@ -112,7 +114,12 @@ public class TimerRange extends Module {
    @Override
    public void onDisabled() {
       slinky.reset();
+      /* 2026-10-30 (audit): shouldResetTimer() is a no-op while shouldReset is already true, which it is during a
+         boost (set by the last reset before it, never cleared by the boost), so a TimerRange switched off mid-boost
+         left the game at the boost speed. Off means 1.0. */
       shouldResetTimer();
+      setTimerSpeed(1f);
+      resetFromPacket = false;
       unblink();
       smartTick = 0;
       cooldownTick = 0;
@@ -189,6 +196,14 @@ public class TimerRange extends Module {
             slinky.tick();
          }
          return;
+      }
+      if (event.getType() == EventType.PRE && resetFromPacket) {
+         resetFromPacket = false;
+         shouldResetTimer();
+         if (shouldReset) {
+            if (chatDebug.getValue()) ChatUtil.sendFormatted("§c[TimerRange] §f" + resetWhy + " Received | AnimationTimer Reset");
+            shouldReset = false;
+         }
       }
       if (event.getType() == EventType.PRE) {
          float timerBoost = RandomUtil.nextFloat(boostDelayMin.getValue(), boostDelayMax.getValue());
@@ -318,21 +333,17 @@ public class TimerRange extends Module {
       }
 
       if (event.getType() == EventType.RECEIVE) {
+         /* 2026-10-30 (audit): this runs on the network thread; the timer is reset on the next client tick
+            instead of from here (resetFromPacket). */
          if (resetOnLagBack.getValue() && packet instanceof S08PacketPlayerPosLook) {
-            shouldResetTimer();
-            if (shouldReset) {
-               if (chatDebug.getValue()) ChatUtil.sendFormatted("§c[TimerRange] §fLagback Received | AnimationTimer Reset");
-               shouldReset = false;
-            }
+            resetFromPacket = true;
+            resetWhy = "Lagback";
          }
 
-         if (resetOnKnockback.getValue() && packet instanceof S12PacketEntityVelocity) {
+         if (resetOnKnockback.getValue() && packet instanceof S12PacketEntityVelocity && mc.thePlayer != null) {
             if (((S12PacketEntityVelocity) packet).getEntityID() == mc.thePlayer.getEntityId()) {
-               shouldResetTimer();
-               if (shouldReset) {
-                  if (chatDebug.getValue()) ChatUtil.sendFormatted("§c[TimerRange] §fKnockback Received | AnimationTimer Reset");
-                  shouldReset = false;
-               }
+               resetFromPacket = true;
+               resetWhy = "Knockback";
             }
          }
       }
@@ -458,39 +469,18 @@ public class TimerRange extends Module {
    }
 
 
+   /* 2026-10-30 (audit): through the accessor, as every other module does; it looked both fields up by
+      reflection on every call, several times a tick. */
    private void setTimerSpeed(float speed) {
-      try {
-         Field timerField = null;
-         try { timerField = Minecraft.class.getDeclaredField("timer"); }
-         catch (NoSuchFieldException e) { timerField = Minecraft.class.getDeclaredField("field_71428_T"); }
-         timerField.setAccessible(true);
-         Object timerObj = timerField.get(mc);
-
-         Field speedField = null;
-         try { speedField = timerObj.getClass().getDeclaredField("timerSpeed"); }
-         catch (NoSuchFieldException e) { speedField = timerObj.getClass().getDeclaredField("field_74278_d"); }
-         speedField.setAccessible(true);
-         speedField.setFloat(timerObj, speed);
-      } catch (Exception e) {
-         e.printStackTrace();
+      if (speed == 1f) {
+         atlas.util.TimerControl.release(this);
+      } else {
+         atlas.util.TimerControl.set(this, speed);
       }
    }
 
    private float getTimerSpeed() {
-      try {
-         Field timerField = null;
-         try { timerField = Minecraft.class.getDeclaredField("timer"); }
-         catch (NoSuchFieldException e) { timerField = Minecraft.class.getDeclaredField("field_71428_T"); }
-         timerField.setAccessible(true);
-         Object timerObj = timerField.get(mc);
-
-         Field speedField = null;
-         try { speedField = timerObj.getClass().getDeclaredField("timerSpeed"); }
-         catch (NoSuchFieldException e) { speedField = timerObj.getClass().getDeclaredField("field_74278_d"); }
-         speedField.setAccessible(true);
-         return speedField.getFloat(timerObj);
-      } catch (Exception e) {
-         return 1.0f;
-      }
+      net.minecraft.util.Timer timer = ((atlas.mixin.IAccessorMinecraft) mc).getTimer();
+      return timer == null ? 1.0f : timer.timerSpeed;
    }
 }

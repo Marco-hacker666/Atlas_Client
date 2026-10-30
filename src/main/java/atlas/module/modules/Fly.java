@@ -149,9 +149,9 @@ public class Fly extends Module {
                         this.verticalMotion = 0.0;
                     }
                     if (this.timerActive && this.timerBoost.getValue()) {
-                        ((IAccessorMinecraft) mc).getTimer().timerSpeed = this.timerSpeed.getValue() - (float) (Math.random() / 1000.0);
+                        atlas.util.TimerControl.set(this, this.timerSpeed.getValue() - (float) (Math.random() / 1000.0));
                     } else if (this.timerActive && ((IAccessorMinecraft) mc).getTimer().timerSpeed != 1.0F) {
-                        ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0F;
+                        atlas.util.TimerControl.release(this);
                     }
                     break;
                 case 5: // Donor MatrixFly: pin below the takeoff height.
@@ -250,7 +250,7 @@ public class Fly extends Module {
         this.boostTicks = -1;
         this.boostActive = false;
         this.timerActive = false;
-        ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0F;
+        atlas.util.TimerControl.release(this);
         if (mc.thePlayer != null) {
             mc.thePlayer.motionY = 0.0;
             MoveUtil.setSpeed(0.0);
@@ -265,7 +265,7 @@ public class Fly extends Module {
     @Override
     public void verifyValue(String name) {
         if (this.isEnabled() && (this.mode.getValue() != 4 || !this.timerBoost.getValue())) {
-            ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0F;
+            atlas.util.TimerControl.release(this);
         }
     }
 

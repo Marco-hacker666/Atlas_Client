@@ -21,11 +21,12 @@ import net.minecraft.util.EnumFacing;
 
 import java.awt.*;
 import java.util.Arrays;
-import java.util.concurrent.CopyOnWriteArraySet;
 
 public class BedESP extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    public final CopyOnWriteArraySet<BlockPos> beds = new CopyOnWriteArraySet<>();
+    /* 2026-10-30 (audit): a concurrent set, not copy-on-write. Chunk-render threads add to it for every
+       matching block they draw, and every add to a CopyOnWriteArraySet copied the whole set. */
+    public final java.util.Set<BlockPos> beds = java.util.concurrent.ConcurrentHashMap.newKeySet();
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"DEFAULT", "FULL"});
     public final ModeProperty color = new ModeProperty("color", 0, new String[]{"CUSTOM", "HUD"});
     public final ColorProperty customColor;

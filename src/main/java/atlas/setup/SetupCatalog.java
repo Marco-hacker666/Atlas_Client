@@ -26,26 +26,30 @@ public final class SetupCatalog {
                 "OptiFine_1.8.9_HD_U_M5.jar",
                 "https://optifine.net/adloadx?f=OptiFine_1.8.9_HD_U_M5.jar",
                 2585014L, true, true, "d362d58a28f5373b141b9e426e8e160638bfafcd"));
+        /* 2026-10-30 (audit): the other mods are pinned too -- they are code the game runs, and only OptiFine was
+           checked. SHA-1 and size as served by these links (Modrinth's own hashes for 3DSkinLayers, WaveyCapes and
+           Controlling; the CDN's MD5 ETag and size for CreamyKeys, whose version page is gone but whose file is still
+           served). */
         out.add(new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.DIRECT,
                 "3DSkinLayers", "3D skin layers on players.",
                 "3dSkinLayers-forge-mc1.8.9-1.2.0.jar",
                 "https://cdn.modrinth.com/data/zV5r3pPn/versions/1.2.0-forge-1.8.9/3dSkinLayers-forge-mc1.8.9-1.2.0.jar",
-                0, false));
+                4032173L, false, false, "309e954f11df7f73a3b8f9f7f55e4a1574173e31"));
         out.add(new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.DIRECT,
                 "Controlling", "Searchable keybind menu.",
                 "Controlling-7.0.0.1.jar",
                 "https://mediafilez.forgecdn.net/files/3810/294/Controlling-7.0.0.1.jar",
-                0, false));
+                31223L, false, false, "a4a92f90a04ac4feed6658cd52f2f1efc06552c7"));
         out.add(new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.DIRECT,
                 "CreamyKeys", "Keystrokes overlay.",
                 "CreamyKeys-0.0.5-1.8.9.jar",
                 "https://cdn.modrinth.com/data/vKOxyOq8/versions/pdFnz68w/CreamyKeys-0.0.5-1.8.9.jar",
-                0, false));
+                1878744L, false, false, "faad43dc933be6d85c04ddc3741d7da4e07998ba"));
         out.add(new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.DIRECT,
                 "WaveyCapes", "Animated cape physics.",
                 "waveycapes-forge-mc1.8.9-1.2.0.jar",
                 "https://cdn.modrinth.com/data/kYuIpRLv/versions/1.2.0-forge-1.8/waveycapes-forge-mc1.8.9-1.2.0.jar",
-                0, false));
+                4062712L, false, false, "89e6a4fefc9c3d26cef8b24a1e62ba0cac887a2d"));
         return Collections.unmodifiableList(out);
     }
 

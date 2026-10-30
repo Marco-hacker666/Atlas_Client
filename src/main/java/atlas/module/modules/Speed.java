@@ -123,9 +123,9 @@ public class Speed extends Module {
         net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
         if (timer == null) return;
         if (this.mode.getValue() >= 2 && this.speedTimer.getValue() != 1.0F && canBoost()) {
-            timer.timerSpeed = this.speedTimer.getValue();
+            atlas.util.TimerControl.set(this, this.speedTimer.getValue());
         } else if (timer.timerSpeed != 1.0F) {
-            timer.timerSpeed = 1.0F;
+            atlas.util.TimerControl.release(this);
         }
     }
 
@@ -431,7 +431,7 @@ public class Speed extends Module {
            already reset unconditionally. */
         net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
         if (timer != null && timer.timerSpeed != 1.0F) {
-            timer.timerSpeed = 1.0F;
+            atlas.util.TimerControl.release(this);
         }
     }
 
@@ -440,7 +440,7 @@ public class Speed extends Module {
         if (mc.thePlayer != null) {
             net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
             if (timer != null && timer.timerSpeed != 1.0F) {
-                timer.timerSpeed = 1.0F;
+                atlas.util.TimerControl.release(this);
             }
         }
     }

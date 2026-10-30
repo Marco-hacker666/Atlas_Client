@@ -686,6 +686,9 @@ public final class ModuleDocs {
         d("Accessories", "在玩家頭上畫頭飾與翅膀，只有你看得到。");
         d("AutoRecraft", "背包打開時自動用合成欄補做蘑菇湯。");
         d("Freeze", "把來襲的擊退封包扣住不動，時間到才一次放行。");
+        d("ResetVL", "原地小跳 times 次（timer 加速），讓舊型反作弊把違規值降下來，跳完自動關閉。只對舊的或有漏洞的反作弊有用；Grim、Polar 這類預測型反作弊反而可能會抓到。（來源：LiquidBounce）");
+        help("ResetVL", "times", "要跳幾次，跳完自動關閉。");
+        help("ResetVL", "timer", "跳的時候遊戲速度的倍數；跳完回到 1.0。");
         d("Animations", "自訂揮劍與格擋動畫。");
         d("HitParticleEffects", "打中時的粒子效果，擊殺時可播音效。");
         d("LegitHUD", "座標、FPS、延遲、CPS 與按鍵顯示。");

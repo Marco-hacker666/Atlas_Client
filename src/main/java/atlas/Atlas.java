@@ -303,6 +303,7 @@ public class Atlas {
         /* CrewX ports: soup recrafting, the knockback hold, and the cosmetics. */
         moduleManager.modules.put(AutoRecraft.class, new AutoRecraft());
         moduleManager.modules.put(Freeze.class, new Freeze());
+        moduleManager.modules.put(ResetVL.class, new ResetVL());
         moduleManager.modules.put(Accessories.class, new Accessories());
         commandManager.commands.add(new BindCommand());
         commandManager.commands.add(new atlas.command.commands.ReportCommand());

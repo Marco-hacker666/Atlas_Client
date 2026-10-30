@@ -72,7 +72,7 @@ public final class ModuleCategories {
                 SkyWars.class, MurderMystery.class, PingFix.class);
         put(Category.EXPLOIT,
                 Disabler.class, GhostHand.class, ClientSpoofer.class,
-                PingSpoof.class, ServerLag.class, TickBase.class, Freeze.class, SmartBlinker.class);
+                PingSpoof.class, ServerLag.class, TickBase.class, Freeze.class, SmartBlinker.class, ResetVL.class);
         put(Category.CLIENT,
                 ClickGUIModule.class, GuiModule.class, FlagDetector.class,
                 FlagResponder.class, HitCheck.class, FightLog.class, Debug.class, Logs.class, PacketLogger.class,

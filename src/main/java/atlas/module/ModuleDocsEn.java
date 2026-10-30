@@ -442,6 +442,9 @@ final class ModuleDocsEn {
         d("Accessories", "Draws headwear and wings on players; only you see them.");
         d("AutoRecraft", "Crafts more soup in the inventory grid while it is open.");
         d("Freeze", "Holds incoming knockback packets, then releases them at the timeout.");
+        d("ResetVL", "Hops on the spot times times (at timer speed) so old anticheats drop their violation levels, then turns off. Only for older or flawed anticheats; prediction anticheats such as Grim and Polar are more likely to flag it.");
+        help("ResetVL", "times", "How many hops before it turns itself off.");
+        help("ResetVL", "timer", "Game speed while hopping; back to 1.0 when done.");
         d("Animations", "Custom sword swing and blocking animations.");
         d("HitParticleEffects", "Particles on hits; an optional sound on kills.");
         d("LegitHUD", "Coordinates, FPS, ping, CPS and keystrokes.");

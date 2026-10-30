@@ -256,6 +256,11 @@ public class LongJump extends Module {
 
     @Override
     public void onDisabled() {
+        /* 2026-10-31 (audit): switched off mid-action, the hand stayed on the item it had swapped to. */
+        if (this.savedHotbarSlot >= 0 && this.savedHotbarSlot < 9 && mc.thePlayer != null && mc.thePlayer.inventory.currentItem != this.savedHotbarSlot) {
+            mc.thePlayer.inventory.currentItem = this.savedHotbarSlot;
+        }
+        this.savedHotbarSlot = -1;
         this.isJumping = false;
         this.tickCounter = 0;
         this.jumpModeStage = 0;

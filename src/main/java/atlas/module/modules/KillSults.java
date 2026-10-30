@@ -152,4 +152,11 @@ public class KillSults extends Module {
         this.killChatVictim = null;
         this.killChatAt = 0L;
     }
+
+    /* 2026-10-31 (audit): a world unload leaves its entities alive (isDead stays false), and one kept here held the
+       whole old world in memory -- for good while this module was off. Dropped when a world loads. */
+    @atlas.event.EventTarget(whenDisabled = true)
+    public void onWorldDropEntities(atlas.events.LoadWorldEvent event) {
+        this.target = null;
+    }
 }

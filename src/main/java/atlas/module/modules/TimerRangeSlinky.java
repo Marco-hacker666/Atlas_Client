@@ -372,6 +372,8 @@ final class TimerRangeSlinky {
         this.frozen = false;
         this.packetHold = false;
         flushHeld();
+        /* 2026-10-31 (audit): TimerRange calls this on a world load too; the old target held its world. */
+        this.target = null;
         if (this.useOwned) {
             releaseUse();
         }

@@ -1,247 +1,252 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): throws the fishing rod at nearby enemies,
-// with silent aim, movement prediction and a packet-only slot mode.
-import com.google.common.base.CaseFormat;
-
+import atlas.Atlas;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
+import atlas.events.LoadWorldEvent;
 import atlas.events.TickEvent;
-import atlas.events.UpdateEvent;
 import atlas.module.Module;
 import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
-import atlas.property.properties.ModeProperty;
+import atlas.util.CombatTargeting;
+import atlas.util.HealthUtil;
 import atlas.util.RotationUtil;
-import atlas.util.TeamUtil;
 import atlas.util.TimerUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Items;
 import net.minecraft.item.ItemStack;
-import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
-import net.minecraft.network.play.client.C09PacketHeldItemChange;
-import net.minecraft.network.play.client.C0APacketAnimation;
 import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.Vec3;
 
+/**
+ * AutoRod (2026-10-31, ported from LiquidBounce legacy's AutoRod, GPL-3; it
+ * replaces the earlier OpenSkid port).
+ *
+ * Casts the fishing rod at the enemy the crosshair is on -- or the one on the
+ * look up to activation-distance -- when this player is healthy enough, few
+ * enough enemies are near and the enemy is not nearly dead; casts anyway to
+ * escape when low; with facing-enemy off, casts whenever it can. The rod goes
+ * out through vanilla's own use (sendUseItem), is taken back after
+ * pullback-delay, and the next cast waits push-delay after that. No aim of its
+ * own: it throws where the player looks.
+ *
+ * Differences from the original, each a fix: the pull-back reels the line in
+ * when the rod was already in hand (the original's stopUsingItem does nothing
+ * for a rod, so the line stayed out); a cast with the rod in hand keeps that
+ * rod (the original re-picked the first rod in the hotbar, a slot change with
+ * nothing to switch back from); enemies behind a wall are not cast at; the
+ * slot is given back when the module is switched off mid-cast.
+ */
 public class AutoRod extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"LEGIT", "PACKET", "NEWPACKET"});
-    public final FloatProperty range = new FloatProperty("range", 4.5F, 2.0F, 8.0F);
-    public final IntProperty throwDelay = new IntProperty("throw-delay", 400, 50, 1000);
-    public final IntProperty pullDelay = new IntProperty("pull-delay", 500, 50, 1000, () -> mode.getValue() == 0);
-    public final BooleanProperty switchBack = new BooleanProperty("switch-back", true);
-    public final BooleanProperty silentAim = new BooleanProperty("silent-aim", true);
-    public final IntProperty fov = new IntProperty("fov", 180, 30, 360, () -> silentAim.getValue());
-    public final BooleanProperty prediction = new BooleanProperty("prediction", true, () -> silentAim.getValue());
-    public final IntProperty predictedTicks = new IntProperty("predicted-ticks", 5, 0, 20, () -> silentAim.getValue() && prediction.getValue());
-    public final BooleanProperty ignoreTeammates = new BooleanProperty("ignore-teammates", true);
-    public final BooleanProperty aimInvis = new BooleanProperty("aim-invis", false);
-    public final BooleanProperty rodKeyOnly = new BooleanProperty("rod-key-only", false);
-    private final TimerUtil throwTimer = new TimerUtil();
-    private final TimerUtil pullTimer = new TimerUtil();
-    private boolean rodOut = false;
-    private int savedSlot = -1;
+
+    public final BooleanProperty facingEnemy = new BooleanProperty("facing-enemy", true);
+    public final BooleanProperty ignoreOnEnemyLowHealth = new BooleanProperty("ignore-on-enemy-low-health", true,
+            this.facingEnemy::getValue);
+    public final BooleanProperty healthFromScoreboard = new BooleanProperty("health-from-scoreboard", false,
+            () -> this.facingEnemy.getValue() && this.ignoreOnEnemyLowHealth.getValue());
+    public final BooleanProperty absorption = new BooleanProperty("absorption", false,
+            () -> this.facingEnemy.getValue() && this.ignoreOnEnemyLowHealth.getValue());
+    public final FloatProperty activationDistance = new FloatProperty("activation-distance", 8.0F, 1.0F, 20.0F);
+    public final IntProperty enemiesNearby = new IntProperty("enemies-nearby", 1, 1, 5);
+    public final IntProperty playerHealthThreshold = new IntProperty("player-health-threshold", 5, 1, 20);
+    public final IntProperty enemyHealthThreshold = new IntProperty("enemy-health-threshold", 5, 1, 20,
+            () -> this.facingEnemy.getValue() && this.ignoreOnEnemyLowHealth.getValue());
+    public final IntProperty escapeHealthThreshold = new IntProperty("escape-health-threshold", 10, 1, 20);
+    public final IntProperty pushDelay = new IntProperty("push-delay", 100, 50, 1000);
+    public final IntProperty pullbackDelay = new IntProperty("pullback-delay", 500, 50, 1000);
+    public final BooleanProperty onUsingItem = new BooleanProperty("on-using-item", false);
+
+    private final TimerUtil pushTimer = new TimerUtil();
+    private final TimerUtil rodPullTimer = new TimerUtil();
+    private boolean rodInUse;
+    private int switchBack = -1;
 
     public AutoRod() {
-        super("AutoRod", false, false, "Automatically throws your fishing rod at nearby enemies.");
+        super("AutoRod", false, false, "Casts your fishing rod at the enemy you face, or to escape when low.");
     }
 
     @Override
     public void onEnabled() {
-        this.throwTimer.reset();
-        this.pullTimer.reset();
-        this.rodOut = false;
-        this.savedSlot = -1;
+        this.pushTimer.reset();
+        this.rodPullTimer.reset();
+        this.rodInUse = false;
+        this.switchBack = -1;
     }
 
     @Override
     public void onDisabled() {
-        /* NewPacket slot spoof restore (MiauMinus AutoRod2 NewPacket branch). */
-        if (this.mode.getValue() == 2 && this.savedSlot != -1 && mc.thePlayer != null) {
-            try {
-                mc.getNetHandler().addToSendQueue(new C09PacketHeldItemChange(this.savedSlot));
-            } catch (Exception ignored) {
-            }
+        if (this.rodInUse) {
+            this.giveSlotBack();
         }
-        this.restoreSlot();
-        this.rodOut = false;
+        this.rodInUse = false;
+        this.switchBack = -1;
     }
 
-    @Override
-    public String[] getSuffix() {
-        return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getModeString())};
+    @EventTarget(whenDisabled = true)
+    public void onWorld(LoadWorldEvent event) {
+        /* A slot remembered in the last world means nothing in this one. */
+        this.rodInUse = false;
+        this.switchBack = -1;
     }
 
-    @EventTarget
-    public void onUpdate(UpdateEvent event) {
-        if (!this.isEnabled() || event.getType() != EventType.PRE) {
-            return;
-        }
-        if (!this.silentAim.getValue()) {
-            return;
-        }
-        if (mc.thePlayer == null || mc.theWorld == null) {
-            return;
-        }
-        EntityPlayer target = this.findAimTarget();
-        if (target == null) {
-            return;
-        }
-        AxisAlignedBB box = target.getEntityBoundingBox();
-        if (this.prediction.getValue() && this.predictedTicks.getValue() > 0) {
-            int ticks = this.predictedTicks.getValue();
-            box = box.offset(target.motionX * ticks, target.motionY * ticks * 0.5, target.motionZ * ticks);
-        }
-        float[] rotations = RotationUtil.getRotationsToBox(box, event.getYaw(), event.getPitch(), 180.0F, 0.0F);
-        event.setRotation(rotations[0], rotations[1], 1);
-    }
-
+    /** TickEvent PRE (runTick head): where vanilla's own right click happens. */
     @EventTarget
     public void onTick(TickEvent event) {
         if (!this.isEnabled() || event.getType() != EventType.PRE) {
             return;
         }
-        if (mc.thePlayer == null || mc.theWorld == null || mc.playerController == null) {
+        if (mc.thePlayer == null || mc.theWorld == null || mc.playerController == null || mc.currentScreen != null) {
             return;
         }
-        if (mc.currentScreen != null) {
-            return;
-        }
-        if (this.rodKeyOnly.getValue() && !mc.gameSettings.keyBindUseItem.isKeyDown()) {
-            return;
-        }
-        if (this.rodOut) {
-            if (this.pullTimer.hasTimeElapsed(this.pullDelay.getValue().longValue())) {
-                if (this.mode.getValue() == 2) {
-                    /* NewPacket pull: slot restore only, no second rod use. */
-                    if (this.savedSlot != -1) {
-                        try {
-                            mc.getNetHandler().addToSendQueue(new C09PacketHeldItemChange(this.savedSlot));
-                        } catch (Exception ignored) {
-                        }
-                    }
-                    this.savedSlot = -1;
-                    this.rodOut = false;
-                    this.throwTimer.reset();
-                } else {
-                    this.useRod();
-                    this.rodOut = false;
-                    this.restoreSlot();
-                    this.throwTimer.reset();
+        ItemStack held = mc.thePlayer.getHeldItem();
+        boolean usingRod = this.rodInUse || mc.thePlayer.isUsingItem() && isRod(held);
+        if (usingRod) {
+            if (this.rodPullTimer.hasTimeElapsed(this.pullbackDelay.getValue())) {
+                if (this.switchBack != -1 && mc.thePlayer.inventory.currentItem != this.switchBack) {
+                    /* Back to the previous item: the line is taken in with it. */
+                    this.giveSlotBack();
+                } else if (mc.thePlayer.fishEntity != null && isRod(held)) {
+                    /* The rod was already in hand: a second use reels it in. */
+                    mc.playerController.sendUseItem(mc.thePlayer, mc.theWorld, held);
                 }
+                this.switchBack = -1;
+                this.rodInUse = false;
+                /* The next cast always waits push-delay after the pull-back. */
+                this.pushTimer.reset();
             }
             return;
         }
-        if (!this.throwTimer.hasTimeElapsed(this.throwDelay.getValue().longValue())) {
+        if (!this.shouldRod()) {
             return;
         }
-        if (!this.hasTarget()) {
+        if (!this.pushTimer.hasTimeElapsed(this.pushDelay.getValue())) {
             return;
         }
-        int slot = this.findRodSlot();
-        if (slot == -1) {
-            return;
-        }
-        if (this.mode.getValue() == 0) {
-            this.savedSlot = mc.thePlayer.inventory.currentItem;
+        int slot;
+        if (isRod(held)) {
+            slot = mc.thePlayer.inventory.currentItem;
+        } else {
+            slot = findRod();
+            if (slot == -1) {
+                return;
+            }
+            this.switchBack = mc.thePlayer.inventory.currentItem;
             mc.thePlayer.inventory.currentItem = slot;
             mc.playerController.updateController();
-        } else if (this.mode.getValue() == 2) {
-            /* NewPacket throw: spoof the held slot via packets, client slot untouched. */
-            this.savedSlot = mc.thePlayer.inventory.currentItem;
-            try {
-                mc.getNetHandler().addToSendQueue(new C09PacketHeldItemChange(slot));
-            } catch (Exception ignored) {
-            }
         }
-        this.useRod();
-        this.rodOut = true;
-        this.pullTimer.reset();
-    }
-
-    private void useRod() {
-        ItemStack stack = mc.thePlayer.inventory.getCurrentItem();
-        if (this.mode.getValue() != 0 && (stack == null || stack.getItem() != Items.fishing_rod)) {
-            int slot = this.findRodSlot();
-            if (slot != -1) {
-                stack = mc.thePlayer.inventory.getStackInSlot(slot);
-            }
-        }
-        if (stack == null) {
+        ItemStack rod = mc.thePlayer.inventory.getStackInSlot(slot);
+        if (!isRod(rod)) {
             return;
         }
-        mc.getNetHandler().addToSendQueue(new C08PacketPlayerBlockPlacement(stack));
-        if (this.mode.getValue() == 0) {
-            mc.thePlayer.swingItem();
-        } else {
-            try {
-                mc.getNetHandler().addToSendQueue(new C0APacketAnimation());
-            } catch (Exception ignored) {
+        mc.playerController.sendUseItem(mc.thePlayer, mc.theWorld, rod);
+        this.rodInUse = true;
+        this.rodPullTimer.reset();
+    }
+
+    private boolean shouldRod() {
+        float own = health(mc.thePlayer);
+        if (this.facingEnemy.getValue() && own >= this.playerHealthThreshold.getValue()) {
+            if (!this.onUsingItem.getValue() && !isRod(mc.thePlayer.getItemInUse())
+                    && (mc.thePlayer.isUsingItem() || auraBlocking())) {
+                return false;
             }
+            EntityLivingBase facing = this.facingEnemy();
+            if (facing == null || this.nearbyEnemies() > this.enemiesNearby.getValue()) {
+                return false;
+            }
+            return !this.ignoreOnEnemyLowHealth.getValue() || health(facing) >= this.enemyHealthThreshold.getValue();
         }
+        if (own <= this.escapeHealthThreshold.getValue()) {
+            /* Low: a cast to keep them off. */
+            return true;
+        }
+        /* Facing-enemy off: cast whenever it can. */
+        return !this.facingEnemy.getValue();
     }
 
-    private boolean hasTarget() {
-        return this.findAimTarget() != null;
-    }
-
-    private EntityPlayer findAimTarget() {
-        float maxRange = this.range.getValue();
-        EntityPlayer best = null;
-        double bestDistSq = Double.MAX_VALUE;
-        for (Object o : mc.theWorld.playerEntities) {
-            if (!(o instanceof EntityPlayer) || o == mc.thePlayer) {
+    /** The enemy under the crosshair, else the first one on the look within activation-distance. */
+    private EntityLivingBase facingEnemy() {
+        MovingObjectPosition over = mc.objectMouseOver;
+        if (over != null && over.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY && this.selected(over.entityHit)) {
+            return (EntityLivingBase) over.entityHit;
+        }
+        double reach = this.activationDistance.getValue();
+        Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
+        Vec3 look = mc.thePlayer.getLook(1.0F);
+        Vec3 end = eyes.addVector(look.xCoord * reach, look.yCoord * reach, look.zCoord * reach);
+        EntityLivingBase best = null;
+        double bestDistance = reach;
+        for (EntityPlayer player : mc.theWorld.playerEntities) {
+            if (!this.selected(player)) {
                 continue;
             }
-            EntityPlayer player = (EntityPlayer) o;
-            if (player.isDead || player.getHealth() <= 0.0F) {
-                continue;
-            }
-            if (player.isInvisible() && !this.aimInvis.getValue()) {
-                continue;
-            }
-            if (this.ignoreTeammates.getValue() && TeamUtil.isSameTeam(player)) {
-                continue;
-            }
-            if (TeamUtil.isFriend(player) || TeamUtil.isBot(player)) {
-                continue;
-            }
-            if (mc.thePlayer.getDistanceToEntity((Entity) o) > maxRange) {
-                continue;
-            }
-            if (this.silentAim.getValue() && RotationUtil.angleToEntity(player) > this.fov.getValue()) {
-                continue;
-            }
-            double distSq = mc.thePlayer.getDistanceSqToEntity((Entity) o);
-            if (distSq < bestDistSq) {
-                bestDistSq = distSq;
+            float border = player.getCollisionBorderSize();
+            AxisAlignedBB box = player.getEntityBoundingBox().expand(border, border, border);
+            MovingObjectPosition hit = box.calculateIntercept(eyes, end);
+            double distance = box.isVecInside(eyes) ? 0.0 : hit == null ? Double.MAX_VALUE : eyes.distanceTo(hit.hitVec);
+            if (distance <= bestDistance && mc.thePlayer.canEntityBeSeen(player)) {
+                bestDistance = distance;
                 best = player;
             }
         }
         return best;
     }
 
-    private int findRodSlot() {
+    private int nearbyEnemies() {
+        int count = 0;
+        for (EntityPlayer player : mc.theWorld.playerEntities) {
+            if (this.selected(player) && RotationUtil.distanceToEntity(player) < this.activationDistance.getValue()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** An enemy: another living player the client's targeting accepts (friends, team mates and bots never). */
+    private boolean selected(Entity entity) {
+        if (!(entity instanceof EntityPlayer) || entity == mc.thePlayer) {
+            return false;
+        }
+        EntityPlayer player = (EntityPlayer) entity;
+        return player.getHealth() > 0.0F && CombatTargeting.isTrackablePlayer(player, true) && TargetFilter.accepts(player);
+    }
+
+    private float health(EntityLivingBase entity) {
+        float health = this.healthFromScoreboard.getValue() ? HealthUtil.resolve(entity) : entity.getHealth();
+        return this.absorption.getValue() ? health + entity.getAbsorptionAmount() : health;
+    }
+
+    private static boolean auraBlocking() {
+        Module module = Atlas.moduleManager == null ? null : Atlas.moduleManager.modules.get(KillAura.class);
+        return module instanceof KillAura && module.isEnabled() && ((KillAura) module).isBlocking();
+    }
+
+    private static boolean isRod(ItemStack stack) {
+        return stack != null && stack.getItem() == Items.fishing_rod;
+    }
+
+    private static int findRod() {
         for (int i = 0; i < 9; i++) {
-            ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
-            if (stack != null && stack.getItem() == Items.fishing_rod) {
+            if (isRod(mc.thePlayer.inventory.getStackInSlot(i))) {
                 return i;
             }
         }
         return -1;
     }
 
-    private void restoreSlot() {
-        if (this.switchBack.getValue() && this.savedSlot != -1 && mc.thePlayer != null
-                && mc.thePlayer.inventory.currentItem != this.savedSlot) {
-            mc.thePlayer.inventory.currentItem = this.savedSlot;
+    private void giveSlotBack() {
+        if (this.switchBack >= 0 && this.switchBack < 9 && mc.thePlayer != null
+                && mc.thePlayer.inventory.currentItem != this.switchBack) {
+            mc.thePlayer.inventory.currentItem = this.switchBack;
             if (mc.playerController != null) {
                 mc.playerController.updateController();
             }
         }
-        this.savedSlot = -1;
     }
 }

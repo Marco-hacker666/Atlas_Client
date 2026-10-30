@@ -65,6 +65,10 @@ public final class OnlineConfigCache {
         if (base.isEmpty() || base.equals("json")) {
             return "shared";
         }
+        /* 2026-10-31 (audit): "con", "nul", "com1"... name a device on Windows, extension or not. */
+        if (base.matches("(?i)(con|prn|aux|nul|com[0-9]|lpt[0-9])(\\..*)?")) {
+            base = "_" + base;
+        }
         return base;
     }
 

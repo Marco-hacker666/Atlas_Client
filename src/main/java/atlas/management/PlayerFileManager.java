@@ -5,16 +5,19 @@ import net.minecraft.client.Minecraft;
 import java.awt.*;
 import java.io.*;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public abstract class PlayerFileManager {
     public static Minecraft mc = Minecraft.getMinecraft();
-    public ArrayList<String> players;
+    /* 2026-10-31 (audit): copy-on-write -- isFriend is asked from packet handlers on the network thread while
+       .friend add/remove change the list on the client thread. */
+    public final java.util.concurrent.CopyOnWriteArrayList<String> players;
     public File file;
     public Color color;
 
     public PlayerFileManager(File file, Color color) {
-        this.players = new ArrayList<>();
+        this.players = new java.util.concurrent.CopyOnWriteArrayList<>();
         this.file = file;
         this.color = color;
     }
@@ -29,17 +32,31 @@ public abstract class PlayerFileManager {
                 System.err.println("Error creating file: " + e.getMessage());
             }
         }
-        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+        /* UTF-8, and blank lines are not names (each used to load as a friend called ""). */
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file),
+                java.nio.charset.StandardCharsets.UTF_8))) {
+            List<String> read = reader.lines().map(String::trim).filter(line -> !line.isEmpty())
+                    .collect(Collectors.toList());
             players.clear();
-            players.addAll(reader.lines().map(String::trim).collect(Collectors.toList()));
+            players.addAll(read);
         } catch (IOException e) {
             System.err.println("Error reading file: " + e.getMessage());
         }
     }
 
+    /** Written whole to a temporary file and moved into place, as Config.save does. */
     public void save() {
-        try (PrintWriter writer = new PrintWriter(new FileWriter(file))) {
-            writer.print(String.join("\n", players));
+        File temp = new File(file.getAbsoluteFile().getParentFile(), file.getName() + ".tmp");
+        try {
+            try (Writer writer = new OutputStreamWriter(new FileOutputStream(temp), java.nio.charset.StandardCharsets.UTF_8)) {
+                writer.write(String.join("\n", players));
+            }
+            try {
+                java.nio.file.Files.move(temp.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                java.nio.file.Files.move(temp.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException e) {
             System.err.println("Error saving file: " + e.getMessage());
         }
@@ -71,11 +88,12 @@ public abstract class PlayerFileManager {
     }
 
     public boolean isFriend(String string) {
-        return this.players.stream().anyMatch(string2 -> string2.equalsIgnoreCase(string));
+        return string != null && this.players.stream().anyMatch(string2 -> string2.equalsIgnoreCase(string));
     }
 
+    /** A copy: the list itself changes under .friend add/remove. */
     public ArrayList<String> getPlayers() {
-        return this.players;
+        return new ArrayList<>(this.players);
     }
 
     public Color getColor() {

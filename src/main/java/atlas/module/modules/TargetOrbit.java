@@ -1187,4 +1187,13 @@ public class TargetOrbit extends Module {
         GL11.glColor4f(((color >> 16) & 0xFF) / 255.0F, ((color >> 8) & 0xFF) / 255.0F, (color & 0xFF) / 255.0F,
                 Math.max(0.0F, Math.min(1.0F, alpha)));
     }
+
+    /* 2026-10-31 (audit): a world unload leaves its entities alive (isDead stays false), and one kept here held the
+       whole old world in memory -- for good while this module was off. Dropped when a world loads. */
+    @atlas.event.EventTarget(whenDisabled = true)
+    public void onWorldDropEntities(atlas.events.LoadWorldEvent event) {
+        this.shown = null;
+        this.leaving = null;
+        this.lastHit = null;
+    }
 }

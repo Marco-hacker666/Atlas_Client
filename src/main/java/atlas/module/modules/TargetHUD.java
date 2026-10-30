@@ -1771,4 +1771,15 @@ public class TargetHUD extends Module {
     private static String strip(String text) {
         return text == null ? "" : text.replaceAll("\u00a7.", "");
     }
+
+    /* 2026-10-31 (audit): a world unload leaves its entities alive (isDead stays false), and one kept here held the
+       whole old world in memory -- for good while this module was off. Dropped when a world loads. */
+    @atlas.event.EventTarget(whenDisabled = true)
+    public void onWorldDropEntities(atlas.events.LoadWorldEvent event) {
+        this.jelloEntity = null;
+        this.lastTarget = null;
+        this.target = null;
+        this.fadingEntity = null;
+        this.renderTarget = null;
+    }
 }

@@ -920,6 +920,10 @@ public class BedNuker extends Module {
     @Override
     public void onDisabled() {
         this.resetBreaking();
+        /* 2026-10-31 (audit): switched off mid-action, the hand stayed on the item it had swapped to. */
+        if (this.savedSlot >= 0 && this.savedSlot < 9 && mc.thePlayer != null && mc.thePlayer.inventory.currentItem != this.savedSlot) {
+            mc.thePlayer.inventory.currentItem = this.savedSlot;
+        }
         this.savedSlot = -1;
         this.waitingForStart = false;
         this.whitelistScanAt = -1L;

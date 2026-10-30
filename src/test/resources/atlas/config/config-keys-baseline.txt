@@ -341,18 +341,6 @@ AutoRequeue win-text
 AutoRespawn #name AutoRespawn
 AutoRespawn delay-ticks
 AutoRod #name AutoRod
-AutoRod aim-invis
-AutoRod fov
-AutoRod ignore-teammates
-AutoRod mode
-AutoRod predicted-ticks
-AutoRod prediction
-AutoRod pull-delay
-AutoRod range
-AutoRod rod-key-only
-AutoRod silent-aim
-AutoRod switch-back
-AutoRod throw-delay
 AutoSoup #name AutoSoup
 AutoSoup delay
 AutoSoup drop-bowls
@@ -1740,15 +1728,6 @@ PotionHUD scale
 PotionHUD shadow
 PotionHUD time-format
 ProjectileAimBot #name ProjectileAimBot
-ProjectileAimBot aim-invis
-ProjectileAimBot cooldown
-ProjectileAimBot fov
-ProjectileAimBot ignore-teammates
-ProjectileAimBot max-range
-ProjectileAimBot min-distance
-ProjectileAimBot mode
-ProjectileAimBot predicted-ticks
-ProjectileAimBot prediction
 ProjectileColors #name ProjectileColors
 Radar #name Radar
 Radar bots

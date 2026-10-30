@@ -47,6 +47,10 @@ public class AutoSoup extends Module {
 
     @Override
     public void onDisabled() {
+        /* 2026-10-31 (audit): switched off mid-action, the hand stayed on the item it had swapped to. */
+        if (this.originalSlot >= 0 && this.originalSlot < 9 && mc.thePlayer != null && mc.thePlayer.inventory.currentItem != this.originalSlot) {
+            mc.thePlayer.inventory.currentItem = this.originalSlot;
+        }
         this.stopEating();
         this.cooldown.reset();
         this.refillTimer.reset();

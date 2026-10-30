@@ -47,6 +47,10 @@ public class AutoGapple extends Module {
         if (isEating) {
             releaseUseKey();
         }
+        /* 2026-10-31 (audit): switched off mid-action, the hand stayed on the item it had swapped to. */
+        if (originalHotbarSlot >= 0 && originalHotbarSlot < 9 && mc.thePlayer != null && mc.thePlayer.inventory.currentItem != originalHotbarSlot) {
+            mc.thePlayer.inventory.currentItem = originalHotbarSlot;
+        }
         isEating = false;
         eatTickCount = 0;
         originalHotbarSlot = -1;

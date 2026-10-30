@@ -987,4 +987,11 @@ public class BlockHit extends Module {
 
     /* Merged modules (2026-10-11, ModuleBundle). */
     public final atlas.module.ModuleBundle autoBlockMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.AuraAutoBlock(), "auto-block", "Aura auto block", false);
+
+    /* 2026-10-31 (audit): a world unload leaves its entities alive (isDead stays false), and one kept here held the
+       whole old world in memory -- for good while this module was off. Dropped when a world loads. */
+    @atlas.event.EventTarget(whenDisabled = true)
+    public void onWorldDropEntities(atlas.events.LoadWorldEvent event) {
+        this.target = null;
+    }
 }

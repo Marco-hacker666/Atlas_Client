@@ -72,16 +72,6 @@ public abstract class MixinEntityPlayerSP extends MixinEntityPlayer {
                     e.printStackTrace();
                 }
             }
-            atlas.module.modules.KillAura2 aura2 = (atlas.module.modules.KillAura2)
-                    atlas.Atlas.moduleManager.modules.get(atlas.module.modules.KillAura2.class);
-            if (aura2 != null) {
-                try {
-                    aura2.afterRotations(event);
-                } catch (RuntimeException e) {
-                    System.err.println("[Atlas] KillAura2.afterRotations threw:");
-                    e.printStackTrace();
-                }
-            }
             RotationState.applyState(event.isRotated() && !this.isRiding(), event.getNewYaw(), event.getNewPitch(), event.getPreYaw(), event.isRotating());
             if (event.isRotated()) {
                 this.pendingYaw = this.rotationYaw;

@@ -8,7 +8,7 @@ import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.event.types.Priority;
 import atlas.events.*;
-import atlas.management.RotationState;
+import atlas.management.RotationHelper;
 import atlas.mixin.IAccessorPlayerControllerMP;
 import atlas.module.Module;
 import atlas.property.properties.BooleanProperty;
@@ -82,7 +82,15 @@ public class BedNuker extends Module {
     private long checkAt;
     private String checkWhat = "";
     private BlockPos ownBedFoot = null;
-    private boolean ownBedPending = false;
+    /* 2026-10-31 (a player: "beds with nothing round them are not dug"). The bed taken as ours was looked for
+       again at every teleport -- a lagback beside an enemy bed made that bed ours -- and only while this was
+       on, so switching it on beside an enemy bed did the same. Now it is looked for whether this is on or
+       not, in the first three seconds after a spawn (the chunks may come late), and once found it stays
+       ours until a respawn or a new world; when it is broken, no other bed becomes ours. */
+    private volatile boolean ownBedPending = false;
+    private volatile boolean ownBedRelocate = false;
+    private boolean ownBedLocked = false;
+    private int ownBedRetryTicks = 0;
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"NORMAL", "SWAP"});
     public final FloatProperty range = new FloatProperty("range", 4.5F, 3.0F, 6.0F);
     public final PercentProperty speed = new PercentProperty("speed", 0);
@@ -163,18 +171,34 @@ public class BedNuker extends Module {
             return;
         }
 
+        /* 2026-10-31: only the bed nearest at the start -- ours -- and its other half. Every bed within 25
+           blocks went on the list, a neighbour's too, so on a small map the bed a rush reaches first, the one
+           with nothing round it yet, was never dug. */
         int sX = MathHelper.floor_double(mc.thePlayer.posX);
         int sY = MathHelper.floor_double(mc.thePlayer.posY + (double) mc.thePlayer.getEyeHeight());
         int sZ = MathHelper.floor_double(mc.thePlayer.posZ);
+        BlockPos nearest = null;
+        double nearestSq = Double.MAX_VALUE;
         for (int i = sX - 25; i <= sX + 25; i++) {
             for (int j = sY - 25; j <= sY + 25; j++) {
                 for (int k = sZ - 25; k <= sZ + 25; k++) {
                     BlockPos blockPos = new BlockPos(i, j, k);
                     Block block = mc.theWorld.getBlockState(blockPos).getBlock();
                     if (block instanceof BlockBed) {
-                        this.bedWhitelist.add(blockPos);
+                        double sq = mc.thePlayer.getDistanceSq(i + 0.5, j + 0.5, k + 0.5);
+                        if (sq < nearestSq) {
+                            nearestSq = sq;
+                            nearest = blockPos;
+                        }
                     }
                 }
+            }
+        }
+        if (nearest != null) {
+            this.bedWhitelist.add(nearest);
+            BlockPos other = this.otherBedHalf(nearest);
+            if (other != null) {
+                this.bedWhitelist.add(other);
             }
         }
     }
@@ -199,12 +223,9 @@ public class BedNuker extends Module {
      * cube keeps this to a few thousand lookups instead of the 130k the
      * whitelist scan costs.
      */
-    private void findOwnBed() {
-        this.ownBedPending = false;
-        this.ownBedHead = null;
-        this.ownBedFoot = null;
+    private boolean findOwnBed() {
         if (mc.theWorld == null || mc.thePlayer == null) {
-            return;
+            return false;
         }
         int radius = this.ownBedRadius.getValue();
         int px = MathHelper.floor_double(mc.thePlayer.posX);
@@ -231,6 +252,41 @@ public class BedNuker extends Module {
         if (best != null) {
             this.ownBedHead = best;
             this.ownBedFoot = this.otherBedHalf(best);
+            this.ownBedLocked = true;
+            return true;
+        }
+        return false;
+    }
+
+    /** Runs whether this is on or not: finds our bed after a spawn, forgets it at a respawn, drops it once broken. */
+    private void updateOwnBed() {
+        if (mc.theWorld == null || mc.thePlayer == null) {
+            return;
+        }
+        if (this.ownBedRelocate) {
+            this.ownBedRelocate = false;
+            this.ownBedLocked = false;
+            this.ownBedHead = null;
+            this.ownBedFoot = null;
+            this.ownBedPending = true;
+        }
+        if (this.ownBedPending) {
+            this.ownBedPending = false;
+            if (!this.ownBedLocked) {
+                this.ownBedRetryTicks = 60;
+            }
+        }
+        if (this.ownBedRetryTicks > 0) {
+            this.ownBedRetryTicks--;
+            if (this.ownBedRetryTicks % 10 == 9 && this.findOwnBed()) {
+                this.ownBedRetryTicks = 0;
+            }
+        }
+        // Our bed being gone means it was broken; stop reserving the spot (and take no other bed for ours).
+        if (this.ownBedHead != null
+                && !(mc.theWorld.getBlockState(this.ownBedHead).getBlock() instanceof BlockBed)) {
+            this.ownBedHead = null;
+            this.ownBedFoot = null;
         }
     }
 
@@ -579,6 +635,7 @@ public class BedNuker extends Module {
     public void onTick(TickEvent event) {
         if (event.getType() == EventType.PRE) {
             this.runPendingWhitelistScan();
+            this.updateOwnBed();
             if (!this.isEnabled()) {
                 return;
             }
@@ -591,15 +648,6 @@ public class BedNuker extends Module {
                 log((back ? "REFUSED " : "BROKEN ") + this.checkWhat + " " + this.checkPos.getX() + ","
                         + this.checkPos.getY() + "," + this.checkPos.getZ() + (back ? " -- the server put it back" : ""));
                 this.checkPos = null;
-            }
-            if (this.ownBedPending) {
-                this.findOwnBed();
-            }
-            // Our bed being gone means it was broken; stop reserving the spot.
-            if (this.ownBedHead != null
-                    && !(mc.theWorld.getBlockState(this.ownBedHead).getBlock() instanceof BlockBed)) {
-                this.ownBedHead = null;
-                this.ownBedFoot = null;
             }
             AutoBlockIn autoBlockIn = (AutoBlockIn) Atlas.moduleManager.modules.get(AutoBlockIn.class);
             if(autoBlockIn.isEnabled()) return;
@@ -623,7 +671,10 @@ public class BedNuker extends Module {
                 }
                 switch (this.breakStage) {
                     case 0:
-                        if (!mc.thePlayer.isUsingItem()) {
+                        /* 2026-10-31: the dig opens once the look the server has is on the block. The look
+                           now turns there as a hand does (RotationHelper), over a tick or more; it used to
+                           jump there in the one tick before this. */
+                        if (!mc.thePlayer.isUsingItem() && this.lookOn(this.targetBed)) {
                             IBlockState startState = mc.theWorld.getBlockState(this.targetBed);
                             float perTick = this.getBreakDelta(startState, this.targetBed, slot, mc.thePlayer.onGround);
                             log("START " + startState.getBlock().getLocalizedName() + " " + this.targetBed.getX() + ","
@@ -733,16 +784,39 @@ public class BedNuker extends Module {
                 double x = (double) this.targetBed.getX() + 0.5 - mc.thePlayer.posX;
                 double y = (double) this.targetBed.getY() + 0.5 - mc.thePlayer.posY - (double) mc.thePlayer.getEyeHeight();
                 double z = (double) this.targetBed.getZ() + 0.5 - mc.thePlayer.posZ;
-                float[] rotations = RotationUtil.getRotationsTo(x, y, z, event.getYaw(), event.getPitch());
-                event.setRotation(rotations[0], rotations[1], 5);
-                event.setPervRotation(this.moveFix.getValue() != 0 ? rotations[0] : mc.thePlayer.rotationYaw, 5);
-                if (this.moveFix.getModeString().equals("REAL")) {
-                    /* REAL: the camera turns as well, spread over this tick's frames by
-                       RotationManager; the mouse still works (not forced). */
-                    Atlas.rotationManager.setRotation(rotations[0], rotations[1], 5, false);
+                /* 2026-10-31: through the shared engine (RotationHelper): turned as a hand does, whole mouse
+                   counts, keys turned for SILENT, handed back when this stops asking. */
+                float[] want = RotationUtil.getRotationsTo(x, y, z, event.getYaw(), event.getPitch());
+                float[] look = RotationHelper.request(this, want[0], want[1], 5, this.moveMode(), false,
+                        RotationHelper.NO_LIMIT);
+                if (look != null && this.moveFix.getModeString().equals("REAL")) {
+                    /* REAL: the camera turns as well, along the look the server gets, spread over this
+                       tick's frames by RotationManager; the mouse still works (not forced). */
+                    Atlas.rotationManager.setRotation(look[0], look[1], 5, false);
                 }
             }
         }
+    }
+
+    /** move-fix as the engine's movement yaw: NONE the camera's, SILENT the look's with the keys turned, STRICT and REAL the look's. */
+    private int moveMode() {
+        switch (this.moveFix.getValue()) {
+            case 0:
+                return RotationHelper.MOVE_CAMERA;
+            case 1:
+                return RotationHelper.MOVE_FIX;
+            default:
+                return RotationHelper.MOVE_LOOK;
+        }
+    }
+
+    /** The look the server has meets the block within range (through other blocks: the nuker digs through them). */
+    private boolean lookOn(BlockPos pos) {
+        net.minecraft.util.Vec3 eye = mc.thePlayer.getPositionEyes(1.0F);
+        net.minecraft.util.Vec3 dir = RotationEngine.direction(RotationHelper.serverYaw(), RotationHelper.serverPitch());
+        double reach = this.range.getValue().doubleValue() + 1.0;
+        net.minecraft.util.Vec3 end = eye.addVector(dir.xCoord * reach, dir.yCoord * reach, dir.zCoord * reach);
+        return mc.theWorld.getBlockState(pos).getBlock().collisionRayTrace(mc.theWorld, pos, eye, end) != null;
     }
 
     @EventTarget
@@ -754,18 +828,6 @@ public class BedNuker extends Module {
                     && !Atlas.playerStateManager.placing
                     && !Atlas.playerStateManager.swinging) {
                 this.doSwing();
-            }
-        }
-    }
-
-    @EventTarget
-    public void onMoveInput(MoveInputEvent event) {
-        if (this.isEnabled()) {
-            if (this.moveFix.getValue() == 1
-                    && RotationState.isActived()
-                    && RotationState.getPriority() == 5.0F
-                    && MoveUtil.isForwardPressed()) {
-                MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
             }
         }
     }
@@ -837,6 +899,11 @@ public class BedNuker extends Module {
         this.whitelistScanAt = -1L;
         this.bedWhitelist.clear();
         this.resetBreaking();
+        /* A new world: no bed is ours until the spawn there. */
+        this.ownBedLocked = false;
+        this.ownBedHead = null;
+        this.ownBedFoot = null;
+        this.ownBedRetryTicks = 0;
     }
 
     @EventTarget(whenDisabled = true)
@@ -853,11 +920,13 @@ public class BedNuker extends Module {
                 this.bedWhitelist.clear();
                 this.scheduleWhitelistScan();
             }
-            /* Any respawn or teleport is a chance to locate our bed, which is
+            /* A respawn or a teleport is where our bed is looked for, which is
                why this does not depend on the game-start message: that line is
-               Hypixel's wording and never arrives on other servers. */
-            if (event.getPacket() instanceof S07PacketRespawn
-                    || event.getPacket() instanceof S08PacketPlayerPosLook) {
+               Hypixel's wording and never arrives on other servers. A teleport
+               only while no bed is ours yet (see ownBedPending). */
+            if (event.getPacket() instanceof S07PacketRespawn) {
+                this.ownBedRelocate = true;
+            } else if (event.getPacket() instanceof S08PacketPlayerPosLook && !this.ownBedLocked) {
                 this.ownBedPending = true;
             }
             if (this.isEnabled() && this.targetBed != null && this.ignoreVelocity.getValue() == 2 && Atlas.delayManager.getDelayModule() != DelayModules.BED_NUKER) {

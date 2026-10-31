@@ -54,7 +54,6 @@ public class SettingNamesTest {
         assertUnique(new AutoClicker());
         assertUnique(new FlagDetector());
         assertUnique(new KeepRange());
-        assertUnique(new AimBacktrack());
         assertUnique(new KBDisplacement());
     }
 

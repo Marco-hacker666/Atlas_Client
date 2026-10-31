@@ -1778,7 +1778,7 @@ public class FlagDetector extends Module {
                 + Math.abs(this.sentPitch - this.sentPitchBefore);
         StringBuilder mods = new StringBuilder();
         for (Class<?> type : new Class<?>[]{FastPlace.class, Clutch.class, Scaffold.class, AutoBlockIn.class,
-                KillAura.class, KillAura2.class, FakeLag.class, BackTrack.class, Blink.class, AntiVoid.class, SafeWalk.class, Eagle.class}) {
+                KillAura.class, FakeLag.class, BackTrack.class, Blink.class, AntiVoid.class, SafeWalk.class, Eagle.class}) {
             atlas.module.Module module = atlas.Atlas.moduleManager.modules.get(type);
             if (module != null && module.isEnabled()) {
                 mods.append(mods.length() == 0 ? "" : ",").append(module.getName());

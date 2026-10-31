@@ -68,7 +68,7 @@ public class HUD extends Module {
     ));
     private static final Set<Class<?>> MISC_MODULES = new HashSet<>(Arrays.<Class<?>>asList(
             Spammer.class, BedNuker.class, BedTracker.class, LightningTracker.class, NoRotate.class,
-            NickHider.class, AntiObbyTrap.class, AntiObfuscate.class, AutoAnduril.class,
+            NickHider.class, AntiObfuscate.class, AutoAnduril.class,
             Disabler.class, ClientSpoofer.class, AutoHypixel.class
     ));
     private List<Module> activeModules = new ArrayList<>();

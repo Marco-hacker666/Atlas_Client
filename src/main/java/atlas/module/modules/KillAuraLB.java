@@ -10,6 +10,7 @@ import atlas.lb.aiming.AngleSmooth;
 import atlas.lb.aiming.AuraRotations;
 import atlas.lb.aiming.PointTracker;
 import atlas.lb.aiming.Rotation;
+import atlas.management.RotationHelper;
 import atlas.lb.clicking.Clicker;
 import atlas.lb.combat.AuraRules;
 import atlas.lb.combat.TargetTracker;
@@ -254,13 +255,16 @@ public class KillAuraLB extends Module {
     // ---- L3: AutoBlocking (KillAuraAutoBlock)
     public final BooleanProperty autoBlocking = new BooleanProperty("AutoBlocking", false);
     public final ModeProperty blockMode = new ModeProperty("BlockMode", 1, new String[]{"Basic", "Interact", "Fake",
-            "Helper", "Auto", "Lag", "Predict", "Manual", "Slinky", "Full", "Yuri", "Rhythm"},
-            this.autoBlocking::getValue);
+            "Helper", "Auto", "Lag", "Predict", "Manual", "Slinky", "Full", "Yuri", "Rhythm", "Raven"},
+            this.autoBlocking::getValue)
+            /* 2026-10-31: the AutoBlock modes retired there are retired here too (indices kept). */
+            .retire("Full", "Auto", "Lag", "Predict");
     /* 2026-10-26 (owner: "my AutoBlock module's block modes in Silent Aura too"): BlockMode 3.. are the AutoBlock
        module's modes, run through that module (BlockHit.driveFromAura) with its own settings, whether it is switched
        on or not. LiquidBounce's own blocking (and the settings below) then stands aside. Appended, so saved
        BlockModes keep their index. Index in BlockHit's Mode for each (Swing, hidden there, is left out). */
-    private static final int[] AUTOBLOCK_MODES = {0, 1, 2, 4, 5, 6, 7, 8};
+    /* 2026-10-31: Raven (AutoBlock's mode 9) appended after Rhythm, which is this aura's own (-1: not AutoBlock's). */
+    private static final int[] AUTOBLOCK_MODES = {0, 1, 2, 4, 5, 6, 7, 8, -1, 9};
     private static final int FIRST_AUTOBLOCK_MODE = 3;
     private final java.util.function.BooleanSupplier lbBlocking =
             () -> this.autoBlocking.getValue() && this.blockMode.getValue() < FIRST_AUTOBLOCK_MODE;
@@ -835,7 +839,9 @@ public class KillAuraLB extends Module {
         Rotation sent = null;
         if (inputPath()) {
             /* V2: target, turn and click now, before vanilla's input and the move. */
-            this.inputRotation = think();
+            /* Asked of the engine now, so the clicks below go along the very look the packet will carry. */
+            this.inputTarget = think();
+            this.inputRotation = this.inputTarget != null ? this.ask(this.inputTarget) : null;
             this.inputThought = true;
             sent = this.inputRotation != null ? this.inputRotation
                     : new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
@@ -861,6 +867,8 @@ public class KillAuraLB extends Module {
 
     /** V2: this tick's look, decided at TickEvent PRE; onUpdate only hands it to the movement packet. */
     private Rotation inputRotation;
+    /** What think() asked for at the start of the tick (inputRotation is what the engine gave). */
+    private Rotation inputTarget;
     private boolean inputThought;
 
     private boolean inputPath() {
@@ -895,8 +903,7 @@ public class KillAuraLB extends Module {
                 Rotation back = this.rotations.update(new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch),
                         RotationUtil.gcd());
                 if (back != null) {
-                    event.setRotation(back.yaw, back.pitch, 1);
-                    event.setPervRotation(back.yaw, 1);
+                    this.ask(back);
                 }
             }
             return;
@@ -904,7 +911,8 @@ public class KillAuraLB extends Module {
         if (inputPath()) {
             if (this.inputThought) {
                 this.inputThought = false;
-                applyRotation(event, this.inputRotation);
+                /* The same ask as at the start of the tick: the engine gives the same look. */
+                applyRotation(event, this.inputTarget);
             }
             return;
         }
@@ -959,17 +967,31 @@ public class KillAuraLB extends Module {
 
     private void applyRotation(UpdateEvent event, Rotation rotation) {
         if (rotation != null) {
+            Rotation sent = this.ask(rotation);
             if (this.rotations.movementCorrection == AuraRotations.CORRECTION_CHANGE_LOOK) {
-                mc.thePlayer.rotationYaw = rotation.yaw;
-                mc.thePlayer.rotationPitch = rotation.pitch;
+                mc.thePlayer.rotationYaw = sent.yaw;
+                mc.thePlayer.rotationPitch = sent.pitch;
             }
-            event.setRotation(rotation.yaw, rotation.pitch, 1);
-            if (this.rotations.movementCorrection != AuraRotations.CORRECTION_OFF) {
-                event.setPervRotation(rotation.yaw, 1);
-            }
-            mc.thePlayer.rotationYawHead = rotation.yaw;
-            mc.thePlayer.renderYawOffset = rotation.yaw;
+            mc.thePlayer.rotationYawHead = sent.yaw;
+            mc.thePlayer.renderYawOffset = sent.yaw;
         }
+    }
+
+    /**
+     * 2026-10-31: the look through the shared engine (RotationHelper), which turns there as Clutch does
+     * (speeding up from rest; speed wander and bow with the Rotations module on), on the mouse grid, turns the
+     * keys for Silent and hands the look back once nothing asks. The LiquidBounce model goes on from the look the
+     * engine gives (hold), which is the one the packet carries; the asked one when a higher priority has it.
+     */
+    private Rotation ask(Rotation target) {
+        int correction = this.rotations.movementCorrection;
+        int move = correction == AuraRotations.CORRECTION_OFF ? RotationHelper.MOVE_CAMERA
+                : correction == AuraRotations.CORRECTION_SILENT ? RotationHelper.MOVE_FIX : RotationHelper.MOVE_LOOK;
+        float[] look = RotationHelper.request(this, target.yaw, target.pitch, 1, move, false, RotationHelper.NO_LIMIT);
+        if (look == null) {
+            return target;
+        }
+        return this.rotations.hold(new Rotation(look[0], look[1]));
     }
 
     private boolean attackPending;
@@ -1190,11 +1212,7 @@ public class KillAuraLB extends Module {
         if (this.fightBot.getValue()) {
             fightBotInput();
         }
-        Rotation rotation = this.rotations.current();
-        if (rotation != null && this.rotations.movementCorrection == AuraRotations.CORRECTION_SILENT
-                && MoveUtil.isForwardPressed()) {
-            MoveUtil.fixStrafe(rotation.yaw);
-        }
+        /* Silent's keys are turned by the shared engine (RotationHelper.MOVE_FIX). */
     }
 
     /** FightBot: walk keys toward the goal, jump, swim and sprint (NavigationBaseValueGroup's input handler). */

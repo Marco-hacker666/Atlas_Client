@@ -35,44 +35,41 @@ public final class ModuleCategories {
            AutoRod with the utilities, KeepSprint with movement), the packet
            tricks to Exploit and the item helpers to Player. */
         put(Category.COMBAT,
-                AimAssist.class, AutoClicker.class, AutoWeapon.class, BackTrack.class, Criticals.class,
-                HitBox.class, HitSelect.class, KnockbackDelay.class, LagRange.class,
+                AimAssist.class, AutoClicker.class, AutoWeapon.class, BackTrack.class, HitBox.class, HitSelect.class, KnockbackDelay.class, LagRange.class,
                 Piercing.class, Reach.class, SprintReset.class, TimerRange.class, Velocity.class, BlockHit.class,
-                KillAura.class, KillAura2.class, PlainAura.class, NoDelay.class, JumpReset.class, Wtap.class,
-                MoreKB.class, KeepRange.class, AimBacktrack.class, Hitflick.class, InvulnTiming.class,
+                KillAura.class, NoDelay.class, JumpReset.class, Wtap.class,
+                MoreKB.class, KeepRange.class, Hitflick.class, InvulnTiming.class,
                 Humanization.class);
         put(Category.PLAYER,
                 MLG.class, Blink.class, NoFall.class, AntiVoid.class, Clutch.class, AutoTool.class, AutoSwap.class,
                 InvManager.class, Refill.class, AntiAFK.class, AntiFireball.class, AutoAnduril.class,
                 InventoryClicker.class, FastUse.class, ItemUseFix.class,
-                FakeLag.class, AutoRod.class, AutoHeal.class, FastBow.class, ArmorBreaker.class, AutoRecraft.class,
-                PearlSaver.class, ThrowAura.class, ProjectileAimBot.class);
+                FakeLag.class, AutoRod.class, AutoHeal.class, FastBow.class, ArmorBreaker.class, PearlSaver.class, ThrowAura.class, ProjectileAimBot.class);
         put(Category.MOVEMENT,
                 Fly.class, Speed.class, LongJump.class, Jesus.class, NoSlow.class, NoItemRelease.class, SafeWalk.class, AntiBounce.class, Eagle.class, InvWalk.class, TargetStrafe.class, MoveFix.class,
-                Stasis.class, Parkour.class, NoWeb.class, Tower.class,
-                FastAccel.class, InstantStop.class, NullMove.class, Strafe.class, KeepSprint.class);
+                Stasis.class, Tower.class,
+                FastAccel.class, InstantStop.class, NullMove.class, KeepSprint.class);
         put(Category.RENDER,
                 BlockESP.class, ESP.class, Chams.class, NameTags.class, Tracers.class,
                 TargetESP.class, TargetOrbit.class, TargetHUD.class, ItemESP.class, Xray.class,
                 ViewClip.class, Trajectories.class, BlockOverlay.class,
-                BreakProgress.class, Indicators.class, Radar.class, LatencyCrosshair.class,
-                TeamHealthDisplay.class, RenderFixes.class,
+                BreakProgress.class, Indicators.class, Radar.class, TeamHealthDisplay.class, RenderFixes.class,
                 AntiDebuff.class, BedPlates.class, TNTTimer.class, DamageTags.class, ItemTags.class,
                 EntityCulling.class, Freecam.class, FallIndicator.class, Pointers.class);
         put(Category.WORLD,
                 Scaffold.class, AutoBlockIn.class, AutoBedDef.class, AutoHeadHitter.class, BedNuker.class,
                 ChestAura.class, ChestStealer.class, FastPlace.class, SpeedMine.class, Timer.class,
-                AntiObbyTrap.class, AutoPlace.class);
+                AutoPlace.class);
         put(Category.MISC,
                 AutoMessage.class, AntiBot.class, TargetFilter.class, MCF.class, NickHider.class, Spammer.class, AutoAuth.class,
                 AutoHypixel.class, BedwarUtils.class, BedTracker.class, LightningTracker.class,
-                ESPDetector.class, AntiCheat.class, AntiObfuscate.class, MouseRawInput.class,
+                AntiCheat.class, AntiObfuscate.class, MouseRawInput.class,
                 ResourceSpoofer.class, NoRotate.class, ExploitFixer.class,
                 AutoReconnect.class, StaffDetector.class,
-                SkyWars.class, MurderMystery.class, PingFix.class);
+                MurderMystery.class, PingFix.class);
         put(Category.EXPLOIT,
                 Disabler.class, GhostHand.class, ClientSpoofer.class,
-                PingSpoof.class, ServerLag.class, TickBase.class, Freeze.class, SmartBlinker.class, ResetVL.class);
+                PingSpoof.class, ServerLag.class, TickBase.class, Freeze.class, ResetVL.class);
         put(Category.CLIENT,
                 ClickGUIModule.class, GuiModule.class, FlagDetector.class,
                 FlagResponder.class, HitCheck.class, FightLog.class, Debug.class, Logs.class, PacketLogger.class,
@@ -98,7 +95,6 @@ public final class ModuleCategories {
        owner tests them with .toggle / .bind before they are shown. */
     private static final java.util.Set<Class<? extends Module>> TESTING =
             new java.util.HashSet<Class<? extends Module>>(java.util.Arrays.<Class<? extends Module>>asList(
-                    KillAura2.class,
                     /* The old "ClickGui" opener (2026-10-17): a second entry
                        beside ClickGUI that does the same thing, listed twice
                        in the Client column. Still bindable with .bind. */

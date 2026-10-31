@@ -360,8 +360,7 @@ public class LagRange extends Module {
         if (aura != null && aura.isEnabled() && aura.isAuraBlocking()) {
             return true;
         }
-        KillAura2 aura2 = (KillAura2) Atlas.moduleManager.getModule(KillAura2.class);
-        return aura2 != null && aura2.isBlocking();
+        return false;
     }
 
     private void apply(int wanted, String why) {

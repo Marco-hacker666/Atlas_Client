@@ -244,7 +244,6 @@ public final class ModuleDocs {
 
     static {
         d("NoClickDelay", "移除兩次左鍵之間的延遲。");
-        d("Parkour", "在方塊邊緣自動起跳，避免掉落。");
         d("ViewPackets", "把收發的封包名稱記錄到聊天欄，可過濾名稱。");
         d("PearlSaver", "自動瞄準並投擲終界珍珠自救。");
         d("ProjectileAimBot", "弓箭自瞄：拉弓時（或手上拿蛋、雪球、珍珠時），伺服器收到的視角會轉向最適合的目標，並依拋物線預判提前量；畫面不動，也不會替你射，你照常拉弓放箭。目標超出射程時不瞄準。（來源：LiquidBounce）");
@@ -282,8 +281,6 @@ public final class ModuleDocs {
         d("BlockLadder", "預測落點並自動放置梯子。");
         d("LadderClutch", "墜落時自動放置梯子自救。");
         d("WaterClutch", "墜落時自動倒水自救（MLG）。");
-        d("SkyWars", "天空之戰的遊戲輔助與資訊顯示。");
-        d("SkywarsAlerts", "天空之戰的事件與對手提醒。");
         d("MurderDetector", "判斷兇手與偵探身分並提醒。");
         d("MurderMystery", "謀殺之謎遊戲的輔助工具。");
         d("AutoPot", "自動投擲藥水。");
@@ -310,13 +307,11 @@ public final class ModuleDocs {
         d("KillSounds", "擊殺時播放音效。");
         d("KillSults", "擊殺後自動嘲諷對手。");
         d("FallIndicator", "標記落點方便 MLG 救場。");
-        d("SmartBlinker", "智慧型封包閃爍，依情況自動收發。");
         d("StaffDetector", "偵測附近的工作人員與可疑行為並發出提醒。");
         d("CheatDetector", "觀察附近玩家並在聊天室回報疑似作弊行為。");
         d("BedProximityAlert", "敵人接近你的床時發出警報。");
         d("BurstClicker", "點擊時額外送出連續點擊以提升命中率。");
         d("LegitReach", "在難以察覺的範圍內微調攻擊距離。");
-        d("NoWeb", "在蜘蛛網中不再被拖慢移動速度。");
         d("Freecam", "讓視角離開身體自由飛行偵查。");
         d("AutoPlace", "準心對準方塊面時自動放置方塊。");
         d("AutoRequeue", "遊戲結束後自動重新排隊。");
@@ -324,7 +319,6 @@ public final class ModuleDocs {
         d("AutoReconnect", "被踢出或斷線後自動重新連線到同一個伺服器。");
         d("AutoGG", "遊戲結束時自動發送訊息（預設是 gg）。");
         // ------------------------------------------------------------ COMBAT
-        d("KillAura2", "重寫的 Silent Aura：轉頭像真手、點擊像真人，只在視角真的打得到時出手；配合 InvulnTiming 在對方無敵時間結束那一刻出手，並會自動格擋。和 Silent Aura 不能同時開。");
         d("KillAura", "自動攻擊範圍內的目標：選目標、轉頭（多種模式，可靜默）、依 CPS 出手，並可自動格擋。");
         d("AimAssist", "攻擊時把準心輕微往附近目標拉，手感接近真人微調，不會自己出手。");
         help("AimAssist", "style", "Smooth：原本的（每 tick 轉剩下角度的一部分）。Regular：每幀轉，遠快近慢。Linear：固定速度。Lock On：黏住目標。後三種參考 Slinky。");
@@ -366,9 +360,8 @@ public final class ModuleDocs {
         d("FakeLag", "延後送出自己的移動，讓伺服器上的你落後於實際位置，方便先手。");
         d("HitSelect", "挑出手時機：只在對自己有利（例如減少吃擊退）的時候讓攻擊送出。ACTIVE 也會管 Silent Aura 的攻擊。");
         d("MoreKB", "攻擊時重置衝刺，讓每一下打出更多擊退。");
-        d("Criticals", "讓攻擊判定為爆擊（多 50% 傷害），以封包或小跳實現。");
         d("FastBow", "加快拉弓射箭的速度。");
-        d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Slinky（預設）：按著左鍵、敵人在範圍內就舉劍，舉滿幾 tick 放下一 tick 讓攻擊打出去，再舉起來；可選只在快被打到時舉、放下時延遲封包。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Full：照原版的擋劍節奏（放下、下一 tick 打、打完立刻舉起），只在能保護你的時候舉劍。Helper / Auto / Lag：其他方式。");
+        d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Slinky（預設）：按著左鍵、敵人在範圍內就舉劍，舉滿幾 tick 放下一 tick 讓攻擊打出去，再舉起來；可選只在快被打到時舉、放下時延遲封包。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Full：照原版的擋劍節奏（放下、下一 tick 打、打完立刻舉起），只在能保護你的時候舉劍。Raven：Raven bS 的 Auto Block，按著右鍵時才作用：同時在打範圍內的敵人就舉劍、放下讓攻擊打出去再舉起，放下時可延遲封包；只按右鍵就是普通格擋。Helper / Auto / Lag：其他方式。");
         help("BlockHit", "yuri-range", "Yuri：打到這個距離內（腳到腳）的目標才會格擋。");
         help("BlockHit", "yuri-chance", "Yuri：有多少比例的攻擊會接著格擋。");
         help("BlockHit", "yuri-combo-delay", "Yuri：打完幾 ms 後舉劍（那時要按著前進）。");
@@ -382,6 +375,16 @@ public final class ModuleDocs {
         help("BlockHit", "fake-animation", "畫面上顯示舉劍動畫（只是本機畫面，不影響伺服器）。");
         help("BlockHit", "fake-animation-in-range", "假動畫只在敵人在範圍內時顯示。");
         help("BlockHit", "lag-chance", "放下劍時，有這個機率把之後送出的封包全部扣住。0 = 不扣。");
+        help("BlockHit", "raven-range", "Raven：敵人在這個距離內才自動格擋（準心上的優先，否則最近的）。");
+        help("BlockHit", "raven-max-hold-ms", "Raven：劍每次最多舉幾 ms，時間到就放下，讓下一下攻擊打出去。");
+        help("BlockHit", "raven-damaged", "Raven：只在你的受傷時間降到 max-hurt-time 時舉劍（對方快能再打到你），被打中就放下。");
+        help("BlockHit", "raven-max-hurt-time-ms", "Raven damaged：受傷時間剩這麼多 ms 時舉劍（換算成 tick，1 到 10）。");
+        help("BlockHit", "raven-ignore-teammates", "Raven：不把隊友當成要格擋的對象。");
+        help("BlockHit", "raven-lag-chance", "Raven：放下劍時，有這個機率把之後送出的封包全部扣住。0 = 不扣。");
+        help("BlockHit", "raven-lag-max-ms", "Raven：封包最多扣到舉劍後這麼多 ms 就放出去。");
+        help("BlockHit", "raven-prevent-delaying-attacks", "Raven：一攻擊就先把扣住的封包放出去，攻擊不會被延遲。");
+        help("BlockHit", "raven-block-again-immediately", "Raven：扣住的封包放出去後（攻擊或時間到），馬上再舉劍。");
+        help("BlockHit", "raven-block-animation", "Raven：舉劍或扣封包時，畫面上顯示舉劍動畫。");
         help("BlockHit", "full-range", "Full：敵人在這個距離內（眼睛到碰撞箱）才會舉劍。");
         help("BlockHit", "full-style", "Full：Always＝敵人在範圍內就一直舉著（最安全、最慢）；Smart＝只在快被打到時、被盯上時、在空中時舉（減速少很多）。");
         help("BlockHit", "full-open-hurt", "Full Smart：被打之後，自己的受傷時間剩這麼多時舉劍（下一下快能打到你了）。");
@@ -423,10 +426,8 @@ public final class ModuleDocs {
         d("Displace", "攻擊瞬間轉向，把對手的擊退方向導向虛空或指定方向。");
         help("Displace", "Keep-hitbox", "打人的那一下伺服器那邊的視角只轉到還能打到對手碰撞箱的角度（Grim、Polar 會檢查視角打不打得到）；轉太多那一下就不算。開著時只能偏 5～10 度，而且只影響疾跑和擊退附魔那部分的擊退，在 Pika、Grim 這類伺服器上效果很小。關掉＝照設定的角度轉，只適合不檢查攻擊視角的伺服器。");
         d("KeepSprint", "攻擊後不讓衝刺被打斷，保持移動速度。");
-        d("PlainAura", "精簡版自動攻擊：只在實際送出的視角真的對準目標時才出手，最不容易被抓。");
         d("InvulnTiming", "算準目標無敵時間結束的時機再出手，並把多餘的攻擊轉給打得動的人。");
         d("KeepRange", "連擊中自動放開前進（S-tap），避免貼太近浪費對手的擊退。");
-        d("AimBacktrack", "剛好揮空的一刀，改算到前幾個 tick 準心對到的人身上。");
         d("KBDisplacement", "手動打人時，靜默把擊退方向轉向附近的危險（虛空、岩漿）。");
         // Ported from OpenSkid (2026-10-05)
         d("KeyStrokes", "在畫面上顯示 WASD、空白鍵和滑鼠按鍵（含 CPS）。可在 HUD 編輯器拖曳。");
@@ -509,12 +510,12 @@ public final class ModuleDocs {
         help("Humanization", "speed-sigma", "每 tick 轉頭速度的對數常態波動。");
         help("Humanization", "human-clicks", "aura 的點擊節奏改用 AutoClicker 的 Human。");
         help("Humanization", "show-stats", "畫面上顯示最近 30 秒的命中率、揮空方式、反應時間。");
-        help("Velocity", "lag-ticks", "Lag：擊退（和之後的 transaction）延後幾 tick 才交給遊戲。伺服器看到的是 ping 短暫變高、擊退晚到，就像延遲。");
-        help("Velocity", "lag-chance", "Lag：幾成的擊退會延後。");
-        help("Velocity", "lag-explosions", "Lag：爆炸也一起延後。");
-        help("Velocity", "lag-ping-budget", "Lag：ping 加延後不超過這個值（ms）；會自動縮短，ping 太高就不延後。0＝不限制。");
-        help("Velocity", "lag-cooldown", "Lag：放出後隔多久（ms）才能再延後，連段時不會一直卡著。");
-        help("Velocity", "lag-only-in-fight", "Lag：6 格內有其他玩家（不是 bot、不是隊友）才延後。");
+        help("Velocity", "lag-ticks", "Delay：擊退（和之後的 transaction）延後幾 tick 才交給遊戲。伺服器看到的是 ping 短暫變高、擊退晚到，就像延遲。");
+        help("Velocity", "lag-chance", "Delay：幾成的擊退會延後。");
+        help("Velocity", "lag-explosions", "Delay：爆炸也一起延後。");
+        help("Velocity", "lag-ping-budget", "Delay：ping 加延後不超過這個值（ms）；會自動縮短，ping 太高就不延後。0＝不限制。");
+        help("Velocity", "lag-cooldown", "Delay：放出後隔多久（ms）才能再延後，連段時不會一直卡著。");
+        help("Velocity", "lag-only-in-fight", "Delay：6 格內有其他玩家（不是 bot、不是隊友）才延後。");
         help("Velocity", "polar-counter-chance", "Polar：被擊退時，在這一 tick 移動之前疾跑反擊的機率（需要 Silent Aura 有目標，且沿著伺服器知道的角度在 3.0 內打得到）。原版的攻擊會讓你自己的速度少 40%。");
         help("Velocity", "polar-jump-chance", "Polar：在地上被擊退時，當下那一 tick 起跳（跳躍重置）的機率。");
         help("Velocity", "polar-both-chance", "Polar：兩種都能做時，兩種一起做的機率；否則只做其中一種。");
@@ -577,12 +578,6 @@ public final class ModuleDocs {
         help("FastAccel", "require-weapon", "只在拿著劍或斧時作用。");
         d("InstantStop", "放開 W 時立刻停下：在地上放開前進鍵的那一 tick，自動點一下後退（或後左／後右）把剩下的速度抵銷，下一 tick 還給你。（來源：Slinky）");
         d("NullMove", "相反方向鍵以最新按的為準（snap tap）：按著 A 再按 D 會往右走，不會停住；放開 D 若還按著 A 就回到往左。W/S 也一樣。（來源：Slinky）");
-        d("Strafe", "讓移動方向更快轉向你按的方向：每 tick 把速度往按鍵方向拉一部分，地面、跳躍、空中分開設定。（來源：Slinky）");
-        help("Strafe", "jump", "起跳那一 tick 的轉向強度。");
-        help("Strafe", "ground", "在地上的轉向強度。");
-        help("Strafe", "air", "在空中的轉向強度。0% = 原版慣性，100% = 立刻轉向。");
-        help("Strafe", "max-hurt-time", "受傷時間大於這個值時不作用（被打飛時不改方向）。10 = 永遠作用。");
-        help("Strafe", "require-weapon", "只在拿著劍或斧時作用。");
         d("Pointers", "準心周圍的箭頭，指向附近玩家所在的方向；可依距離、名牌顏色或自訂顏色上色，3D 模式會隨你的俯仰角傾斜。（來源：Slinky）");
         help("Pointers", "range", "多遠內的玩家才顯示箭頭（格）。");
         help("Pointers", "ignore-within-fov", "在準心這個角度內的玩家不顯示（已經看得到的人）。0 = 全部顯示。");
@@ -635,7 +630,6 @@ public final class ModuleDocs {
         d("ChestStealer", "打開箱子時自動把有用的東西拿走。");
         d("FastPlace", "加快放方塊的速度。");
         d("SpeedMine", "加快挖方塊。BreakSpeed：工具原本的挖掘速度乘上 multiplier（1.4 約快 40%）。FinishEarly：挖到一定進度就提早完成，speed 100% 是原版伺服器能接受的最快（原版時間的 70%）。");
-        d("AntiObbyTrap", "頭卡在黑曜石等陷阱方塊裡時，把那格當成空氣，讓你看得到、出得去。");
         // ------------------------------------------------------------ RENDER
         d("ESP", "在其他玩家身上畫外框或光暈，隔牆也看得到。");
         d("Chams", "隔牆顯示玩家模型。");
@@ -653,7 +647,6 @@ public final class ModuleDocs {
         d("BreakProgress", "顯示方塊被挖的進度。");
         d("Indicators", "在畫面邊緣提示飛向你的火球、珍珠、箭等投擲物。");
         d("Radar", "小地圖雷達，顯示附近玩家的方向與距離。");
-        d("LatencyCrosshair", "多畫一個準心，標出伺服器目前認為你瞄準的位置（延遲造成的落差）。");
         d("TeamHealthDisplay", "顯示隊友或敵人的血量。");
         d("RenderFixes", "較現代的聊天框與計分板外觀（圓角、可移動）。");
         d("AntiDebuff", "移除失明、反胃等畫面效果。");
@@ -668,7 +661,6 @@ public final class ModuleDocs {
         d("BedwarUtils", "Bedwars 輔助：鑽石升級、物品追蹤、隱身提醒、珍珠／接近提醒等 HUD。");
         d("BedTracker", "追蹤床的狀態，敵人靠近自己的床時提醒，可自動發訊息。");
         d("LightningTracker", "在聊天欄報出閃電落下的座標（常代表有人死亡）。");
-        d("ESPDetector", "偵測隔牆一直把準心跟著你的玩家（疑似開 ESP）。");
         d("AntiCheat", "偵測從過遠距離或隔牆打你的玩家並回報。");
         d("AntiObfuscate", "移除文字的亂碼效果（§k），讓被混淆的字看得清楚。");
         d("MouseRawInput", "使用原始滑鼠輸入，不受系統滑鼠加速影響。");
@@ -712,7 +704,6 @@ public final class ModuleDocs {
         d("ItemPhysics", "掉落物平躺在地上，空中會翻滾。");
         d("Capes", "顯示自訂披風。");
         d("Accessories", "在玩家頭上畫頭飾與翅膀，只有你看得到。");
-        d("AutoRecraft", "背包打開時自動用合成欄補做蘑菇湯。");
         d("Freeze", "把來襲的擊退封包扣住不動，時間到才一次放行。");
         d("ResetVL", "原地小跳 times 次（timer 加速），讓舊型反作弊把違規值降下來，跳完自動關閉。只對舊的或有漏洞的反作弊有用；Grim、Polar 這類預測型反作弊反而可能會抓到。（來源：LiquidBounce）");
         help("ResetVL", "times", "要跳幾次，跳完自動關閉。");
@@ -851,7 +842,8 @@ public final class ModuleDocs {
                 h("Swing（舊）", "Predict*"),
                 h("Slinky 格擋", "block-range", "max-hold-ticks", "require-*", "max-hurt-time"),
                 h("Slinky 假動畫", "fake-animation*"),
-                h("Slinky 延遲封包", "lag-*"));
+                h("Slinky 延遲封包", "lag-*"),
+                h("Raven", "raven-*"));
         g("TargetHUD",
                 h("樣式", "style", "Anim Mode", "animations", "head", "indicator", "outline", "shadow"),
                 h("顏色", "color", "CustomColor", "Bg-Alpha", "background"),

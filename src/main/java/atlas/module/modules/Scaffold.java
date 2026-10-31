@@ -6,8 +6,7 @@ import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.event.types.Priority;
 import atlas.events.*;
-import atlas.management.PlaceRotations;
-import atlas.management.RotationState;
+import atlas.management.RotationHelper;
 import atlas.module.Module;
 import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.FloatProperty;
@@ -37,8 +36,6 @@ import org.lwjgl.opengl.GL11;
 
 import java.awt.*;
 import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.Comparator;
@@ -116,6 +113,9 @@ public class Scaffold extends Module {
     private float lastSnapPlaceYaw = Float.NaN;
     private float lastSnapPlacePitch = Float.NaN;
     public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2", "POLAR", "TELLY"})
+            /* 2026-10-31 (owner's consolidation): SIDEWAYS, SNAP, 3FMC and SNAP2 retired (indices kept); a config
+               naming one gets GODBRIDGE. */
+            .retire("GODBRIDGE", "SIDEWAYS", "SNAP", "3FMC", "SNAP2")
             /* 2026-10-08: fewer modes in the menu; the rest still load from old configs. */
             .hide("BACKWARDS", "SIDEWAYS", "SMOOTH", "Hypixel", "3FMC", "SNAP2")
             .alias("GODBIRGDE", "GODBRIDGE")
@@ -161,14 +161,14 @@ public class Scaffold extends Module {
        does not fall off. polar.json runs it with:
          Modes = [Jump], ForceSneakBelowCount = 5, SneakTime = 1..1
        i.e. normally JUMP, but SNEAK when fewer than 5 blocks remain. */
-    private final IntProperty polarForceSneakBelowCount = new IntProperty("polar-force-sneak-below-count", 5, 0, 20, () -> this.rotationMode.getValue() == ROTATION_POLAR);
-    private final IntProperty polarSneakTime = new IntProperty("polar-sneak-time", 1, 1, 10, () -> this.rotationMode.getValue() == ROTATION_POLAR);
+    private final IntProperty polarForceSneakBelowCount = new IntProperty("polar-force-sneak-below-count", 5, 0, 20, this::lbGodBridge);
+    private final IntProperty polarSneakTime = new IntProperty("polar-sneak-time", 1, 1, 10, this::lbGodBridge);
     /* polar.json's Modes = [Jump]. A single choice, as the client's other mode
        settings are; the ledge decision reads it, so Sneak, StopInput and
        Backwards can be picked without a rebuild. */
     private final ModeProperty polarModes = new ModeProperty("polar-modes", POLAR_JUMP,
             new String[]{"Jump", "Sneak", "StopInput", "Backwards"},
-            () -> this.rotationMode.getValue() == ROTATION_POLAR);
+            this::lbGodBridge);
     private int polarLedgeSneakTicks = 0;
     private boolean polarLedgeStopInput = false;
     private boolean polarLedgeStepBack = false;
@@ -192,7 +192,9 @@ public class Scaffold extends Module {
          repeats the yaw step of the last placement (Grim DuplicateRotPlace). */
     private static final int[] TURNING_MODES = {1, 2, 3, 4, 5, 6};
     public final IntProperty turnSpeed = new IntProperty("turn-speed", 80, 10, 180, this::turnLimited);
-    public final BooleanProperty humanize = new BooleanProperty("humanize", true, this::turnLimited);
+    /* Hidden since 2026-10-31: the speed wander and bow are the shared engine's, set in the Rotations module
+       for every module on it. Kept so saved configs still load. */
+    public final BooleanProperty humanize = new BooleanProperty("humanize", true, () -> false);
     /* 2026-10-17 (a player: "your scaffold rotations need randomization"):
        SNAP and the fixed-target modes aimed at the same yaw and pitch for every
        placement (exactly back, pitch 85). The aim now wanders within
@@ -223,7 +225,6 @@ public class Scaffold extends Module {
     private float b4ScriptYaw = 0.0F;
     private float b4TurnSign = 1.0F;
     private int b4Ticks = 0;
-    private final RotationEngine engine = new RotationEngine();
     private int tick = 0;
     private int pauseTicks = 0;
     private volatile boolean correctionPending = false;
@@ -273,6 +274,28 @@ public class Scaffold extends Module {
         this.wanderYaw += (this.wanderGoalYaw - this.wanderYaw) * pull;
         this.wanderPitch += (this.wanderGoalPitch - this.wanderPitch) * pull;
         return new float[]{yaw + this.wanderYaw, MathHelper.clamp_float(pitch + this.wanderPitch, -90.0F, 90.0F)};
+    }
+
+    /*
+     * 2026-10-31: the turn is the shared engine's (RotationHelper). This module works out the look each mode
+     * wants and asks for it; the engine turns there as Clutch does (speeding up from rest; speed wander and bow
+     * with the Rotations module on), on the mouse grid from the look the server has, with Grim's DuplicateRotPlace
+     * guard, turns the keys for SILENT, and hands the look back once this stops asking (switched off, or a tick it
+     * does not turn). That replaces this module's humanTurn (a 70-degree cap and a three-tick ease-in, earlier the
+     * same day; the engine's acceleration is the ease-in now), its own grid and guard, and handBack on switching
+     * off. In the turning modes turn-speed is the engine's cap, on each axis.
+     */
+
+    /** move-fix as the engine's movement yaw: NONE the camera's, SILENT the look's with the keys turned, REAL the look's. */
+    private int moveMode() {
+        switch (this.moveFix.getValue()) {
+            case 0:
+                return RotationHelper.MOVE_CAMERA;
+            case 1:
+                return RotationHelper.MOVE_FIX;
+            default:
+                return RotationHelper.MOVE_LOOK;
+        }
     }
 
     private boolean turnLimited() {
@@ -463,24 +486,21 @@ public class Scaffold extends Module {
             targetYaw = fromYaw + share * (targetYaw - fromYaw);
             targetPitch = fromPitch + share * (targetPitch - fromPitch);
         }
-        float[] onGrid = RotationEngine.quantize(fromYaw, fromPitch, targetYaw, targetPitch);
-        float turn = Math.abs(MathHelper.wrapAngleTo180_float(onGrid[0] - fromYaw));
-        for (int guard = 0; guard < 3 && turn > 2.0F && PlaceRotations.wouldDuplicate(onGrid[0]); guard++) {
-            /* Grim DuplicateRotPlace, as in the other modes. */
-            double gcd = RotationUtil.gcd();
-            onGrid[0] += Math.signum(MathHelper.wrapAngleTo180_float(onGrid[0] - fromYaw)) * (float) (gcd > 0.0 ? gcd : 0.01);
-            turn = Math.abs(MathHelper.wrapAngleTo180_float(onGrid[0] - fromYaw));
+        /* B4 eases in by itself (b4Ticks). The shared engine turns, keeps the grid and the DuplicateRotPlace
+           guard; the click (onUpdateClick) goes along the look the packet carries. */
+        float[] onGrid = RotationHelper.request(this, targetYaw, targetPitch, 3, this.moveMode(), false,
+                RotationHelper.NO_LIMIT, MIN_STEP);
+        if (onGrid == null) {
+            /* A higher priority has the look this tick. */
+            onGrid = RotationEngine.quantize(fromYaw, fromPitch, targetYaw, targetPitch);
         }
+        float turn = Math.abs(MathHelper.wrapAngleTo180_float(onGrid[0] - fromYaw));
         if (turn > 0.5F) {
             this.b4YawOffset = RandomUtil.nextFloat(-0.5F, 0.5F);
         }
         this.yaw = onGrid[0];
         this.pitch = onGrid[1];
         this.canRotate = true;
-        event.setRotation(onGrid[0], onGrid[1], 3);
-        if (this.moveFix.getValue() != 0) {
-            event.setPervRotation(onGrid[0], 3);
-        }
         if (this.moveFix.getModeString().equals("REAL")) {
             Atlas.rotationManager.setRotation(onGrid[0], onGrid[1], 3, false);
         }
@@ -1174,7 +1194,7 @@ public class Scaffold extends Module {
                        at the block every tick -- 30-37 degree turns on the
                        click ticks in the 2026-10-07 Pika log. */
                     float[] fixed = godBridgeLook;
-                    if (this.rotationMode.getValue() != ROTATION_POLAR
+                    if (!this.lbGodBridge()
                             && aimDiff != Float.MAX_VALUE
                             && this.lookHit(blockData, fixed[0], fixed[1]) == null) {
                         /* S4d (2026-10-08): the fixed look misses the face from
@@ -1288,38 +1308,20 @@ public class Scaffold extends Module {
                            wander from block to block. */
                         targetYaw = event.getYaw();
                         targetPitch = event.getPitch();
-                    } else if (this.turnLimited() && !towerRotating) {
-                        /* From the look the server has, at most turn-speed a
-                           tick (LiquidBounce: RotationsValueGroup). */
-                        Set<RotationEngine.Feature> features = EnumSet.noneOf(RotationEngine.Feature.class);
-                        if (this.humanize.getValue()) {
-                            features.add(RotationEngine.Feature.NOISE);
-                            features.add(RotationEngine.Feature.CURVE);
-                        }
-                        float speed = this.turnSpeed.getValue();
-                        float[] stepped = this.engine.step(event.getYaw(), event.getPitch(), targetYaw, targetPitch,
-                                speed, Math.max(10.0F, speed * 0.5F), 0, true, features);
-                        targetYaw = stepped[0];
-                        targetPitch = stepped[1];
                     }
-                    float[] onGrid = RotationEngine.quantize(event.getYaw(), event.getPitch(), targetYaw, targetPitch);
+                    /* The shared engine turns (in the turning modes at most turn-speed a tick on each axis --
+                       LiquidBounce: RotationsValueGroup), keeps the grid and the DuplicateRotPlace guard. */
+                    float cap = this.turnLimited() && !towerRotating ? this.turnSpeed.getValue() : RotationHelper.NO_LIMIT;
+                    float[] onGrid = RotationHelper.request(this, targetYaw, targetPitch, 3, this.moveMode(), false, cap,
+                            MIN_STEP);
+                    if (onGrid == null) {
+                        /* A higher priority has the look this tick. */
+                        onGrid = RotationEngine.quantize(event.getYaw(), event.getPitch(), targetYaw, targetPitch);
+                    }
                     targetYaw = onGrid[0];
                     targetPitch = onGrid[1];
-                    float turn = Math.abs(MathHelper.wrapAngleTo180_float(targetYaw - event.getYaw()));
-                    for (int guard = 0; guard < 3 && turn > 2.0F && PlaceRotations.wouldDuplicate(targetYaw); guard++) {
-                        /* Grim DuplicateRotPlace: the same yaw step as at the
-                           last judged placement. One mouse count more breaks it. */
-                        double gcd = RotationUtil.gcd();
-                        targetYaw += Math.signum(MathHelper.wrapAngleTo180_float(targetYaw - event.getYaw()))
-                                * (float) (gcd > 0.0 ? gcd : 0.01);
-                        turn = Math.abs(MathHelper.wrapAngleTo180_float(targetYaw - event.getYaw()));
-                    }
                     placeYaw = targetYaw;
                     placePitch = targetPitch;
-                    event.setRotation(targetYaw, targetPitch, 3);
-                    if (this.moveFix.getValue() != 0) {
-                        event.setPervRotation(targetYaw, 3);
-                    }
                     if (this.moveFix.getModeString().equals("REAL")) {
                         /* REAL: the camera turns as well, spread over this tick's frames by
                            RotationManager; the mouse still works (not forced). Movement
@@ -1371,8 +1373,9 @@ public class Scaffold extends Module {
            Since 2026-10-06 this runs at LOWEST, after every module's
            rotation, and the click is wherever that look lands if the block
            goes somewhere wanted (lookHit), as Clutch's post() does. */
-        float sentYaw = event.getNewYaw();
-        float sentPitch = event.getNewPitch();
+        float[] packet = RotationHelper.packetLook(event);
+        float sentYaw = packet[0];
+        float sentPitch = packet[1];
         MovingObjectPosition along = null;
         if (this.rotationMode.getValue() != 0 && blockData != null && hitVec != null) {
             along = this.lookHit(blockData, sentYaw, sentPitch);
@@ -1636,12 +1639,7 @@ public class Scaffold extends Module {
             }
             this.applyPolarLedgeInput();
             this.quietThreeFmcMovement();
-            if (this.moveFix.getValue() == 1
-                    && RotationState.isActived()
-                    && RotationState.getPriority() == 3.0F
-                    && MoveUtil.isForwardPressed()) {
-                MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
-            }
+            /* SILENT's keys are turned by the shared engine (RotationHelper). */
             if (mc.thePlayer.onGround && this.stage > 0 && MoveUtil.isForwardPressed()) {
                 mc.thePlayer.movementInput.jump = true;
             }
@@ -1709,6 +1707,23 @@ public class Scaffold extends Module {
 
     /** Until when the edge crouch is held after the edge is left (Vape's "sneak delay"). */
     private long edgeSneakUntil = 0L;
+
+    /*
+     * 2026-10-31 (owner: "GodBridge does not look like GodBridge, use LiquidBounce"; asked: the fixed look and
+     * LiquidBounce's jump or sneak at the ledge, not a turn to aim; diagonal straight back as LiquidBounce): GODBRIDGE
+     * is now what POLAR already was -- LiquidBounce's GodBridge technique whole. The look never leaves the fixed one
+     * (S4d's re-aim is gone), and when it cannot place for the next step at the edge, the ledge action (polar-modes,
+     * polar-force-sneak-below-count, polar-sneak-time) jumps or sneaks.
+     */
+    /* 2026-10-31: a turn from rest may be this big (the engine's own is 35), as before the move onto the engine:
+       a GodBridge side switch (about 90 degrees) or a change of direction has to land within a tick or two, or the
+       block is not placed in time. */
+    private static final float MIN_STEP = 70.0F;
+
+    private boolean lbGodBridge() {
+        int mode = this.rotationMode.getValue();
+        return mode == ROTATION_GODBRIDGE || mode == ROTATION_POLAR;
+    }
 
     /** GodBridge: which side of the block row the player walks on. */
     private boolean godBridgeRightSide;
@@ -1784,7 +1799,7 @@ public class Scaffold extends Module {
      * stores the action for {@link #applyPolarLedgeInput()}.
      */
     private void updatePolarLedge(BlockData blockData, float[] godBridgeLook) {
-        if (this.rotationMode.getValue() != ROTATION_POLAR) {
+        if (!this.lbGodBridge()) {
             this.polarLedgeSneakTicks = 0;
             this.polarLedgeStopInput = false;
             this.polarLedgeStepBack = false;
@@ -1898,7 +1913,7 @@ public class Scaffold extends Module {
      * actions zero the player's movement so no block is walked off.
      */
     private void applyPolarLedgeInput() {
-        if (this.rotationMode.getValue() != ROTATION_POLAR) {
+        if (!this.lbGodBridge()) {
             return;
         }
         if (this.polarLedgeSneakTicks > 0) {
@@ -2108,6 +2123,7 @@ public class Scaffold extends Module {
         if (mc.thePlayer != null && this.lastSlot != -1) {
             mc.thePlayer.inventory.currentItem = this.lastSlot;
         }
+        /* The shared engine hands the look back to the camera by itself once this stops asking. */
         Atlas.blinkManager.setBlinkState(false, BlinkModules.SCAFFOLD);
         if (this.safeStuckActive && mc.thePlayer != null) {
             mc.thePlayer.motionX = this.savedMotionX;

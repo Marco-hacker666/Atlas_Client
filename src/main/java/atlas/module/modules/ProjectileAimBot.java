@@ -40,13 +40,11 @@ import net.minecraft.util.MathHelper;
  * egg, snowball and pearl are aimed by their own switches (in the original
  * they only were with other-items on); the look is turned at turn-speed and
  * eased back to the camera when the aim ends instead of snapping, and stays on
- * the mouse grid.
+ * the mouse grid (since 2026-10-31 through the shared engine, RotationHelper).
  */
 public class ProjectileAimBot extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final String[] BODY = new String[]{"Head", "Body", "Feet"};
-    /** Below this from the camera the eased-back look is let go. */
-    private static final float SETTLED = 1.0F;
 
     public final BooleanProperty bow = new BooleanProperty("bow", true);
     public final BooleanProperty egg = new BooleanProperty("egg", true);
@@ -70,9 +68,6 @@ public class ProjectileAimBot extends Module {
     public final BooleanProperty mark = new BooleanProperty("mark", true);
 
     private EntityPlayer target;
-    /** The look this module has the server on, or NaN when it has none. */
-    private float sentYaw = Float.NaN;
-    private float sentPitch = Float.NaN;
 
     public ProjectileAimBot() {
         super("ProjectileAimBot", false, false, "Aims your bow, eggs, snowballs and pearls at the best target while you draw or hold them.");
@@ -95,8 +90,6 @@ public class ProjectileAimBot extends Module {
 
     private void clear() {
         this.target = null;
-        this.sentYaw = Float.NaN;
-        this.sentPitch = Float.NaN;
     }
 
     /** Priority 2: above AimAssist (1), below Scaffold (3) and Clutch (7), which need theirs to place. */
@@ -111,36 +104,15 @@ public class ProjectileAimBot extends Module {
         }
         this.target = null;
         float[] want = this.aim();
-        float cameraYaw = mc.thePlayer.rotationYaw;
-        float cameraPitch = mc.thePlayer.rotationPitch;
         if (want == null) {
-            if (Float.isNaN(this.sentYaw)) {
-                return;
-            }
-            /* No aim now: back to the camera at the same pace, then the real look goes through again. */
-            if (Math.abs(MathHelper.wrapAngleTo180_float(cameraYaw - event.getYaw())) < SETTLED
-                    && Math.abs(cameraPitch - event.getPitch()) < SETTLED) {
-                this.sentYaw = Float.NaN;
-                this.sentPitch = Float.NaN;
-                return;
-            }
-            want = new float[]{cameraYaw, cameraPitch};
-        }
-        /* From the look the server last got (another module may have had the packet since). */
-        float fromYaw = event.getYaw();
-        float fromPitch = event.getPitch();
-        float max = this.turnSpeed.getValue() * (0.9F + (float) Math.random() * 0.2F);
-        float dYaw = MathHelper.clamp_float(MathHelper.wrapAngleTo180_float(want[0] - fromYaw), -max, max);
-        float dPitch = MathHelper.clamp_float(want[1] - fromPitch, -max, max);
-        float[] look = RotationUtil.gcd(fromYaw + dYaw, MathHelper.clamp_float(fromPitch + dPitch, -90.0F, 90.0F),
-                event.getYaw(), event.getPitch());
-        if (Float.isNaN(look[0]) || Float.isNaN(look[1])) {
-            this.clear();
+            /* No aim now: the shared engine takes the look back to the camera. */
             return;
         }
-        this.sentYaw = look[0];
-        this.sentPitch = look[1];
-        event.setRotation(look[0], look[1], 2);
+        /* At most turn-speed a tick from the look the server last got; the engine adds the grid and its acceleration. */
+        float max = this.turnSpeed.getValue() * (0.9F + (float) Math.random() * 0.2F);
+        float[] look = atlas.management.RotationHelper.limitTurn(event.getYaw(), event.getPitch(), want[0], want[1], max);
+        /* Priority 2: above AimAssist (1), below Scaffold (3) and Clutch (7). No move fix, no clicks: you shoot. */
+        atlas.management.RotationHelper.request(this, look[0], look[1], 2, false, false);
     }
 
     /** The look wanted this tick, or null: nothing to aim with, no target, or out of reach. */

@@ -8,6 +8,7 @@ import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.event.types.Priority;
 import atlas.events.*;
+import atlas.management.RotationHelper;
 import atlas.management.RotationState;
 import atlas.mixin.IAccessorEntity;
 import atlas.mixin.IAccessorPlayerControllerMP;
@@ -613,14 +614,41 @@ public class KillAura extends Module {
             this.raycastRetarget(event.getNewYaw(), event.getNewPitch());
         }
         boolean attacked = this.deferredAttack && this.performAttack(event.getNewYaw(), event.getNewPitch());
-        this.finishAttack(event, attacked, this.deferredSwap, this.deferredBlocked);
+        this.finishAttack(new float[]{event.getNewYaw(), event.getNewPitch()}, attacked, this.deferredSwap,
+                this.deferredBlocked);
+    }
+
+    /* 2026-10-31: every look of this module goes through the shared engine (RotationHelper): it turns there as
+       Clutch does (speeding up from rest; speed wander and bow with the Rotations module on), on the mouse grid,
+       with the DuplicateRotPlace guard, turns the keys for MoveFix, and hands the look back once nothing asks.
+       Each mode still works out its own look; the hit goes along the look the engine returns. */
+    private boolean askedThisTick;
+
+    /** The movement yaw as before: LockView's is the camera's (it is the look); MoveFix on: the keys turned in
+        Silent, LiquidBounce, Raven BS and Advanced, the look's in Legit; off: the camera's. */
+    private int lookMove() {
+        int mode = this.rotations.getValue();
+        if (mode == 3) {
+            return RotationHelper.MOVE_LOOK;
+        }
+        if (this.moveFix.getValue() == 0) {
+            return RotationHelper.MOVE_CAMERA;
+        }
+        return mode == 2 || mode == 4 || mode == 5 || mode == 6 ? RotationHelper.MOVE_FIX : RotationHelper.MOVE_LOOK;
+    }
+
+    /** This tick's look through the engine: the one the packet carries, or the asked one when a higher priority has it. */
+    private float[] ask(float yaw, float pitch, float cap) {
+        this.askedThisTick = true;
+        float[] look = RotationHelper.request(this, yaw, pitch, 1, this.lookMove(), false, cap);
+        return look != null ? look : new float[]{yaw, MathHelper.clamp_float(pitch, -90.0F, 90.0F)};
     }
 
     /** The block after the hit, as it was done straight after it before K1. */
-    private void finishAttack(UpdateEvent event, boolean attacked, boolean swap, boolean blocked) {
+    private void finishAttack(float[] look, boolean attacked, boolean swap, boolean blocked) {
         if (swap) {
             if (attacked) {
-                this.interactAttack(event.getNewYaw(), event.getNewPitch());
+                this.interactAttack(look[0], look[1]);
             } else {
                 this.sendUseItem();
             }
@@ -1405,7 +1433,8 @@ public class KillAura extends Module {
                 if (this.wantsToDisable) {
                     /* Switched off with the sent look away from the camera:
                        turn it back first, from the look last sent. */
-                    if (this.smoothBack.getValue() && !event.isRotated() && this.stepBack(event)) {
+                    if (this.smoothBack.getValue() && !event.isRotated() && !RotationHelper.askedByOther(this, 1)
+                            && this.stepBack(event)) {
                         return;
                     }
                     this.wantsToDisable = false;
@@ -1415,7 +1444,8 @@ public class KillAura extends Module {
                     this.closing = false;
                     return;
                 }
-                boolean rotatedBefore = event.isRotated();
+                boolean rotatedBefore = event.isRotated() || RotationHelper.askedByOther(this, 1);
+                this.askedThisTick = false;
                 this.deferredPending = false;
                 if (this.attackDelayMS > 0L) {
                     this.attackDelayMS -= 50L;
@@ -1814,11 +1844,8 @@ public class KillAura extends Module {
                             float[] fixed = RotationUtil.gcd(new float[]{nextRot.yaw, nextRot.pitch}, new float[]{currentRot.yaw, currentRot.pitch});
                             nextRot = new Rotation(fixed[0], fixed[1]);
 
-                            this.serverRotation = nextRot;
-                            event.setRotation(nextRot.yaw, nextRot.pitch, 1);
-                            if (this.moveFix.getValue() != 0) {
-                                event.setPervRotation(nextRot.yaw, 1);
-                            }
+                            float[] look = this.ask(nextRot.yaw, nextRot.pitch, RotationHelper.NO_LIMIT);
+                            this.serverRotation = new Rotation(look[0], look[1]);
                         } else {
                             this.isSmoothBacking = false;
                             this.serverRotation = playerRot;
@@ -1836,12 +1863,10 @@ public class KillAura extends Module {
                             float[] fixed = RotationUtil.gcd(new float[]{nextRot.yaw, nextRot.pitch}, new float[]{currentRot.yaw, currentRot.pitch});
                             nextRot = new Rotation(fixed[0], fixed[1]);
 
+                            float[] look = this.ask(nextRot.yaw, nextRot.pitch, RotationHelper.NO_LIMIT);
+                            nextRot = new Rotation(look[0], look[1]);
                             this.serverRotation = nextRot;
                             updateRenderAimPosition(nextRot);
-                            event.setRotation(nextRot.yaw, nextRot.pitch, 1);
-                            if (this.moveFix.getValue() != 0) {
-                                event.setPervRotation(nextRot.yaw, 1);
-                            }
                             mc.thePlayer.rotationYawHead = nextRot.yaw;
                             mc.thePlayer.renderYawOffset = nextRot.yaw;
                             if (attack) {
@@ -1849,12 +1874,9 @@ public class KillAura extends Module {
                             }
                         } else if (this.rotations.getValue() == 6) {
                             /* Rise's Advanced model, from the rotation last sent. */
-                            float[] next = this.advancedRotation(event.getYaw(), event.getPitch());
+                            float[] wanted = this.advancedRotation(event.getYaw(), event.getPitch());
+                            float[] next = this.ask(wanted[0], wanted[1], RotationHelper.NO_LIMIT);
                             this.serverRotation = new Rotation(next[0], next[1]);
-                            event.setRotation(next[0], next[1], 1);
-                            if (this.moveFix.getValue() != 0) {
-                                event.setPervRotation(next[0], 1);
-                            }
                             mc.thePlayer.rotationYawHead = next[0];
                             mc.thePlayer.renderYawOffset = next[0];
                             if (attack) {
@@ -1873,13 +1895,12 @@ public class KillAura extends Module {
                             float finalPitch = smoothed[1];
                             if (finalPitch > 90) finalPitch = 90;
                             if (finalPitch < -90) finalPitch = -90;
+                            float[] look = this.ask(finalYaw, finalPitch, RotationHelper.NO_LIMIT);
+                            finalYaw = look[0];
+                            finalPitch = look[1];
                             this.serverRotation = new Rotation(finalYaw, finalPitch);
-                            event.setRotation(finalYaw, finalPitch, 1);
                             mc.thePlayer.rotationYawHead = finalYaw;
                             mc.thePlayer.renderYawOffset = finalYaw;
-                            if (this.moveFix.getValue() != 0) {
-                                event.setPervRotation(finalYaw, 1);
-                            }
                             deferred = true;
                         } else if (this.rotations.getValue() >= 1 && this.snapHold(event)) {
                             /* K5 Snap: the click is not due by the time the aim
@@ -1922,15 +1943,14 @@ public class KillAura extends Module {
 
                             if (finalPitch > 90) finalPitch = 90;
                             if (finalPitch < -90) finalPitch = -90;
-                            event.setRotation(finalYaw, finalPitch, 1);
+                            float[] look = this.ask(finalYaw, finalPitch, RotationHelper.NO_LIMIT);
+                            finalYaw = look[0];
+                            finalPitch = look[1];
                             if (this.rotations.getValue() == 3) {
                                 Atlas.rotationManager.setRotation(finalYaw, finalPitch, 1, true);
                             } else {
                                 mc.thePlayer.rotationYawHead = finalYaw;
                                 mc.thePlayer.renderYawOffset = finalYaw;
-                            }
-                            if (this.moveFix.getValue() != 0 || this.rotations.getValue() == 3) {
-                                event.setPervRotation(finalYaw, 1);
                             }
                             deferred = true;
                         } else {
@@ -1948,10 +1968,11 @@ public class KillAura extends Module {
                         this.deferredBlocked = blocked;
                         this.deferredPending = true;
                     } else {
-                        this.finishAttack(event, attacked, swap, blocked);
+                        /* The engine sets the packet after this handler: the look it will carry. */
+                        this.finishAttack(RotationHelper.packetLook(event), attacked, swap, blocked);
                     }
                 }
-                if (!rotatedBefore && event.isRotated()) {
+                if (!rotatedBefore && this.askedThisTick) {
                     /* LockView turns the camera itself: nothing to return. */
                     this.returning = this.rotations.getValue() != 3;
                 } else if (this.returning) {
@@ -2211,14 +2232,10 @@ public class KillAura extends Module {
                 && Math.abs(camPitch - fromPitch) <= 1.0F) {
             return false;
         }
-        float[] next = this.backEngine.step(fromYaw, fromPitch, camYaw, camPitch,
-                Math.max(20.0F, this.aimMaxSpeed.getValue()), this.turnAccel.getValue(), 0, false,
-                java.util.EnumSet.allOf(RotationEngine.Feature.class));
+        /* The shared engine turns it (speeding up from rest, speed wander and bow with the Rotations module on),
+           at most this module's top speed a tick on each axis. */
+        float[] next = this.ask(camYaw, camPitch, Math.max(20.0F, this.aimMaxSpeed.getValue()));
         this.serverRotation = new Rotation(next[0], next[1]);
-        event.setRotation(next[0], next[1], 1);
-        if (this.moveFix.getValue() != 0) {
-            event.setPervRotation(next[0], 1);
-        }
         mc.thePlayer.rotationYawHead = next[0];
         mc.thePlayer.renderYawOffset = next[0];
         return true;
@@ -2420,11 +2437,7 @@ public class KillAura extends Module {
             boolean isLiquidBounce = this.rotations.getValue() == 4;
             boolean isRavenBS = this.rotations.getValue() == 5;
             boolean isAdvanced = this.rotations.getValue() == 6;
-            if (this.moveFix.getValue() != 0 && (isSilent || isLiquidBounce || isRavenBS || isAdvanced)) {
-                if (RotationState.isActived() && RotationState.getPriority() == 1.0F && MoveUtil.isForwardPressed()) {
-                    MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
-                }
-            }
+            /* With MoveFix on in those modes the shared engine turns the keys (RotationHelper.MOVE_FIX, lookMove). */
             if (this.shouldAutoBlock()) {
                 mc.thePlayer.movementInput.jump = false;
             }
@@ -2545,11 +2558,6 @@ public class KillAura extends Module {
 
     @Override
     public void onEnabled() {
-        /* Never both auras at once (KillAura2, 2026-10-14). */
-        Module rewrite = Atlas.moduleManager.modules.get(KillAura2.class);
-        if (rewrite != null && rewrite.isEnabled()) {
-            rewrite.setEnabled(false);
-        }
         if (!this.wantsToDisable) {
             this.target = null;
             this.switchTick = 0;

@@ -1,7 +1,6 @@
 package atlas.mixin;
 
 import atlas.Atlas;
-import atlas.module.modules.AntiObbyTrap;
 import atlas.module.modules.Jesus;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.entity.EntityPlayerSP;
@@ -46,15 +45,7 @@ public abstract class MixinWorld {
         if (Atlas.moduleManager == null) {
             return world.getBlockState(blockPos);
         } else {
-            AntiObbyTrap antiObbyTrap = (AntiObbyTrap) Atlas.moduleManager.modules.get(AntiObbyTrap.class);
-            if (antiObbyTrap.isEnabled() && antiObbyTrap.isInsideBlock(world, blockPos)) {
-                if (antiObbyTrap.setAir.getValue()) {
-                    world.setBlockToAir(blockPos);
-                }
-                return Blocks.air.getDefaultState();
-            } else {
-                return world.getBlockState(blockPos);
-            }
+            return world.getBlockState(blockPos);
         }
     }
 }

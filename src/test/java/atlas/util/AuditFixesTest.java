@@ -42,7 +42,7 @@ public class AuditFixesTest {
 
     @Test
     public void debugPanelListsItsModules() {
-        assertEquals(6, atlas.module.modules.Debug.MANAGED.length);
+        assertEquals(5, atlas.module.modules.Debug.MANAGED.length); // LatencyCrosshair removed 2026-10-31
         assertTrue(java.util.Arrays.asList(atlas.module.modules.Debug.MANAGED)
                 .contains(atlas.module.modules.HitCheck.class));
     }

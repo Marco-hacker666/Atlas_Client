@@ -5,13 +5,12 @@ import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.event.types.Priority;
 import atlas.events.*;
-import atlas.management.RotationState;
+import atlas.management.RotationHelper;
 import atlas.module.Module;
 import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
 import atlas.property.properties.ModeProperty;
-import atlas.util.MoveUtil;
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.init.Blocks;
@@ -157,18 +156,15 @@ public class AutoHeadHitter extends Module {
         computeAimForStage();
         if (targetBlock == null) return;
 
-        float yawDiff   = MathHelper.wrapAngleTo180_float(aimYaw - serverYaw);
-        float pitchDiff = aimPitch - serverPitch;
-        float maxTurn   = speed.getValue().floatValue();
-
-        float steppedYaw   = serverYaw + MathHelper.clamp_float(yawDiff, -maxTurn, maxTurn);
-        float steppedPitch = MathHelper.clamp_float(
-                serverPitch + MathHelper.clamp_float(pitchDiff, -maxTurn, maxTurn), -90.0f, 90.0f);
-
-        event.setRotation(steppedYaw, steppedPitch, ROT_PRIORITY);
-        event.setPervRotation(
-                moveFix.getValue() != 0 ? steppedYaw : mc.thePlayer.rotationYaw,
-                ROT_PRIORITY);
+        /* 2026-10-31: the turn is the shared engine's (RotationHelper): at most speed on each axis a
+           tick, speeding up from rest, whole mouse counts, keys turned for SILENT, the look handed back when
+           this stops asking. It used to step up to speed on each axis at once, from rest, with no grid. The
+           block is placed along the look the engine returns, the one this tick's packet carries. */
+        float[] look = RotationHelper.request(this, aimYaw, aimPitch, ROT_PRIORITY, moveMode(), false,
+                speed.getValue().floatValue());
+        if (look == null) return;
+        float steppedYaw   = look[0];
+        float steppedPitch = look[1];
         if (moveFix.getModeString().equals("REAL")) {
             /* REAL: the camera turns as well, spread over this tick's frames by
                RotationManager; the mouse still works (not forced). */
@@ -219,14 +215,12 @@ public class AutoHeadHitter extends Module {
         targetHitVec = null;
     }
 
-    @EventTarget
-    public void onMove(MoveInputEvent event) {
-        if (!isEnabled()) return;
-        if (moveFix.getValue() == 1
-                && RotationState.isActived()
-                && RotationState.getPriority() == ROT_PRIORITY
-                && MoveUtil.isForwardPressed()) {
-            MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
+    /** move-fix as the engine's movement yaw: NONE the camera's, SILENT the look's with the keys turned, REAL the look's. */
+    private int moveMode() {
+        switch (moveFix.getValue()) {
+            case 0:  return RotationHelper.MOVE_CAMERA;
+            case 1:  return RotationHelper.MOVE_FIX;
+            default: return RotationHelper.MOVE_LOOK;
         }
     }
 

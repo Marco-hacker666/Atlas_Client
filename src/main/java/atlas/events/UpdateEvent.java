@@ -55,6 +55,11 @@ public class UpdateEvent implements Event {
         return this.rotated;
     }
 
+    /** The priority the packet's look was last set at this tick; -1 when nobody set it. */
+    public int getRotationPriority() {
+        return this.lastPriority;
+    }
+
     public void setRotation(float yaw, float pitch, int priority) {
         if (this.type == EventType.PRE && this.lastPriority <= priority) {
             this.newYaw = yaw;

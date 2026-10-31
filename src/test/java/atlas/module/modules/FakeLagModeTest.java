@@ -10,8 +10,9 @@ import static org.junit.Assert.assertTrue;
 public class FakeLagModeTest {
 
     @Test
-    public void theModesAreLatencyDynamicRepel() {
-        assertArrayEquals(new String[]{"LATENCY", "DYNAMIC", "REPEL"}, new FakeLag().mode.visibleModes());
+    public void theModesAreLatencyAndDynamic() {
+        /* 2026-10-31: REPEL retired. */
+        assertArrayEquals(new String[]{"LATENCY", "DYNAMIC"}, new FakeLag().mode.visibleModes());
     }
 
     @Test
@@ -27,7 +28,7 @@ public class FakeLagModeTest {
         assertTrue(fakeLag.mode.parseString("DYNAMIC"));
         assertEquals("DYNAMIC", fakeLag.mode.getModeString());
         assertTrue(fakeLag.mode.parseString("REPEL"));
-        assertEquals("REPEL", fakeLag.mode.getModeString());
+        assertEquals("DYNAMIC", fakeLag.mode.getModeString());
         assertTrue(fakeLag.mode.parseString("LATENCY"));
         assertEquals("LATENCY", fakeLag.mode.getModeString());
     }

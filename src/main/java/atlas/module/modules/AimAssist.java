@@ -98,7 +98,13 @@ public class AimAssist extends Module {
        looking. Without a ceiling an assist that nudges a little every tick
        accumulates into a full silent killaura pointing somewhere the player
        never looked, which is both a different feature and a far louder one. */
-    public final FloatProperty maxOffset = new FloatProperty("max-offset", 30.0F, 1.0F, 180.0F,
+    public final FloatProperty maxOffset = new FloatProperty("max-offset", 180.0F, 1.0F, 180.0F,
+            () -> smooth.getAsBoolean() && this.mode.getValue() == 1);
+    /* 2026-10-31 (owner: "silent still does not work, look at Raven bS 16"): the silent turn is Raven bS's --
+       from the look the server has, (speed / 30)^2 * 180 degrees a tick at most, randomised, slower near the target. */
+    public final IntProperty silentSpeed = new IntProperty("silent-speed", 10, 1, 30,
+            () -> smooth.getAsBoolean() && this.mode.getValue() == 1);
+    public final PercentProperty silentRandomization = new PercentProperty("silent-randomization", 50,
             () -> smooth.getAsBoolean() && this.mode.getValue() == 1);
 
     /* SILENT makes the silent aim the yaw movement is computed from too, and
@@ -116,22 +122,14 @@ public class AimAssist extends Module {
      * camera's crosshair, not the look the server got; the angle was not on the mouse grid; and with no target it
      * jumped back to the camera in one tick (up to max-offset).
      */
-    private float offsetYaw;
-    private float offsetPitch;
-    /** What the movement packet carried, on the mouse grid. */
-    private float silentYaw;
-    private float silentPitch;
-    private boolean silentActive;
-    private boolean silentQueued;
-    /** With no target the offset shrinks by this share a tick, and stops below SETTLED degrees. */
-    private static final float EASE_BACK = 0.35F;
-    private static final float SETTLED = 0.5F;
-
-    /* The yaw handed to setPervRotation this tick; NaN on ticks this module
-       did not rotate. */
-    private float moveYaw = Float.NaN;
+    /* 2026-10-31: SILENT asks the shared engine (management/RotationHelper) for its look; sending it, the
+       mouse grid, the move fix, the clicks along it and the way back to the camera are the engine's. */
 
     private boolean isValidTarget(EntityPlayer entityPlayer) {
+        return this.isValidTarget(entityPlayer, true);
+    }
+
+    private boolean isValidTarget(EntityPlayer entityPlayer, boolean cameraFov) {
         if (entityPlayer != mc.thePlayer && entityPlayer != mc.thePlayer.ridingEntity) {
             if (entityPlayer == mc.getRenderViewEntity() || entityPlayer == mc.getRenderViewEntity().ridingEntity) {
                 return false;
@@ -139,7 +137,7 @@ public class AimAssist extends Module {
                 return false;
             } else if (RotationUtil.distanceToEntity(entityPlayer) > (double) this.range.getValue()) {
                 return false;
-            } else if (RotationUtil.angleToEntity(entityPlayer) > (float) this.fov.getValue()) {
+            } else if (cameraFov && RotationUtil.angleToEntity(entityPlayer) > (float) this.fov.getValue()) {
                 return false;
             } else if (RotationUtil.rayTrace(entityPlayer) != null) {
                 return false;
@@ -165,48 +163,119 @@ public class AimAssist extends Module {
 
     @Override
     public void onEnabled() {
-        this.resetSilent();
         this.framedAim.reset();
     }
 
     @Override
     public void onDisabled() {
         this.humanizer.reset();
-        this.resetSilent();
         this.framedAim.reset();
     }
 
-    private void resetSilent() {
-        this.silentActive = false;
-        this.silentQueued = false;
-        this.offsetYaw = 0.0F;
-        this.offsetPitch = 0.0F;
-    }
-
-    private boolean silentLook() {
-        return this.style.getValue() == 0 && this.mode.getValue() == 1 && (this.silentQueued
-                || Math.abs(this.offsetYaw) >= SETTLED || Math.abs(this.offsetPitch) >= SETTLED);
+    /** At the start of the tick, so this tick's clicks follow the silent look (the engine does that). */
+    @EventTarget
+    public void onTickPre(TickEvent event) {
+        if (!this.isEnabled() || event.getType() != EventType.PRE || mc.thePlayer == null || mc.theWorld == null) {
+            return;
+        }
+        this.silentAim();
     }
 
     /**
-     * Clicks go along the silent look: the look this tick's movement packet will carry (the camera plus the offset,
-     * the camera does not turn inside runTick), so what is hit is what the server sees aimed at. Only when the camera
-     * or the silent look is on a player -- otherwise the camera's crosshair stays, for blocks. An aura's look wins.
+     * SILENT, the way Raven bS 16 does it (2026-10-31). Decided once at the start of the tick, before the clicks
+     * and before the movement, so this tick's click, movement and movement packet all use the same look (it used to
+     * be decided at the end of the tick before). The turn starts from the look the server has, not the camera; the
+     * target is chosen within fov of that look; and there is no 30-degree leash any more (max-offset 180 by
+     * default): with one, a target farther off than that was never reached. A running aura with a target wins.
      */
-    @EventTarget
-    public void onTickPre(TickEvent event) {
-        if (!this.isEnabled() || event.getType() != EventType.PRE || mc.currentScreen != null || !this.silentLook()
-                || atlas.util.VanillaInput.isFighting()) {
+    private void silentAim() {
+        if (this.style.getValue() != 0 || this.mode.getValue() != 1) {
             return;
         }
-        float yaw = mc.thePlayer.rotationYaw + this.offsetYaw;
-        float pitch = MathHelper.clamp_float(mc.thePlayer.rotationPitch + this.offsetPitch, -90.0F, 90.0F);
-        net.minecraft.util.MovingObjectPosition over = atlas.util.VanillaInput.pick(yaw, pitch);
-        boolean silentOnEntity = over != null && over.typeOfHit == MovingObjectType.ENTITY;
-        boolean cameraOnEntity = mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectType.ENTITY;
-        if (silentOnEntity || cameraOnEntity) {
-            atlas.util.VanillaInput.fighting(over);
+        if (mc.currentScreen != null || atlas.util.Auras.target() != null) {
+            return;
         }
+        if (this.weaponOnly.getValue() && !ItemUtil.hasRawUnbreakingEnchant()
+                && !(this.allowTools.getValue() && ItemUtil.isHoldingTool())) {
+            return;
+        }
+        if (!PlayerUtil.isAttacking() && this.timer.hasTimeElapsed(350L)) {
+            return;
+        }
+        float cameraYaw = mc.thePlayer.rotationYaw;
+        float cameraPitch = mc.thePlayer.rotationPitch;
+        /* From the look the server has (Raven: serverRotations). */
+        float baseYaw = cameraYaw + MathHelper.wrapAngleTo180_float(atlas.management.RotationHelper.serverYaw() - cameraYaw);
+        float basePitch = MathHelper.clamp_float(atlas.management.RotationHelper.serverPitch(), -90.0F, 90.0F);
+        EntityPlayer target = null;
+        double best = Double.MAX_VALUE;
+        boolean bestInReach = false;
+        for (EntityPlayer player : mc.theWorld.playerEntities) {
+            if (!this.isValidTarget(player, false)) {
+                continue;
+            }
+            double yawTo = Math.toDegrees(Math.atan2(player.posZ - mc.thePlayer.posZ, player.posX - mc.thePlayer.posX)) - 90.0;
+            if (Math.abs(MathHelper.wrapAngleTo180_double(yawTo - baseYaw)) > this.fov.getValue()) {
+                continue;
+            }
+            boolean inReach = this.isInReach(player);
+            double distance = RotationUtil.distanceToEntity(player);
+            if (inReach && !bestInReach || inReach == bestInReach && distance < best) {
+                target = player;
+                best = distance;
+                bestInReach = inReach;
+            }
+        }
+        if (target == null || !this.humanizer.reacted(target.getEntityId(), System.currentTimeMillis())) {
+            return;
+        }
+        /* Raven's aim point: the middle of the box at eye height, or the eyes' own height from inside it. */
+        float border = target.getCollisionBorderSize();
+        AxisAlignedBB box = target.getEntityBoundingBox().expand(border, border, border);
+        Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
+        double px = (box.minX + box.maxX) / 2.0;
+        double pz = (box.minZ + box.maxZ) / 2.0;
+        double py = box.isVecInside(eyes) ? eyes.yCoord : target.posY + target.getEyeHeight();
+        double dx = px - eyes.xCoord;
+        double dy = py - eyes.yCoord;
+        double dz = pz - eyes.zCoord;
+        double horizontal = Math.sqrt(dx * dx + dz * dz);
+        if (horizontal < 1.0E-4) {
+            return;
+        }
+        float wantYaw = baseYaw + MathHelper.wrapAngleTo180_float((float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0) - baseYaw);
+        float wantPitch = (float) -Math.toDegrees(Math.atan2(dy, horizontal));
+        float[] next = ravenSmooth(baseYaw, basePitch, wantYaw, wantPitch, this.silentSpeed.getValue(),
+                this.silentRandomization.getValue());
+        if (Float.isNaN(next[0]) || Float.isNaN(next[1])) {
+            return;
+        }
+        float yaw = cameraYaw + limit(MathHelper.wrapAngleTo180_float(next[0] - cameraYaw));
+        float pitch = cameraPitch + limit(MathHelper.clamp_float(next[1], -90.0F, 90.0F) - cameraPitch);
+        /* Priority 1: below Scaffold (3) and Clutch (7), which need the look to place. */
+        atlas.management.RotationHelper.request(this, yaw, pitch, 1, this.moveFix.getValue() != 0, true);
+    }
+
+    /** Raven bS RotationUtils.smoothRotation: speed 1-30 (30 = there at once), randomization 0-100. */
+    static float[] ravenSmooth(float baseYaw, float basePitch, float targetYaw, float targetPitch, int speed,
+                               int randomization) {
+        if (speed >= 30) {
+            return new float[]{targetYaw, MathHelper.clamp_float(targetPitch, -90.0F, 90.0F)};
+        }
+        float deltaYaw = MathHelper.wrapAngleTo180_float(targetYaw - baseYaw);
+        float deltaPitch = targetPitch - basePitch;
+        float magnitude = (float) Math.sqrt(deltaYaw * deltaYaw + deltaPitch * deltaPitch);
+        if (speed <= 0 || magnitude < 0.001F) {
+            return speed <= 0 ? new float[]{baseYaw, basePitch} : new float[]{targetYaw, targetPitch};
+        }
+        float t = speed / 30.0F;
+        float step = t * t * 180.0F;
+        float range = 0.6F * (randomization / 100.0F);
+        step *= range <= 0.001F ? 1.0F : 1.0F - range / 2.0F + (float) Math.random() * range;
+        float proximity = (float) Math.pow(Math.min(1.0F, magnitude / 180.0F), 0.7);
+        step *= Math.max(0.8F, 1.0F - randomization / 100.0F * (1.0F - proximity));
+        float scale = Math.min(step, magnitude) / magnitude;
+        return new float[]{baseYaw + deltaYaw * scale, MathHelper.clamp_float(basePitch + deltaPitch * scale, -90.0F, 90.0F)};
     }
 
     /** Regular / Linear / Lock On: the view turns every frame. */
@@ -236,7 +305,8 @@ public class AimAssist extends Module {
             this.framedAim.tick();
             return;
         }
-        if (this.isEnabled() && event.getType() == EventType.POST && mc.currentScreen == null) {
+        if (this.isEnabled() && event.getType() == EventType.POST && mc.currentScreen == null
+                && this.mode.getValue() != 1) {
             if (!(Boolean) this.weaponOnly.getValue()
                     || ItemUtil.hasRawUnbreakingEnchant()
                     || this.allowTools.getValue() && ItemUtil.isHoldingTool()) {
@@ -271,10 +341,8 @@ public class AimAssist extends Module {
                                             (player.posZ - player.lastTickPosZ) * ahead);
                                 }
                                 /* The look this turns from: the camera, or in SILENT the silent look (camera + offset). */
-                                boolean silent = this.mode.getValue() == 1;
-                                float curYaw = mc.thePlayer.rotationYaw + (silent ? this.offsetYaw : 0.0F);
-                                float curPitch = MathHelper.clamp_float(
-                                        mc.thePlayer.rotationPitch + (silent ? this.offsetPitch : 0.0F), -90.0F, 90.0F);
+                                float curYaw = mc.thePlayer.rotationYaw;
+                                float curPitch = mc.thePlayer.rotationPitch;
                                 float[] rotation;
                                 if (this.multipoint.getValue()) {
                                     Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
@@ -328,15 +396,7 @@ public class AimAssist extends Module {
                                         + MathHelper.wrapAngleTo180_float(rotation[0] + humanYaw - curYaw) * yawStep;
                                 float nextPitch = curPitch + (rotation[1] + humanPitch - curPitch) * pitchStep;
 
-                                if (silent) {
-                                    /* Kept as an offset, so the next tick turns on from here and the mouse carries it. */
-                                    this.offsetYaw = limit(MathHelper.wrapAngleTo180_float(nextYaw - mc.thePlayer.rotationYaw));
-                                    this.offsetPitch = limit(MathHelper.clamp_float(nextPitch, -90.0F, 90.0F)
-                                            - mc.thePlayer.rotationPitch);
-                                    this.silentQueued = true;
-                                } else {
-                                    Atlas.rotationManager.setRotation(nextYaw, nextPitch, 0, false);
-                                }
+                                Atlas.rotationManager.setRotation(nextYaw, nextPitch, 0, false);
                             }
                         }
                     }
@@ -345,72 +405,7 @@ public class AimAssist extends Module {
         }
     }
 
-    /**
-     * Writes the silent aim into the movement packet. The camera is untouched,
-     * so this is the only place the server ever sees the adjusted angle.
-     *
-     * Priority 1 keeps this below Scaffold (3) and Clutch (7): those are
-     * placing blocks and need the rotation they asked for, while an aim assist
-     * losing a tick to them costs nothing.
-     */
-    @EventTarget
-    public void onUpdate(UpdateEvent event) {
-        if (!this.isEnabled() || event.getType() != EventType.PRE) {
-            return;
-        }
-        this.moveYaw = Float.NaN;
-        if (this.mode.getValue() != 1 || this.style.getValue() != 0) {
-            this.resetSilent();
-            return;
-        }
-        if (!this.silentQueued) {
-            /* Nothing aimed at this tick: back to the camera over a few ticks (a jump of up to max-offset in one
-               tick is a snap), then the real rotation goes through again. */
-            this.offsetYaw *= 1.0F - EASE_BACK;
-            this.offsetPitch *= 1.0F - EASE_BACK;
-            if (Math.abs(this.offsetYaw) < SETTLED && Math.abs(this.offsetPitch) < SETTLED) {
-                this.offsetYaw = 0.0F;
-                this.offsetPitch = 0.0F;
-                this.silentActive = false;
-                return;
-            }
-        }
-        this.silentQueued = false;
-        this.silentActive = true;
-        /* On the mouse grid, from the look the server last received. */
-        float[] look = RotationUtil.gcd(mc.thePlayer.rotationYaw + this.offsetYaw,
-                MathHelper.clamp_float(mc.thePlayer.rotationPitch + this.offsetPitch, -90.0F, 90.0F),
-                event.getYaw(), event.getPitch());
-        this.silentYaw = look[0];
-        this.silentPitch = look[1];
-        event.setRotation(this.silentYaw, this.silentPitch, 1);
-        // Same priority, so whichever module wins the packet also sets the
-        // yaw the player moves by.
-        this.moveYaw = this.moveFix.getValue() != 0 ? this.silentYaw : mc.thePlayer.rotationYaw;
-        event.setPervRotation(this.moveYaw, 1);
-    }
 
-    /**
-     * Turns the movement keys toward the silent yaw so the player keeps going
-     * where the camera points.
-     *
-     * Only for this module's own rotation: the yaw in force must be the one
-     * set above, not one another module at priority 1 won with -- Speed moves
-     * by its own yaw with the keys as pressed, on purpose, and KillAura fixes
-     * its own. fixStrafe reads the raw keys, so running after MoveFix is
-     * harmless.
-     */
-    @EventTarget
-    public void onMoveInput(MoveInputEvent event) {
-        if (this.isEnabled()
-                && this.moveFix.getValue() == 1
-                && RotationState.isActived()
-                && RotationState.getPriority() == 1
-                && RotationState.getSmoothedYaw() == this.moveYaw
-                && MoveUtil.isForwardPressed()) {
-            MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
-        }
-    }
 
     @Override
     public String[] getSuffix() {
@@ -429,6 +424,5 @@ public class AimAssist extends Module {
     @atlas.event.EventTarget(whenDisabled = true)
     public void onWorldDropEntities(atlas.events.LoadWorldEvent event) {
         this.framedAim.reset();
-        this.resetSilent();
     }
 }

@@ -25,9 +25,11 @@ public class BlockHit extends Module {
        AutoBlock the way Slinky does it"); the module is shown as AutoBlock.
        Saved configs keep the mode they name. */
     private final ModeProperty mode = new ModeProperty("Mode", 6,
-            new String[]{"Helper", "Auto", "Lag", "Swing", "Predict", "Manual", "Slinky", "Full", "Yuri"})
+            new String[]{"Helper", "Auto", "Lag", "Swing", "Predict", "Manual", "Slinky", "Full", "Yuri", "Raven"})
             .hide("Swing")
-            .alias("Rhythm", "Predict");
+            /* 2026-10-31 (owner's consolidation): Auto, Lag, Swing and Predict retired; a config naming one gets Full. */
+            .retire("Full", "Auto", "Lag", "Swing", "Predict")
+            .alias("Rhythm", "Full");
     /* ---- Slinky (Slinky's Auto Block, rebuilt here from what it does) ----
        While the attack key is held and an enemy is within block-range, the
        use key goes down; after max-hold-ticks it comes up for a tick, which
@@ -64,6 +66,27 @@ public class BlockHit extends Module {
             () -> slinky.getAsBoolean() && this.sLagChance.getValue() > 0);
     private final BooleanProperty sLagReblock = new BooleanProperty("lag-reblock", false,
             () -> slinky.getAsBoolean() && this.sLagChance.getValue() > 0);
+    /* ---- Raven (2026-10-31, owner: "make me Raven's auto block"): Raven bS's Autoblock with its settings and
+       defaults, see AutoBlockRaven. Right click held: block-hits while attacking an enemy in range, a plain block
+       otherwise. Defaults for the owner (Pika/Polar, ~220 ms ping), not Raven's: range 3.5 (Raven 4.0), max-hold
+       100 ms (150: a hit every 3 ticks, not 4), max-hurt-time 300 ms (200: up a tick earlier for the ping), lag-chance
+       0 (100: every outgoing packet held is a pattern Polar can see; raise it to try). */
+    private final java.util.function.BooleanSupplier ravenMode = () -> this.modeIndex() == 9;
+    final FloatProperty ravenRange = new FloatProperty("raven-range", 3.5F, 2.0F, 6.0F, ravenMode);
+    final IntProperty ravenMaxHold = new IntProperty("raven-max-hold-ms", 100, 50, 500, ravenMode);
+    final BooleanProperty ravenDamaged = new BooleanProperty("raven-damaged", false, ravenMode);
+    final IntProperty ravenMaxHurt = new IntProperty("raven-max-hurt-time-ms", 300, 50, 500,
+            () -> ravenMode.getAsBoolean() && this.ravenDamaged.getValue());
+    final BooleanProperty ravenIgnoreTeammates = new BooleanProperty("raven-ignore-teammates", true, ravenMode);
+    final PercentProperty ravenLagChance = new PercentProperty("raven-lag-chance", 0, ravenMode);
+    final IntProperty ravenLagMax = new IntProperty("raven-lag-max-ms", 200, 50, 500,
+            () -> ravenMode.getAsBoolean() && this.ravenLagChance.getValue() > 0);
+    final BooleanProperty ravenNoDelayAttacks = new BooleanProperty("raven-prevent-delaying-attacks", true,
+            () -> ravenMode.getAsBoolean() && this.ravenLagChance.getValue() > 0);
+    final BooleanProperty ravenBlockAgain = new BooleanProperty("raven-block-again-immediately", true,
+            () -> ravenMode.getAsBoolean() && this.ravenLagChance.getValue() > 0);
+    final BooleanProperty ravenAnimation = new BooleanProperty("raven-block-animation", true, ravenMode);
+    private final AutoBlockRaven raven = new AutoBlockRaven(this);
     /* ---- Full (2026-10-21): sword up whenever an enemy is in range, every hit swapped in within
        one tick (release, hit, block again), so the server has it up for every hit taken. See AutoBlockFull. */
     private final java.util.function.BooleanSupplier full = () -> this.modeIndex() == 7;
@@ -317,6 +340,7 @@ public class BlockHit extends Module {
         this.intervalCount = 0;
         this.lastDamageAt = 0L;
         slinkyReset(true);
+        this.raven.reset(true);
         this.fullBlock.reset();
     }
 
@@ -451,6 +475,11 @@ public class BlockHit extends Module {
                 slinkyTick();
             } else if (this.sActive) {
                 slinkyReset(true);
+            }
+            if (this.modeIndex() == 9) {
+                this.raven.tick();
+            } else if (this.raven.active()) {
+                this.raven.reset(true);
             }
         }
     }
@@ -702,8 +731,17 @@ public class BlockHit extends Module {
     /** While held packets wait, a right click must not raise the sword on its own. */
     @EventTarget
     public void onSlinkyRightClick(atlas.events.RightClickMouseEvent event) {
-        if (this.isRunning() && this.sLagging && mc.currentScreen == null && ItemUtil.isHoldingSword()) {
+        if (this.isRunning() && (this.sLagging || this.raven.lagging()) && mc.currentScreen == null
+                && ItemUtil.isHoldingSword()) {
             event.setCancelled(true);
+        }
+    }
+
+    /** Raven: an attack lets the held packets go first, and the sword goes straight back up. */
+    @EventTarget(atlas.event.types.Priority.HIGHEST)
+    public void onRavenPacket(atlas.events.PacketEvent event) {
+        if (this.modeIndex() == 9 || this.raven.lagging()) {
+            this.raven.onSend(event);
         }
     }
 

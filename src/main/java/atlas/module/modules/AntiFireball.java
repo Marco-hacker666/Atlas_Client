@@ -5,7 +5,7 @@ import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.event.types.Priority;
 import atlas.events.*;
-import atlas.management.RotationState;
+import atlas.management.RotationHelper;
 import atlas.module.Module;
 import atlas.util.*;
 import atlas.property.properties.*;
@@ -16,6 +16,7 @@ import net.minecraft.entity.projectile.EntityFireball;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C02PacketUseEntity.Action;
 import net.minecraft.network.play.client.C0APacketAnimation;
+import net.minecraft.util.AxisAlignedBB;
 
 import java.awt.*;
 import java.util.ArrayList;
@@ -85,17 +86,24 @@ public class AntiFireball extends Module {
         if (this.isEnabled() && event.getType() == EventType.PRE) {
             EntityFireball fireball = this.target;
             if (TeamUtil.isEntityLoaded(fireball)) {
-                float[] rotations = RotationUtil.getRotationsToBox(this.target.getEntityBoundingBox(), event.getYaw(), event.getPitch(), 180.0F, 0.0F);
-                if (this.rotations.getValue()
+                /* 2026-10-31: the look goes through the shared engine (RotationHelper), which turns it as a hand
+                   does -- it used to jump onto the fireball in one tick -- and hands it back when this stops
+                   asking. With rotations on, the hit waits until the look the engine returns, the one this
+                   tick's packet carries, is on the fireball; before, it went out along whatever look the server
+                   had. */
+                boolean aim = this.rotations.getValue()
                         && !ItemUtil.isHoldingNonEmpty()
                         && !ItemUtil.isUsingBow()
-                        && !ItemUtil.hasHoldItem()) {
-                    event.setRotation(rotations[0], rotations[1], 0);
-                    event.setPervRotation(this.moveFix.getValue() != 0 ? rotations[0] : mc.thePlayer.rotationYaw, 0);
-                    if (this.moveFix.getModeString().equals("REAL")) {
-                        /* REAL: the camera turns as well, spread over this tick's frames by
-                           RotationManager; the mouse still works (not forced). */
-                        Atlas.rotationManager.setRotation(rotations[0], rotations[1], 0, false);
+                        && !ItemUtil.hasHoldItem();
+                float[] look = null;
+                if (aim) {
+                    float[] want = RotationUtil.getRotationsToBox(fireball.getEntityBoundingBox(),
+                            RotationHelper.serverYaw(), RotationHelper.serverPitch(), 180.0F, 0.0F);
+                    look = RotationHelper.request(this, want[0], want[1], 0, this.moveMode(), false, RotationHelper.NO_LIMIT);
+                    if (look != null && this.moveFix.getModeString().equals("REAL")) {
+                        /* REAL: the camera turns as well, along the look the server gets, spread over this
+                           tick's frames by RotationManager; the mouse still works (not forced). */
+                        Atlas.rotationManager.setRotation(look[0], look[1], 0, false);
                     }
                 }
                 /* Only in reach and only while it is still coming this way. The
@@ -104,14 +112,34 @@ public class AntiFireball extends Module {
                    target and was swung at and attacked every tick -- twenty a
                    second -- until it left. */
                 if (!Atlas.playerStateManager.attacking && !Atlas.playerStateManager.digging && !Atlas.playerStateManager.placing
-                        && RotationUtil.distanceToEntity(this.target) <= (double) this.range.getValue().floatValue()
-                        && approaching(this.target)) {
+                        && RotationUtil.distanceToEntity(fireball) <= (double) this.range.getValue().floatValue()
+                        && approaching(fireball)
+                        && (!aim || look != null && this.lookHits(look, fireball))) {
                     this.doAttackAnimation();
-                    PacketUtil.sendPacket(new C02PacketUseEntity(this.target, Action.ATTACK));
-                    PlayerUtil.attackEntity(this.target);
+                    PacketUtil.sendPacket(new C02PacketUseEntity(fireball, Action.ATTACK));
+                    PlayerUtil.attackEntity(fireball);
                 }
             }
         }
+    }
+
+    /** move-fix as the engine's movement yaw: NONE the camera's, SILENT the look's with the keys turned, STRICT and REAL the look's. */
+    private int moveMode() {
+        switch (this.moveFix.getValue()) {
+            case 0:
+                return RotationHelper.MOVE_CAMERA;
+            case 1:
+                return RotationHelper.MOVE_FIX;
+            default:
+                return RotationHelper.MOVE_LOOK;
+        }
+    }
+
+    /** The look's line meets the fireball's hit box (its collision border included) within reach. */
+    private boolean lookHits(float[] look, EntityFireball fireball) {
+        float border = fireball.getCollisionBorderSize();
+        AxisAlignedBB box = fireball.getEntityBoundingBox().expand(border, border, border);
+        return RotationUtil.rayTrace(box, look[0], look[1], this.range.getValue() + 1.0) != null;
     }
 
     /** Same sign test the render colour uses: velocity towards the player is positive. */
@@ -120,18 +148,6 @@ public class AntiFireball extends Module {
                 + (fireball.posY - fireball.lastTickPosY) * (mc.thePlayer.posY - fireball.posY)
                 + (fireball.posZ - fireball.lastTickPosZ) * (mc.thePlayer.posZ - fireball.posZ);
         return dot > 0.0;
-    }
-
-    @EventTarget
-    public void onMove(MoveInputEvent event) {
-        if (this.isEnabled()) {
-            if (this.moveFix.getValue() == 1
-                    && RotationState.isActived()
-                    && RotationState.getPriority() == 0.0F
-                    && MoveUtil.isForwardPressed()) {
-                MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
-            }
-        }
     }
 
     @EventTarget

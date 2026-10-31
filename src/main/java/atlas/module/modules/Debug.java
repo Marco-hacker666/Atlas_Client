@@ -41,7 +41,6 @@ public class Debug extends Module {
     /** One line per fight: hits, combos, knockback each way, the outcome. */
     public final BooleanProperty fights = new BooleanProperty("fights", true);
     /** Where the server still thinks you are aiming. */
-    public final BooleanProperty aimLag = new BooleanProperty("aim-lag", false);
     /** Scales latency-sensitive settings down as the connection degrades. */
     public final BooleanProperty governor = new BooleanProperty("governor", false);
 
@@ -81,14 +80,13 @@ public class Debug extends Module {
         set(FlagDetector.class, false);
         set(HitCheck.class, false);
         set(FightLog.class, false);
-        set(LatencyCrosshair.class, false);
         set(LatencyGovernor.class, false);
         set(FlagResponder.class, false);
     }
 
     /** The modules this panel switches; while it is hidden, they are too (HUD's list). */
     public static final Class<?>[] MANAGED = {FlagDetector.class, HitCheck.class, FightLog.class,
-            LatencyCrosshair.class, LatencyGovernor.class, FlagResponder.class};
+            LatencyGovernor.class, FlagResponder.class};
 
     public static boolean hidesWithPanel(Module module) {
         Module panel = Atlas.moduleManager == null ? null : Atlas.moduleManager.modules.get(Debug.class);
@@ -131,7 +129,6 @@ public class Debug extends Module {
         set(FlagDetector.class, this.flags.getValue());
         set(HitCheck.class, this.hits.getValue());
         set(FightLog.class, this.fights.getValue());
-        set(LatencyCrosshair.class, this.aimLag.getValue());
         set(LatencyGovernor.class, this.governor.getValue());
 
         /* Nothing to respond to without the detector that produces the
@@ -163,7 +160,6 @@ public class Debug extends Module {
         StringBuilder sb = new StringBuilder("&7[&bDebug&7] ");
         sb.append(this.flags.getValue() ? "&aflags " : "&8flags ");
         sb.append(this.hits.getValue() ? "&ahits " : "&8hits ");
-        sb.append(this.aimLag.getValue() ? "&aaim-lag " : "&8aim-lag ");
         sb.append(this.governor.getValue() ? "&agovernor " : "&8governor ");
         sb.append(this.autoDisable.getValue() ? "&aauto-disable" : "&8auto-disable");
         ChatUtil.sendFormatted(sb.toString());
@@ -178,15 +174,12 @@ public class Debug extends Module {
         if (this.hits.getValue()) {
             on++;
         }
-        if (this.aimLag.getValue()) {
-            on++;
-        }
         if (this.governor.getValue()) {
             on++;
         }
         if (this.autoDisable.getValue()) {
             on++;
         }
-        return new String[]{on + "/5"};
+        return new String[]{on + "/4"};
     }
 }

@@ -52,8 +52,6 @@ AimAssist target-mode
 AimAssist teams
 AimAssist vertical-speed
 AimAssist weapons-only
-AimBacktrack #name AimBacktrack
-AimBacktrack ticks
 Ambience #name Ambience
 Ambience Time
 Ambience Time Speed
@@ -123,8 +121,6 @@ AntiFireball range
 AntiFireball rotations
 AntiFireball show-target
 AntiFireball swing
-AntiObbyTrap #name AntiObbyTrap
-AntiObbyTrap set-air
 AntiObfuscate #name AntiObfuscate
 AntiVoid #name AntiVoid
 AntiVoid combat-range
@@ -321,15 +317,6 @@ AutoPot strength
 AutoReconnect #name AutoReconnect
 AutoReconnect delay
 AutoReconnect max-attempts
-AutoRecraft #name AutoRecraft
-AutoRecraft click-max-delay
-AutoRecraft click-min-delay
-AutoRecraft manual-bind
-AutoRecraft mode
-AutoRecraft recipe
-AutoRecraft start-max-delay
-AutoRecraft start-min-delay
-AutoRecraft start-with
 AutoRequeue #name AutoRequeue
 AutoRequeue alert
 AutoRequeue delay
@@ -746,24 +733,6 @@ Clutch switch-back
 Clutch trigger
 Clutch turn-random
 Clutch void-only
-Criticals #name Criticals
-Criticals custom-y
-Criticals delay
-Criticals fall-distance
-Criticals ground-spoof
-Criticals hurt-time
-Criticals hypixel-autojump
-Criticals hypixel-boost
-Criticals lag-chance
-Criticals lag-max-ms
-Criticals lag-stop-hurt
-Criticals matrix-every
-Criticals matrix-offset
-Criticals mode
-Criticals timer-chance
-Criticals timer-max-ms
-Criticals timer-speed
-Criticals timer-stop-hurt
 DamageTags #name DamageTags
 DamageTags Background
 DamageTags Lifetime
@@ -771,7 +740,6 @@ DamageTags Merge-Distance
 DamageTags Scale
 DamageTags Shadow
 Debug #name Debug
-Debug aim-lag
 Debug auto-disable
 Debug auto-disable-dry-run
 Debug chat
@@ -865,16 +833,6 @@ ESP health-bar
 ESP mode
 ESP players
 ESP self
-ESPDetector #name ESPDetector
-ESPDetector angle
-ESPDetector chat
-ESPDetector cooldown
-ESPDetector min-distance
-ESPDetector movement
-ESPDetector range
-ESPDetector required
-ESPDetector sound
-ESPDetector window
 Eagle blocks-only
 Eagle direction-check
 Eagle jump-check
@@ -1343,43 +1301,6 @@ KillAura auto-block
 KillAura simulate-clicks
 KillAura yuri-hurt-ticks
 KillAura yuri-only-when-hurt
-KillAura2 #name KillAura2
-KillAura2 aim-drift
-KillAura2 animals
-KillAura2 attack-range
-KillAura2 auto-block
-KillAura2 block-log
-KillAura2 block-min-ticks
-KillAura2 block-release
-KillAura2 block-stop-sprint
-KillAura2 bot-check
-KillAura2 flick-overshoot
-KillAura2 fov
-KillAura2 ignored-backoff
-KillAura2 inventory-check
-KillAura2 lazy
-KillAura2 legit-threat
-KillAura2 legit-tolerance
-KillAura2 max-cps
-KillAura2 max-per-tick
-KillAura2 max-turn
-KillAura2 min-cps
-KillAura2 min-turn
-KillAura2 mobs
-KillAura2 mode
-KillAura2 move-fix
-KillAura2 players
-KillAura2 raycast
-KillAura2 require-press
-KillAura2 scan-extra
-KillAura2 short-stop
-KillAura2 sort
-KillAura2 swing-range
-KillAura2 switch-delay
-KillAura2 teams
-KillAura2 through-walls
-KillAura2 turn-accel
-KillAura2 weapons-only
 KillEffect #name KillEffect
 KillEffect bolt
 KillEffect particles
@@ -1441,13 +1362,6 @@ LagRange release-on-sprint-reset
 LagRange show-position
 LagRange teams
 LagRange weapons-only
-LatencyCrosshair #name LatencyCrosshair
-LatencyCrosshair extra-ticks
-LatencyCrosshair fade-with-distance
-LatencyCrosshair min-offset
-LatencyCrosshair show-degrees
-LatencyCrosshair size
-LatencyCrosshair thickness
 LatencyGovernor #name LatencyGovernor
 LatencyGovernor chat
 LatencyGovernor cut-send-lag
@@ -1630,9 +1544,6 @@ NoSlow Sword Motion
 NoSlow Sword Sprint
 NoSlow Vulcan Interval
 NoSlow Vulcan Packet
-NoWeb #name NoWeb
-NoWeb mode
-NoWeb only-moving
 Notifications #name Notifications
 Notifications max-notifications
 Notifications offset-x
@@ -1653,10 +1564,6 @@ Panic #name Panic
 Panic drop-held-packets
 Panic keep-also
 Panic report
-Parkour #name Parkour
-Parkour edge-distance
-Parkour mode
-Parkour only-sprinting
 PearlSaver #name PearlSaver
 PearlSaver min-fall
 PearlSaver reach
@@ -1675,15 +1582,6 @@ PingSpoof keep-alive
 PingSpoof pulse-size
 PingSpoof release
 PingSpoof transactions
-PlainAura #name PlainAura
-PlainAura DeadZone
-PlainAura FOV
-PlainAura MaxCPS
-PlainAura MinCPS
-PlainAura RequirePress
-PlainAura TurnSpeed
-PlainAura WeaponOnly
-PlainAura move-fix
 PlayTracker #name PlayTracker
 PlayTracker background-alpha
 PlayTracker mitigation-always
@@ -1829,40 +1727,6 @@ ServerLag Lag ms
 ServerProfiles #name ServerProfiles
 ServerProfiles chat
 ServerProfiles profiles
-SkyWars #name SkyWars
-SkyWars announce-killer
-SkyWars combat-alert
-SkyWars display
-SkyWars offset-x
-SkyWars offset-y
-SkyWars refill-alert
-SkyWars scale
-SkyWars sound
-SkyWars strength-alert
-SkyWars strength-secs
-SkywarsAlerts #name SkywarsAlerts
-SkywarsAlerts cooldown
-SkywarsAlerts diamond-sword
-SkywarsAlerts display
-SkywarsAlerts fire-sword
-SkywarsAlerts knockback
-SkywarsAlerts offset-x
-SkywarsAlerts offset-y
-SkywarsAlerts pearl
-SkywarsAlerts show-distance
-SkywarsAlerts strength
-SmartBlinker #name SmartBlinker
-SmartBlinker block-all
-SmartBlinker delay
-SmartBlinker max-distance
-SmartBlinker max-range
-SmartBlinker max-time
-SmartBlinker min-range
-SmartBlinker mode
-SmartBlinker stop-on-attack
-SmartBlinker stop-on-hurt
-SmartBlinker stop-on-place
-SmartBlinker stop-on-tp
 SmartClicking #name SmartClicking
 SmartClicking break-chance
 SmartClicking jitter
@@ -1927,12 +1791,6 @@ Statistics #name Statistics
 Statistics Color Mode
 Statistics Custom Color
 Statistics SessionStats
-Strafe #name Strafe
-Strafe air
-Strafe ground
-Strafe jump
-Strafe max-hurt-time
-Strafe require-weapon
 TNTTimer #name TNTTimer
 TNTTimer Background
 TNTTimer Radius

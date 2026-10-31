@@ -43,6 +43,18 @@ public class ModeProperty extends Property<Integer> {
         return this;
     }
 
+    /**
+     * 2026-10-31 (consolidation): a mode taken out. It stays in the array, so every index the code compares with
+     * keeps its meaning, but no menu offers it and a config naming it loads {@code replacement} instead.
+     */
+    public ModeProperty retire(String replacement, String... names) {
+        this.hide(names);
+        for (String name : names) {
+            this.alias(name, replacement);
+        }
+        return this;
+    }
+
     /** A config saying {@code old} means {@code now}. */
     public ModeProperty alias(String old, String now) {
         this.aliases.put(old.toLowerCase(), now);

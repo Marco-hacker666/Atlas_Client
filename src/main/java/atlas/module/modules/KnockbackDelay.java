@@ -664,10 +664,6 @@ public class KnockbackDelay extends Module {
      * client's team, friend and bot filtering.
      */
     private Entity findTarget() {
-        KillAura2 aura2 = (KillAura2) Atlas.moduleManager.modules.get(KillAura2.class);
-        if (aura2 != null && aura2.isEnabled() && aura2.getTarget() != null) {
-            return aura2.getTarget();
-        }
         KillAura killAura = (KillAura) Atlas.moduleManager.modules.get(KillAura.class);
         if (killAura != null && killAura.isEnabled()) {
             Entity entity = killAura.getTarget();

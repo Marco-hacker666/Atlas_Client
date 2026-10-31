@@ -54,6 +54,13 @@ public class Eagle extends Module {
         /* Shown as BridgeAssist since 2026-10-20 (owner; OpenSlinky's name for it). Settings saved under
            "Eagle" still load: Config falls back to the class name. */
         super("BridgeAssist", false);
+        /* 2026-10-31 (owner: "BridgeAssist stops by itself while Scaffold is on"): its edge crouch and its
+           sneak-only un-crouch fought Scaffold's own edge handling (safe-walk, GodBridge's ledge sneak). */
+        this.pauseWhen(() -> {
+            Module scaffold = atlas.Atlas.moduleManager == null ? null
+                    : atlas.Atlas.moduleManager.modules.get(Scaffold.class);
+            return scaffold != null && scaffold.isEnabled();
+        });
     }
 
     @EventTarget(Priority.LOWEST)

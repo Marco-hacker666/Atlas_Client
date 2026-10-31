@@ -2,12 +2,16 @@ package atlas.module.modules;
 
 // Ported from OpenSkid (GPL-3.0): throws an ender pearl at the nearest surface
 // when knocked into the void. One throw per fall, slot restored after.
+import atlas.Atlas;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.events.UpdateEvent;
+import atlas.management.RotationHelper;
+import atlas.mixin.IAccessorPlayerControllerMP;
 import atlas.module.Module;
 import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.FloatProperty;
+import atlas.util.RotationEngine;
 import atlas.util.RotationUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.item.ItemEnderPearl;
@@ -16,9 +20,27 @@ import net.minecraft.util.BlockPos;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.Vec3;
 
+/*
+ * 2026-10-31, moved onto the shared engine (RotationHelper), and made to throw:
+ * - the look turns to the surface as a hand does (it jumped there in one
+ *   tick) and is handed back after the throw; with silent-aim off the camera
+ *   follows the same look;
+ * - the pearl is thrown only once the look the server already has -- the
+ *   last packet's, which a throw goes along -- is on the surface;
+ * - it is thrown as a pearl is (a use, as the vanilla right click sends it):
+ *   a right click on a block, which this used, never throws one in 1.8, so
+ *   no pearl ever left;
+ * - the aim is from the eyes to the surface: the surface's world coordinates
+ *   were taken for the offset to it, which pointed somewhere else entirely;
+ * - the surface is a face open to the air (it took one against another block);
+ * - the slot is switched only for the throw, not on every tick of the fall.
+ */
 public class PearlSaver extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    private int lastSlot = -1;
+    /** Rotation priority: as before, below Scaffold (3) and Clutch (7). */
+    private static final int ROT_PRIORITY = 2;
+    /** The last sent look within this many degrees of the aim counts as on the surface (the aim's own dead zone is 1). */
+    private static final float ON_TARGET = 2.0F;
     private boolean thrown = false;
 
     public final FloatProperty minFall = new FloatProperty("min-fall", 4.0F, 2.0F, 12.0F);
@@ -36,7 +58,6 @@ public class PearlSaver extends Module {
         }
         if (mc.thePlayer.onGround || mc.thePlayer.capabilities.isFlying) {
             this.thrown = false;
-            this.resetSlot();
             return;
         }
         if (this.thrown || mc.thePlayer.fallDistance < this.minFall.getValue() || mc.thePlayer.motionY >= 0.0) {
@@ -53,26 +74,30 @@ public class PearlSaver extends Module {
         if (placement == null) {
             return;
         }
-        if (this.lastSlot == -1) {
-            this.lastSlot = mc.thePlayer.inventory.currentItem;
+        Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
+        float[] want = RotationUtil.getRotationsTo(placement.hitVec.xCoord - eyes.xCoord,
+                placement.hitVec.yCoord - eyes.yCoord, placement.hitVec.zCoord - eyes.zCoord,
+                RotationHelper.serverYaw(), RotationHelper.serverPitch());
+        boolean silent = this.silentAim.getValue();
+        float[] look = RotationHelper.request(this, want[0], want[1], ROT_PRIORITY,
+                silent ? RotationHelper.MOVE_CAMERA : RotationHelper.MOVE_LOOK, false, RotationHelper.NO_LIMIT);
+        if (look != null && !silent) {
+            /* The camera follows the look the server gets, spread over this tick's frames. */
+            Atlas.rotationManager.setRotation(look[0], look[1], ROT_PRIORITY, false);
         }
+        if (RotationEngine.angle(event.getYaw(), event.getPitch(), want[0], want[1]) > ON_TARGET) {
+            return;
+        }
+        /* The slot is only synced (updateController would also run the incoming packets mid-update);
+           sendUseItem syncs the pearl's slot itself before its use. */
+        int previous = mc.thePlayer.inventory.currentItem;
         mc.thePlayer.inventory.currentItem = pearlSlot;
-        mc.playerController.updateController();
-        float[] rotations = RotationUtil.getRotationsTo(placement.hitVec.xCoord, placement.hitVec.yCoord, placement.hitVec.zCoord,
-                mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
-        if (this.silentAim.getValue()) {
-            event.setRotation(rotations[0], rotations[1], 2);
-        } else {
-            mc.thePlayer.rotationYaw = rotations[0];
-            mc.thePlayer.rotationPitch = rotations[1];
-        }
         ItemStack stack = mc.thePlayer.inventory.getCurrentItem();
-        if (stack != null && mc.playerController.onPlayerRightClick(mc.thePlayer, mc.theWorld, stack,
-                placement.pos, placement.face, placement.hitVec)) {
-            mc.thePlayer.swingItem();
+        if (stack != null && mc.playerController.sendUseItem(mc.thePlayer, mc.theWorld, stack)) {
             this.thrown = true;
         }
-        this.resetSlot();
+        mc.thePlayer.inventory.currentItem = previous;
+        ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
     }
 
     private boolean groundBelow() {
@@ -99,7 +124,7 @@ public class PearlSaver extends Module {
                         continue;
                     }
                     for (EnumFacing face : EnumFacing.values()) {
-                        if (!mc.theWorld.isAirBlock(pos.offset(face))) {
+                        if (mc.theWorld.isAirBlock(pos.offset(face))) {
                             double dist = mc.thePlayer.getDistance(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
                             if (dist < bestDist && dist <= mc.playerController.getBlockReachDistance() + 1.5F) {
                                 bestDist = dist;
@@ -127,18 +152,9 @@ public class PearlSaver extends Module {
         return -1;
     }
 
-    private void resetSlot() {
-        if (this.lastSlot != -1 && mc.thePlayer != null && mc.playerController != null) {
-            mc.thePlayer.inventory.currentItem = this.lastSlot;
-            mc.playerController.updateController();
-        }
-        this.lastSlot = -1;
-    }
-
     @Override
     public void onDisabled() {
         this.thrown = false;
-        this.resetSlot();
     }
 
     @Override

@@ -186,7 +186,9 @@ public class FakeLag extends Module {
     private static final int REPEL = 2;
 
     public final ModeProperty mode = new ModeProperty("mode", 0,
-            new String[]{"LATENCY", "DYNAMIC", "REPEL"}).alias("LIQUID", "DYNAMIC");
+            new String[]{"LATENCY", "DYNAMIC", "REPEL"}).alias("LIQUID", "DYNAMIC")
+            /* 2026-10-31 (owner's consolidation): REPEL retired, a config naming it gets DYNAMIC. */
+            .retire("DYNAMIC", "REPEL");
 
     /**
      * Milliseconds each eligible packet waits.
@@ -1181,8 +1183,7 @@ public class FakeLag extends Module {
         if (aura != null && aura.isEnabled() && aura.isAuraBlocking()) {
             return true;
         }
-        KillAura2 aura2 = (KillAura2) atlas.Atlas.moduleManager.getModule(KillAura2.class);
-        return aura2 != null && aura2.isBlocking();
+        return false;
     }
 
     /** Every release goes through here, in the style the setting chooses. */

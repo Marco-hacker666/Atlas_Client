@@ -106,7 +106,15 @@ public class Velocity extends Module {
         return Math.max(0.0, Math.min(1.0, share));
     }
 
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"Vanilla", "Jump", "Hypixel", "Slap_Attack", "Intave", "GrimAC", "Matrix", "PolarJump", "Legit", "Delay", "Tick", "Zip", "Karhu", "MatrixReverse", "MatrixFull", "Intave14", "XZSwitch", "OldGrim", "Vulcan", "BlocksMC", "GrimC03", "IntaveTimer", "Lag", "Polar"});
+    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"Vanilla", "Jump", "Hypixel", "Slap_Attack", "Intave", "GrimAC", "Matrix", "PolarJump", "Legit", "OldDelay", "Tick", "Zip", "Karhu", "MatrixReverse", "MatrixFull", "Intave14", "XZSwitch", "OldGrim", "Vulcan", "BlocksMC", "GrimC03", "IntaveTimer", "Delay", "Polar"})
+            /* 2026-10-31 (owner's consolidation): four modes left -- Vanilla, Hypixel, Delay, Polar. Delay is the
+               former Lag (index 22: own knockback and the replies after it held, the Vape-style freeze); the old
+               Delay (index 9) is OldDelay, retired. A config naming Lag or Delay gets this Delay; any retired mode
+               becomes Polar. Indices are unchanged, so the code below still compares the same numbers. */
+            .alias("Lag", "Delay")
+            .retire("Polar", "Jump", "Slap_Attack", "Intave", "GrimAC", "Matrix", "PolarJump", "Legit", "OldDelay",
+                    "Tick", "Zip", "Karhu", "MatrixReverse", "MatrixFull", "Intave14", "XZSwitch", "OldGrim", "Vulcan",
+                    "BlocksMC", "GrimC03", "IntaveTimer");
 
     public final PercentProperty chance = new PercentProperty("chance", 100, () -> mode.getValue() <= 1);
     /* Lag (2026-10-24, VelocityLag, after Rise's DelayVelocity): own knockback and the transactions after it

@@ -10,13 +10,12 @@ import atlas.events.Render2DEvent;
 import atlas.events.SwapItemEvent;
 import atlas.events.TickEvent;
 import atlas.events.UpdateEvent;
-import atlas.management.RotationState;
+import atlas.management.RotationHelper;
 import atlas.module.Module;
 import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
 import atlas.property.properties.ModeProperty;
-import atlas.util.MoveUtil;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockBed;
 import net.minecraft.block.BlockContainer;
@@ -210,19 +209,28 @@ public class AutoBedDef extends Module {
             mc.thePlayer.inventory.currentItem = blockSlot;
         }
 
-        float yawDiff = MathHelper.wrapAngleTo180_float(aimYaw - sentYaw);
-        float pitchDiff = aimPitch - sentPitch;
-        float maxTurn = (float) speed.getValue();
-
-        float yaw = sentYaw + MathHelper.clamp_float(yawDiff, -maxTurn, maxTurn);
-        float pitch = MathHelper.clamp_float(sentPitch + MathHelper.clamp_float(pitchDiff, -maxTurn, maxTurn), -90f, 90f);
-
-        event.setRotation(yaw, pitch, ROT_PRIORITY);
-        event.setPervRotation(moveFix.getValue() != 0 ? yaw : mc.thePlayer.rotationYaw, ROT_PRIORITY);
-        if (moveFix.getModeString().equals("REAL")) {
+        /* 2026-10-31: the turn is the shared engine's (RotationHelper): at most speed on each axis a
+           tick, speeding up from rest, whole mouse counts, keys turned for SILENT, the look handed back when
+           this stops asking. It used to step up to speed on each axis at once, from rest, with no grid. The
+           click still goes at the start of the next tick, along the look the server then has (onTick). */
+        float[] look = RotationHelper.request(this, aimYaw, aimPitch, ROT_PRIORITY, moveMode(), false,
+                (float) speed.getValue());
+        if (look != null && moveFix.getModeString().equals("REAL")) {
             /* REAL: the camera turns as well, spread over this tick's frames by
                RotationManager; the mouse still works (not forced). */
-            Atlas.rotationManager.setRotation(yaw, pitch, ROT_PRIORITY, false);
+            Atlas.rotationManager.setRotation(look[0], look[1], ROT_PRIORITY, false);
+        }
+    }
+
+    /** move-fix as the engine's movement yaw: NONE the camera's, SILENT the look's with the keys turned, REAL the look's. */
+    private int moveMode() {
+        switch (moveFix.getValue()) {
+            case 0:
+                return RotationHelper.MOVE_CAMERA;
+            case 1:
+                return RotationHelper.MOVE_FIX;
+            default:
+                return RotationHelper.MOVE_LOOK;
         }
     }
 
@@ -283,12 +291,7 @@ public class AutoBedDef extends Module {
             mc.thePlayer.movementInput.moveStrafe *= 0.3F;
             mc.thePlayer.movementInput.moveForward *= 0.3F;
         }
-        if (moveFix.getValue() == 1
-                && RotationState.isActived()
-                && RotationState.getPriority() == ROT_PRIORITY
-                && MoveUtil.isForwardPressed()) {
-            MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
-        }
+        /* SILENT's keys are turned by the shared engine (RotationHelper) now. */
     }
 
     /** While the hand holds our block, a scroll picks the slot that comes back after. */

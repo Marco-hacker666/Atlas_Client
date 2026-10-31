@@ -37,7 +37,6 @@ final class ModuleDocsEn {
 
     static {
         // ------------------------------------------------------------ COMBAT
-        d("KillAura2", "Silent Aura rewritten: turns like a hand, clicks like a human, hits only when the look really lands; with InvulnTiming it hits the tick the target's hurt window ends, and it blocks by itself. Cannot run together with Silent Aura.");
         d("KillAura", "Attacks targets in range: picks a target, turns to it (several modes, silent or not), clicks at your CPS and can block for you.");
         d("AimAssist", "Nudges your aim toward a nearby target while you attack, like a small hand correction; never clicks by itself.");
         help("AimAssist", "style", "Smooth: the old one (a share of what is left each tick). Regular: every frame, fast when far, easing in. Linear: one steady speed. Lock On: stays on the target. The last three after Slinky.");
@@ -79,7 +78,6 @@ final class ModuleDocsEn {
         d("FakeLag", "Delays your outgoing movement so the server's copy of you runs behind, for the first hit.");
         d("HitSelect", "Lets an attack through only when it suits you, e.g. when it costs less knockback. ACTIVE also decides Silent Aura's hits.");
         d("MoreKB", "Resets sprint on attack so each hit deals more knockback.");
-        d("Criticals", "Makes attacks critical hits (+50% damage) by packets or small hops.");
         d("FastBow", "Draws and shoots the bow faster.");
         help("BlockHit", "ManualChance", "Chance that a hit is followed by a one-tick block (blocks per second = CPS x chance). Idle while Silent Aura blocks by itself.");
         d("BlockHit", "Blocks with the sword between hits. Slinky (default): while the attack key is held and an enemy is in range the sword goes up, comes down for one tick after a few so the next hit lands, then goes up again; optionally only just before you can be hit, and packets held briefly as it comes down. Manual: after your hits, one-tick block. Predict: raised just before you can be hit again, lowered when you are. Full: vanilla block-hit order (down, hit next tick, up right after), the sword up only when it protects you. Helper / Auto / Lag: other ways.");
@@ -104,12 +102,12 @@ final class ModuleDocsEn {
         help("BlockHit", "full-guard", "Full Smart: before a fight starts, short raises while an enemy in range faces you.");
         help("FakeLag", "ping-budget", "The most your ping and FakeLag's delay may add up to (ms). Each hold is cut to "
                 + "this minus your ping; with under 40 ms left it does not hold. 0 turns it off.");
-        help("Velocity", "lag-ticks", "Lag: ticks your knockback (and the transactions after it) wait before they reach the game. The server sees a short rise in ping, then the knockback taken late, as latency looks.");
-        help("Velocity", "lag-chance", "Lag: share of knockbacks that are held.");
-        help("Velocity", "lag-explosions", "Lag: explosions wait in the same queue.");
-        help("Velocity", "lag-ping-budget", "Lag: ping plus the hold never goes past this (ms); the hold is cut, and on a high enough ping there is none. 0 = off.");
-        help("Velocity", "lag-cooldown", "Lag: after a release, no new hold for this long (ms), so a combo does not keep you lagging.");
-        help("Velocity", "lag-only-in-fight", "Lag: only with another player (not a bot or teammate) within 6 blocks.");
+        help("Velocity", "lag-ticks", "Delay: ticks your knockback (and the transactions after it) wait before they reach the game. The server sees a short rise in ping, then the knockback taken late, as latency looks.");
+        help("Velocity", "lag-chance", "Delay: share of knockbacks that are held.");
+        help("Velocity", "lag-explosions", "Delay: explosions wait in the same queue.");
+        help("Velocity", "lag-ping-budget", "Delay: ping plus the hold never goes past this (ms); the hold is cut, and on a high enough ping there is none. 0 = off.");
+        help("Velocity", "lag-cooldown", "Delay: after a release, no new hold for this long (ms), so a combo does not keep you lagging.");
+        help("Velocity", "lag-only-in-fight", "Delay: only with another player (not a bot or teammate) within 6 blocks.");
         help("Velocity", "polar-counter-chance", "Polar: chance a knockback is answered by hitting back while sprinting, before the tick's movement (needs Silent Aura with a target in 3.0 along the look the server has). The game's own attack takes 40% off your speed.");
         help("Velocity", "polar-jump-chance", "Polar: chance a knockback on the ground is answered by a jump on that tick (a jump reset).");
         help("Velocity", "polar-both-chance", "Polar: when both would happen, chance to do both; otherwise one of them.");
@@ -181,10 +179,8 @@ final class ModuleDocsEn {
         d("Displace", "Turns at the moment of a hit to aim the target's knockback at the void or a chosen direction.");
         help("Displace", "Keep-hitbox", "Turn the server-side look only as far as it still meets the target's hitbox (Grim and Polar check that); turned further the hit does not count. On, the turn is only 5-10 degrees and moves only the sprint / Knockback part of the push, so on servers like Pika or Grim the effect is small. Off = the full offset, for servers that do not check the hit's look.");
         d("KeepSprint", "Keeps sprinting after an attack instead of slowing down.");
-        d("PlainAura", "A minimal aura: attacks only when the rotation actually sent is on the target. The hardest to flag.");
         d("InvulnTiming", "Times attacks to the end of the target's invulnerability, and spends spare swings on someone who can be hurt.");
         d("KeepRange", "Lets go of forward during a combo (S-tap) so you do not walk into the target and waste their knockback.");
-        d("AimBacktrack", "A swing that just missed lands on whoever your aim was on a few ticks ago.");
         d("KBDisplacement", "In fights by hand, silently aims your knockback at nearby hazards (void, lava).");
         // Ported from OpenSkid (2026-10-05)
         d("KeyStrokes", "Shows WASD, space and the mouse buttons (with CPS) on screen. Movable in the HUD editor.");
@@ -303,12 +299,6 @@ final class ModuleDocsEn {
         help("FastAccel", "require-weapon", "Only while holding a sword or an axe.");
         d("InstantStop", "Stops dead when you let go of W: on the ground, the tick forward comes up it taps back (or back-left / back-right) for one tick to cancel the leftover speed, then hands the keys back. (From Slinky)");
         d("NullMove", "The newest of two opposite keys wins (snap tap): holding A then pressing D walks right instead of stopping; letting go of D with A still held goes left again. W/S the same. (From Slinky)");
-        d("Strafe", "Turns your motion toward the keys you hold: each tick part of the speed is pointed the way you press, with separate strengths for ground, jump and air. (From Slinky)");
-        help("Strafe", "jump", "Strength on the jump tick.");
-        help("Strafe", "ground", "Strength on the ground.");
-        help("Strafe", "air", "Strength in the air. 0% = vanilla momentum, 100% = turns at once.");
-        help("Strafe", "max-hurt-time", "Not while your hurt time is above this (knockback keeps its direction). 10 = always.");
-        help("Strafe", "require-weapon", "Only while holding a sword or an axe.");
         d("Pointers", "Arrowheads around the crosshair pointing to nearby players; coloured by distance, name tag or by hand; 3D tilts the ring with your pitch. (From Slinky)");
         help("Pointers", "range", "Players within this many blocks get an arrow.");
         help("Pointers", "ignore-within-fov", "No arrow for players within this angle of the crosshair (you can already see them). 0 = all.");
@@ -361,7 +351,6 @@ final class ModuleDocsEn {
         d("ChestStealer", "Takes the useful items when a chest opens.");
         d("FastPlace", "Places blocks faster.");
         d("SpeedMine", "Mines faster. BreakSpeed: the tool's own dig speed times multiplier (1.4 is about 40% faster). FinishEarly: ends the dig early; speed 100% is the fastest a vanilla server accepts (70% of vanilla time).");
-        d("AntiObbyTrap", "When your head is stuck in an obsidian trap, treats that block as air so you can see and get out.");
         // ------------------------------------------------------------ RENDER
         d("ESP", "Draws outlines or glow on other players, visible through walls.");
         d("Chams", "Shows player models through walls.");
@@ -379,7 +368,6 @@ final class ModuleDocsEn {
         d("BreakProgress", "Shows how far a block is broken.");
         d("Indicators", "Edge-of-screen warnings for fireballs, pearls, arrows and other projectiles coming at you.");
         d("Radar", "A minimap radar of nearby players' direction and distance.");
-        d("LatencyCrosshair", "A second crosshair where the server still thinks you are aiming (the latency gap).");
         d("TeamHealthDisplay", "Shows teammates' or enemies' health.");
         d("RenderFixes", "Modern chat and scoreboard rendering (rounded, movable).");
         d("AntiDebuff", "Removes blindness and nausea screen effects.");
@@ -394,7 +382,6 @@ final class ModuleDocsEn {
         d("BedwarUtils", "Bedwars helpers: diamond upgrades, item tracker, invisibility, pearl and approach alerts.");
         d("BedTracker", "Tracks beds; alerts when enemies near yours and can send a message.");
         d("LightningTracker", "Reports where lightning struck (often a death) in chat.");
-        d("ESPDetector", "Reports players whose aim follows you through walls (likely ESP).");
         d("AntiCheat", "Reports players who hit you from too far or through blocks.");
         d("AntiObfuscate", "Removes the scrambled-text effect (§k) so obfuscated text is readable.");
         d("MouseRawInput", "Uses raw mouse input, unaffected by system mouse acceleration.");
@@ -440,7 +427,6 @@ final class ModuleDocsEn {
         d("ItemPhysics", "Dropped items lie flat and tumble in the air.");
         d("Capes", "Shows custom capes.");
         d("Accessories", "Draws headwear and wings on players; only you see them.");
-        d("AutoRecraft", "Crafts more soup in the inventory grid while it is open.");
         d("Freeze", "Holds incoming knockback packets, then releases them at the timeout.");
         d("ProjectileAimBot", "Bow aimbot: while you draw a bow (or hold an egg, snowball or pearl) the look the server gets turns onto the best target, leading it along the arc. The camera stays, and you still draw and let go yourself. No aim at a target out of reach. (from LiquidBounce)");
         help("ProjectileAimBot", "bow", "Aim while drawing a bow.");

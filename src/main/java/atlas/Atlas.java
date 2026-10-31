@@ -97,7 +97,6 @@ public class Atlas {
         moduleManager.modules.put(AntiAFK.class, new AntiAFK());
         moduleManager.modules.put(AntiDebuff.class, new AntiDebuff());
         moduleManager.modules.put(AntiFireball.class, new AntiFireball());
-        moduleManager.modules.put(AntiObbyTrap.class, new AntiObbyTrap());
         moduleManager.modules.put(AntiObfuscate.class, new AntiObfuscate());
         moduleManager.modules.put(AntiVoid.class, new AntiVoid());
         moduleManager.modules.put(AutoClicker.class, new AutoClicker());
@@ -112,22 +111,18 @@ public class Atlas {
         moduleManager.modules.put(BlockESP.class, new BlockESP());
         moduleManager.modules.put(AutoMessage.class, new AutoMessage());
         moduleManager.modules.put(AutoReconnect.class, new AutoReconnect());
-        moduleManager.modules.put(Parkour.class, new Parkour());
         moduleManager.modules.put(StaffDetector.class, new StaffDetector());
-        moduleManager.modules.put(NoWeb.class, new NoWeb());
         moduleManager.modules.put(Freecam.class, new Freecam());
         moduleManager.modules.put(AutoPlace.class, new AutoPlace());
         moduleManager.modules.put(ArmorBreaker.class, new ArmorBreaker());
         moduleManager.modules.put(Tower.class, new Tower());
         moduleManager.modules.put(FastUse.class, new FastUse());
-        moduleManager.modules.put(SkyWars.class, new SkyWars());
         moduleManager.modules.put(MurderMystery.class, new MurderMystery());
         moduleManager.modules.put(AutoRod.class, new AutoRod());
         moduleManager.modules.put(AutoWeapon.class, new AutoWeapon());
         moduleManager.modules.put(PingSpoof.class, new PingSpoof());
         moduleManager.modules.put(KillEffect.class, new KillEffect());
         moduleManager.modules.put(FallIndicator.class, new FallIndicator());
-        moduleManager.modules.put(SmartBlinker.class, new SmartBlinker());
         /* Legit bridging 3-in-1: Eagle + BridgeAssist + LegitScaffold combined. */
         moduleManager.modules.put(PearlSaver.class, new PearlSaver());
         moduleManager.modules.put(ProjectileAimBot.class, new ProjectileAimBot());
@@ -167,7 +162,6 @@ public class Atlas {
         moduleManager.modules.put(InventoryClicker.class, new InventoryClicker());
         moduleManager.modules.put(InvManager.class, new InvManager());
         moduleManager.modules.put(InvWalk.class, new InvWalk());
-        moduleManager.modules.put(Criticals.class, new Criticals());
         moduleManager.modules.put(FastBow.class, new FastBow());
         moduleManager.modules.put(BlockHit.class, new BlockHit());
         moduleManager.modules.put(ThrowAura.class, new ThrowAura());
@@ -177,7 +171,6 @@ public class Atlas {
         moduleManager.modules.put(Disabler.class, new Disabler());
         moduleManager.modules.put(KeepSprint.class, new KeepSprint());
         moduleManager.modules.put(FlagDetector.class, new FlagDetector());
-        moduleManager.modules.put(ESPDetector.class, new ESPDetector());
         moduleManager.modules.put(AntiCheat.class, new AntiCheat());
         moduleManager.modules.put(HitCheck.class, new HitCheck());
         moduleManager.modules.put(FightLog.class, new FightLog());
@@ -201,19 +194,15 @@ public class Atlas {
         moduleManager.modules.put(ServerFingerprint.class, new ServerFingerprint());
         moduleManager.modules.put(AutoTune.class, new AutoTune());
         moduleManager.modules.put(Adaptive.class, new Adaptive());
-        moduleManager.modules.put(PlainAura.class, new PlainAura());
         moduleManager.modules.put(InvulnTiming.class, new InvulnTiming());
-        moduleManager.modules.put(LatencyCrosshair.class, new LatencyCrosshair());
         moduleManager.modules.put(FlagResponder.class, new FlagResponder());
         moduleManager.modules.put(LatencyGovernor.class, new LatencyGovernor());
         /* Rise comparison items 4, 6 and 7 (2026-09-28). */
         moduleManager.modules.put(KeepRange.class, new KeepRange());
-        moduleManager.modules.put(AimBacktrack.class, new AimBacktrack());
         moduleManager.modules.put(ServerProfiles.class, new ServerProfiles());
         moduleManager.modules.put(HitBox.class, new HitBox());
         moduleManager.modules.put(KillAura.class, new KillAura());
         /* The rewrite, side by side until it replaces KillAura (2026-10-14). */
-        moduleManager.modules.put(KillAura2.class, new KillAura2());
         moduleManager.modules.put(LagRange.class, new LagRange());
         moduleManager.modules.put(LightningTracker.class, new LightningTracker());
         moduleManager.modules.put(LongJump.class, new LongJump());
@@ -239,7 +228,6 @@ public class Atlas {
         moduleManager.modules.put(FastAccel.class, new FastAccel());
         moduleManager.modules.put(InstantStop.class, new InstantStop());
         moduleManager.modules.put(NullMove.class, new NullMove());
-        moduleManager.modules.put(Strafe.class, new Strafe());
         moduleManager.modules.put(Pointers.class, new Pointers());
         moduleManager.modules.put(PingFix.class, new PingFix());
         moduleManager.modules.put(ItemUseFix.class, new ItemUseFix());
@@ -301,7 +289,6 @@ public class Atlas {
         moduleManager.modules.put(EffectsHUD.class, new EffectsHUD());
         moduleManager.modules.put(AutoRespawn.class, new AutoRespawn());
         /* CrewX ports: soup recrafting, the knockback hold, and the cosmetics. */
-        moduleManager.modules.put(AutoRecraft.class, new AutoRecraft());
         moduleManager.modules.put(Freeze.class, new Freeze());
         moduleManager.modules.put(ResetVL.class, new ResetVL());
         moduleManager.modules.put(Accessories.class, new Accessories());
@@ -363,6 +350,9 @@ public class Atlas {
                     new ArrayList<Property<?>>(atlas.module.ModuleDocs.apply(module, properties)));
             EventManager.register(module);
         }
+        /* The shared server look, after every module (2026-10-31): handlers of one priority run in the order they
+           were registered, so a module asking for a look in its LOWEST handler still asks before the packet is set. */
+        EventManager.register(atlas.management.RotationHelper.get());
         Config config = new Config("default", true);
         if (config.file.exists()) {
             config.load();

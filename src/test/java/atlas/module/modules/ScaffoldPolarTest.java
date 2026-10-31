@@ -142,17 +142,21 @@ public class ScaffoldPolarTest {
         assertEquals("Modes = [Jump]", "Jump", modes.getModeString());
     }
 
-    /** The report: the polar settings showed while another rotation mode was selected. */
+    /**
+     * The report: the polar settings showed while another rotation mode was selected. Since 2026-10-31 GodBridge is
+     * LiquidBounce's GodBridge whole, ledge included (owner), so they are GodBridge's too -- and still no other mode's.
+     */
     @Test
-    public void thePolarSettingsAreShownOnlyForPolar() throws Exception {
+    public void thePolarSettingsAreShownOnlyForTheLiquidBounceGodBridge() throws Exception {
         Scaffold scaffold = scaffold();
         ModeProperty rotations = (ModeProperty) setting(scaffold, "rotationMode");
         String[] polarSettings = {"polarForceSneakBelowCount", "polarSneakTime", "polarModes"};
 
         for (String name : polarSettings) {
+            rotations.setValue(1);
+            assertFalse(name + " is not a DEFAULT setting", setting(scaffold, name).isVisible());
             rotations.setValue(GODBRIDGE);
-            assertFalse(name + " is not a GodBridge setting",
-                    setting(scaffold, name).isVisible());
+            assertTrue(name + " is a GodBridge setting", setting(scaffold, name).isVisible());
             rotations.setValue(POLAR);
             assertTrue(name + " is a polar setting", setting(scaffold, name).isVisible());
         }

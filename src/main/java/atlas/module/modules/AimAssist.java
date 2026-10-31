@@ -106,6 +106,12 @@ public class AimAssist extends Module {
             () -> smooth.getAsBoolean() && this.mode.getValue() == 1);
     public final PercentProperty silentRandomization = new PercentProperty("silent-randomization", 50,
             () -> smooth.getAsBoolean() && this.mode.getValue() == 1);
+    /* 2026-10-31 (a player: "add more settings to silent aim, like hp based, distance based"): which enemy the
+       silent aim picks. One in reach still comes before one out of it; among those, the lowest of this. Distance
+       is what it always did. */
+    public final ModeProperty silentSort = new ModeProperty("silent-sort", 0,
+            new String[]{"Distance", "Health", "Hurt time", "Aim angle"},
+            () -> smooth.getAsBoolean() && this.mode.getValue() == 1);
 
     /* SILENT makes the silent aim the yaw movement is computed from too, and
        turns the keys to match, so the player still goes where the camera
@@ -219,10 +225,10 @@ public class AimAssist extends Module {
                 continue;
             }
             boolean inReach = this.isInReach(player);
-            double distance = RotationUtil.distanceToEntity(player);
-            if (inReach && !bestInReach || inReach == bestInReach && distance < best) {
+            double score = this.silentScore(player, baseYaw, basePitch);
+            if (inReach && !bestInReach || inReach == bestInReach && score < best) {
                 target = player;
-                best = distance;
+                best = score;
                 bestInReach = inReach;
             }
         }
@@ -254,6 +260,27 @@ public class AimAssist extends Module {
         float pitch = cameraPitch + limit(MathHelper.clamp_float(next[1], -90.0F, 90.0F) - cameraPitch);
         /* Priority 1: below Scaffold (3) and Clutch (7), which need the look to place. */
         atlas.management.RotationHelper.request(this, yaw, pitch, 1, this.moveFix.getValue() != 0, true);
+    }
+
+    /** silent-sort: lower is picked first. */
+    private double silentScore(EntityPlayer player, float baseYaw, float basePitch) {
+        switch (this.silentSort.getValue()) {
+            case 1:
+                return player.getHealth() + player.getAbsorptionAmount();
+            case 2:
+                /* One that can be hurt now (hurt time 0) first, then the one nearest to it. */
+                return player.hurtTime * 100.0 + RotationUtil.distanceToEntity(player);
+            case 3: {
+                double dx = player.posX - mc.thePlayer.posX;
+                double dz = player.posZ - mc.thePlayer.posZ;
+                double dy = player.posY + player.getEyeHeight() - (mc.thePlayer.posY + mc.thePlayer.getEyeHeight());
+                float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
+                float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
+                return atlas.util.RotationEngine.angle(yaw, pitch, baseYaw, basePitch);
+            }
+            default:
+                return RotationUtil.distanceToEntity(player);
+        }
     }
 
     /** Raven bS RotationUtils.smoothRotation: speed 1-30 (30 = there at once), randomization 0-100. */

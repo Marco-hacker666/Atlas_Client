@@ -322,6 +322,7 @@ public final class ModuleDocs {
         d("KillAura", "自動攻擊範圍內的目標：選目標、轉頭（多種模式，可靜默）、依 CPS 出手，並可自動格擋。");
         d("AimAssist", "攻擊時把準心輕微往附近目標拉，手感接近真人微調，不會自己出手。");
         help("AimAssist", "style", "Smooth：原本的（每 tick 轉剩下角度的一部分）。Regular：每幀轉，遠快近慢。Linear：固定速度。Lock On：黏住目標。後三種參考 Slinky。");
+        help("AimAssist", "silent-sort", "Silent：先挑打得到的敵人，其中挑：Distance 最近的、Health 血最少的、Hurt time 現在打得到傷害的、Aim angle 離目前視角最近的。");
         help("AimAssist", "speed-h", "Regular / Linear：左右速度。");
         help("AimAssist", "speed-v", "Regular / Linear：上下速度。");
         help("AimAssist", "lock-vertical", "Lock On：上下也跟。");

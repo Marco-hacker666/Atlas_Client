@@ -154,6 +154,61 @@ public final class PlaceUtil {
                 && ((ItemBlock) stack.getItem()).canPlaceBlockOnSide(mc.theWorld, support, face, mc.thePlayer, stack);
     }
 
+    /* Lower preferred (2026-11-01, moved here from AutoBlockIn so SpeedBlocker
+       chooses the same material). It was once keyed by getUnlocalizedName()
+       strings and five of nine never matched (whiteStone, wood, stainedGlass,
+       clayHardened, clayHardenedStained), so end stone, planks and clay were
+       never chosen. A constant that does not exist is a compile error; a
+       string that does not exist is silence (NOTES 4.5). Comparisons, not a
+       static map: a map's initialiser would touch Blocks when this class is
+       loaded, and the geometry tests load it before the game has a registry. */
+    /** Anything else usableBlock accepts, used only when nothing listed is in the hotbar. */
+    private static final int FALLBACK_SCORE = 100;
+
+    private static int blockScore(Block block) {
+        if (block == Blocks.obsidian) {
+            return 0;
+        }
+        if (block == Blocks.end_stone) {
+            return 1;
+        }
+        if (block == Blocks.planks || block == Blocks.log || block == Blocks.log2) {
+            return 2;
+        }
+        if (block == Blocks.glass || block == Blocks.stained_glass) {
+            return 3;
+        }
+        if (block == Blocks.hardened_clay || block == Blocks.stained_hardened_clay) {
+            return 4;
+        }
+        if (block == Blocks.wool) {
+            return 5;
+        }
+        return FALLBACK_SCORE;
+    }
+
+    /** The hotbar slot with the best-scored usable block, the held one on a tie; -1 if none. */
+    public static int bestBlockSlot() {
+        if (mc.thePlayer == null) {
+            return -1;
+        }
+        int current = mc.thePlayer.inventory.currentItem;
+        int best = -1;
+        int bestScore = Integer.MAX_VALUE;
+        for (int i = 0; i < 9; i++) {
+            ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
+            if (!usableBlock(stack)) {
+                continue;
+            }
+            int score = blockScore(((ItemBlock) stack.getItem()).getBlock());
+            if (score < bestScore || score == bestScore && i == current) {
+                best = i;
+                bestScore = score;
+            }
+        }
+        return best;
+    }
+
     /* ---- aims ----------------------------------------------------------- */
 
     /** A support block, the face to click on it, and the rotation that hits it. */

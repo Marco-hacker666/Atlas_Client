@@ -181,6 +181,17 @@ final class ModuleDocsEn {
         d("KeepSprint", "Keeps sprinting after an attack instead of slowing down.");
         d("InvulnTiming", "Times attacks to the end of the target's invulnerability, and spends spare swings on someone who can be hurt.");
         d("KeepRange", "Lets go of forward during a combo (S-tap) so you do not walk into the target and waste their knockback.");
+        d("SpeedBlocker", "Puts a block in the path of a player running at you: the sprint stops, so the hit they had ready loses most of its knockback and you get the first one. Works in stick fights too.");
+        help("SpeedBlocker", "scan-range", "How far to look for a player coming in.");
+        help("SpeedBlocker", "min-approach", "Blocks a tick the target has to close on you before it is worth a block. A sprint is about 0.28, a walk about 0.1.");
+        help("SpeedBlocker", "lead", "Ticks of the target's motion to aim ahead of: the block goes where it will be, not where it is (one inside it is refused by the server). Raise it on high ping.");
+        help("SpeedBlocker", "reach-ahead", "How far along its motion to look for the first open cell.");
+        help("SpeedBlocker", "height", "FEET: one block, enough to stop a walk. DOUBLE: a two-high wall, also stops a jump over it.");
+        help("SpeedBlocker", "restore-delay", "Ticks the block stays in your hand after the last placement, then the slot you had comes back.");
+        help("SpeedBlocker", "require-sprint", "Only targets the server has sprinting.");
+        help("SpeedBlocker", "target-invisible", "Also block invisible players.");
+        help("SpeedBlocker", "ignore-teammates", "Skip teammates; friends are always skipped.");
+        help("SpeedBlocker", "retry-cooldown", "A cell that took max-retries clicks is left alone this long: a placement the server ignores (a claim, a region) stays open here and would be retried every tick.");
         d("KBDisplacement", "In fights by hand, silently aims your knockback at nearby hazards (void, lava).");
         // Ported from OpenSkid (2026-10-05)
         d("KeyStrokes", "Shows WASD, space and the mouse buttons (with CPS) on screen. Movable in the HUD editor.");

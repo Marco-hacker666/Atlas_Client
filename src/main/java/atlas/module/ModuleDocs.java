@@ -615,6 +615,7 @@ public final class ModuleDocs {
         // ------------------------------------------------------------- WORLD
         d("Scaffold", "自動在腳下放方塊搭橋，支援疊高（tower）、保持高度與多種轉頭模式。");
         d("AutoBlockIn", "自動用方塊把自己圍起來：先圍身體一圈，再補屋頂。");
+        d("SpeedBlocker", "在衝向你的敵人腳前放方塊，撞掉它的衝刺動量，方便起手連擊；棍戰也好用。");
         help("AutoBlockIn", "debug", "開發用：把每一步的判斷寫進 config/Atlas/placedebug-*.txt（背景寫入，不影響 fps）。平常不用開。");
         help("AutoBlockIn", "debug-chat", "debug 時也印到聊天欄（每秒最多 4 行）。裝了聊天相關模組時很吃 fps，只在需要即時看時才開。");
         d("AutoBedDef", "自動在自己的床周圍放方塊防守。");

@@ -22,10 +22,7 @@ import atlas.util.ChatUtil;
 import atlas.util.MoveUtil;
 import atlas.util.PlaceUtil;
 import net.minecraft.client.Minecraft;
-import net.minecraft.block.Block;
 import net.minecraft.client.gui.ScaledResolution;
-import net.minecraft.init.Blocks;
-import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.minecraft.network.play.server.S23PacketBlockChange;
@@ -37,7 +34,6 @@ import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -207,7 +203,7 @@ public class AutoBlockIn extends Module {
         this.trace.log(now, "activation conditions passed", "sides " + sides.size() + ", roof " + roofs.size()
                 + ", body " + body.size() + " cells");
 
-        int slot = this.findBestBlockSlot();
+        int slot = PlaceUtil.bestBlockSlot();
         if (slot < 0) {
             this.locked = null;
             this.trace.log(now, "stopped", "no usable blocks in hotbar");
@@ -427,50 +423,6 @@ public class AutoBlockIn extends Module {
         mc.fontRendererObj.drawString(text,
                 sr.getScaledWidth() / 2.0F - mc.fontRendererObj.getStringWidth(text) / 2.0F,
                 sr.getScaledHeight() / 5.0F * 2.0F, color | 0xBF000000, true);
-    }
-
-    /* ---- material ------------------------------------------------------- */
-
-    /* Keyed by the block itself, lower preferred. It was once keyed by
-       getUnlocalizedName() strings and five of nine never matched (whiteStone,
-       wood, stainedGlass, clayHardened, clayHardenedStained), so end stone,
-       planks and clay were never chosen. A constant that does not exist is a
-       compile error; a string that does not exist is silence (NOTES 4.5). */
-    private static final Map<Block, Integer> BLOCK_SCORE = new HashMap<Block, Integer>();
-    /** Anything else PlaceUtil.usableBlock accepts, used only when nothing listed is in the hotbar. */
-    private static final int FALLBACK_SCORE = 100;
-
-    static {
-        BLOCK_SCORE.put(Blocks.obsidian, 0);
-        BLOCK_SCORE.put(Blocks.end_stone, 1);
-        BLOCK_SCORE.put(Blocks.planks, 2);
-        BLOCK_SCORE.put(Blocks.log, 2);
-        BLOCK_SCORE.put(Blocks.log2, 2);
-        BLOCK_SCORE.put(Blocks.glass, 3);
-        BLOCK_SCORE.put(Blocks.stained_glass, 3);
-        BLOCK_SCORE.put(Blocks.hardened_clay, 4);
-        BLOCK_SCORE.put(Blocks.stained_hardened_clay, 4);
-        BLOCK_SCORE.put(Blocks.wool, 5);
-    }
-
-    /** The hotbar slot with the best-scored usable block, the held one on a tie; -1 if none. */
-    private int findBestBlockSlot() {
-        int current = mc.thePlayer.inventory.currentItem;
-        int best = -1;
-        int bestScore = Integer.MAX_VALUE;
-        for (int i = 0; i < 9; i++) {
-            ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
-            if (!PlaceUtil.usableBlock(stack)) {
-                continue;
-            }
-            Integer listed = BLOCK_SCORE.get(((ItemBlock) stack.getItem()).getBlock());
-            int score = listed != null ? listed : FALLBACK_SCORE;
-            if (score < bestScore || score == bestScore && i == current) {
-                best = i;
-                bestScore = score;
-            }
-        }
-        return best;
     }
 
     /* ---- goals ---------------------------------------------------------- */

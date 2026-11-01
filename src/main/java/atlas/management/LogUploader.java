@@ -40,7 +40,8 @@ import java.util.Deque;
  * one kick log per 2 minutes (the relay allows 4 an hour). Counted here, not by
  * FlagDetector, which is off unless Debug turns it on.
  *
- * The switch ("auto-send-logs", Client Settings > Privacy, on by default) lives
+ * The switch ("auto-send-logs", Client Settings > Privacy; off by default since 2026-11-01, owner: the player turns
+ * it on, nothing is sent unasked) lives
  * in config/Atlas/atlas-theme.json; read from the file the first time (the menu
  * may never be opened), pushed by AtlasTheme after that. The first time it
  * applies, the player is told once in chat what is sent and when.
@@ -80,7 +81,7 @@ public final class LogUploader {
 
     private static boolean readSetting() {
         if (!THEME_FILE.isFile()) {
-            return true;
+            return false;
         }
         try (Reader reader = new FileReader(THEME_FILE)) {
             JsonElement parsed = new JsonParser().parse(reader);
@@ -93,7 +94,7 @@ public final class LogUploader {
         } catch (Exception ignored) {
             // Unreadable: the default.
         }
-        return true;
+        return false;
     }
 
     @EventTarget

@@ -67,7 +67,7 @@ public class HUD extends Module {
             AutoGapple.class, ThrowAura.class, InventoryClicker.class
     ));
     private static final Set<Class<?>> MISC_MODULES = new HashSet<>(Arrays.<Class<?>>asList(
-            Spammer.class, BedNuker.class, BedTracker.class, LightningTracker.class, NoRotate.class,
+            BedNuker.class, BedTracker.class, LightningTracker.class, NoRotate.class,
             NickHider.class, AntiObfuscate.class, AutoAnduril.class,
             Disabler.class, ClientSpoofer.class, AutoHypixel.class
     ));

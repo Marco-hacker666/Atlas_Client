@@ -303,9 +303,7 @@ public final class ModuleDocs {
         d("ModSpoofer", "偽造客戶端品牌封包。");
         d("PingSpoof", "偽造延遲以製造封包延遲效果。");
         d("KillEffect", "擊殺時播放特效與音效。");
-        d("KillMessage", "擊殺後自動發送訊息。");
         d("KillSounds", "擊殺時播放音效。");
-        d("KillSults", "擊殺後自動嘲諷對手。");
         d("FallIndicator", "標記落點方便 MLG 救場。");
         d("StaffDetector", "偵測附近的工作人員與可疑行為並發出提醒。");
         d("CheatDetector", "觀察附近玩家並在聊天室回報疑似作弊行為。");
@@ -317,7 +315,6 @@ public final class ModuleDocs {
         d("AutoRequeue", "遊戲結束後自動重新排隊。");
         d("ArmorBreaker", "戰鬥中自動切換斧頭以破壞對手護甲。");
         d("AutoReconnect", "被踢出或斷線後自動重新連線到同一個伺服器。");
-        d("AutoGG", "遊戲結束時自動發送訊息（預設是 gg）。");
         // ------------------------------------------------------------ COMBAT
         d("KillAura", "自動攻擊範圍內的目標：選目標、轉頭（多種模式，可靜默）、依 CPS 出手，並可自動格擋。");
         d("AimAssist", "攻擊時把準心輕微往附近目標拉，手感接近真人微調，不會自己出手。");
@@ -571,7 +568,6 @@ public final class ModuleDocs {
         d("NoDelay", "移除各種延遲：攻擊、點擊、跳躍。");
         d("MLG", "墜落時用水或梯子自救。");
         d("BlockESP", "標出箱子、床或自訂方塊的位置。");
-        d("AutoMessage", "遊戲結束或擊殺後自動發送訊息。");
         d("NoItemRelease", "放開右鍵時不送出「停止使用物品」封包，伺服器仍當你在使用；本機照常停止。照 Slinky 的做法：看實際送出的封包，使用物品後的下一個放開封包不送。");
         d("FastAccel", "起步更快：在地上時，把速度往「按著這些鍵最後會達到的速度」推近一部分。不會超過正常按鍵能到的速度，只是更快到。（來源：Slinky）");
         help("FastAccel", "boost", "每 tick 把剩下的差距補上多少。0% = 原版，100% = 一步到位。");
@@ -656,7 +652,6 @@ public final class ModuleDocs {
         d("TargetFilter", "統一判斷「誰算目標」（好友、隊友、假人、隱身、距離），給戰鬥與延遲類模組共用。");
         d("MCF", "中鍵點玩家加入或移除好友。");
         d("NickHider", "隱藏自己的名字（聊天、計分板、等級）。");
-        d("Spammer", "定時在聊天欄發送訊息。");
         d("AutoAuth", "自動輸入伺服器的登入／註冊密碼。");
         d("AutoHypixel", "Hypixel 小工具：自動接受規範、自動下一場等。");
         d("BedwarUtils", "Bedwars 輔助：鑽石升級、物品追蹤、隱身提醒、珍珠／接近提醒等 HUD。");

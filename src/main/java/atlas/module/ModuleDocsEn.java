@@ -291,7 +291,6 @@ final class ModuleDocsEn {
         d("NoDelay", "Removes delays: attacking, clicking, jumping.");
         d("MLG", "Saves a fall with water or a ladder.");
         d("BlockESP", "Marks chests, beds or chosen blocks.");
-        d("AutoMessage", "Sends a message after a game or a kill.");
         d("NoItemRelease", "Does not send the release-use-item packet when you let go of right click; the server still sees the item in use, the client stops as usual. Slinky's method: it watches the packets that go out and drops the first release after a use.");
         d("FastAccel", "Faster start: on the ground, moves your speed part of the way toward the speed the held keys settle at. Never past what the keys would reach anyway; it only gets there sooner. (From Slinky)");
         help("FastAccel", "boost", "How much of the remaining gap is closed each tick. 0% = vanilla, 100% = at once.");
@@ -376,7 +375,6 @@ final class ModuleDocsEn {
         d("TargetFilter", "One shared answer to who counts as a target (friends, team, bots, invisible, distance) for combat and latency modules.");
         d("MCF", "Middle-click a player to add or remove a friend.");
         d("NickHider", "Hides your name (chat, scoreboard, level).");
-        d("Spammer", "Sends chat messages on a timer.");
         d("AutoAuth", "Types the server's login / register password for you.");
         d("AutoHypixel", "Hypixel helpers: accept policies, next game and more.");
         d("BedwarUtils", "Bedwars helpers: diamond upgrades, item tracker, invisibility, pearl and approach alerts.");

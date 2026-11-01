@@ -61,7 +61,7 @@ public final class ModuleCategories {
                 ChestAura.class, ChestStealer.class, FastPlace.class, SpeedMine.class, Timer.class,
                 AutoPlace.class);
         put(Category.MISC,
-                AutoMessage.class, AntiBot.class, TargetFilter.class, MCF.class, NickHider.class, Spammer.class, AutoAuth.class,
+                AntiBot.class, TargetFilter.class, MCF.class, NickHider.class, AutoAuth.class,
                 AutoHypixel.class, BedwarUtils.class, BedTracker.class, LightningTracker.class,
                 AntiCheat.class, AntiObfuscate.class, MouseRawInput.class,
                 ResourceSpoofer.class, NoRotate.class, ExploitFixer.class,

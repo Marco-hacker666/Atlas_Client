@@ -109,7 +109,6 @@ public class Atlas {
         moduleManager.modules.put(NoDelay.class, new NoDelay());
         moduleManager.modules.put(MLG.class, new MLG());
         moduleManager.modules.put(BlockESP.class, new BlockESP());
-        moduleManager.modules.put(AutoMessage.class, new AutoMessage());
         moduleManager.modules.put(AutoReconnect.class, new AutoReconnect());
         moduleManager.modules.put(StaffDetector.class, new StaffDetector());
         moduleManager.modules.put(Freecam.class, new Freecam());
@@ -268,7 +267,6 @@ public class Atlas {
         moduleManager.modules.put(PlayTracker.class, new PlayTracker());
         moduleManager.modules.put(FreeLook.class, new FreeLook());
         moduleManager.modules.put(ItemPhysics.class, new ItemPhysics());
-        moduleManager.modules.put(Spammer.class, new Spammer());
         moduleManager.modules.put(Speed.class, new Speed());
         moduleManager.modules.put(SpeedMine.class, new SpeedMine());
         moduleManager.modules.put(Sprint.class, new Sprint());

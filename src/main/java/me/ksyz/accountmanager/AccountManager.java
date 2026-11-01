@@ -1,5 +1,7 @@
 package me.ksyz.accountmanager;
 
+import me.ksyz.accountmanager.utils.TokenVault;
+
 import com.google.gson.*;
 import me.ksyz.accountmanager.auth.Account;
 import me.ksyz.accountmanager.utils.Nan0EventRegister;
@@ -44,6 +46,7 @@ public class AccountManager {
 
     public static void load() {
         accounts.clear();
+        boolean plain = false;
         try {
             JsonElement json = new JsonParser().parse(
                     new BufferedReader(new FileReader(file))
@@ -52,9 +55,14 @@ public class AccountManager {
                 JsonArray jsonArray = json.getAsJsonArray();
                 for (JsonElement jsonElement : jsonArray) {
                     JsonObject jsonObject = jsonElement.getAsJsonObject();
+                    String refresh = Optional.ofNullable(jsonObject.get("refreshToken")).map(JsonElement::getAsString).orElse("");
+                    String access = Optional.ofNullable(jsonObject.get("accessToken")).map(JsonElement::getAsString).orElse("");
+                    /* 2026-11-01: tokens are kept encrypted (TokenVault); an old plain one is re-saved encrypted. */
+                    plain |= !refresh.isEmpty() && !TokenVault.isEncrypted(refresh)
+                            || !access.isEmpty() && !TokenVault.isEncrypted(access);
                     accounts.add(new Account(
-                            Optional.ofNullable(jsonObject.get("refreshToken")).map(JsonElement::getAsString).orElse(""),
-                            Optional.ofNullable(jsonObject.get("accessToken")).map(JsonElement::getAsString).orElse(""),
+                            TokenVault.decrypt(refresh),
+                            TokenVault.decrypt(access),
                             Optional.ofNullable(jsonObject.get("username")).map(JsonElement::getAsString).orElse(""),
                             Optional.ofNullable(jsonObject.get("unban")).map(JsonElement::getAsLong).orElse(0L),
                             Optional.ofNullable(jsonObject.get("clientId")).map(JsonElement::getAsString).orElse(""),
@@ -66,6 +74,9 @@ public class AccountManager {
         } catch (FileNotFoundException e) {
             System.err.print("Couldn't find atlas.accounts.json!");
         }
+        if (plain) {
+            save();
+        }
     }
 
     public static void save() {
@@ -73,8 +84,8 @@ public class AccountManager {
             JsonArray jsonArray = new JsonArray();
             for (Account account : accounts) {
                 JsonObject jsonObject = new JsonObject();
-                jsonObject.addProperty("refreshToken", account.getRefreshToken());
-                jsonObject.addProperty("accessToken", account.getAccessToken());
+                jsonObject.addProperty("refreshToken", TokenVault.encrypt(account.getRefreshToken()));
+                jsonObject.addProperty("accessToken", TokenVault.encrypt(account.getAccessToken()));
                 jsonObject.addProperty("username", account.getUsername());
                 jsonObject.addProperty("unban", account.getUnban());
                 jsonObject.addProperty("clientId", account.getClientId());

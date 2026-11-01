@@ -271,13 +271,6 @@ AutoClicker randomization
 AutoClicker range
 AutoClicker start-delay-ms
 AutoClicker weapons-only
-AutoGG #name AutoGG
-AutoGG delay-ms
-AutoGG first-message
-AutoGG first-text
-AutoGG second-delay-ms
-AutoGG second-message
-AutoGG second-text
 AutoGapple #name Gapple
 AutoGapple Eat-In-Combat
 AutoGapple Health-Percent
@@ -293,7 +286,6 @@ AutoHypixel #name AutoHypixel
 AutoHypixel AutoPolicies
 AutoHypixel InvDisabler
 AutoHypixel Silent
-AutoMessage #name AutoMessage
 AutoPlace #name AutoPlace
 AutoPlace frame
 AutoPlace min-delay
@@ -1306,18 +1298,10 @@ KillEffect bolt
 KillEffect particles
 KillEffect sound
 KillEffect volume
-KillMessage #name KillMessage
-KillMessage delay
-KillMessage message
-KillMessage shout
 KillSounds #name KillSounds
 KillSounds only-players
 KillSounds sound
 KillSounds volume
-KillSults #name KillSults
-KillSults chance
-KillSults delay
-KillSults words
 KnockbackDelay #name KnockbackDelay
 KnockbackDelay AirDelay
 KnockbackDelay Chance
@@ -1734,10 +1718,6 @@ SmartClicking jitter-strength
 SmartClicking max-cps
 SmartClicking min-cps
 SmartClicking weapons-only
-Spammer #name Spammer
-Spammer delay
-Spammer random
-Spammer text
 Speed #name Speed
 Speed block-placements
 Speed blocksmc-boost

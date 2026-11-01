@@ -28,15 +28,12 @@ public class OnlineConfigApplier {
 
     /*
      * 2026-10-30 (audit): a config from someone else (or rewritten on the way) is not trusted with everything.
-     * Never applied from one: key binds; any text setting (AutoAuth's password, the lines Spammer, AutoGG, KillSults
-     * and the rest say in your name, commands to run); and switching on or off a module that runs code, holds a
+     * Never applied from one: key binds; any text setting (AutoAuth's password, the lines a module would say
+     * in your name, commands to run); and switching on or off a module that runs code, holds a
      * secret or talks for you.
      */
     private static final java.util.Set<Class<?>> SENSITIVE = new java.util.HashSet<Class<?>>(java.util.Arrays.asList(
-            atlas.module.modules.ScriptModule.class, atlas.module.modules.AutoAuth.class,
-            atlas.module.modules.Spammer.class, atlas.module.modules.AutoMessage.class,
-            atlas.module.modules.AutoGG.class, atlas.module.modules.KillSults.class,
-            atlas.module.modules.KillMessage.class));
+            atlas.module.modules.ScriptModule.class, atlas.module.modules.AutoAuth.class));
 
     public Result apply(String json) {
         if (json == null || json.trim().isEmpty()) {

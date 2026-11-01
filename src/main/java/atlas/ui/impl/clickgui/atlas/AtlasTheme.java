@@ -118,7 +118,8 @@ final class AtlasTheme {
     final BooleanProperty stateDots = new BooleanProperty("state-dots", true);
 
     // ---- Privacy (2026-10-08): the automatic log upload (management.LogUploader)
-    final BooleanProperty autoSendLogs = new BooleanProperty(atlas.management.LogUploader.SETTING, true);
+    /* Off by default since 2026-11-01 (owner): logs leave this computer only when the player turns this on. */
+    final BooleanProperty autoSendLogs = new BooleanProperty(atlas.management.LogUploader.SETTING, false);
 
     // ---- Performance (2026-10-15): phones on gl4es / Krypton Wrapper (util.render.MobileSafe)
     final ModeProperty mobileSafe = new ModeProperty(atlas.util.render.MobileSafe.SETTING, 0,

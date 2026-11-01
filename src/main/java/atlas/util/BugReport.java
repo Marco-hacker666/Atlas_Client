@@ -161,6 +161,18 @@ public final class BugReport {
         thread.start();
     }
 
+    /**
+     * Anonymous SpeedBlocker run data (RunCollector, 2026-11-01): kind "runs", the relay posts it to its own channel.
+     * Only numbers; nothing to redact. A failure is only logged: the rows are not kept for a retry.
+     */
+    public static void sendRuns(String title, String summary, String csv) {
+        post(relayUrl(), "runs", title, summary, csv, "", (ok, message) -> {
+            if (!ok) {
+                System.err.println("[Atlas] Run data not sent: " + message);
+            }
+        });
+    }
+
     private interface Sent {
         void done(boolean ok, String message);
     }

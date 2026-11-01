@@ -622,7 +622,8 @@ public final class ModuleDocs {
         help("SpeedBlocker", "lead-ping", "照你的 ping 算時機：你看到的對方位置晚了半個來回，方塊送到伺服器又要半個來回，所以選對方在那之後才會踩到的格子（再加 lead）。關掉就是一 tick 加 lead。");
         help("SpeedBlocker", "contact-ticks", "往前預測幾 tick 的路線；比這更遠的人先不擋。");
         help("SpeedBlocker", "blocks-per-run", "每次對方衝過來最多放幾格（DOUBLE 是幾組兩格）；放完之後，那個人停下來前不再放。");
-        help("SpeedBlocker", "show-plan", "畫出預測的路線（黃點）和選中要放方塊的格子（藍框）。");
+        help("SpeedBlocker", "record-runs", "記錄預測準不準：附近每個在移動的玩家先預測、之後對照他實際跑到哪，寫進 config/Atlas/speedblock-runs-*.csv。關掉時在聊天欄顯示平均誤差（跟直線預測比）。");
+        help("SpeedBlocker", "show-plan", "畫出附近每個在移動的玩家預測會跑的路線（灰點）、被選中的目標路線（黃點）和要放方塊的格子（藍框）。");
         help("AutoBlockIn", "debug", "開發用：把每一步的判斷寫進 config/Atlas/placedebug-*.txt（背景寫入，不影響 fps）。平常不用開。");
         help("AutoBlockIn", "debug-chat", "debug 時也印到聊天欄（每秒最多 4 行）。裝了聊天相關模組時很吃 fps，只在需要即時看時才開。");
         d("AutoBedDef", "自動在自己的床周圍放方塊防守。");

@@ -188,7 +188,8 @@ final class ModuleDocsEn {
         help("SpeedBlocker", "lead-ping", "Time the block by your ping: the runner you see is half a round trip old and the click takes the other half to arrive, so the cell chosen is one it reaches after that (plus lead). Off: one tick plus lead.");
         help("SpeedBlocker", "contact-ticks", "How far ahead the run is predicted, in ticks: a runner further off than this is not blocked yet.");
         help("SpeedBlocker", "blocks-per-run", "Blocks one run gets (a pair with DOUBLE); then nothing more for that player until it stops coming in.");
-        help("SpeedBlocker", "show-plan", "Draws the predicted run (yellow marks) and the cell chosen for the block (blue).");
+        help("SpeedBlocker", "record-runs", "Records how well the run prediction does: every moving player nearby is predicted and then checked against where it really went, into config/Atlas/speedblock-runs-*.csv. Switching it off prints the mean error against a straight line.");
+        help("SpeedBlocker", "show-plan", "Draws where everyone moving nearby is predicted to run (grey), the target's run (yellow) and the cell chosen for the block (blue).");
         help("SpeedBlocker", "height", "FEET: one block, enough to stop a walk. DOUBLE: a two-high wall, also stops a jump over it.");
         help("SpeedBlocker", "restore-delay", "Ticks the block stays in your hand after the last placement, then the slot you had comes back.");
         help("SpeedBlocker", "require-sprint", "Only targets the server has sprinting.");

@@ -78,6 +78,8 @@ public class Atlas {
         EventManager.register(new atlas.management.PerfLog());
         EventManager.register(new atlas.management.HitTimer());
         EventManager.register(new atlas.management.LogUploader());
+        /* Anonymous SpeedBlocker run data, only with the player's yes (2026-11-01). */
+        EventManager.register(new atlas.management.RunCollector());
         EventManager.register(new atlas.management.PlaceRotations());
         /* One definition of "a connection to a server" (Phase 2, 2026-09-28). */
         EventManager.register(new atlas.management.ServerSession());
@@ -293,6 +295,7 @@ public class Atlas {
         moduleManager.modules.put(Accessories.class, new Accessories());
         commandManager.commands.add(new BindCommand());
         commandManager.commands.add(new atlas.command.commands.ReportCommand());
+        commandManager.commands.add(new atlas.command.commands.RunDataCommand());
         commandManager.commands.add(new ClickGuiCommand());
         commandManager.commands.add(new ConfigCommand());
         commandManager.commands.add(new DenickCommand());

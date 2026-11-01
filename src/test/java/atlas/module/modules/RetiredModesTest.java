@@ -25,12 +25,23 @@ public class RetiredModesTest {
     @Test
     public void scaffoldRetiredRotationsLoadAsGodBridge() {
         Scaffold scaffold = new Scaffold();
-        for (String old : new String[]{"SIDEWAYS", "SNAP", "3FMC", "SNAP2"}) {
+        for (String old : new String[]{"SIDEWAYS", "3FMC"}) {
             assertTrue(scaffold.rotationMode.parseString(old));
             assertEquals("GODBRIDGE", scaffold.rotationMode.getModeString());
         }
         for (String name : scaffold.rotationMode.visibleModes()) {
-            assertFalse(name, name.equals("SNAP") || name.equals("SNAP2") || name.equals("3FMC") || name.equals("SIDEWAYS"));
+            assertFalse(name, name.equals("3FMC") || name.equals("SIDEWAYS") || name.equals("SNAP2"));
         }
+    }
+
+    /** 2026-11-01 (owner): SNAP is back in the menu; SNAP2 loads as itself again, hidden as before. */
+    @Test
+    public void scaffoldSnapIsBack() {
+        Scaffold scaffold = new Scaffold();
+        assertTrue(scaffold.rotationMode.parseString("SNAP"));
+        assertEquals("SNAP", scaffold.rotationMode.getModeString());
+        assertTrue(scaffold.rotationMode.parseString("SNAP2"));
+        assertEquals("SNAP2", scaffold.rotationMode.getModeString());
+        assertTrue(java.util.Arrays.asList(scaffold.rotationMode.visibleModes()).contains("SNAP"));
     }
 }

@@ -113,9 +113,9 @@ public class Scaffold extends Module {
     private float lastSnapPlaceYaw = Float.NaN;
     private float lastSnapPlacePitch = Float.NaN;
     public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2", "POLAR", "TELLY"})
-            /* 2026-10-31 (owner's consolidation): SIDEWAYS, SNAP, 3FMC and SNAP2 retired (indices kept); a config
-               naming one gets GODBRIDGE. */
-            .retire("GODBRIDGE", "SIDEWAYS", "SNAP", "3FMC", "SNAP2")
+            /* 2026-10-31 (owner's consolidation): SIDEWAYS and 3FMC retired (indices kept); a config naming one gets
+               GODBRIDGE. SNAP and SNAP2 came back 2026-11-01 (owner: "put Scaffold snap back"), SNAP2 hidden as before. */
+            .retire("GODBRIDGE", "SIDEWAYS", "3FMC")
             /* 2026-10-08: fewer modes in the menu; the rest still load from old configs. */
             .hide("BACKWARDS", "SIDEWAYS", "SMOOTH", "Hypixel", "3FMC", "SNAP2")
             .alias("GODBIRGDE", "GODBRIDGE")
@@ -1312,8 +1312,9 @@ public class Scaffold extends Module {
                     /* The shared engine turns (in the turning modes at most turn-speed a tick on each axis --
                        LiquidBounce: RotationsValueGroup), keeps the grid and the DuplicateRotPlace guard. */
                     float cap = this.turnLimited() && !towerRotating ? this.turnSpeed.getValue() : RotationHelper.NO_LIMIT;
+                    /* A snap lands in the tick it is made: the click waits only snapDelay ticks for it. */
                     float[] onGrid = RotationHelper.request(this, targetYaw, targetPitch, 3, this.moveMode(), false, cap,
-                            MIN_STEP);
+                            snapMode ? SNAP_STEP : MIN_STEP);
                     if (onGrid == null) {
                         /* A higher priority has the look this tick. */
                         onGrid = RotationEngine.quantize(event.getYaw(), event.getPitch(), targetYaw, targetPitch);
@@ -1719,6 +1720,8 @@ public class Scaffold extends Module {
        a GodBridge side switch (about 90 degrees) or a change of direction has to land within a tick or two, or the
        block is not placed in time. */
     private static final float MIN_STEP = 70.0F;
+    /** SNAP / SNAP2: any turn in one tick (the engine's acceleration does not apply to a snap). */
+    private static final float SNAP_STEP = 360.0F;
 
     private boolean lbGodBridge() {
         int mode = this.rotationMode.getValue();

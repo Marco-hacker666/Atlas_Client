@@ -184,8 +184,11 @@ final class ModuleDocsEn {
         d("SpeedBlocker", "Puts a block in the path of a player running at you: the sprint stops, so the hit they had ready loses most of its knockback and you get the first one. Works in stick fights too.");
         help("SpeedBlocker", "scan-range", "How far to look for a player coming in.");
         help("SpeedBlocker", "min-approach", "Blocks a tick the target has to close on you before it is worth a block. A sprint is about 0.28, a walk about 0.1.");
-        help("SpeedBlocker", "lead", "Ticks of the target's motion to aim ahead of: the block goes where it will be, not where it is (one inside it is refused by the server). Raise it on high ping.");
-        help("SpeedBlocker", "reach-ahead", "How far along its motion to look for the first open cell.");
+        help("SpeedBlocker", "lead", "Extra ticks of margin on top of the ping timing: the block is to be in the runner's world this much before it gets there. Raise it if blocks come a step late.");
+        help("SpeedBlocker", "lead-ping", "Time the block by your ping: the runner you see is half a round trip old and the click takes the other half to arrive, so the cell chosen is one it reaches after that (plus lead). Off: one tick plus lead.");
+        help("SpeedBlocker", "contact-ticks", "How far ahead the run is predicted, in ticks: a runner further off than this is not blocked yet.");
+        help("SpeedBlocker", "blocks-per-run", "Blocks one run gets (a pair with DOUBLE); then nothing more for that player until it stops coming in.");
+        help("SpeedBlocker", "show-plan", "Draws the predicted run (yellow marks) and the cell chosen for the block (blue).");
         help("SpeedBlocker", "height", "FEET: one block, enough to stop a walk. DOUBLE: a two-high wall, also stops a jump over it.");
         help("SpeedBlocker", "restore-delay", "Ticks the block stays in your hand after the last placement, then the slot you had comes back.");
         help("SpeedBlocker", "require-sprint", "Only targets the server has sprinting.");

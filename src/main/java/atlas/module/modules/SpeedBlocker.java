@@ -9,7 +9,7 @@ import atlas.events.MoveInputEvent;
 import atlas.events.PacketEvent;
 import atlas.events.UpdateEvent;
 import atlas.management.Arbiter;
-import atlas.management.RotationState;
+import atlas.management.RotationHelper;
 import atlas.module.Module;
 import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.FloatProperty;
@@ -17,7 +17,6 @@ import atlas.property.properties.IntProperty;
 import atlas.property.properties.ModeProperty;
 import atlas.util.BlockUtil;
 import atlas.util.CombatTargeting;
-import atlas.util.MoveUtil;
 import atlas.util.PlaceUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
@@ -25,6 +24,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.minecraft.network.play.server.S23PacketBlockChange;
+import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.MovingObjectPosition;
@@ -68,6 +68,37 @@ import java.util.concurrent.ConcurrentHashMap;
  *  4. the placement is made against a face a ray along the rotation about to
  *     be sent actually hits, turning at most speed degrees a tick.
  *
+ * 2026-11-01 (owner: "make it better"):
+ *  - positions are the server's, not the screen's: another player is drawn
+ *    gliding three ticks behind the position the server sent (interpolation),
+ *    so velocity, path and the box to keep clear of are read from serverPos;
+ *  - the lead grows with ping (lead-ping): the block is on the server half a
+ *    round trip after the click, so the target has run that much further;
+ *  - only a target about to arrive is blocked (contact-ticks): one still six
+ *    blocks out at walking pace got a block it would never reach;
+ *  - the look goes through the shared engine (RotationHelper): turned as a
+ *    hand does at speed degrees a tick at most, on the mouse grid with the
+ *    duplicate-rotation guard, keys turned for SILENT, handed back after; the
+ *    click goes along the look the engine returns, the one the packet carries;
+ *  - a scroll while the block is held picks the slot that comes back.
+ *
+ * Prediction and fewer actions (2026-11-01, owner: "make it complete, it is
+ * unique, it must really help, as undetectable as it can be"):
+ *  - the run is simulated tick by tick under vanilla movement (SpeedblockPlan
+ *    .simulate): the target keeps the keys it holds relative to its look
+ *    (W, W+A ...) and, while it is chasing, keeps its look on this player, so
+ *    a strafe that curls in is followed; sprint or walk, ground or air;
+ *  - a cell counts from the tick the front of the target's box reaches it, and
+ *    only if the block is in the target's world by then: half our round trip,
+ *    a server tick and half the target's round trip (its tab ping), plus lead;
+ *  - cells this player's own next steps run into are left alone;
+ *  - blocks-per-run blocks a run (DOUBLE: both cells), then nothing more for
+ *    that target until it stops coming in;
+ *  - the hotbar changes only once there is a face to place on, and the held
+ *    item comes back restore-delay ticks after (3 by default: the sword is
+ *    wanted for the hit the block sets up);
+ *  - show-plan draws the predicted run and the chosen cell.
+ *
  * The server's answer is read too: a block change into a cell still waiting
  * means the placement landed, one that comes back replaceable means it did
  * not (a claim, a region), and a teleport drops the aim the click was built
@@ -94,17 +125,23 @@ public class SpeedBlocker extends Module {
     public final FloatProperty scanRange = new FloatProperty("scan-range", 6.0F, 3.0F, 12.0F);
     /** Blocks a tick the target has to close on us before it is worth a block. */
     public final FloatProperty minApproach = new FloatProperty("min-approach", 0.1F, 0.01F, 0.3F);
-    /** Ticks of the target's motion to aim ahead of, so the block is there before it is. */
-    public final IntProperty lead = new IntProperty("lead", 1, 0, 5);
-    /** Blocks to look ahead along the motion for the first open cell. */
-    public final FloatProperty reachAhead = new FloatProperty("reach-ahead", 2.5F, 1.0F, 4.0F);
+    /** Extra ticks of margin: the block is to be in the target's world this much before it gets there. */
+    public final IntProperty lead = new IntProperty("lead", 0, 0, 5);
+    /** Time the block by both pings (ours and the target's tab ping); off: one tick plus lead. */
+    public final BooleanProperty leadPing = new BooleanProperty("lead-ping", true);
+    /** How far ahead the run is predicted, ticks: a target further off than this is not blocked yet. */
+    public final IntProperty contactTicks = new IntProperty("contact-ticks", 20, 2, 40);
     public final ModeProperty height = new ModeProperty("height", 0, new String[]{"FEET", "DOUBLE"});
+    /** Blocks one run gets (DOUBLE: pairs), then nothing more for that target until it stops coming in. */
+    public final IntProperty blocksPerRun = new IntProperty("blocks-per-run", 1, 1, 3);
+    /** Draws the predicted run and the chosen cell. */
+    public final BooleanProperty showPlan = new BooleanProperty("show-plan", false);
     /** Degrees of turn per tick. */
     public final IntProperty speed = new IntProperty("speed", 45, 5, 180);
     public final IntProperty placeInterval = new IntProperty("place-interval", 2, 1, 10);
     public final IntProperty swapDelay = new IntProperty("swap-delay", 1, 0, 3);
     /** Ticks the block stays in the hand after the last placement, then the old slot comes back. */
-    public final IntProperty restoreDelay = new IntProperty("restore-delay", 8, 0, 60);
+    public final IntProperty restoreDelay = new IntProperty("restore-delay", 3, 0, 60);
     public final IntProperty maxRetries = new IntProperty("max-retries", 3, 1, 10);
     /** Milliseconds a cell that took max-retries is left alone. */
     public final IntProperty retryCooldown = new IntProperty("retry-cooldown", 2000, 250, 10000);
@@ -136,12 +173,24 @@ public class SpeedBlocker extends Module {
     private int lastPlaceTick = -100;
     private int swapWait;
     private int lastSlot = -1;
-    /** Tick the held slot goes back, 0 when it is not to be touched. */
-    private int restoreAt;
-    /* Yaw steps, for Grim's duplicate-rotation check (its memory is
-       server-side, so these are kept across enables). */
-    private float placedTurn = -1.0F;
+    /* 2026-11-01 (owner: "SpeedBlocker keeps me holding blocks, I cannot switch to my weapon"): the slot came back
+       only restore-delay ticks after a placement, so a swap that never led to one (the runner turned, the cell
+       came too late) kept the block in hand for good, and every key or scroll was taken as the slot to give back.
+       Now the hand goes back restore-delay ticks after the block was last wanted or placed, whatever happened, and
+       the player's own key or scroll always wins: the hand is theirs, and not taken again for HANDS_OFF ticks. */
+    /** The last tick a block was wanted in hand (an aim to place). */
+    private int wantedTick = -100;
+    /** Until this tick the hotbar is the player's: they picked a slot themselves. */
+    private int handsOffUntil;
+    private static final int HANDS_OFF = 20;
     private String targetName;
+    /** Blocks placed in the target's current run, and the last tick it was coming in, by entity id. */
+    private final Map<Integer, int[]> runs = new HashMap<Integer, int[]>();
+    /** A run ends when the target has not been coming in for this many ticks. */
+    private static final int RUN_GAP = 10;
+    /** For show-plan: the predicted feet positions (x, y, z) and the chosen cell; read on the render thread. */
+    private volatile double[][] planPath;
+    private volatile BlockPos planCell;
 
     public SpeedBlocker() {
         super("SpeedBlocker", false, false, "Puts a block in the path of a player running in, to break the sprint");
@@ -152,7 +201,7 @@ public class SpeedBlocker extends Module {
         this.resetState();
         this.trace.reset();
         this.lastSlot = -1;
-        this.restoreAt = 0;
+        this.handsOffUntil = 0;
         this.trace.log(this.tick, "enabled", "");
     }
 
@@ -162,7 +211,6 @@ public class SpeedBlocker extends Module {
             mc.thePlayer.inventory.currentItem = this.lastSlot;
         }
         this.lastSlot = -1;
-        this.restoreAt = 0;
         this.resetState();
     }
 
@@ -216,6 +264,9 @@ public class SpeedBlocker extends Module {
         this.locked = null;
         this.lastSeen.clear();
         this.velocities.clear();
+        this.runs.clear();
+        this.planPath = null;
+        this.planCell = null;
         this.attempts.clear();
         this.refusedUntil.clear();
         this.pending.clear();
@@ -257,6 +308,10 @@ public class SpeedBlocker extends Module {
         List<BlockPos> goals = target != null ? this.goals(target) : null;
         if (goals == null || goals.isEmpty()) {
             this.locked = null;
+            if (target == null) {
+                this.planPath = null;
+                this.planCell = null;
+            }
             this.trace.log(this.tick, "waiting", target == null ? "no one coming in" : "no open cell in its path");
             this.restoreDue();
             return;
@@ -270,15 +325,8 @@ public class SpeedBlocker extends Module {
             this.restoreDue();
             return;
         }
-        if (mc.thePlayer.inventory.currentItem != slot) {
-            if (this.lastSlot < 0) {
-                this.lastSlot = mc.thePlayer.inventory.currentItem;
-            }
-            mc.thePlayer.inventory.currentItem = slot;
-            this.swapWait = this.swapDelay.getValue();
-            this.trace.log(this.tick, "swap", "slot " + slot + ", waiting " + this.swapWait);
-        }
-        ItemStack stack = mc.thePlayer.inventory.getCurrentItem();
+        /* Planned with the block the hotbar would give; the hand changes only once there is a face to place on. */
+        ItemStack stack = mc.thePlayer.inventory.getStackInSlot(slot);
 
         /* The rotation and eye position the server holds. */
         float serverYaw = event.getYaw();
@@ -295,20 +343,31 @@ public class SpeedBlocker extends Module {
             this.restoreDue();
             return;
         }
+        this.planCell = aim.cell;
+        if (mc.thePlayer.inventory.currentItem != slot) {
+            if (this.tick < this.handsOffUntil) {
+                /* The player just picked their slot: not taken from them. */
+                this.trace.log(this.tick, "waiting", "the hotbar is the player's for now");
+                this.restoreDue();
+                return;
+            }
+            if (this.lastSlot < 0) {
+                this.lastSlot = mc.thePlayer.inventory.currentItem;
+            }
+            mc.thePlayer.inventory.currentItem = slot;
+            this.swapWait = this.swapDelay.getValue();
+            this.trace.log(this.tick, "swap", "slot " + slot + ", waiting " + this.swapWait);
+        }
+        this.wantedTick = this.tick;
 
-        /* The rotation this tick's movement packet will carry. */
-        float[] rotation = aim.current ? new float[]{serverYaw, serverPitch}
-                : PlaceUtil.step(serverYaw, serverPitch, aim.yaw, aim.pitch, this.speed.getValue());
-        float turn = Math.abs(MathHelper.wrapAngleTo180_float(rotation[0] - serverYaw));
-        /* Also against the server's own memory (PlaceRotations, 2026-10-04). */
-        if (turn > 2.0F && (Math.abs(turn - this.placedTurn) < 1.0E-3F
-                || atlas.management.PlaceRotations.wouldDuplicate(rotation[0]))) {
-            /* Grim DuplicateRotPlace flags a placement whose yaw step equals the
-               one before the previous placement; one mouse count more breaks the tie. */
-            double gcd = atlas.util.RotationUtil.gcd();
-            rotation[0] += Math.signum(MathHelper.wrapAngleTo180_float(rotation[0] - serverYaw))
-                    * (float) (gcd > 0.0 ? gcd : 0.01);
-            turn = Math.abs(MathHelper.wrapAngleTo180_float(rotation[0] - serverYaw));
+        /* The rotation this tick's movement packet will carry: the shared engine's (2026-11-01), which keeps
+           the grid and Grim's duplicate-rotation guard. Null when a higher priority has the look this tick. */
+        float[] rotation = RotationHelper.request(this, aim.current ? serverYaw : aim.yaw,
+                aim.current ? serverPitch : aim.pitch, PRIORITY, this.moveMode(), false, this.speed.getValue());
+        if (rotation == null) {
+            this.trace.log(this.tick, "waiting", "another module has the look");
+            this.restoreDue();
+            return;
         }
 
         /* Click before the tick's movement packet, along the rotation that
@@ -320,10 +379,12 @@ public class SpeedBlocker extends Module {
                 if (PlaceUtil.click(shot)) {
                     this.lastPlaceTick = this.tick;
                     this.locked = null;
-                    this.placedTurn = turn;
-                    this.restoreAt = this.tick + this.restoreDelay.getValue();
                     this.targetName = target.getName();
                     this.pending.put(shot.cell, this.tick);
+                    int[] run = this.runs.get(target.getEntityId());
+                    if (run != null) {
+                        run[0]++;
+                    }
                     this.count(shot.cell);
                     this.trace.log(this.tick, "success", "block in " + fmt(shot.cell) + " ahead of "
                             + target.getName());
@@ -332,8 +393,6 @@ public class SpeedBlocker extends Module {
                 }
             }
         }
-        event.setRotation(rotation[0], rotation[1], PRIORITY);
-        event.setPervRotation(this.moveFix.getValue() != 0 ? rotation[0] : mc.thePlayer.rotationYaw, PRIORITY);
         if (this.moveFix.getModeString().equals("REAL")) {
             /* REAL: the camera turns as well, spread over this tick's frames by
                RotationManager; the mouse still works (not forced). */
@@ -360,21 +419,45 @@ public class SpeedBlocker extends Module {
             }
             int id = player.getEntityId();
             alive.add(id);
+            /* 2026-11-01 (owner: "it did not place at all"): a server sends a player's position every second tick
+               (the entity tracker's update interval for players), so a one-tick difference was 0, then twice the
+               speed: the run predicted from it jumped about every tick, the chosen cell with it, and the look never
+               settled on one long enough to click. Velocity is now the change between two updates over the ticks
+               between them; between updates it is kept. lastSeen: {x, z, tick of that update, last tick seen}. */
             double[] last = this.lastSeen.get(id);
-            if (last != null && this.tick - (int) last[2] == 1) {
-                double vx = player.posX - last[0];
-                double vz = player.posZ - last[1];
+            double sx = serverX(player);
+            double sz = serverZ(player);
+            if (last == null || this.tick - (int) last[3] > 1) {
+                this.velocities.remove(id);
+                this.lastSeen.put(id, new double[]{sx, sz, this.tick, this.tick});
+                continue;
+            }
+            last[3] = this.tick;
+            if (sx == last[0] && sz == last[1]) {
+                if (this.tick - (int) last[2] > 3) {
+                    /* No update for longer than a tracker interval or two: it is standing. */
+                    this.velocities.remove(id);
+                }
+                continue;
+            }
+            int dt = Math.max(1, this.tick - (int) last[2]);
+            double vx = (sx - last[0]) / dt;
+            double vz = (sz - last[1]) / dt;
+            if (vx * vx + vz * vz > 1.5 * 1.5) {
+                /* A teleport, not a run. */
+                this.velocities.remove(id);
+            } else {
                 double[] previous = this.velocities.get(id);
                 if (previous != null) {
-                    /* Smoothing: a one-tick position correction is not a run. */
+                    /* Smoothing: one odd update is not a run. */
                     vx = vx * 0.65 + previous[0] * 0.35;
                     vz = vz * 0.65 + previous[1] * 0.35;
                 }
                 this.velocities.put(id, new double[]{vx, vz});
-            } else {
-                this.velocities.remove(id);
             }
-            this.lastSeen.put(id, new double[]{player.posX, player.posZ, this.tick});
+            last[0] = sx;
+            last[1] = sz;
+            last[2] = this.tick;
         }
         this.lastSeen.keySet().removeIf(id -> !alive.contains(id));
         this.velocities.keySet().removeIf(id -> !alive.contains(id));
@@ -395,12 +478,12 @@ public class SpeedBlocker extends Module {
             if (this.requireSprint.getValue() && !player.isSprinting()) {
                 continue;
             }
-            double dx = mc.thePlayer.posX - player.posX;
-            double dz = mc.thePlayer.posZ - player.posZ;
+            double dx = mc.thePlayer.posX - this.nowX(player);
+            double dz = mc.thePlayer.posZ - this.nowZ(player);
             if (dx * dx + dz * dz > scan * scan) {
                 continue;
             }
-            if (Math.abs(player.getEntityBoundingBox().minY - mc.thePlayer.getEntityBoundingBox().minY) > SAME_FLOOR) {
+            if (Math.abs(serverY(player) - mc.thePlayer.getEntityBoundingBox().minY) > SAME_FLOOR) {
                 continue;
             }
             double[] motion = this.velocities.get(player.getEntityId());
@@ -408,6 +491,23 @@ public class SpeedBlocker extends Module {
                 continue;
             }
             double approach = SpeedblockPlan.approach(motion[0], motion[1], dx, dz);
+            /* Ticks until it is on top of this player at that speed: too far off is not worth a block yet. */
+            double gap = Math.max(0.0, Math.sqrt(dx * dx + dz * dz) - 0.6);
+            if (approach > 0.0 && gap / approach > this.contactTicks.getValue()) {
+                continue;
+            }
+            if (approach > this.minApproach.getValue()) {
+                int[] run = this.runs.get(player.getEntityId());
+                if (run == null || this.tick - run[1] > RUN_GAP) {
+                    run = new int[]{0, this.tick};
+                    this.runs.put(player.getEntityId(), run);
+                }
+                run[1] = this.tick;
+                if (run[0] >= this.blocksPerRun.getValue() * (this.height.getModeString().equals("DOUBLE") ? 2 : 1)) {
+                    /* This run has had its blocks. */
+                    continue;
+                }
+            }
             if (approach > bestApproach) {
                 bestApproach = approach;
                 best = player;
@@ -423,25 +523,56 @@ public class SpeedBlocker extends Module {
         if (motion == null) {
             return goals;
         }
-        int feetY = MathHelper.floor_double(target.getEntityBoundingBox().minY + 1.0E-3);
+        double sx = this.nowX(target);
+        double sy = serverY(target);
+        double sz = this.nowZ(target);
+        int feetY = MathHelper.floor_double(sy + 1.0E-3);
         boolean doubleHeight = this.height.getModeString().equals("DOUBLE");
-        double leadDistance = this.lead.getValue() * SpeedblockPlan.speed(motion[0], motion[1]);
-        /* Never lead past half the lookahead, or a high lead leaves no cell at all. */
-        leadDistance = Math.min(leadDistance, this.reachAhead.getValue() * 0.5);
-        List<int[]> cells = SpeedblockPlan.path(target.posX, target.posZ, feetY, motion[0], motion[1],
-                leadDistance, this.reachAhead.getValue(), 2, doubleHeight);
+        boolean sprinting = target.isSprinting() || SpeedblockPlan.speed(motion[0], motion[1]) >= 0.25;
+        double[][] run = SpeedblockPlan.simulate(sx, sz, motion[0], motion[1], target.rotationYawHead,
+                mc.thePlayer.posX, mc.thePlayer.posZ, target.onGround, sprinting, this.contactTicks.getValue());
+        double[][] shown = new double[run.length][];
+        for (int i = 0; i < run.length; i++) {
+            shown[i] = new double[]{run[i][0], sy, run[i][1]};
+        }
+        this.planPath = shown;
+        List<int[]> cells = SpeedblockPlan.cellsAlong(sx, sz, feetY, run, 6, doubleHeight);
+        /* Not before the block can be in the target's world. */
+        int need = this.needTicks(target);
         Vec3 eye = mc.thePlayer.getPositionEyes(1.0F);
         double reach = this.range.getValue() + 0.87;
+        /* Where the server has the target, not where it is drawn. */
+        AxisAlignedBB targetBox = target.getEntityBoundingBox().offset(sx - target.posX,
+                sy - target.getEntityBoundingBox().minY, sz - target.posZ);
+        boolean holding = PlaceUtil.usableBlock(mc.thePlayer.inventory.getCurrentItem());
         for (int[] cell : cells) {
             BlockPos pos = new BlockPos(cell[0], cell[1], cell[2]);
+            /* The click comes once the look is there (and the block in hand): that wait counts too. */
+            double cx = pos.getX() + 0.5 - eye.xCoord;
+            double cy = pos.getY() + 0.5 - eye.yCoord;
+            double cz = pos.getZ() + 0.5 - eye.zCoord;
+            float cellYaw = (float) SpeedblockPlan.yawOf(cx, cz);
+            float cellPitch = (float) -Math.toDegrees(Math.atan2(cy, Math.sqrt(cx * cx + cz * cz)));
+            float turn = atlas.util.RotationEngine.angle(cellYaw, cellPitch, RotationHelper.serverYaw(),
+                    RotationHelper.serverPitch());
+            int ready = (int) Math.ceil(Math.max(0.0F, turn - 5.0F) / Math.max(1, this.speed.getValue()))
+                    + (holding ? 0 : this.swapDelay.getValue());
+            if (cell[3] < need + ready) {
+                /* It would be there before the block is: too late for this one. */
+                continue;
+            }
             if (!BlockUtil.isReplaceable(pos) || this.refusedUntil.containsKey(pos)
                     || this.pending.containsKey(pos)) {
+                continue;
+            }
+            if (this.inOwnWay(pos)) {
+                /* This player is about to walk there: the block would stop us, not them. */
                 continue;
             }
             /* A block in either body is refused or pushes the player: skip it
                and let the next cell along the path be the goal. */
             if (PlaceUtil.boxIntersects(mc.thePlayer.getEntityBoundingBox(), pos)
-                    || PlaceUtil.boxIntersects(target.getEntityBoundingBox(), pos)) {
+                    || PlaceUtil.boxIntersects(targetBox, pos)) {
                 continue;
             }
             if (eye.squareDistanceTo(new Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5)) > reach * reach) {
@@ -479,24 +610,114 @@ public class SpeedBlocker extends Module {
         this.trace.log(this.tick, "refused", fmt(cell) + " for " + this.retryCooldown.getValue() + "ms");
     }
 
-    /** Gives the held slot back once the placement is over. */
+    /** Gives the held slot back restore-delay ticks after the block was last wanted or placed. */
     private void restoreDue() {
-        if (this.restoreAt == 0 || this.tick < this.restoreAt) {
+        if (this.lastSlot < 0) {
             return;
         }
-        this.restoreAt = 0;
-        if (mc.thePlayer != null && this.lastSlot >= 0 && this.lastSlot <= 8) {
+        if (this.tick - Math.max(this.lastPlaceTick, this.wantedTick) < this.restoreDelay.getValue()) {
+            return;
+        }
+        if (mc.thePlayer != null && this.lastSlot <= 8) {
             mc.thePlayer.inventory.currentItem = this.lastSlot;
         }
         this.lastSlot = -1;
     }
 
+    /** The player's own key or scroll: the slot is theirs, nothing is given back, and the hand is left alone a while. */
     @EventTarget
-    public void onMove(MoveInputEvent event) {
-        if (this.isEnabled() && this.moveFix.getValue() == 1 && RotationState.isActived()
-                && RotationState.getPriority() == PRIORITY && MoveUtil.isForwardPressed()) {
-            MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
+    public void onSwap(atlas.events.SwapItemEvent event) {
+        if (this.isEnabled() && this.lastSlot >= 0) {
+            this.lastSlot = -1;
+            this.locked = null;
+            this.handsOffUntil = this.tick + HANDS_OFF;
         }
+    }
+
+    /** move-fix as the engine's movement yaw: NONE the camera's, SILENT the look's with the keys turned, STRICT and REAL the look's. */
+    private int moveMode() {
+        switch (this.moveFix.getValue()) {
+            case 0:
+                return RotationHelper.MOVE_CAMERA;
+            case 1:
+                return RotationHelper.MOVE_FIX;
+            default:
+                return RotationHelper.MOVE_LOOK;
+        }
+    }
+
+    /** The tick a cell may be reached at the soonest: when a block placed now is in the target's world, plus lead. */
+    private int needTicks(EntityPlayer target) {
+        int base = this.leadPing.getValue() ? SpeedblockPlan.serverWallAfterTicks(atlas.util.Ping.own()) : 1;
+        return base + this.lead.getValue();
+    }
+
+    /** The cell is where this player's box goes in the next three ticks at its own motion. */
+    private boolean inOwnWay(BlockPos pos) {
+        AxisAlignedBB box = mc.thePlayer.getEntityBoundingBox();
+        for (int t = 1; t <= 3; t++) {
+            if (PlaceUtil.boxIntersects(box.offset(mc.thePlayer.motionX * t, 0.0, mc.thePlayer.motionZ * t), pos)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** show-plan: the predicted run as small marks at the feet, and the chosen cell. */
+    @EventTarget
+    public void onRender(atlas.events.Render3DEvent event) {
+        if (!this.isEnabled() || !this.showPlan.getValue() || mc.getRenderManager() == null) {
+            return;
+        }
+        double[][] path = this.planPath;
+        BlockPos cell = this.planCell;
+        if (path == null && cell == null) {
+            return;
+        }
+        atlas.mixin.IAccessorRenderManager view = (atlas.mixin.IAccessorRenderManager) mc.getRenderManager();
+        atlas.util.RenderUtil.enableRenderState();
+        if (path != null) {
+            for (double[] p : path) {
+                atlas.util.RenderUtil.drawFilledBox(new AxisAlignedBB(p[0] - 0.06, p[1], p[2] - 0.06,
+                        p[0] + 0.06, p[1] + 0.12, p[2] + 0.06).offset(-view.getRenderPosX(), -view.getRenderPosY(),
+                        -view.getRenderPosZ()), 255, 200, 40, 160);
+            }
+        }
+        if (cell != null) {
+            atlas.util.RenderUtil.drawBlockBoundingBox(cell, 1.0, 60, 220, 255, 220, 2.0F);
+        }
+        atlas.util.RenderUtil.disableRenderState();
+    }
+
+    /* The server's position of another player (S14/S18, in 1/32 blocks): the drawn one trails it. */
+    /** The server's position of the player now: its last update moved on by the velocity for the ticks since. */
+    private double nowX(EntityPlayer player) {
+        return serverX(player) + this.sinceUpdate(player, 0);
+    }
+
+    private double nowZ(EntityPlayer player) {
+        return serverZ(player) + this.sinceUpdate(player, 1);
+    }
+
+    private double sinceUpdate(EntityPlayer player, int axis) {
+        double[] last = this.lastSeen.get(player.getEntityId());
+        double[] motion = this.velocities.get(player.getEntityId());
+        if (last == null || motion == null) {
+            return 0.0;
+        }
+        return motion[axis] * Math.max(0, Math.min(3, this.tick - (int) last[2]));
+    }
+
+    private static double serverX(EntityPlayer player) {
+        return player.serverPosX / 32.0;
+    }
+
+    private static double serverY(EntityPlayer player) {
+        return player.serverPosY / 32.0;
+    }
+
+    private static double serverZ(EntityPlayer player) {
+        return player.serverPosZ / 32.0;
     }
 
     @Override

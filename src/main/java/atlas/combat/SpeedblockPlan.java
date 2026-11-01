@@ -97,6 +97,165 @@ public final class SpeedblockPlan {
         return out;
     }
 
+    // ---------------------------------------------------------------- prediction (2026-11-01)
+
+    /** Ground: what a tick of friction leaves of the motion (slipperiness 0.6 x 0.91), and a sprint's push a tick. */
+    static final double GROUND_DRAG = 0.546;
+    static final double GROUND_SPRINT = 0.13;
+    static final double GROUND_WALK = 0.1;
+    /** Air: drag, and the push a sprint (or a walk) still gives. */
+    static final double AIR_DRAG = 0.91;
+    static final double AIR_SPRINT = 0.026;
+    static final double AIR_WALK = 0.02;
+    /** A look within this of the player counts as chasing them: the look then follows them. */
+    static final double CHASE_CONE = 60.0;
+    /** Degrees a tick a chaser's look turns to stay on the player. */
+    static final double AIM_TURN = 30.0;
+    /** Half a player's width: the box's front edge reaches a cell this much before its centre. */
+    static final double HALF_WIDTH = 0.3;
+
+    /** Minecraft's yaw of a horizontal direction (0 = +z, 90 = -x). */
+    public static double yawOf(double dx, double dz) {
+        return Math.toDegrees(Math.atan2(dz, dx)) - 90.0;
+    }
+
+    static double wrap(double degrees) {
+        double d = degrees % 360.0;
+        if (d >= 180.0) {
+            d -= 360.0;
+        }
+        if (d < -180.0) {
+            d += 360.0;
+        }
+        return d;
+    }
+
+    /**
+     * The angle between where the target runs and where it looks, as the keys make it: W, W+A, A ... are the eight
+     * 45-degree directions, so an offset within 15 of one is taken as that key; anything else (knockback, ice) as
+     * it is. 0 without a look.
+     */
+    public static double keyOffset(double motionYaw, double lookYaw) {
+        if (Double.isNaN(lookYaw)) {
+            return 0.0;
+        }
+        double offset = wrap(motionYaw - lookYaw);
+        double snapped = Math.round(offset / 45.0) * 45.0;
+        return Math.abs(offset - snapped) < 15.0 ? snapped : offset;
+    }
+
+    /**
+     * The target's feet, tick by tick, under vanilla movement: every tick the motion gets the push of the keys it
+     * holds -- the same keys relative to its look as now (keyOffset) -- the feet move by the motion, then friction
+     * takes its share. A target looking within CHASE_CONE of the player keeps its look on them (a chaser aims at
+     * whom it chases), turning at most AIM_TURN a tick, so a strafe that curls in is followed. A target that is
+     * not chasing keeps its look and runs on.
+     *
+     * @param moveX     the target's last move, blocks (server positions, one tick apart)
+     * @param lookYaw   its yaw, NaN when unknown (then it runs along its motion)
+     * @param sprinting a sprint's push rather than a walk's
+     * @return {x, z} of the feet after each of {@code ticks} ticks; empty when it is not moving
+     */
+    public static double[][] simulate(double x, double z, double moveX, double moveZ, double lookYaw,
+                                      double playerX, double playerZ, boolean onGround, boolean sprinting, int ticks) {
+        double speed = speed(moveX, moveZ);
+        if (speed < 1.0E-6 || ticks <= 0) {
+            return new double[0][];
+        }
+        double drag = onGround ? GROUND_DRAG : AIR_DRAG;
+        double push = onGround ? (sprinting ? GROUND_SPRINT : GROUND_WALK) : (sprinting ? AIR_SPRINT : AIR_WALK);
+        double motionYaw = yawOf(moveX, moveZ);
+        double look = Double.isNaN(lookYaw) ? motionYaw : lookYaw;
+        double offset = keyOffset(motionYaw, lookYaw);
+        /* The motion carried into the next tick: what the last move left after friction. */
+        double mx = moveX * drag;
+        double mz = moveZ * drag;
+        double[][] out = new double[ticks][];
+        for (int t = 0; t < ticks; t++) {
+            double toPlayer = yawOf(playerX - x, playerZ - z);
+            double off = wrap(toPlayer - look);
+            if (Math.abs(off) < CHASE_CONE) {
+                look += Math.max(-AIM_TURN, Math.min(AIM_TURN, off));
+            }
+            double input = Math.toRadians(look + offset);
+            mx += -Math.sin(input) * push;
+            mz += Math.cos(input) * push;
+            x += mx;
+            z += mz;
+            mx *= drag;
+            mz *= drag;
+            out[t] = new double[]{x, z};
+        }
+        return out;
+    }
+
+    /**
+     * The cells the target runs into along {@code positions}, in order, with the tick its box first reaches each:
+     * the front edge of the box (HALF_WIDTH ahead of the feet along the move) is what meets a block, not the
+     * centre. The cell it stands in is left out.
+     *
+     * @return {x, y, z, tick} (tick 1 = the first position), at most maxCells cells (twice that with doubleHeight)
+     */
+    public static List<int[]> cellsAlong(double x, double z, int feetY, double[][] positions, int maxCells,
+                                         boolean doubleHeight) {
+        List<int[]> out = new ArrayList<int[]>();
+        int startX = floor(x);
+        int startZ = floor(z);
+        int lastX = startX;
+        int lastZ = startZ;
+        double px = x;
+        double pz = z;
+        int perCell = doubleHeight ? 2 : 1;
+        for (int t = 0; t < positions.length && out.size() < maxCells * perCell; t++) {
+            double nx = positions[t][0];
+            double nz = positions[t][1];
+            double dx = nx - px;
+            double dz = nz - pz;
+            double length = Math.sqrt(dx * dx + dz * dz);
+            if (length > 1.0E-9) {
+                double fx = dx / length * HALF_WIDTH;
+                double fz = dz / length * HALF_WIDTH;
+                int steps = Math.max(1, (int) Math.ceil(length / STEP));
+                for (int i = 1; i <= steps; i++) {
+                    double share = i / (double) steps;
+                    int cellX = floor(px + dx * share + fx);
+                    int cellZ = floor(pz + dz * share + fz);
+                    if (cellX == lastX && cellZ == lastZ) {
+                        continue;
+                    }
+                    lastX = cellX;
+                    lastZ = cellZ;
+                    if (cellX == startX && cellZ == startZ) {
+                        continue;
+                    }
+                    out.add(new int[]{cellX, feetY, cellZ, t + 1});
+                    if (doubleHeight) {
+                        out.add(new int[]{cellX, feetY + 1, cellZ, t + 1});
+                    }
+                    if (out.size() >= maxCells * perCell) {
+                        break;
+                    }
+                }
+            }
+            px = nx;
+            pz = nz;
+        }
+        return out;
+    }
+
+    /**
+     * Ticks along the predicted run (which starts from the position the server last sent us) before a block placed
+     * now is a wall on the server: that position is half our round trip old, the click takes the other half to
+     * arrive, and the server takes a tick. A runner whose move into the cell the server gets after that is stopped
+     * there -- by the block on its own screen, or, if it has not drawn it yet, by the server putting it back. The
+     * runner's own ping does not enter: its moves reach the server late by the same amount its view of the block
+     * does. An unknown ping (0 or less, or absurd) counts as 100 ms.
+     */
+    public static int serverWallAfterTicks(int ownPingMs) {
+        int own = ownPingMs > 0 && ownPingMs < 2000 ? ownPingMs : 100;
+        return (int) Math.ceil(own / 50.0) + 1;
+    }
+
     /** Math.floor, without the boxing. */
     private static int floor(double value) {
         int floor = (int) value;

@@ -16,7 +16,7 @@ import static org.junit.Assert.*;
 public class RotationHelperMigrationTest {
     private static final String[] MOVED = {
             "AimAssist", "ProjectileAimBot", "AntiFireball", "ChestAura", "ThrowAura", "PearlSaver",
-            "AutoHeadHitter", "AutoBedDef", "BedNuker", "Scaffold", "KillAura", "KillAuraLB"
+            "AutoHeadHitter", "AutoBedDef", "BedNuker", "Scaffold", "KillAura", "KillAuraLB", "SpeedBlocker"
     };
 
     private static String read(String path) throws IOException {

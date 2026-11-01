@@ -319,6 +319,8 @@ public final class ModuleDocs {
         d("KillAura", "自動攻擊範圍內的目標：選目標、轉頭（多種模式，可靜默）、依 CPS 出手，並可自動格擋。");
         d("AimAssist", "攻擊時把準心輕微往附近目標拉，手感接近真人微調，不會自己出手。");
         help("AimAssist", "style", "Smooth：原本的（每 tick 轉剩下角度的一部分）。Regular：每幀轉，遠快近慢。Linear：固定速度。Lock On：黏住目標。後三種參考 Slinky。");
+        help("AimAssist", "silent-pre-aim", "Silent：還沒點擊時，就先把伺服器看到的視角對準附近、在你前方的敵人（畫面不動），第一下就打得到。");
+        help("AimAssist", "silent-pre-aim-range", "預瞄只對這個距離內的敵人。");
         help("AimAssist", "silent-sort", "Silent：先挑打得到的敵人，其中挑：Distance 最近的、Health 血最少的、Hurt time 現在打得到傷害的、Aim angle 離目前視角最近的。");
         help("AimAssist", "speed-h", "Regular / Linear：左右速度。");
         help("AimAssist", "speed-v", "Regular / Linear：上下速度。");
@@ -616,6 +618,11 @@ public final class ModuleDocs {
         d("Scaffold", "自動在腳下放方塊搭橋，支援疊高（tower）、保持高度與多種轉頭模式。");
         d("AutoBlockIn", "自動用方塊把自己圍起來：先圍身體一圈，再補屋頂。");
         d("SpeedBlocker", "在衝向你的敵人腳前放方塊，撞掉它的衝刺動量，方便起手連擊；棍戰也好用。");
+        help("SpeedBlocker", "lead", "在 ping 算出的時機之外再多提前幾 tick；方塊常常晚一步就調高。");
+        help("SpeedBlocker", "lead-ping", "照你的 ping 算時機：你看到的對方位置晚了半個來回，方塊送到伺服器又要半個來回，所以選對方在那之後才會踩到的格子（再加 lead）。關掉就是一 tick 加 lead。");
+        help("SpeedBlocker", "contact-ticks", "往前預測幾 tick 的路線；比這更遠的人先不擋。");
+        help("SpeedBlocker", "blocks-per-run", "每次對方衝過來最多放幾格（DOUBLE 是幾組兩格）；放完之後，那個人停下來前不再放。");
+        help("SpeedBlocker", "show-plan", "畫出預測的路線（黃點）和選中要放方塊的格子（藍框）。");
         help("AutoBlockIn", "debug", "開發用：把每一步的判斷寫進 config/Atlas/placedebug-*.txt（背景寫入，不影響 fps）。平常不用開。");
         help("AutoBlockIn", "debug-chat", "debug 時也印到聊天欄（每秒最多 4 行）。裝了聊天相關模組時很吃 fps，只在需要即時看時才開。");
         d("AutoBedDef", "自動在自己的床周圍放方塊防守。");

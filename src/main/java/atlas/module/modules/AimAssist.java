@@ -112,6 +112,15 @@ public class AimAssist extends Module {
     public final ModeProperty silentSort = new ModeProperty("silent-sort", 0,
             new String[]{"Distance", "Health", "Hurt time", "Aim angle"},
             () -> smooth.getAsBoolean() && this.mode.getValue() == 1);
+    /* 2026-11-01 (a player: "the first hit won't land until your crosshair is within the enemy hitbox"): the silent
+       look started only with the click, and a new target first waited out the reaction time, so the first click
+       went along the camera. Pre-aim keeps the silent look on an enemy within pre-aim-range and the fov of the
+       camera before any click; the reaction time passes before the click, and the first one lands. The camera
+       does not move. */
+    public final BooleanProperty silentPreAim = new BooleanProperty("silent-pre-aim", true,
+            () -> smooth.getAsBoolean() && this.mode.getValue() == 1);
+    public final FloatProperty silentPreAimRange = new FloatProperty("silent-pre-aim-range", 4.5F, 3.0F, 6.0F,
+            () -> smooth.getAsBoolean() && this.mode.getValue() == 1 && this.silentPreAim.getValue());
 
     /* SILENT makes the silent aim the yaw movement is computed from too, and
        turns the keys to match, so the player still goes where the camera
@@ -205,7 +214,8 @@ public class AimAssist extends Module {
                 && !(this.allowTools.getValue() && ItemUtil.isHoldingTool())) {
             return;
         }
-        if (!PlayerUtil.isAttacking() && this.timer.hasTimeElapsed(350L)) {
+        boolean clicking = PlayerUtil.isAttacking() || !this.timer.hasTimeElapsed(350L);
+        if (!clicking && !this.silentPreAim.getValue()) {
             return;
         }
         float cameraYaw = mc.thePlayer.rotationYaw;
@@ -216,12 +226,19 @@ public class AimAssist extends Module {
         EntityPlayer target = null;
         double best = Double.MAX_VALUE;
         boolean bestInReach = false;
+        double preAimRange = this.silentPreAimRange.getValue();
         for (EntityPlayer player : mc.theWorld.playerEntities) {
             if (!this.isValidTarget(player, false)) {
                 continue;
             }
             double yawTo = Math.toDegrees(Math.atan2(player.posZ - mc.thePlayer.posZ, player.posX - mc.thePlayer.posX)) - 90.0;
-            if (Math.abs(MathHelper.wrapAngleTo180_double(yawTo - baseYaw)) > this.fov.getValue()) {
+            /* Pre-aim (no click yet): only an enemy close by and in front of the camera, not whoever the silent
+               look happens to face. */
+            float fovFrom = clicking ? baseYaw : cameraYaw;
+            if (Math.abs(MathHelper.wrapAngleTo180_double(yawTo - fovFrom)) > this.fov.getValue()) {
+                continue;
+            }
+            if (!clicking && RotationUtil.distanceToEntity(player) > preAimRange) {
                 continue;
             }
             boolean inReach = this.isInReach(player);

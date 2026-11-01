@@ -261,6 +261,7 @@ public class Atlas {
         moduleManager.modules.put(Notifications.class, new Notifications());
         moduleManager.modules.put(ExploitFixer.class, new ExploitFixer());
         moduleManager.modules.put(AutoBlockIn.class, new AutoBlockIn());
+        moduleManager.modules.put(SpeedBlocker.class, new SpeedBlocker());
         moduleManager.modules.put(AntiBot.class, new AntiBot());
         moduleManager.modules.put(AutoBedDef.class, new AutoBedDef());
         moduleManager.modules.put(TickBase.class, new TickBase());

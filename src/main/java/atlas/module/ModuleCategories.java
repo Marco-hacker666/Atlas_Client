@@ -39,6 +39,7 @@ public final class ModuleCategories {
                 Piercing.class, Reach.class, SprintReset.class, TimerRange.class, Velocity.class, BlockHit.class,
                 KillAura.class, NoDelay.class, JumpReset.class, Wtap.class,
                 MoreKB.class, KeepRange.class, Hitflick.class, InvulnTiming.class,
+                SpeedBlocker.class,
                 Humanization.class);
         put(Category.PLAYER,
                 MLG.class, Blink.class, NoFall.class, AntiVoid.class, Clutch.class, AutoTool.class, AutoSwap.class,

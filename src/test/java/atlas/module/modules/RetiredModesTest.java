@@ -45,11 +45,20 @@ public class RetiredModesTest {
         assertFalse("nor keep-y", scaffold.isSpeedTellyKeepY());
         assertTrue("auto jump comes on", scaffold.tellyAutoJump.getValue());
         assertTrue(scaffold.tellyAutoJump.isVisible());
-        assertTrue(scaffold.rotationMode.parseString("TELLY"));
-        assertEquals(11, (int) scaffold.rotationMode.getValue());
-        assertFalse("its switch is this mode's", scaffold.tellyAutoJump.isVisible());
         assertTrue(scaffold.rotationMode.parseString("POLAR"));
         assertEquals(10, (int) scaffold.rotationMode.getValue());
+        assertFalse("its switch is this mode's", scaffold.tellyAutoJump.isVisible());
+    }
+
+    /** 2026-11-04 (owner: "delete Telly, keep Speed Telly"): gone from the menu; old configs load SPEED-TELLY. */
+    @Test
+    public void scaffoldTellyLoadsAsSpeedTelly() {
+        Scaffold scaffold = new Scaffold();
+        for (String old : new String[]{"TELLY", "B4"}) {
+            assertTrue(scaffold.rotationMode.parseString(old));
+            assertEquals("SPEED-TELLY", scaffold.rotationMode.getModeString());
+        }
+        assertFalse(java.util.Arrays.asList(scaffold.rotationMode.visibleModes()).contains("TELLY"));
     }
 
     /** 2026-11-01 (owner): SNAP is back in the menu; SNAP2 loads as itself again, hidden as before. */

@@ -1694,7 +1694,6 @@ Scaffold speed-motion
 Scaffold sprint
 Scaffold swing
 Scaffold telly-auto-jump
-Scaffold telly-jump
 Scaffold telly-normal-rotation-max-speed
 Scaffold telly-normal-rotation-min-speed
 Scaffold telly-start-rotation-max-speed

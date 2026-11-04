@@ -1080,7 +1080,6 @@ public final class ModuleDocs {
         help("Scaffold", "turn-speed", "每 tick 最多轉幾度（DEFAULT～Hypixel 模式）。不再一次甩到位，轉不到就等下一 tick，不會亂點。180 = 不限制。");
         help("Scaffold", "humanize", "轉頭加上 Rotations 引擎的速度隨機與弧線，比較像人手。");
         help("Scaffold", "telly-auto-jump", "SPEED-TELLY 模式：按住 W 在地上時自動跳，放開就停。");
-        help("Scaffold", "telly-jump", "TELLY 模式：每次起跳時先面向前方跳，再分幾個 tick 轉回身後放方塊（telly 搭橋）；轉身時不點擊。");
         help("Scaffold", "pause-on-correction", "被伺服器拉回後，等一個來回延遲再放方塊；被退回的方塊也會暫停。避免在錯的位置連續放出 ghost block。");
         help(cl, "pre-aim", "還沒到時機前先把頭轉到大概的位置，等一下轉比較少。");
         help(cl, "counter-knockback", "被打飛時往回走，抵銷一部分擊退。");

@@ -232,6 +232,13 @@ public class Clutch extends Module {
     private static final int LADDER_TICKS = 12;
     /** Climbing is given up this long after the ladder went up: the player has control again. */
     private static final int CLIMB_TICKS = 60;
+    /* Scaffold's SPEED-TELLY: blocks go along one lane (TellyLane). Nothing below that names the lane runs otherwise. */
+    /** Degrees the view may be off the lane before the next landing starts a new one. */
+    private static final float LANE_KEEP = 35.0F;
+    /** Blocks ahead of the player the lane steers for: the sideways pull back onto it. */
+    private static final double LANE_AHEAD = 3.0;
+    /** Ticks before the feet reach the layer from which a lane cell out of reach gives way to any catch. */
+    private static final int LANE_RESCUE_TICKS = 3;
     private static final File LOG_DIR = new File("./config/Atlas/");
     private static final SimpleDateFormat FILE_STAMP = new SimpleDateFormat("yyyyMMdd-HHmmss");
     private static final SimpleDateFormat LINE_STAMP = new SimpleDateFormat("HH:mm:ss.SSS");
@@ -477,6 +484,14 @@ public class Clutch extends Module {
     private int settleTicks;
     /** How many ticks ahead the plan was made from: 0 is from where the player is now. */
     private int planLead;
+    private TellyLane lane;
+    /** This tick's blocks go along the lane. */
+    private boolean laneNow;
+    /** This tick's keys go along the lane, toward laneYaw. */
+    private boolean laneKeys;
+    private float laneYaw;
+    /** Ticks until the feet reach the layer being built. */
+    private int laneCrossing;
     /** Where the steering heads for: the last standing place, or the ladder. */
     private double steerX;
     private double steerZ;
@@ -576,6 +591,7 @@ public class Clutch extends Module {
         this.refused.clear();
         this.failedFaces.clear();
         this.logTarget = null;
+        clearLane();
     }
 
     @Override
@@ -588,6 +604,7 @@ public class Clutch extends Module {
         this.steering = false;
         this.settleTicks = 0;
         this.ladderCell = null;
+        clearLane();
         abandonAttempt("module turned off");
     }
 
@@ -595,6 +612,7 @@ public class Clutch extends Module {
     public void onLoadWorld(LoadWorldEvent event) {
         /* A new world is a new fall, and the old attempt's blocks are gone. */
         abandonAttempt("world changed");
+        clearLane();
         this.active = false;
         this.plan = null;
         this.placed.clear();
@@ -923,6 +941,10 @@ public class Clutch extends Module {
         if (this.settleTicks > 0) {
             mc.thePlayer.movementInput.moveForward = 0.0F;
             mc.thePlayer.movementInput.moveStrafe = 0.0F;
+            return;
+        }
+        if (this.laneKeys) {
+            press(this.laneYaw);
             return;
         }
         if (!MoveUtil.isForwardPressed() || !RotationState.isActived()
@@ -1778,6 +1800,10 @@ public class Clutch extends Module {
      * (its "extensionTarget": the landing column at the target's height).
      */
     private BlockPos extraCell() {
+        if (this.lane != null && !this.plainJump) {
+            /* The lane has no blocks beside it. */
+            return null;
+        }
         if (!this.extraBlock.getValue() || !this.attempt || this.extraDone || this.attemptPlaced <= 0
                 || mc.thePlayer.onGround || this.landingTick < 0 || this.landingTick >= this.path.size()) {
             return null;
@@ -1812,7 +1838,7 @@ public class Clutch extends Module {
             Plan best = null;
             for (BlockPos cell : cells) {
                 int crossing = catchTick(this.path, this.pathStart, cell, PLAN_TICKS);
-                if (crossing < lead) {
+                if (crossing < lead && !this.laneNow) {
                     continue;
                 }
                 Plan candidate = aim(cell, eyes, crossing);
@@ -1835,7 +1861,8 @@ public class Clutch extends Module {
      * the level are started, since half a bridge catches nothing.
      */
     private Plan planChain(List<List<BlockPos>> levels, Vec3 eyes, int lead) {
-        if (!this.chain.getValue()) {
+        if (!this.chain.getValue() || this.laneNow) {
+            /* The lane is its own chain: it never searches sideways. */
             return null;
         }
         int interval = Math.max(1, this.placeInterval.getValue());
@@ -2110,6 +2137,8 @@ public class Clutch extends Module {
            then at the start of the next PRE with that tick's turn held, which
            cost a tick per block. */
         this.holdThisTick = false;
+        this.laneKeys = false;
+        updateLane();
 
         updateOpponentBoxes();
         predict(false);
@@ -2151,6 +2180,10 @@ public class Clutch extends Module {
         if (this.steering) {
             this.attemptSteered = true;
             predict(true);
+        }
+        this.laneNow = want && this.lane != null && !this.plainJump && !this.steering && this.ladderCell == null;
+        if (this.laneNow && MoveUtil.isForwardPressed()) {
+            aimAlongLane();
         }
 
         if (!want) {
@@ -2263,7 +2296,7 @@ public class Clutch extends Module {
             return;
         }
         if (extra == null && this.landingTick >= 0 && this.landingTick < this.path.size()
-                && this.predictedFall <= this.safeDrop.getValue()
+                && this.predictedFall <= this.safeDrop.getValue() && !this.laneNow
                 && restsOn(this.path.get(this.landingTick), this.placed)) {
             /* Caught: the fall now lands on a block this catch put down. The
                columns beside it are still crossed by the feet, and placing
@@ -2274,8 +2307,17 @@ public class Clutch extends Module {
             holdRotation(event);
             return;
         }
-        List<List<BlockPos>> levels = blockSlot < 0 ? new ArrayList<List<BlockPos>>()
-                : extra != null ? Collections.singletonList(Collections.singletonList(extra)) : catchCells();
+        List<List<BlockPos>> levels = this.laneNow && blockSlot >= 0 ? laneLevels() : null;
+        if (levels != null && levels.isEmpty()) {
+            trace(state() + " | lane: built as far as this jump lands");
+            holdRotation(event);
+            return;
+        }
+        if (levels == null) {
+            this.laneNow = false;
+            levels = blockSlot < 0 ? new ArrayList<List<BlockPos>>()
+                    : extra != null ? Collections.singletonList(Collections.singletonList(extra)) : catchCells();
+        }
         resetDiagnosis();
         String[] why = null;
         if (levels.isEmpty()) {
@@ -2304,7 +2346,18 @@ public class Clutch extends Module {
                 }
             }
         }
-        if (this.plan == null && ladderSlot >= 0 && this.ladderCell == null && extra == null) {
+        if (this.plan == null && this.laneNow && this.laneCrossing <= LANE_RESCUE_TICKS) {
+            /* The next lane cell cannot be had in time: not falling comes before the straight line. */
+            this.laneNow = false;
+            levels = catchCells();
+            if (!levels.isEmpty()) {
+                this.plan = planCatch(levels, eyes, 0);
+                if (this.plan == null) {
+                    this.plan = planChain(levels, eyes, 0);
+                }
+            }
+        }
+        if (this.plan == null && !this.laneNow && ladderSlot >= 0 && this.ladderCell == null && extra == null) {
             /* No block can catch this fall in time: hang a ladder in its way. */
             this.plan = planLadder();
             if (this.plan != null) {
@@ -2318,7 +2371,10 @@ public class Clutch extends Module {
         if (this.plan == null) {
             trace(state() + " | " + levels(levels) + " | none: " + why[1]
                     + (ladderSlot >= 0 && this.ladderCell == null ? ", no ladder cell either" : "") + steerText());
-            problem(why[0], why[1]);
+            if (!this.laneNow) {
+                /* On the lane this is only the first ticks of a jump, before the turn can see the face. */
+                problem(why[0], why[1]);
+            }
             lookBack(event, eyes);
             return;
         }
@@ -2394,6 +2450,148 @@ public class Clutch extends Module {
         if (!clickedHeld && !early) {
             post();
         }
+    }
+
+    // ------------------------------------------------------------------ lane
+
+    private void clearLane() {
+        this.lane = null;
+        this.laneNow = false;
+        this.laneKeys = false;
+    }
+
+    /**
+     * Scaffold's SPEED-TELLY: on the ground, which cell of the lane is stood on. Standing off it, or facing more
+     * than LANE_KEEP away from it, starts a new one from the block under the feet, the way the keys go.
+     */
+    private void updateLane() {
+        if (!scaffoldTelly()) {
+            clearLane();
+            return;
+        }
+        if (!mc.thePlayer.onGround) {
+            return;
+        }
+        AxisAlignedBB box = mc.thePlayer.getEntityBoundingBox();
+        int layer = MathHelper.floor_double(box.minY - 1.0E-3);
+        double middleX = (box.minX + box.maxX) / 2.0;
+        double middleZ = (box.minZ + box.maxZ) / 2.0;
+        BlockPos stood = null;
+        double nearest = Double.MAX_VALUE;
+        int index = TellyLane.OFF;
+        for (int x = MathHelper.floor_double(box.minX); x <= MathHelper.floor_double(box.maxX - 1.0E-7); x++) {
+            for (int z = MathHelper.floor_double(box.minZ); z <= MathHelper.floor_double(box.maxZ - 1.0E-7); z++) {
+                BlockPos cell = new BlockPos(x, layer, z);
+                if (BlockUtil.isReplaceable(cell)) {
+                    continue;
+                }
+                double distance = Math.hypot(x + 0.5 - middleX, z + 0.5 - middleZ);
+                if (distance < nearest) {
+                    nearest = distance;
+                    stood = cell;
+                }
+                if (this.lane != null) {
+                    index = Math.max(index, this.lane.indexOf(x, z));
+                }
+            }
+        }
+        if (stood == null) {
+            return;
+        }
+        boolean keys = MoveUtil.isForwardPressed();
+        float view = this.mode.getValue() == 1 && this.hasSent ? this.viewYaw : mc.thePlayer.rotationYaw;
+        float moving = MoveUtil.adjustYaw(view, MoveUtil.getForwardValue(), MoveUtil.getLeftValue());
+        boolean turned = this.lane != null && keys
+                && Math.abs(MathHelper.wrapAngleTo180_float(moving - this.lane.yaw)) > LANE_KEEP;
+        if (this.lane == null || index == TellyLane.OFF || turned) {
+            this.lane = keys ? new TellyLane(stood.getX(), stood.getZ(), layer, moving) : null;
+            return;
+        }
+        this.lane.anchor = index;
+        this.lane.layer = layer;
+    }
+
+    /** The keys, and the prediction with them, go along the lane and back onto it. */
+    private void aimAlongLane() {
+        double[] point = this.lane.ahead(mc.thePlayer.posX, mc.thePlayer.posZ, LANE_AHEAD);
+        this.steerX = point[0];
+        this.steerZ = point[1];
+        this.laneYaw = (float) Math.toDegrees(Math.atan2(point[1] - mc.thePlayer.posZ,
+                point[0] - mc.thePlayer.posX)) - 90.0F;
+        this.laneKeys = true;
+        predict(true);
+    }
+
+    private BlockPos laneCell(int index) {
+        int[] column = this.lane.cell(index);
+        return new BlockPos(column[0], this.lane.layer, column[1]);
+    }
+
+    private int laneIndexAt(AxisAlignedBB box) {
+        return this.lane.indexAt((box.minX + box.maxX) / 2.0, (box.minZ + box.maxZ) / 2.0);
+    }
+
+    /** The tick the feet come down to this height, or -1 if they do not. */
+    private int crossingTick(double top) {
+        AxisAlignedBB previous = this.pathStart;
+        for (int t = 0; t < this.path.size(); t++) {
+            AxisAlignedBB current = this.path.get(t);
+            if (previous.minY >= top - 1.0E-3 && current.minY <= top) {
+                return t;
+            }
+            previous = current;
+        }
+        return -1;
+    }
+
+    /**
+     * What the lane wants next, as catch levels of one cell: the first empty cell after the one last stood on, up to
+     * the one under the feet when they come down to the layer. Always that cell, however far the player has flown:
+     * each block is the next one's support. Empty when this jump already lands on the layer; null when the lane
+     * cannot catch it (below the layer, or falling beside it) and any cell will do.
+     */
+    private List<List<BlockPos>> laneLevels() {
+        double top = this.lane.layer + 1.0;
+        if (this.landingTick >= 0 && this.landingTick < this.path.size()
+                && this.path.get(this.landingTick).minY >= top - 1.0E-3) {
+            BlockPos step = laneStep(top);
+            return step == null ? new ArrayList<List<BlockPos>>() : one(step);
+        }
+        int crossing = crossingTick(top);
+        if (crossing < 0) {
+            return null;
+        }
+        this.laneCrossing = crossing;
+        int stop = laneIndexAt(this.path.get(crossing));
+        for (int i = this.lane.anchor; i <= stop; i++) {
+            BlockPos cell = laneCell(i);
+            if (BlockUtil.isReplaceable(cell)) {
+                return intersects(this.pathStart, cell) || opponentIn(cell) ? null : one(cell);
+            }
+        }
+        return null;
+    }
+
+    /** Keep-y off: the block one up where this jump lands, as Clutch built before the lane. Null with keep-y on. */
+    private BlockPos laneStep(double top) {
+        if (keepYTop() <= this.lane.layer) {
+            return null;
+        }
+        int crossing = crossingTick(top + 1.0);
+        if (crossing < 0) {
+            return null;
+        }
+        BlockPos cell = laneCell(laneIndexAt(this.path.get(crossing))).up();
+        if (!BlockUtil.isReplaceable(cell) || BlockUtil.isReplaceable(cell.down()) || intersects(this.pathStart, cell)
+                || opponentIn(cell) || catchTick(this.path, this.pathStart, cell, PLAN_TICKS) < 0) {
+            return null;
+        }
+        this.laneCrossing = crossing;
+        return cell;
+    }
+
+    private static List<List<BlockPos>> one(BlockPos cell) {
+        return Collections.singletonList(Collections.singletonList(cell));
     }
 
     private String steerText() {
@@ -2513,7 +2711,7 @@ public class Clutch extends Module {
         }
         boolean wanted = cell.equals(this.plan.cell)
                 || this.tick - this.aimedTick == 1 && cell.equals(this.aimedCell);
-        if (!wanted) {
+        if (!wanted && !this.laneNow) {
             /* A partly turned look can still land somewhere useful: under the
                fall as it now stands -- but not above the keep-y layer (until
                2026-10-03 this let a steep look onto the top of a catch block

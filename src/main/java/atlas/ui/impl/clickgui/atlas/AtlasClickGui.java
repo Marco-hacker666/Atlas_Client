@@ -157,6 +157,8 @@ public class AtlasClickGui extends GuiScreen {
     private SearchIndex index = new SearchIndex();
     private String searchedFor;
     private String searchedOn;
+    /** ScriptManager.version() when the index was built. */
+    private int indexedScripts = -1;
     private SearchIndex.Results searchResults = SearchIndex.NONE;
     private static final int MAX_SETTING_RESULTS = 60;
     /** How many modules the client had when the index was built: it is built again only if that changes. */
@@ -222,6 +224,14 @@ public class AtlasClickGui extends GuiScreen {
        modules -- everything on, and everything that needs a look. */
     private static final String ENABLED = "Enabled";
     private static final String ATTENTION = "Attention";
+    /* The Scripts page (2026-11-03, owner: "a tab somewhere you see it, that loads everyone's scripts, Raven's
+       API and ours"): its sidebar's groups. Its rows are the scripts' modules, so switching, keys and settings
+       work as on the other pages; a toolbar over the list makes, opens, imports and reloads them. */
+    private static final String SCRIPTS = "Scripts";
+    private static final String SCRIPTS_ALL = "All scripts";
+    private static final String SCRIPTS_ATLAS = "Atlas scripts";
+    private static final String SCRIPTS_RAVEN16 = "Raven bS 16";
+    private static final String SCRIPTS_RAVEN17 = "Raven bS 17";
 
     /**
      * One module's health marks: what FlagDetector named it for this session
@@ -456,7 +466,11 @@ public class AtlasClickGui extends GuiScreen {
         if (legit != null) {
             this.legitGroups.putAll(LegitGroups.group(legit));
         }
-        if (isQuick(this.category)) {
+        if (SCRIPTS.equals(this.page)) {
+            if (!isScriptGroup(this.category)) {
+                this.category = SCRIPTS_ALL;
+            }
+        } else if (isQuick(this.category)) {
             /* Enabled and Attention are lists of the page, not categories. */
         } else if ("Legit".equals(this.page) && !this.legitGroups.isEmpty()) {
             if (!this.legitGroups.containsKey(this.category)) {
@@ -481,6 +495,11 @@ public class AtlasClickGui extends GuiScreen {
                     }
                 }
             }
+            for (Module module : scriptModules(SCRIPTS_ALL)) {
+                if (module.getName().equals(this.pendingSelection)) {
+                    this.selected = module;
+                }
+            }
             this.pendingSelection = "";
         }
     }
@@ -496,6 +515,13 @@ public class AtlasClickGui extends GuiScreen {
 
     private List<String> sidebarCategories() {
         List<String> out = new ArrayList<String>();
+        if (SCRIPTS.equals(this.page)) {
+            out.add(SCRIPTS_ALL);
+            out.add(SCRIPTS_ATLAS);
+            out.add(SCRIPTS_RAVEN16);
+            out.add(SCRIPTS_RAVEN17);
+            return out;
+        }
         if ("Legit".equals(this.page) || "Modules".equals(this.page)) {
             out.add(ENABLED);
             out.add(ATTENTION);
@@ -562,7 +588,8 @@ public class AtlasClickGui extends GuiScreen {
                         this.page = "Client Settings";
                     }
                 } else if ("page".equals(key)) {
-                    if ("Modules".equals(value) || "Legit".equals(value) || "Client Settings".equals(value)) {
+                    if ("Modules".equals(value) || "Legit".equals(value) || "Client Settings".equals(value)
+                            || SCRIPTS.equals(value)) {
                         this.page = value;
                     }
                 }
@@ -680,6 +707,12 @@ public class AtlasClickGui extends GuiScreen {
     }
 
     private boolean belongsOnPage(Module module) {
+        if (module instanceof atlas.script.ScriptHost) {
+            return SCRIPTS.equals(this.page);
+        }
+        if (SCRIPTS.equals(this.page)) {
+            return false;
+        }
         Category category = ModuleCategories.of(module.getClass());
         if ("Legit".equals(this.page)) {
             return category == Category.LEGIT;
@@ -688,7 +721,8 @@ public class AtlasClickGui extends GuiScreen {
     }
 
     private void selectPage(String next) {
-        if (!"Modules".equals(next) && !"Legit".equals(next) && !"Client Settings".equals(next)) {
+        if (!"Modules".equals(next) && !"Legit".equals(next) && !"Client Settings".equals(next)
+                && !SCRIPTS.equals(next)) {
             return;
         }
         this.page = next;
@@ -710,6 +744,17 @@ public class AtlasClickGui extends GuiScreen {
             this.serversView = false;
             if ("Legit".equals(this.category) || this.legitGroups.containsKey(this.category)) {
                 this.category = firstModuleCategory();
+            }
+            List<Module> modules = visibleModules();
+            if (this.selected == null || !belongsOnPage(this.selected)) {
+                this.selected = modules.isEmpty() ? null : modules.get(0);
+            }
+        } else if (SCRIPTS.equals(next)) {
+            this.profilesView = false;
+            this.appearanceView = false;
+            this.serversView = false;
+            if (!isScriptGroup(this.category)) {
+                this.category = SCRIPTS_ALL;
             }
             List<Module> modules = visibleModules();
             if (this.selected == null || !belongsOnPage(this.selected)) {
@@ -827,6 +872,7 @@ public class AtlasClickGui extends GuiScreen {
         this.openedFor += this.delta;
         this.ui.delta = this.delta;
         this.hint = "";
+        followScripts();
         this.ui.beginFrame();
         this.lenses.clear();
         this.dropAnchored = false;
@@ -1304,7 +1350,7 @@ public class AtlasClickGui extends GuiScreen {
      * Returns the control's right edge.
      */
     private float drawPageTabs(float left, float cy, float mx, float my) {
-        String[] names = {"Modules", "Legit", "Client Settings"};
+        String[] names = {"Modules", "Legit", SCRIPTS, "Client Settings"};
         LiquidFont label = font(8.5F, false);
         float pad = 9.0F;
         float top = cy - 9.0F;
@@ -1399,7 +1445,7 @@ public class AtlasClickGui extends GuiScreen {
     private void drawSidebar(int x, int y, int height, int sidebar, float mx, float my) {
         List<String> shownCategories = sidebarCategories();
         String sidebarTitle = "Modules".equals(this.page) ? "MODULES"
-                : "Legit".equals(this.page) ? "LEGIT" : "CLIENT SETTINGS";
+                : "Legit".equals(this.page) ? "LEGIT" : SCRIPTS.equals(this.page) ? "SCRIPTS" : "CLIENT SETTINGS";
         font(7.0F, true).drawTracked(sidebarTitle, x + 18, y + 16, FAINT, 0.8F);
         float top = y + 26;
         float profilesLabel = top + shownCategories.size() * CAT + 12;
@@ -2195,6 +2241,45 @@ public class AtlasClickGui extends GuiScreen {
         small.draw(small.trim(where, sidebar - 50), x + 35, cy + 4.5F, FAINT);
     }
 
+    /** The Scripts page's buttons, flowing onto a second row when narrow; returns the bottom. */
+    private float drawScriptToolbar(float left, float top, float width, float mx, float my) {
+        String[][] buttons = {
+                {"newAtlas", "+ Atlas", "A new Atlas script from the template, opened in your editor"},
+                {"newBs16", "+ bS 16", "A new Raven bS 16 script from the template, opened in your editor"},
+                {"newBs17", "+ bS 17", "A new Raven bS 17 script from the template, opened in your editor"},
+                {"folder", "Folder", "Open the scripts folder of the group you are in"},
+                {"import", "Import", "Copy Raven bS's scripts (.minecraft/keystrokes/scripts) in: as bS 16 in the bS 16 group, else as bS 17"},
+                {"reload", "Reload", "Compile every script again"}};
+        LiquidFont label = font(8.0F, false);
+        float height = 16.0F;
+        float gap = 5.0F;
+        float cx = left;
+        float cy = top;
+        for (String[] button : buttons) {
+            float w = label.width(button[1]) + 14.0F;
+            if (cx > left && cx + w > left + width) {
+                cx = left;
+                cy += height + gap;
+            }
+            boolean hovered = mx >= cx && mx <= cx + w && my >= cy && my <= cy + height;
+            hit("scriptAction", button[0], cx, cy, cx + w, cy + height);
+            float glow = ease("scriptBtn:" + button[0], hovered, 10.0F);
+            Liquid.rect(cx, cy, cx + w, cy + height, 7.0F, ink(0x0E), ink(0x08));
+            Liquid.rim(cx, cy, cx + w, cy + height, 7.0F, 1.0F, blend(ink(0x16), accent(), glow * 0.8F), ink(0x08));
+            float ring = pulseAt("scriptBtn:" + button[0], 420L);
+            if (ring >= 0.0F) {
+                Liquid.rect(cx, cy, cx + w, cy + height, 7.0F, alpha(accent(), 0.35F * (1.0F - ring)),
+                        alpha(accent(), 0.15F * (1.0F - ring)));
+            }
+            label.drawCentred(button[1], cx + w / 2.0F, cy + height / 2.0F, hovered ? TEXT : DIM);
+            if (hovered) {
+                this.hint = button[2];
+            }
+            cx += w + gap;
+        }
+        return cy + height;
+    }
+
     private void drawList(ScaledResolution sr, int x, int y, int width, int height, float mx, float my) {
         List<Module> modules = visibleModules();
         boolean searching = !search().trim().isEmpty();
@@ -2229,14 +2314,38 @@ public class AtlasClickGui extends GuiScreen {
                                 + (flagDetectorOn() ? "  ·  flags counted since you joined"
                                         : "  ·  FlagDetector is off: flags are not counted")
                         : modules.size() + " modules  ·  " + on + " enabled";
-        font(8.0F, false).draw(subtitle, x + 16, y + 31, FAINT);
+        boolean scriptsPage = SCRIPTS.equals(this.page) && !searching;
+        if (scriptsPage) {
+            subtitle = modules.size() + (modules.size() == 1 ? " script" : " scripts") + "  \u00b7  " + on + " on"
+                    + "  \u00b7  " + atlas.script.ScriptManager.get().compilerStatus();
+        }
+        font(8.0F, false).draw(font(8.0F, false).trim(subtitle, width - 32), x + 16, y + 31, FAINT);
 
         float top = y + 42;
+        if (scriptsPage) {
+            top = drawScriptToolbar(x + 16, y + 42, width - 32, mx, my) + 6;
+        }
         float bottom = y + height - 4;
         int maxRows = Math.max(1, (int) ((bottom - top) / ROW));
         this.listMaxScroll = Math.max(0, rows - maxRows);
         if (this.listScroll > this.listMaxScroll) {
             this.listScroll = this.listMaxScroll;
+        }
+        if (rows == 0 && scriptsPage) {
+            LiquidFont small = font(8.5F, false);
+            float line = top + 12;
+            for (String text : new String[]{"No scripts here yet.",
+                    "Atlas scripts: config/Atlas/scripts/*.java",
+                    "Raven bS 16: config/Atlas/scripts/raven16/*.java",
+                    "Raven bS 17: config/Atlas/scripts/raven17/*.java",
+                    "+ Atlas / + bS 16 / + bS 17 makes one from a template;",
+                    "Import copies Raven bS's scripts (keystrokes/scripts).",
+                    "A saved file reloads by itself.",
+                    "Scripts run with the client's full rights: read what you load."}) {
+                small.draw(small.trim(text, width - 32), x + 16, line, FAINT);
+                line += 13;
+            }
+            return;
         }
         if (rows == 0) {
             font(9.0F, false).draw(searching ? "No module or setting matches \"" + search() + "\""
@@ -2482,6 +2591,9 @@ public class AtlasClickGui extends GuiScreen {
     /** The search's results for what is typed, on this page; searched again only when either changes. */
     private SearchIndex.Results searchResults() {
         String query = search();
+        if (this.indexedScripts != atlas.script.ScriptManager.get().version()) {
+            buildIndex();
+        }
         if (!query.equals(this.searchedFor) || !this.page.equals(this.searchedOn)) {
             this.searchedFor = query;
             this.searchedOn = this.page;
@@ -2500,22 +2612,47 @@ public class AtlasClickGui extends GuiScreen {
         java.util.Set<Module> seen = new java.util.HashSet<Module>();
         for (List<Module> list : this.byCategory.values()) {
             for (Module module : list) {
-                if (module == null || !seen.add(module)) {
-                    continue;
-                }
-                built.addModule(module, module.getName(), module.getDescription());
-                List<Property<?>> properties = Atlas.propertyManager.properties.get(module.getClass());
-                if (properties == null) {
-                    continue;
-                }
-                for (Property<?> property : properties) {
-                    built.addSetting(module, property, module.getName(), property.getLabel(), property.getName(),
-                            property.getHelp());
+                if (module != null && seen.add(module)) {
+                    index(built, module);
                 }
             }
         }
+        /* Scripts come and go, and a reload makes a new module: searchResults builds this again when they change. */
+        this.indexedScripts = atlas.script.ScriptManager.get().version();
+        for (Module module : scriptModules(SCRIPTS_ALL)) {
+            index(built, module);
+        }
         this.index = built;
         this.searchedFor = null;
+    }
+
+    private static void index(SearchIndex built, Module module) {
+        built.addModule(module, module.getName(), module.getDescription());
+        List<Property<?>> properties = Atlas.propertyManager.properties.get(module.getClass());
+        if (properties == null) {
+            return;
+        }
+        for (Property<?> property : properties) {
+            built.addSetting(module, property, module.getName(), property.getLabel(), property.getName(),
+                    property.getHelp());
+        }
+    }
+
+    /**
+     * A script's module is a new object each time it reloads, and a placeholder until it loads: the selection
+     * follows the script, so the card never edits a module that is gone. When the file is gone, so is the selection.
+     */
+    private void followScripts() {
+        if (!(this.selected instanceof atlas.script.ScriptHost)) {
+            return;
+        }
+        atlas.script.ScriptEntry entry = ((atlas.script.ScriptHost) this.selected).entry();
+        Module current = entry != null && atlas.script.ScriptManager.get().entries().contains(entry) ? entry.module()
+                : null;
+        if (current != this.selected) {
+            List<Module> modules = current == null ? visibleModules() : null;
+            this.selected = current != null ? current : modules.isEmpty() ? null : modules.get(0);
+        }
     }
 
     /**
@@ -3742,6 +3879,13 @@ public class AtlasClickGui extends GuiScreen {
             Liquid.line(x, y + 4.6F, x, y + 6.0F, 1.1F, c);
             Liquid.line(x - 6.0F, y, x - 4.6F, y, 1.1F, c);
             Liquid.line(x + 4.6F, y, x + 6.0F, y, 1.1F, c);
+        } else if (key.equals("code")) {
+            /* </>: the Scripts page. */
+            Liquid.line(x - 2.2F, y - 3.6F, x - 5.4F, y, 1.2F, c);
+            Liquid.line(x - 5.4F, y, x - 2.2F, y + 3.6F, 1.2F, c);
+            Liquid.line(x + 2.2F, y - 3.6F, x + 5.4F, y, 1.2F, c);
+            Liquid.line(x + 5.4F, y, x + 2.2F, y + 3.6F, 1.2F, c);
+            Liquid.line(x + 1.0F, y - 4.4F, x - 1.0F, y + 4.4F, 1.1F, c);
         } else if (key.equals("theme")) {
             /* A palette: the board and three wells of paint. */
             Liquid.ring(x, y, 5.0F, 1.1F, c);
@@ -3930,6 +4074,9 @@ public class AtlasClickGui extends GuiScreen {
 
     /** The modules behind a sidebar row: a Legit sub-group on the Legit page, a category elsewhere. */
     private List<Module> modulesOf(String name) {
+        if (isScriptGroup(name)) {
+            return scriptModules(name);
+        }
         if (isQuick(name)) {
             boolean enabled = ENABLED.equals(name);
             List<Module> out = new ArrayList<Module>();
@@ -3948,8 +4095,28 @@ public class AtlasClickGui extends GuiScreen {
         return ENABLED.equals(name) || ATTENTION.equals(name);
     }
 
+    private static boolean isScriptGroup(String name) {
+        return SCRIPTS_ALL.equals(name) || SCRIPTS_ATLAS.equals(name) || SCRIPTS_RAVEN16.equals(name)
+                || SCRIPTS_RAVEN17.equals(name);
+    }
+
+    /** The scripts of a group, as menu rows (a script that did not load has a row too, with why). */
+    private static List<Module> scriptModules(String group) {
+        atlas.script.ScriptKind kind = SCRIPTS_ATLAS.equals(group) ? atlas.script.ScriptKind.ATLAS
+                : SCRIPTS_RAVEN16.equals(group) ? atlas.script.ScriptKind.RAVEN16
+                : SCRIPTS_RAVEN17.equals(group) ? atlas.script.ScriptKind.RAVEN17 : null;
+        List<Module> out = new ArrayList<Module>();
+        for (atlas.script.ScriptEntry entry : atlas.script.ScriptManager.get().entries(kind)) {
+            out.add(entry.module());
+        }
+        return out;
+    }
+
     /** Every module of this page once, in its categories' order. */
     private List<Module> pageModules() {
+        if (SCRIPTS.equals(this.page)) {
+            return scriptModules(SCRIPTS_ALL);
+        }
         List<Module> out = new ArrayList<Module>();
         java.util.Set<Module> seen = new java.util.HashSet<Module>();
         if ("Legit".equals(this.page)) {
@@ -3981,6 +4148,9 @@ public class AtlasClickGui extends GuiScreen {
         }
         if (ATTENTION.equals(name)) {
             return "attention";
+        }
+        if (isScriptGroup(name)) {
+            return SCRIPTS_ATLAS.equals(name) ? "client" : SCRIPTS_ALL.equals(name) ? "code" : "folder";
         }
         return "Legit".equals(this.page) ? LegitGroups.icon(name) : name;
     }
@@ -4174,6 +4344,9 @@ public class AtlasClickGui extends GuiScreen {
 
     /** The top-level page a module lives on, as its tab is labelled. */
     private static String pageOf(Module module) {
+        if (module instanceof atlas.script.ScriptHost) {
+            return SCRIPTS;
+        }
         return ModuleCategories.of(module.getClass()) == Category.LEGIT ? "Legit" : "Modules";
     }
 
@@ -4359,6 +4532,33 @@ public class AtlasClickGui extends GuiScreen {
         }
         if ("page".equals(target.kind)) {
             selectPage((String) target.payload);
+            return;
+        }
+        if ("scriptAction".equals(target.kind)) {
+            String action = (String) target.payload;
+            pulse("scriptBtn:" + action);
+            atlas.script.ScriptManager scripts = atlas.script.ScriptManager.get();
+            if ("newAtlas".equals(action)) {
+                scripts.newScript(atlas.script.ScriptKind.ATLAS);
+                tell(Toasts.Kind.OK, "New Atlas script: saving it loads it");
+            } else if ("newBs16".equals(action)) {
+                scripts.newScript(atlas.script.ScriptKind.RAVEN16);
+                tell(Toasts.Kind.OK, "New Raven bS 16 script: saving it loads it");
+            } else if ("newBs17".equals(action)) {
+                scripts.newScript(atlas.script.ScriptKind.RAVEN17);
+                tell(Toasts.Kind.OK, "New Raven bS 17 script: saving it loads it");
+            } else if ("folder".equals(action)) {
+                scripts.openFolder(SCRIPTS_RAVEN16.equals(this.category) ? atlas.script.ScriptKind.RAVEN16
+                        : SCRIPTS_RAVEN17.equals(this.category) ? atlas.script.ScriptKind.RAVEN17
+                        : atlas.script.ScriptKind.ATLAS);
+            } else if ("import".equals(action)) {
+                int copied = scripts.importRaven(SCRIPTS_RAVEN16.equals(this.category)
+                        ? atlas.script.ScriptKind.RAVEN16 : atlas.script.ScriptKind.RAVEN17);
+                tell(Toasts.Kind.OK, copied == 0 ? "No new Raven scripts to copy" : "Copied " + copied + " Raven script(s)");
+            } else if ("reload".equals(action)) {
+                scripts.reloadAll();
+                tell(Toasts.Kind.OK, "Reloading scripts");
+            }
             return;
         }
         if ("appearance".equals(target.kind)) {
@@ -5183,7 +5383,7 @@ public class AtlasClickGui extends GuiScreen {
      */
     private void alignCategory() {
         if (this.selected == null || !search().trim().isEmpty() || this.profilesView || this.appearanceView
-                || this.serversView) {
+                || this.serversView || SCRIPTS.equals(this.page)) {
             return;
         }
         Map<String, List<Module>> lists = "Legit".equals(this.page) ? this.legitGroups : this.byCategory;

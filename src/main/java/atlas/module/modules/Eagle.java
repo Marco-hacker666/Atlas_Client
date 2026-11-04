@@ -57,6 +57,10 @@ public class Eagle extends Module {
         /* 2026-10-31 (owner: "BridgeAssist stops by itself while Scaffold is on"): its edge crouch and its
            sneak-only un-crouch fought Scaffold's own edge handling (safe-walk, GodBridge's ledge sneak). */
         this.pauseWhen(() -> {
+            /* 2026-11-04: a Raven script that turned SafeWalk off (see RavenScript.modules). */
+            if (atlas.script.raven.RavenHooks.edgeCrouchHeld) {
+                return true;
+            }
             Module scaffold = atlas.Atlas.moduleManager == null ? null
                     : atlas.Atlas.moduleManager.modules.get(Scaffold.class);
             return scaffold != null && scaffold.isEnabled();

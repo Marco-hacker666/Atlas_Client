@@ -28,10 +28,10 @@ public class SpeedblockPredictTest {
 
     @Test
     public void aSprintSettlesAtVanillaSpeed() {
-        /* Sprinting along +z from rest-ish: the step converges on about 0.286 blocks a tick. */
+        /* Sprinting along +z from rest-ish: the step converges on vanilla's 0.2806 blocks a tick (5.612 a second). */
         double[][] p = SpeedblockPlan.simulate(0.5, 0.5, 0.0, 0.05, 0.0, 0.5, 100.0, true, true, 40);
         double last = p[39][1] - p[38][1];
-        assertEquals(0.2863, last, 0.002);
+        assertEquals(0.2806, last, 0.0005);
         assertEquals(0.5, p[39][0], 1.0E-6);
     }
 

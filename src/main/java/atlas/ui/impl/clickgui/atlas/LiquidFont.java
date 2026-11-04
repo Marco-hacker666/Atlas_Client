@@ -584,6 +584,15 @@ final class LiquidFont {
         if (text == null || text.isEmpty()) {
             return lines;
         }
+        if (text.indexOf('\n') >= 0) {
+            /* 2026-11-03: a script's problems come one to a line; each line wraps on its own. */
+            for (String paragraph : text.split("\n")) {
+                if (!paragraph.trim().isEmpty()) {
+                    lines.addAll(this.wrap(paragraph, maxWidth));
+                }
+            }
+            return lines;
+        }
         StringBuilder line = new StringBuilder();
         for (String word : text.split(" ")) {
             if (!latin(word) && width(word) > maxWidth) {

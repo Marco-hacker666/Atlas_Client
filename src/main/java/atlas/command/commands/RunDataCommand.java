@@ -19,10 +19,10 @@ public class RunDataCommand extends Command {
         if (arg.equals("on")) {
             RunCollector.setConsent(true);
             ChatUtil.sendFormatted("&b[Atlas] &7Thanks! Anonymous run data is on (no names, no server, no coordinates). "
-                    + "&8.rundata off&7 stops it.&r");
+                    + "&8.rundata off&7 (or Client Settings > Privacy) stops it.&r");
         } else if (arg.equals("off")) {
             RunCollector.setConsent(false);
-            ChatUtil.sendFormatted("&b[Atlas] &7Run data is off: nothing is recorded or sent.&r");
+            ChatUtil.sendFormatted("&b[Atlas] &7Run data is off: nothing is recorded or sent, and rows not yet sent are dropped.&r");
         } else {
             Boolean consent = RunCollector.consent();
             ChatUtil.sendFormatted("&b[Atlas] &7Run data: " + (consent == null ? "not chosen" : consent ? "&aon" : "&coff")

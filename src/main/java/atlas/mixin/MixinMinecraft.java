@@ -217,6 +217,42 @@ public abstract class MixinMinecraft {
         }
     }
 
+    /* 2026-11-03: scripts. Raven bS 17's onKey (every key going down or up, before the client handles it), and
+       Raven's onPrePlayerInteract (each tick, before the clicks are handled) -- at the places Raven fires them. */
+    @Inject(
+            method = {"runTick"},
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/Minecraft;dispatchKeypresses()V"
+            )
+    )
+    private void beforeDispatchKeypresses(CallbackInfo callbackInfo) {
+        atlas.script.ScriptDispatcher.INSTANCE.onKeyState(org.lwjgl.input.Keyboard.getEventKey(),
+                org.lwjgl.input.Keyboard.getEventKeyState(), this.currentScreen != null);
+    }
+
+    @Inject(
+            method = {"runTick"},
+            at = @At(
+                    value = "FIELD",
+                    opcode = org.objectweb.asm.Opcodes.GETFIELD,
+                    target = "Lnet/minecraft/client/settings/GameSettings;chatVisibility:Lnet/minecraft/entity/player/EntityPlayer$EnumChatVisibility;"
+            )
+    )
+    private void beforeChatVisibility(CallbackInfo callbackInfo) {
+        atlas.script.ScriptDispatcher.INSTANCE.onPreInteract();
+    }
+
+    /* 2026-11-03 (full check): Raven's onGuiUpdate, where Raven fires it -- the head of displayGuiScreen, with the
+       screen asked for or the one closing, before Forge's GuiOpenEvent puts the main menu in place of a null. */
+    @Inject(
+            method = {"displayGuiScreen"},
+            at = {@At("HEAD")}
+    )
+    private void beforeDisplayGuiScreen(GuiScreen guiScreen, CallbackInfo callbackInfo) {
+        atlas.script.ScriptDispatcher.INSTANCE.onGuiChange(guiScreen, this.currentScreen);
+    }
+
     @Redirect(
             method = {"runTick"},
             at = @At(

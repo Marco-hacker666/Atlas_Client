@@ -54,6 +54,26 @@ public final class RunTracker {
         return this.velocity.get(id);
     }
 
+    /** A new position from the server arrived on this tick: the raw position is exact now, not a tick old. */
+    public boolean fresh(int tick, int id) {
+        double[] seen = this.last.get(id);
+        return seen != null && (int) seen[2] == tick;
+    }
+
+    /**
+     * Where the server has it now: the last update moved on by the velocity for the ticks since (at most 3) -- the
+     * position SpeedBlocker plans from. {rawX, rawZ} when the velocity is not known.
+     */
+    public double[] now(int tick, int id, double rawX, double rawZ) {
+        double[] seen = this.last.get(id);
+        double[] v = this.velocity.get(id);
+        if (seen == null || v == null) {
+            return new double[]{rawX, rawZ};
+        }
+        int since = Math.max(0, Math.min(3, tick - (int) seen[2]));
+        return new double[]{rawX + v[0] * since, rawZ + v[1] * since};
+    }
+
     /** Forgets every player not in {@code alive}. */
     public void retain(Set<Integer> alive) {
         this.last.keySet().retainAll(alive);

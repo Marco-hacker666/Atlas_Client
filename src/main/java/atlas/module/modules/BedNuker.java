@@ -63,6 +63,15 @@ public class BedNuker extends Module {
     private int breakStage = 0;
     private int tickCounter = 0;
     private float breakProgress = 0.0F;
+
+    /** For scripts (Raven's modules.getBedAuraPosition / getBedAuraProgress), 2026-11-03: read only. */
+    public BlockPos getTargetBed() {
+        return this.targetBed;
+    }
+
+    public float getBreakProgress() {
+        return this.breakProgress;
+    }
     private boolean isBed = false;
     private int savedSlot = -1;
     private boolean readyToBreak = false;

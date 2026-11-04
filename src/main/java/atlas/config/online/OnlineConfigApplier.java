@@ -33,7 +33,7 @@ public class OnlineConfigApplier {
      * secret or talks for you.
      */
     private static final java.util.Set<Class<?>> SENSITIVE = new java.util.HashSet<Class<?>>(java.util.Arrays.asList(
-            atlas.module.modules.ScriptModule.class, atlas.module.modules.AutoAuth.class));
+            atlas.module.modules.AutoAuth.class));
 
     public Result apply(String json) {
         if (json == null || json.trim().isEmpty()) {
@@ -50,7 +50,8 @@ public class OnlineConfigApplier {
             if (object == null) {
                 continue;
             }
-            if (SENSITIVE.contains(module.getClass())) {
+            /* 2026-11-03: scripts run code; a shared config never switches one on (ScriptModule is gone). */
+            if (SENSITIVE.contains(module.getClass()) || module instanceof atlas.script.ScriptHost) {
                 if (object.has("toggled")) {
                     result.skipped.add(module.getName() + ".toggled");
                 }

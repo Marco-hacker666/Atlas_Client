@@ -127,8 +127,6 @@ public class Atlas {
         /* Legit bridging 3-in-1: Eagle + BridgeAssist + LegitScaffold combined. */
         moduleManager.modules.put(PearlSaver.class, new PearlSaver());
         moduleManager.modules.put(ProjectileAimBot.class, new ProjectileAimBot());
-        /* The script runtime drives scripts through one module (Batch 6). */
-        moduleManager.modules.put(ScriptModule.class, new ScriptModule());
         moduleManager.modules.put(AutoTool.class, new AutoTool());
         moduleManager.modules.put(AutoSwap.class, new AutoSwap());
         moduleManager.modules.put(BedNuker.class, new BedNuker());
@@ -354,6 +352,11 @@ public class Atlas {
         }
         /* The shared server look, after every module (2026-10-31): handlers of one priority run in the order they
            were registered, so a module asking for a look in its LOWEST handler still asks before the packet is set. */
+        /* Scripts (2026-11-03): one dispatcher for every script's hooks, on Atlas's bus and Forge's; before the
+           shared look, so a look a script asks for at UpdateEvent PRE is asked before the packet is set. */
+        EventManager.register(atlas.script.ScriptDispatcher.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(atlas.script.ScriptDispatcher.INSTANCE);
+        net.minecraftforge.fml.common.FMLCommonHandler.instance().bus().register(atlas.script.ScriptDispatcher.INSTANCE);
         EventManager.register(atlas.management.RotationHelper.get());
         Config config = new Config("default", true);
         if (config.file.exists()) {
@@ -367,6 +370,8 @@ public class Atlas {
         if (targetManager.file.exists()) {
             targetManager.load();
         }
+        /* The scripts compile on a thread of their own and load into the game once it runs (Scripts tab). */
+        atlas.script.ScriptManager.get().start();
         FontManager.initializeFonts();
         /* Menu fonts and Java2D warmed up on a worker while the game loads,
            so the start screen does not freeze opening (2026-10-13). */

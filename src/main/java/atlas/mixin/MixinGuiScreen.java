@@ -36,4 +36,14 @@ public abstract class MixinGuiScreen {
                 Atlas.clientName, click.getValue()));
         cir.setReturnValue(true);
     }
+
+    /* 2026-11-03: Raven's onKeyPress(char, int) for scripts -- a key in an open screen, which a script may keep
+       from the screen (Raven's KeyPressEvent, at the same place). */
+    @Inject(method = {"handleKeyboardInput"}, at = {@At("HEAD")}, cancellable = true)
+    private void atlas$scriptKeyPress(org.spongepowered.asm.mixin.injection.callback.CallbackInfo callbackInfo) {
+        if (atlas.script.ScriptDispatcher.INSTANCE.onScreenKey(org.lwjgl.input.Keyboard.getEventCharacter(),
+                org.lwjgl.input.Keyboard.getEventKey())) {
+            callbackInfo.cancel();
+        }
+    }
 }

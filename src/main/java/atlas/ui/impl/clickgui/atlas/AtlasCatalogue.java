@@ -33,7 +33,8 @@ final class AtlasCatalogue {
         }
         List<Module> other = new ArrayList<Module>();
         for (Module module : Atlas.moduleManager.modules.values()) {
-            if (module != null && !listed.contains(module)) {
+            /* Scripts have a page of their own (2026-11-03). */
+            if (module != null && !listed.contains(module) && !(module instanceof atlas.script.ScriptHost)) {
                 other.add(module);
             }
         }

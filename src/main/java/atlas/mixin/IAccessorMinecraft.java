@@ -35,6 +35,10 @@ public interface IAccessorMinecraft {
     @org.spongepowered.asm.mixin.gen.Invoker("clickMouse")
     void callClickMouse();
 
+    /* 2026-11-03: scripts' keybinds.rightClick (Raven API): vanilla's own right click. */
+    @org.spongepowered.asm.mixin.gen.Invoker("rightClickMouse")
+    void callRightClickMouse();
+
     /* 2026-10-11: where AtlasResources adds the jar's "atlas" resources. */
     @Accessor("defaultResourcePacks")
     java.util.List<net.minecraft.client.resources.IResourcePack> getDefaultResourcePacks();

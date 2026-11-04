@@ -273,7 +273,6 @@ public final class ModuleDocs {
         d("BlocksESP", "高亮顯示附近的方塊。");
         d("MobESP", "高亮顯示附近的生物。");
         d("AuraAutoBlock", "攻擊時自動舉盾格擋。");
-        d("ScriptModule", "載入腳本檔案並執行其鉤子。");
         d("JumpReset", "受擊時自動跳躍以減少擊退。");
         d("Tower", "快速垂直向上堆疊前進，含隧道模式。");
         d("FastUse", "加快進食與格擋的完成速度。");
@@ -623,6 +622,10 @@ public final class ModuleDocs {
         help("SpeedBlocker", "contact-ticks", "往前預測幾 tick 的路線；比這更遠的人先不擋。");
         help("SpeedBlocker", "blocks-per-run", "每次對方衝過來最多放幾格（DOUBLE 是幾組兩格）；放完之後，那個人停下來前不再放。");
         help("SpeedBlocker", "record-runs", "記錄預測準不準：附近每個在移動的玩家先預測、之後對照他實際跑到哪，寫進 config/Atlas/speedblock-runs-*.csv。關掉時在聊天欄顯示平均誤差（跟直線預測比）。");
+        help("SpeedBlocker", "trigger", "Auto：有人衝過來就自動擋。Press：按一下 press-key 立刻擋住衝過來的人，被繞過就再放，直到對方進到 stop-distance 內或 press-time 用完；按住會一直有效。");
+        help("SpeedBlocker", "press-key", "Press 模式：按下就開始擋的按鍵（預設 R）。");
+        help("SpeedBlocker", "press-time", "Press 模式：按一下之後有效幾秒（從放開按鍵算起）。");
+        help("SpeedBlocker", "stop-distance", "Press 模式：對方離你小於這個距離（格）就不再放，那時方塊已經來不及擋。");
         help("SpeedBlocker", "show-plan", "畫出附近每個在移動的玩家預測會跑的路線（灰點）、被選中的目標路線（黃點）和要放方塊的格子（藍框）。");
         help("AutoBlockIn", "debug", "開發用：把每一步的判斷寫進 config/Atlas/placedebug-*.txt（背景寫入，不影響 fps）。平常不用開。");
         help("AutoBlockIn", "debug-chat", "debug 時也印到聊天欄（每秒最多 4 行）。裝了聊天相關模組時很吃 fps，只在需要即時看時才開。");
@@ -1076,6 +1079,7 @@ public final class ModuleDocs {
         help(cl, "max-speed", "每 tick 最多轉幾度。");
         help("Scaffold", "turn-speed", "每 tick 最多轉幾度（DEFAULT～Hypixel 模式）。不再一次甩到位，轉不到就等下一 tick，不會亂點。180 = 不限制。");
         help("Scaffold", "humanize", "轉頭加上 Rotations 引擎的速度隨機與弧線，比較像人手。");
+        help("Scaffold", "telly-auto-jump", "SPEED-TELLY 模式：按住 W 在地上時自動跳，放開就停。");
         help("Scaffold", "telly-jump", "TELLY 模式：每次起跳時先面向前方跳，再分幾個 tick 轉回身後放方塊（telly 搭橋）；轉身時不點擊。");
         help("Scaffold", "pause-on-correction", "被伺服器拉回後，等一個來回延遲再放方塊；被退回的方塊也會暫停。避免在錯的位置連續放出 ghost block。");
         help(cl, "pre-aim", "還沒到時機前先把頭轉到大概的位置，等一下轉比較少。");

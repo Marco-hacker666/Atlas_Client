@@ -120,6 +120,10 @@ final class AtlasTheme {
     // ---- Privacy (2026-10-08): the automatic log upload (management.LogUploader)
     /* Off by default since 2026-11-01 (owner): logs leave this computer only when the player turns this on. */
     final BooleanProperty autoSendLogs = new BooleanProperty(atlas.management.LogUploader.SETTING, false);
+    /* 2026-11-02 (review): the run-data choice in the menu too, not only .rundata. The choice itself lives in
+       RunCollector (config/Atlas/run-data.txt); this switch shows it and changes it (autosave keeps the two in step). */
+    final BooleanProperty shareRunData = new BooleanProperty("share-run-data", false);
+    private boolean runDataSeen;
 
     // ---- Performance (2026-10-15): phones on gl4es / Krypton Wrapper (util.render.MobileSafe)
     final ModeProperty mobileSafe = new ModeProperty(atlas.util.render.MobileSafe.SETTING, 0,
@@ -156,13 +160,18 @@ final class AtlasTheme {
         group("Layout", "How tightly rows are packed, and which extras are shown.",
                 this.density, this.accountCard, this.hintBar, this.moduleStatus, this.counts, this.stateDots);
         group("Privacy", "When a server kicks you, or you get flagged many times in a minute, the client sends its "
-                        + "log and config to the developers to help fix it. Your name, other players' names, tokens and IPs are removed first.",
-                this.autoSendLogs);
+                        + "log and config to the developers to help fix it. Off unless you turn it on. Your name, other players' names, "
+                        + "tokens and numeric IP addresses are removed first; the server's address (its domain) is kept so the problem "
+                        + "can be traced. Like any website, the relay sees your IP address; it uses it only to limit how often you can "
+                        + "send. Share run data: anonymous SpeedBlocker movement numbers (no names, no server, no coordinates).",
+                this.autoSendLogs, this.shareRunData);
         group("Performance", "Mobile-safe drawing for phones (PojavLauncher and its forks on gl4es or Krypton Wrapper): "
                         + "no blur, glass shaders or glow, plain rounded shapes. Auto turns it on only when such a "
                         + "renderer is found; it changes nothing on a PC.",
                 this.mobileSafe);
         load();
+        this.runDataSeen = Boolean.TRUE.equals(atlas.management.RunCollector.consent());
+        this.shareRunData.setValue(this.runDataSeen);
         this.saved = snapshot();
         atlas.management.LogUploader.setEnabled(this.autoSendLogs.getValue());
         atlas.util.render.MobileSafe.setSetting(this.mobileSafe.getValue());
@@ -325,7 +334,7 @@ final class AtlasTheme {
         int keepMode = this.mode.getValue();
         for (Property<?> property : all()) {
             /* A look preset never changes the privacy or performance choice. */
-            if (property != this.autoSendLogs && property != this.mobileSafe) {
+            if (property != this.autoSendLogs && property != this.shareRunData && property != this.mobileSafe) {
                 resetOne(property);
             }
         }
@@ -425,6 +434,7 @@ final class AtlasTheme {
             return;
         }
         this.checkedAt = time;
+        this.syncRunData();
         String now = snapshot();
         if (now.equals(this.saved)) {
             this.changedAt = 0L;
@@ -434,6 +444,18 @@ final class AtlasTheme {
             this.changedAt = time;
         } else if (time - this.changedAt > 500L) {
             save();
+        }
+    }
+
+    /** share-run-data and RunCollector's choice: whichever changed last wins (the switch here, or .rundata / chat). */
+    private void syncRunData() {
+        boolean collector = Boolean.TRUE.equals(atlas.management.RunCollector.consent());
+        if (collector != this.runDataSeen) {
+            this.runDataSeen = collector;
+            this.shareRunData.setValue(collector);
+        } else if (this.shareRunData.getValue() != collector) {
+            atlas.management.RunCollector.setConsent(this.shareRunData.getValue());
+            this.runDataSeen = this.shareRunData.getValue();
         }
     }
 

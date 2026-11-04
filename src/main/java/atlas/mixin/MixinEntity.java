@@ -93,6 +93,17 @@ public abstract class MixinEntity {
         }
     }
 
+    /* 2026-11-03 (full check): Raven's onPlayerMove -- what this player is about to move by, as Raven fires it. */
+    @Inject(
+            method = {"moveEntity"},
+            at = {@At("HEAD")}
+    )
+    private void beforeMoveEntity(double x, double y, double z, CallbackInfo callbackInfo) {
+        if ((Entity) ((Object) this) instanceof EntityPlayerSP) {
+            atlas.script.ScriptDispatcher.INSTANCE.onPlayerMove(x, y, z);
+        }
+    }
+
     @ModifyVariable(
             method = {"moveEntity"},
             ordinal = 0,

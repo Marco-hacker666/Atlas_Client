@@ -163,13 +163,15 @@ public final class BugReport {
 
     /**
      * Anonymous SpeedBlocker run data (RunCollector, 2026-11-01): kind "runs", the relay posts it to its own channel.
-     * Only numbers; nothing to redact. A failure is only logged: the rows are not kept for a retry.
+     * Only numbers; nothing to redact. {@code done} hears on the sending thread whether it went (RunCollector keeps
+     * the rows for one retry when it did not).
      */
-    public static void sendRuns(String title, String summary, String csv) {
+    public static void sendRuns(String title, String summary, String csv, java.util.function.Consumer<Boolean> done) {
         post(relayUrl(), "runs", title, summary, csv, "", (ok, message) -> {
             if (!ok) {
                 System.err.println("[Atlas] Run data not sent: " + message);
             }
+            done.accept(ok);
         });
     }
 
@@ -248,7 +250,7 @@ public final class BugReport {
                 .append(" | **Menu:** ").append(setting("ClickGUI", "Style"))
                 .append(" | **OptiFine:** ").append(optifine() ? (FramebufferCompat.optifineFastRender() ? "Fast Render ON" : "yes") : "no")
                 .append('\n');
-        sb.append("Log (report.txt) and config (config.txt) attached; names, tokens and IPs removed.");
+        sb.append("Log (report.txt) and config (config.txt) attached; names, tokens and numeric IPs removed (the server address is kept).");
         return redactor().apply(sb.toString());
     }
 

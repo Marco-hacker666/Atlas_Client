@@ -131,6 +131,20 @@ public class SpeedBlocker extends Module {
     public final BooleanProperty leadPing = new BooleanProperty("lead-ping", true);
     /** How far ahead the run is predicted, ticks: a target further off than this is not blocked yet. */
     public final IntProperty contactTicks = new IntProperty("contact-ticks", 30, 2, 60);
+    /* 2026-11-02 (owner: "Auto and Press modes"). Auto is what it always did. Press, first "only while the key is
+       held"; then (owner: "press the key and a block goes out at once, and it really stops them; it may try again
+       and again until the enemy is within 2 blocks"): a press starts a burst at once (PressBurst), held or not.
+       The burst follows the runner coming in, blocks it at the soonest cell a block can still be in time for, and
+       blocks it again whenever its run is open (it went round, or the block was taken back) -- no blocks-per-run,
+       no contact-ticks wait. It ends when the runner is within stop-distance (a block then lands after it is
+       through), or press-time after the key was last down. With no burst nothing is turned or swapped. */
+    public final ModeProperty trigger = new ModeProperty("trigger", 0, new String[]{"Auto", "Press"});
+    public final atlas.property.properties.KeyProperty pressKey = new atlas.property.properties.KeyProperty("press-key",
+            org.lwjgl.input.Keyboard.KEY_R, () -> this.trigger.getValue() == 1);
+    public final FloatProperty pressTime = new FloatProperty("press-time", 3.0F, 0.5F, 10.0F,
+            () -> this.trigger.getValue() == 1);
+    public final FloatProperty stopDistance = new FloatProperty("stop-distance", 2.0F, 1.0F, 4.0F,
+            () -> this.trigger.getValue() == 1);
     public final ModeProperty height = new ModeProperty("height", 0, new String[]{"FEET", "DOUBLE"});
     /** Blocks one run gets (DOUBLE: pairs), then nothing more for that target until it stops coming in. */
     public final IntProperty blocksPerRun = new IntProperty("blocks-per-run", 1, 1, 3);
@@ -161,10 +175,17 @@ public class SpeedBlocker extends Module {
     /** Smoothed horizontal velocity, blocks a tick, by entity id. */
     private final Map<Integer, double[]> velocities = new HashMap<Integer, double[]>();
     /** Clips per cell, and cells left alone until a time (ms). */
-    private final Map<BlockPos, Integer> attempts = new ConcurrentHashMap<BlockPos, Integer>();
+    /* 2026-11-02 (review): {clicks, tick of the last one}. It held only the clicks, and prune() took them for a
+       tick (tick - clicks > 100): past the first 100 ticks every entry went every tick, so max-retries and
+       retry-cooldown never came into play. */
+    private final Map<BlockPos, int[]> attempts = new ConcurrentHashMap<BlockPos, int[]>();
     private final Map<BlockPos, Long> refusedUntil = new ConcurrentHashMap<BlockPos, Long>();
     /** Placements sent and not yet answered: cell -> tick sent. */
-    private final Map<BlockPos, Integer> pending = new ConcurrentHashMap<BlockPos, Integer>();
+    /* {tick sent, target id}. 2026-11-02 (review): a run's block counts once the server shows it in place (landed,
+       drained on the client thread), not at the click: a block the server took back used up the run. A block still
+       waiting for its answer counts toward the run too, so no second one goes out meanwhile. */
+    private final Map<BlockPos, int[]> pending = new ConcurrentHashMap<BlockPos, int[]>();
+    private final java.util.Queue<Integer> landed = new java.util.concurrent.ConcurrentLinkedQueue<Integer>();
     /** Support faces whose click was answered false: key -> tick they may be used again. */
     private final Map<PlaceUtil.FaceKey, Integer> failedFaces = new ConcurrentHashMap<PlaceUtil.FaceKey, Integer>();
 
@@ -206,13 +227,24 @@ public class SpeedBlocker extends Module {
        (TARGET_HOLD ticks), the cells are on the floor it runs on, and the cell committed to keeps its place while
        it is still on the run, open and in reach. */
     private int lastTargetId = -1;
-    private int lastTargetTick = -100;
+    /* 2026-11-02 (review): the last tick the target closed in above min-approach by itself. The hold counted from
+       the last tick it was chosen and gave it +1.0, so it was chosen every tick, the hold never ran out, and a
+       faster runner never got the target. */
+    private int lastQualifiedTick = -100;
     private static final int TARGET_HOLD = 6;
     private BlockPos committed;
     private int committedTarget = -1;
     private int committedUntil;
     /** Why the last plan had no cell, for the trace. */
     private String goalWhy = "";
+    private final atlas.combat.PressBurst press = new atlas.combat.PressBurst();
+    /** Press: the run is followed this far ahead and this many cells along it, from further off than Auto. */
+    private static final int PRESS_TICKS = 40;
+    private static final int PRESS_CELLS = 16;
+    /** Press: the soonest cells in time, in path order; the cheapest turn among them is placed. */
+    private static final int PRESS_GOALS = 4;
+    /** A block at the feet this high or lower is stepped onto, not run into. */
+    private static final double STEP_HEIGHT = 0.6;
 
     public SpeedBlocker() {
         super("SpeedBlocker", false, false, "Puts a block in the path of a player running in, to break the sprint");
@@ -268,17 +300,18 @@ public class SpeedBlocker extends Module {
         }
         S23PacketBlockChange change = (S23PacketBlockChange) packet;
         BlockPos pos = change.getBlockPosition();
-        if (this.pending.remove(pos) == null) {
+        int[] sent = this.pending.remove(pos);
+        if (sent == null) {
             return;
         }
         if (!BlockUtil.isReplaceable(change.getBlockState().getBlock())) {
-            /* The cell holds a block now: the placement landed. */
+            /* The cell holds a block now: the placement landed, and counts for that target's run. */
             this.attempts.remove(pos);
             this.refusedUntil.remove(pos);
+            this.landed.add(sent[1]);
             return;
         }
-        int failed = this.attempts.merge(pos, 1, Integer::sum);
-        if (failed >= this.maxRetries.getValue()) {
+        if (this.bump(pos) >= this.maxRetries.getValue()) {
             this.refuse(pos);
         }
     }
@@ -292,6 +325,7 @@ public class SpeedBlocker extends Module {
         this.planCell = null;
         this.committed = null;
         this.lastTargetId = -1;
+        this.landed.clear();
         this.attempts.clear();
         this.refusedUntil.clear();
         this.pending.clear();
@@ -299,6 +333,7 @@ public class SpeedBlocker extends Module {
         this.swapWait = 0;
         this.lastPlaceTick = -100;
         this.targetName = null;
+        this.press.reset();
     }
 
     @EventTarget
@@ -324,15 +359,30 @@ public class SpeedBlocker extends Module {
         this.predictEveryone();
         this.record();
         this.swapWait = Math.max(0, this.swapWait - 1);
+        boolean pressMode = this.trigger.getValue() == 1;
+        /* Before anything returns, so a press is never missed (onUpdate runs with no screen open: a key typed in
+           chat is not a press). */
+        boolean bursting = pressMode && this.press.update(this.tick, this.pressKey.isDown(),
+                Math.round(this.pressTime.getValue() * 20.0F));
         if (Arbiter.catching()) {
             this.locked = null;
             this.trace.log(this.tick, "stopped", "standing aside for " + Arbiter.catcher());
             this.restoreDue();
             return;
         }
+        if (pressMode && !bursting) {
+            /* Press, no burst: nothing turned or swapped (the engine hands the look back, the slot comes back). */
+            this.locked = null;
+            this.committed = null;
+            this.planCell = null;
+            this.planPath = null;
+            this.trace.log(this.tick, "waiting", "press-key not pressed");
+            this.restoreDue();
+            return;
+        }
 
-        EntityPlayer target = this.findTarget();
-        List<BlockPos> goals = target != null ? this.goals(target) : null;
+        EntityPlayer target = pressMode ? this.pressTarget() : this.findTarget(false);
+        List<BlockPos> goals = target != null ? this.goals(target, pressMode) : null;
         if (goals == null || goals.isEmpty()) {
             this.locked = null;
             if (target == null) {
@@ -414,11 +464,7 @@ public class SpeedBlocker extends Module {
                     this.committed = null;
                     this.locked = null;
                     this.targetName = target.getName();
-                    this.pending.put(shot.cell, this.tick);
-                    int[] run = this.runs.get(target.getEntityId());
-                    if (run != null) {
-                        run[0]++;
-                    }
+                    this.pending.put(shot.cell, new int[]{this.tick, target.getEntityId()});
                     this.count(shot.cell);
                     this.trace.log(this.tick, "success", "block in " + fmt(shot.cell) + " ahead of "
                             + target.getName());
@@ -439,8 +485,15 @@ public class SpeedBlocker extends Module {
     private void prune() {
         long now = System.currentTimeMillis();
         this.refusedUntil.entrySet().removeIf(entry -> now >= entry.getValue());
-        this.attempts.entrySet().removeIf(entry -> this.tick - entry.getValue() > ATTEMPT_TICKS);
-        this.pending.entrySet().removeIf(entry -> this.tick - entry.getValue() > ANSWER_TICKS);
+        this.attempts.entrySet().removeIf(entry -> this.tick - entry.getValue()[1] > ATTEMPT_TICKS);
+        this.pending.entrySet().removeIf(entry -> this.tick - entry.getValue()[0] > ANSWER_TICKS);
+        Integer landedFor;
+        while ((landedFor = this.landed.poll()) != null) {
+            int[] run = this.runs.get(landedFor);
+            if (run != null) {
+                run[0]++;
+            }
+        }
         this.failedFaces.entrySet().removeIf(entry -> this.tick >= entry.getValue());
     }
 
@@ -497,27 +550,23 @@ public class SpeedBlocker extends Module {
         this.velocities.keySet().removeIf(id -> !alive.contains(id));
     }
 
-    /** The player closing on this one fastest, or null. */
-    private EntityPlayer findTarget() {
+    /**
+     * The player closing on this one fastest, or null. Press: from as far as scan-range (no contact-ticks wait),
+     * no blocks-per-run, and nobody within stop-distance.
+     */
+    private EntityPlayer findTarget(boolean press) {
         EntityPlayer best = null;
+        double bestOwn = 0.0;
         double bestApproach = this.minApproach.getValue();
-        double scan = this.scanRange.getValue();
+        double stop = this.stopDistance.getValue();
         for (EntityPlayer player : mc.theWorld.playerEntities) {
-            if (player == mc.thePlayer || !CombatTargeting.isTrackablePlayer(player, this.ignoreTeammates.getValue())) {
-                continue;
-            }
-            if (!this.targetInvisible.getValue() && player.isInvisible()) {
-                continue;
-            }
-            if (this.requireSprint.getValue() && !player.isSprinting()) {
+            if (!this.inSight(player) || this.requireSprint.getValue() && !player.isSprinting()) {
                 continue;
             }
             double dx = mc.thePlayer.posX - this.nowX(player);
             double dz = mc.thePlayer.posZ - this.nowZ(player);
-            if (dx * dx + dz * dz > scan * scan) {
-                continue;
-            }
-            if (Math.abs(serverY(player) - mc.thePlayer.getEntityBoundingBox().minY) > SAME_FLOOR) {
+            if (press && dx * dx + dz * dz < stop * stop) {
+                /* Too close: a block placed now lands after it is through. */
                 continue;
             }
             double[] motion = this.velocities.get(player.getEntityId());
@@ -526,43 +575,96 @@ public class SpeedBlocker extends Module {
             }
             double approach = SpeedblockPlan.approach(motion[0], motion[1], dx, dz);
             /* The target of the last ticks stays while it still closes in at all: a strafe dips under min-approach. */
-            boolean held = player.getEntityId() == this.lastTargetId && this.tick - this.lastTargetTick <= TARGET_HOLD
+            boolean held = player.getEntityId() == this.lastTargetId && this.tick - this.lastQualifiedTick <= TARGET_HOLD
                     && approach > 0.0;
             /* Ticks until it is on top of this player at that speed: too far off is not worth a block yet. */
             double gap = Math.max(0.0, Math.sqrt(dx * dx + dz * dz) - 0.6);
-            if (approach > 0.0 && gap / approach > this.contactTicks.getValue()) {
+            if (!press && approach > 0.0 && gap / approach > this.contactTicks.getValue()) {
                 continue;
             }
-            if (approach > this.minApproach.getValue() || held) {
+            if (!press && (approach > this.minApproach.getValue() || held)) {
                 int[] run = this.runs.get(player.getEntityId());
                 if (run == null || this.tick - run[1] > RUN_GAP) {
                     run = new int[]{0, this.tick};
                     this.runs.put(player.getEntityId(), run);
                 }
                 run[1] = this.tick;
-                if (run[0] >= this.blocksPerRun.getValue() * (this.height.getModeString().equals("DOUBLE") ? 2 : 1)) {
-                    /* This run has had its blocks. */
+                int quota = this.blocksPerRun.getValue() * (this.height.getModeString().equals("DOUBLE") ? 2 : 1);
+                if (run[0] + this.inFlight(player.getEntityId()) >= quota) {
+                    /* This run has had its blocks (in place, or on their way). */
                     continue;
                 }
             }
-            if (held && approach > 0.0) {
-                /* Kept ahead of any other: switching targets mid-plan is what loses the block. */
-                approach += 1.0;
-            }
-            if (approach > bestApproach) {
-                bestApproach = approach;
+            /* A held target counts as just above min-approach while it dips under it, and wins a tie: kept over a
+               runner no faster, never over a faster one. */
+            double score = held ? Math.max(approach, this.minApproach.getValue() + 1.0E-6) + 0.02 : approach;
+            if (score > bestApproach) {
+                bestApproach = score;
                 best = player;
+                bestOwn = approach;
             }
         }
         if (best != null) {
             this.lastTargetId = best.getEntityId();
-            this.lastTargetTick = this.tick;
+            if (bestOwn > this.minApproach.getValue()) {
+                this.lastQualifiedTick = this.tick;
+            }
         }
         return best;
     }
 
-    /** The cells the target's feet enter next that are worth and able to take a block. */
-    private List<BlockPos> goals(EntityPlayer target) {
+    /** A player SpeedBlocker may follow: trackable, visible (unless target-invisible), in scan-range, on this floor. */
+    private boolean inSight(EntityPlayer player) {
+        if (player == mc.thePlayer || !CombatTargeting.isTrackablePlayer(player, this.ignoreTeammates.getValue())) {
+            return false;
+        }
+        if (!this.targetInvisible.getValue() && player.isInvisible()) {
+            return false;
+        }
+        double scan = this.scanRange.getValue();
+        double dx = mc.thePlayer.posX - this.nowX(player);
+        double dz = mc.thePlayer.posZ - this.nowZ(player);
+        if (dx * dx + dz * dz > scan * scan) {
+            return false;
+        }
+        return Math.abs(serverY(player) - mc.thePlayer.getEntityBoundingBox().minY) <= SAME_FLOOR;
+    }
+
+    /**
+     * Press: the burst's target. Kept from the tick it was chosen while it is in sight, closing in or not, so a
+     * runner that was stopped is still watched and blocked again if it goes round; within stop-distance the burst
+     * ends. With none locked, the runner closing in fastest.
+     */
+    private EntityPlayer pressTarget() {
+        int id = this.press.target();
+        if (id >= 0) {
+            net.minecraft.entity.Entity entity = mc.theWorld.getEntityByID(id);
+            if (entity instanceof EntityPlayer && this.inSight((EntityPlayer) entity)) {
+                EntityPlayer player = (EntityPlayer) entity;
+                double stop = this.stopDistance.getValue();
+                double dx = mc.thePlayer.posX - this.nowX(player);
+                double dz = mc.thePlayer.posZ - this.nowZ(player);
+                if (dx * dx + dz * dz < stop * stop) {
+                    this.press.end();
+                    this.trace.log(this.tick, "stopped", player.getName() + " is within stop-distance, burst over");
+                    return null;
+                }
+                return player;
+            }
+            this.press.lock(-1);
+        }
+        EntityPlayer best = this.findTarget(true);
+        if (best != null) {
+            this.press.lock(best.getEntityId());
+        }
+        return best;
+    }
+
+    /**
+     * The cells the target's feet enter next that are worth and able to take a block. Press: followed further
+     * ahead, nothing while something already walls the run, and only the soonest cells in time.
+     */
+    private List<BlockPos> goals(EntityPlayer target, boolean press) {
         List<BlockPos> goals = new ArrayList<BlockPos>();
         double[] motion = this.velocities.get(target.getEntityId());
         if (motion == null) {
@@ -575,13 +677,26 @@ public class SpeedBlocker extends Module {
         boolean doubleHeight = this.height.getModeString().equals("DOUBLE");
         boolean sprinting = target.isSprinting() || SpeedblockPlan.speed(motion[0], motion[1]) >= 0.25;
         double[][] run = SpeedblockPlan.simulate(sx, sz, motion[0], motion[1], target.rotationYawHead,
-                mc.thePlayer.posX, mc.thePlayer.posZ, target.onGround, sprinting, this.contactTicks.getValue());
+                mc.thePlayer.posX, mc.thePlayer.posZ, target.onGround, sprinting,
+                press ? Math.max(PRESS_TICKS, this.contactTicks.getValue()) : this.contactTicks.getValue());
         double[][] shown = new double[run.length][];
         for (int i = 0; i < run.length; i++) {
             shown[i] = new double[]{run[i][0], feetY, run[i][1]};
         }
         this.planPath = shown;
-        List<int[]> cells = SpeedblockPlan.cellsAlong(sx, sz, feetY, run, 6, doubleHeight);
+        List<int[]> cells = SpeedblockPlan.cellsAlong(sx, sz, feetY, run, press ? PRESS_CELLS : 6, doubleHeight);
+        if (press) {
+            int wall = SpeedblockPlan.firstWall(cells, doubleHeight, mc.thePlayer.posX, mc.thePlayer.posZ,
+                    cell -> this.walls(cell, feetY));
+            if (wall >= 0) {
+                /* A block already stands in its way -- ours (landed, or placed here and waiting for the server's
+                   answer) or the world's: watched, and blocked again only once the run is open. */
+                int[] at = cells.get(wall);
+                this.planCell = new BlockPos(at[0], at[1], at[2]);
+                this.goalWhy = "already walled at " + at[0] + "," + at[1] + "," + at[2] + ", watching";
+                return goals;
+            }
+        }
         /* Not before the block can be in the target's world. */
         int need = this.needTicks(target);
         Vec3 eye = mc.thePlayer.getPositionEyes(1.0F);
@@ -651,7 +766,19 @@ public class SpeedBlocker extends Module {
         }
         this.goalWhy = cells.size() + " cell(s) on the run: " + late + " too late (need " + need + "t), " + taken
                 + " taken, " + ours + " in our way, " + bodies + " in a body, " + far + " out of reach";
+        if (press && goals.size() > PRESS_GOALS) {
+            /* The soonest: the block meets it earliest, with time left for another if it goes round. */
+            return new ArrayList<BlockPos>(goals.subList(0, PRESS_GOALS));
+        }
         return goals;
+    }
+
+    /** The cell stops a runner: at the feet a block higher than a step, above them any block. */
+    private boolean walls(int[] cell, int feetY) {
+        BlockPos pos = new BlockPos(cell[0], cell[1], cell[2]);
+        net.minecraft.block.state.IBlockState state = mc.theWorld.getBlockState(pos);
+        AxisAlignedBB box = state.getBlock().getCollisionBoundingBox(mc.theWorld, pos, state);
+        return box != null && (cell[1] != feetY || box.maxY - pos.getY() > STEP_HEIGHT);
     }
 
     /**
@@ -676,7 +803,7 @@ public class SpeedBlocker extends Module {
     private void invalidate(PlaceUtil.Aim aim, String why) {
         this.failedFaces.put(aim.key(), this.tick + FAILED_FACE_TICKS);
         this.locked = null;
-        int failed = this.attempts.merge(aim.cell, 1, Integer::sum);
+        int failed = this.bump(aim.cell);
         if (failed >= this.maxRetries.getValue()) {
             this.refuse(aim.cell);
         }
@@ -688,9 +815,28 @@ public class SpeedBlocker extends Module {
      * every click keeps that cell from being retried every tick forever.
      */
     private void count(BlockPos cell) {
-        if (this.attempts.merge(cell, 1, Integer::sum) >= this.maxRetries.getValue()) {
+        if (this.bump(cell) >= this.maxRetries.getValue()) {
             this.refuse(cell);
         }
+    }
+
+    /** One more click on the cell; how many it has had. */
+    private int bump(BlockPos cell) {
+        int now = this.tick;
+        int[] after = this.attempts.compute(cell, (key, old) -> old == null ? new int[]{1, now}
+                : new int[]{old[0] + 1, now});
+        return after[0];
+    }
+
+    /** Blocks sent for the target and not yet answered. */
+    private int inFlight(int targetId) {
+        int n = 0;
+        for (int[] sent : this.pending.values()) {
+            if (sent[1] == targetId) {
+                n++;
+            }
+        }
+        return n;
     }
 
     private void refuse(BlockPos cell) {
@@ -785,9 +931,13 @@ public class SpeedBlocker extends Module {
             double[] motion = this.velocities.get(player.getEntityId());
             boolean sprinting = player.isSprinting()
                     || motion != null && SpeedblockPlan.speed(motion[0], motion[1]) >= 0.25;
-            this.recorder.observe(this.tick, player.getEntityId(), player.getName(), x, z,
-                    motion == null ? Double.NaN : motion[0], motion == null ? Double.NaN : motion[1],
-                    player.rotationYawHead, mc.thePlayer.posX, mc.thePlayer.posZ, player.onGround, sprinting);
+            double[] seen = this.lastSeen.get(player.getEntityId());
+            boolean fresh = seen != null && (int) seen[2] == this.tick;
+            /* From where the plan starts (the update moved on), checked against fresh server positions. */
+            this.recorder.observe(this.tick, player.getEntityId(), player.getName(), this.nowX(player),
+                    this.nowZ(player), x, z, fresh, motion == null ? Double.NaN : motion[0],
+                    motion == null ? Double.NaN : motion[1], player.rotationYawHead, mc.thePlayer.posX,
+                    mc.thePlayer.posZ, player.onGround, sprinting);
         }
     }
 
@@ -910,10 +1060,11 @@ public class SpeedBlocker extends Module {
 
     @Override
     public String[] getSuffix() {
+        String trigger = this.trigger.getValue() == 1 ? "Press " + this.pressKey.getKeyName() : null;
         if (this.targetName == null || this.tick - this.lastPlaceTick > 20) {
-            return new String[0];
+            return trigger == null ? new String[0] : new String[]{trigger};
         }
-        return new String[]{this.targetName};
+        return trigger == null ? new String[]{this.targetName} : new String[]{trigger, this.targetName};
     }
 
     private static String fmt(BlockPos pos) {

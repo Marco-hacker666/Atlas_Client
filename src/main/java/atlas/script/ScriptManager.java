@@ -1,606 +1,690 @@
 package atlas.script;
 
-import com.google.gson.Gson;
+import atlas.Atlas;
+import atlas.module.Module;
+import atlas.module.ModuleManager;
+import atlas.property.Property;
+import atlas.util.ChatUtil;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import atlas.util.ChatUtil;
+import net.minecraft.client.Minecraft;
 
-import java.io.BufferedReader;
+import javax.tools.JavaCompiler;
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.PrintWriter;
-import java.net.URL;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import javax.tools.Diagnostic;
-import javax.tools.DiagnosticCollector;
-import javax.tools.JavaCompiler;
-import javax.tools.JavaFileObject;
-import javax.tools.StandardJavaFileManager;
-import javax.tools.ToolProvider;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-// Ported from OpenSkid (GPL-3.0). Note what this is: scripts are Java source
-// compiled at runtime with the JDK compiler API and loaded through
-// SecureScriptClassLoader. It is not a JavaScript engine.
-//
-// The donor's remote `load - "url"` include is deliberately omitted: there is
-// no URL parameter, no fetch, no network anywhere in this file, by design.
-//
-// THREAT MODEL. Read before trusting a script.
-// A malicious script CAN still: hang or slow the tick with an infinite loop
-// or heavy allocation; spam local chat lines through print(); spawn threads
-// (java.lang.Thread is not blocked); call System.exit(); read system
-// properties; and escape the class denylist by reaching the parent loader
-// via getClass().getClassLoader().getParent() plus Class.forName, because a
-// URLClassLoader denylist is a speed bump, not a SecurityManager sandbox.
-// A malicious script CANNOT through the intended API: touch live Minecraft,
-// module, packet or file objects (it only ever sees Strings and booleans);
-// mutate, replay or forge packets (it votes allow/cancel on a summary, the
-// caller owns the real packet); or load code from the network (no fetch path
-// exists and http tokens are rejected at the source check).
-// Loading a script IS code execution. Only load files you wrote or read.
-public class ScriptManager {
-    private static final File SCRIPTS_DIR = new File("./config/Atlas/scripts");
-    private static final File CLASSES_DIR = new File(SCRIPTS_DIR, ".classes");
-    private static final File STATE_FILE = new File("./config/Atlas/scripts.json");
-    private static final int MAX_ERROR_LINES = 6;
+/**
+ * The scripts (2026-11-02, owner: "a tab that loads everyone's own scripts; Raven's script API and ours"). Replaces
+ * the OpenSkid port, which compiled with javac only -- absent from the launchers' JRE -- and gave scripts strings.
+ *
+ *  - Atlas scripts are the .java files in config/Atlas/scripts, Raven's those in config/Atlas/scripts/raven16 and
+ *    raven17, by the version they are written for (Raven bS's own folder, .minecraft/keystrokes/scripts, can be
+ *    copied in from the Scripts tab). A file whose name starts with "_" is left alone, as in Raven.
+ *  - Files are watched: a changed file is compiled again and its new version replaces the old, keeping its
+ *    settings, key and on/off. A version that does not compile leaves the old one running and shows why.
+ *  - Compiling runs on a thread of its own (ScriptCompiler); loading, onLoad and registering on the client
+ *    thread, where the module and property maps are read.
+ *  - Each script is a module: its key, HUD entry and settings work like any module's and are kept in profiles,
+ *    and in config/Atlas/scripts/state.json, which is what a script gets back when it loads.
+ *
+ * Loading a script runs its code with this client's rights (owner's choice: no sandbox). Only load scripts whose
+ * source you have read.
+ */
+public final class ScriptManager {
+    public static final File ROOT = new File("./config/Atlas/scripts");
+    /* 2026-11-03 (owner: "a bS 16 and a bS 17 separately"): one folder for each Raven version. raven/, the one
+       folder of the first version, is read as bS 16. */
+    public static final File RAVEN16_DIR = new File(ROOT, "raven16");
+    public static final File RAVEN17_DIR = new File(ROOT, "raven17");
+    static final File LEGACY_RAVEN_DIR = new File(ROOT, "raven");
+    static final File BUILD_DIR = new File(ROOT, ".build");
+    static final File STATE_FILE = new File(ROOT, "state.json");
+    /** The rotation priority scripts ask with (modules use 0-6). */
+    public static final int PRIORITY = 4;
+    private static final int POLL_TICKS = 20;
+    private static final int SAVE_TICKS = 200;
 
     private static final ScriptManager INSTANCE = new ScriptManager();
+    /** The script being constructed on this thread, for AtlasScript's constructor (its fields make settings). */
+    static final ThreadLocal<ScriptEntry> CONSTRUCTING = new ThreadLocal<ScriptEntry>();
 
-    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
-    private final Map<String, LoadedScript> scripts = new LinkedHashMap<String, LoadedScript>();
-    private final Map<String, Boolean> enabledState = new LinkedHashMap<String, Boolean>();
-
-    // One loaded script. Registry struct, not scattered maps.
-    private static final class LoadedScript {
-        final String name;
-        final File file;
-        final Script instance;
-        final SecureScriptClassLoader loader;
-        boolean enabled;
-        String lastError;
-
-        LoadedScript(String name, File file, Script instance, SecureScriptClassLoader loader, boolean enabled) {
-            this.name = name;
-            this.file = file;
-            this.instance = instance;
-            this.loader = loader;
-            this.enabled = enabled;
-        }
-    }
+    /** Every script file known, loaded or not. */
+    private final List<ScriptEntry> all = new CopyOnWriteArrayList<ScriptEntry>();
+    /** The loaded ones, for the dispatcher (any thread). */
+    final List<ScriptEntry> running = new CopyOnWriteArrayList<ScriptEntry>();
+    private final ExecutorService worker = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "Atlas-Scripts");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private JsonObject state = new JsonObject();
+    private String savedState = "";
+    private int generation;
+    /** Goes up whenever a script's module appears, changes or goes: what the menu's search index is checked by. */
+    private volatile int version;
+    private int ticks;
+    private boolean started;
+    private List<File> classpath;
 
     private ScriptManager() {
-        this.loadEnabledState();
     }
 
-    public static ScriptManager getInstance() {
+    public static ScriptManager get() {
         return INSTANCE;
     }
 
-    public synchronized List<String> getScriptNames() {
-        return new ArrayList<String>(this.scripts.keySet());
+    // ---- what the menu reads ---------------------------------------------
+
+    public List<ScriptEntry> entries() {
+        return new ArrayList<ScriptEntry>(this.all);
     }
 
-    public synchronized boolean isLoaded(String name) {
-        return this.scripts.containsKey(name);
-    }
-
-    public synchronized boolean isEnabled(String name) {
-        LoadedScript slot = this.scripts.get(name);
-        return slot != null && slot.enabled;
-    }
-
-    public synchronized String getLastError(String name) {
-        LoadedScript slot = this.scripts.get(name);
-        return slot == null ? null : slot.lastError;
-    }
-
-    public synchronized List<String> availableScriptFiles() {
-        List<String> out = new ArrayList<String>();
-        File[] files = SCRIPTS_DIR.listFiles();
-        if (files == null) {
-            return out;
-        }
-        Arrays.sort(files);
-        for (File file : files) {
-            if (file.isFile() && file.getName().endsWith(".java")) {
-                out.add(this.stripExtension(file.getName()));
+    public List<ScriptEntry> entries(ScriptKind kind) {
+        List<ScriptEntry> out = new ArrayList<ScriptEntry>();
+        for (ScriptEntry entry : this.all) {
+            if (kind == null || entry.kind == kind) {
+                out.add(entry);
             }
         }
         return out;
     }
 
-    public synchronized void loadAll() {
-        this.ensureDirs();
-        for (String name : this.availableScriptFiles()) {
-            if (!this.scripts.containsKey(name)) {
-                this.loadQuiet(name);
-            }
+    public ScriptEntry byName(String name) {
+        if (name == null) {
+            return null;
         }
-    }
-
-    public synchronized void reloadAll() {
-        this.ensureDirs();
-        for (String name : new ArrayList<String>(this.scripts.keySet())) {
-            this.reload(name);
-        }
-        for (String name : this.availableScriptFiles()) {
-            if (!this.scripts.containsKey(name)) {
-                this.loadQuiet(name);
-            }
-        }
-    }
-
-    public synchronized boolean load(String name) {
-        String clean = this.cleanName(name);
-        if (clean == null) {
-            ChatUtil.sendFormatted("&7[&bScript&7]&r Invalid script name.");
-            return false;
-        }
-        if (this.scripts.containsKey(clean)) {
-            ChatUtil.sendFormatted("&7[&bScript&7]&r Already loaded (&o" + clean + "&r). Use reload.");
-            return false;
-        }
-        return this.loadQuiet(clean);
-    }
-
-    public synchronized boolean unload(String name) {
-        String clean = this.cleanName(name);
-        LoadedScript slot = clean == null ? null : this.scripts.remove(clean);
-        if (slot == null) {
-            ChatUtil.sendFormatted("&7[&bScript&7]&r Not loaded (&o" + name + "&r).");
-            return false;
-        }
-        try {
-            slot.instance.onDisable();
-        } catch (Throwable t) {
-            // Unload must succeed even if the script throws.
-        }
-        try {
-            slot.loader.close();
-        } catch (Exception ignored) {
-        }
-        ChatUtil.sendFormatted("&7[&bScript&7]&r Unloaded (&o" + clean + "&r).");
-        return true;
-    }
-
-    public synchronized boolean reload(String name) {
-        String clean = this.cleanName(name);
-        if (clean == null || !this.scripts.containsKey(clean)) {
-            return this.load(name);
-        }
-        boolean wasEnabled = this.scripts.get(clean).enabled;
-        this.unload(clean);
-        boolean ok = this.loadQuiet(clean);
-        if (ok && !wasEnabled) {
-            this.setEnabled(clean, false);
-        }
-        return ok;
-    }
-
-    public synchronized boolean setEnabled(String name, boolean enabled) {
-        return this.setEnabled(name, enabled, true);
-    }
-
-    /** {@code remember} false: only for now (ScriptModule going off), the saved choice stays. */
-    private synchronized boolean setEnabled(String name, boolean enabled, boolean remember) {
-        String clean = this.cleanName(name);
-        LoadedScript slot = clean == null ? null : this.scripts.get(clean);
-        if (slot == null) {
-            ChatUtil.sendFormatted("&7[&bScript&7]&r Not loaded (&o" + name + "&r).");
-            return false;
-        }
-        slot.enabled = enabled;
-        if (remember) {
-            this.enabledState.put(clean, enabled);
-            this.saveEnabledState();
-        }
-        try {
-            if (enabled) {
-                slot.instance.onEnable();
-            } else {
-                slot.instance.onDisable();
-            }
-        } catch (Throwable t) {
-            slot.lastError = this.shortError(t);
-            ChatUtil.sendFormatted("&7[&bScript&7]&r Runtime error in (&o" + clean + "&r): " + slot.lastError);
-        }
-        ChatUtil.sendFormatted("&7[&bScript&7]&r " + (enabled ? "Enabled" : "Disabled") + " (&o" + clean + "&r).");
-        return true;
-    }
-
-    /** Every loaded script that is on, by name. */
-    public synchronized List<String> getEnabledScriptNames() {
-        List<String> out = new ArrayList<String>();
-        for (Map.Entry<String, LoadedScript> entry : this.scripts.entrySet()) {
-            if (entry.getValue().enabled) {
-                out.add(entry.getKey());
-            }
-        }
-        return out;
-    }
-
-    public synchronized int loadedCount() {
-        return this.scripts.size();
-    }
-
-    /**
-     * Disables every loaded script without unloading it. 2026-10-30 (audit): without saving that -- it went into
-     * scripts.json, so after ScriptModule was off once every script stayed off.
-     */
-    public synchronized void disableAll() {
-        for (String name : new ArrayList<String>(this.scripts.keySet())) {
-            if (this.scripts.get(name).enabled) {
-                this.setEnabled(name, false, false);
-            }
-        }
-    }
-
-    /** Turns back on what the saved choices say is on (ScriptModule coming back on). */
-    public synchronized void restoreSaved() {
-        for (String name : new ArrayList<String>(this.scripts.keySet())) {
-            LoadedScript slot = this.scripts.get(name);
-            Boolean saved = this.enabledState.get(name);
-            if (!slot.enabled && saved != null && saved) {
-                this.setEnabled(name, true, false);
-            }
-        }
-    }
-
-    // Event fan-out. Each script runs isolated in try/catch so one bad script
-    // cannot break the tick or silence the rest.
-    public void fireTick() {
-        for (LoadedScript slot : this.snapshot()) {
-            if (!slot.enabled) {
-                continue;
-            }
-            try {
-                slot.instance.onTick();
-            } catch (Throwable t) {
-                this.reportRuntime(slot, t);
-            }
-        }
-    }
-
-    public void fireChat(String message) {
-        String copy = message == null ? "" : message;
-        for (LoadedScript slot : this.snapshot()) {
-            if (!slot.enabled) {
-                continue;
-            }
-            try {
-                slot.instance.onChat(copy);
-            } catch (Throwable t) {
-                this.reportRuntime(slot, t);
-            }
-        }
-    }
-
-    // True means every script voted allow. Any false asks the caller to cancel.
-    public boolean firePacketSend(String packetClass, String packetSummary) {
-        boolean allow = true;
-        for (LoadedScript slot : this.snapshot()) {
-            if (!slot.enabled) {
-                continue;
-            }
-            try {
-                if (!slot.instance.onPacketSend(packetClass, packetSummary)) {
-                    allow = false;
-                }
-            } catch (Throwable t) {
-                this.reportRuntime(slot, t);
-            }
-        }
-        return allow;
-    }
-
-    public boolean firePacketReceive(String packetClass, String packetSummary) {
-        boolean allow = true;
-        for (LoadedScript slot : this.snapshot()) {
-            if (!slot.enabled) {
-                continue;
-            }
-            try {
-                if (!slot.instance.onPacketReceive(packetClass, packetSummary)) {
-                    allow = false;
-                }
-            } catch (Throwable t) {
-                this.reportRuntime(slot, t);
-            }
-        }
-        return allow;
-    }
-
-    private synchronized List<LoadedScript> snapshot() {
-        return new ArrayList<LoadedScript>(this.scripts.values());
-    }
-
-    private boolean loadQuiet(String name) {
-        this.ensureDirs();
-        File file = new File(SCRIPTS_DIR, name + ".java");
-        if (!this.isInsideScriptsDir(file)) {
-            ChatUtil.sendFormatted("&7[&bScript&7]&r Rejected path escape (&o" + name + "&r).");
-            return false;
-        }
-        if (!file.isFile()) {
-            ChatUtil.sendFormatted("&7[&bScript&7]&r File not found (&o" + file.getPath() + "&r).");
-            return false;
-        }
-        String source = this.readSource(file);
-        if (source == null) {
-            ChatUtil.sendFormatted("&7[&bScript&7]&r Could not read (&o" + name + "&r).");
-            return false;
-        }
-        String rejected = this.rejectUnsafeSource(source);
-        if (rejected != null) {
-            ChatUtil.sendFormatted("&7[&bScript&7]&r Rejected (&o" + name + "&r): " + rejected);
-            return false;
-        }
-        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
-        if (compiler == null) {
-            ChatUtil.sendFormatted("&7[&bScript&7]&r No Java compiler on this runtime (JRE instead of JDK). Cannot compile (&o" + name + "&r).");
-            return false;
-        }
-        File outDir = new File(CLASSES_DIR, name);
-        this.cleanDir(outDir);
-        outDir.mkdirs();
-        DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<JavaFileObject>();
-        StandardJavaFileManager fileManager = compiler.getStandardFileManager(diagnostics, null, null);
-        boolean compiled;
-        try {
-            Iterable<? extends JavaFileObject> units = fileManager.getJavaFileObjectsFromFiles(Arrays.asList(file));
-            List<String> options = Arrays.asList(
-                    "-d", outDir.getAbsolutePath(),
-                    "-classpath", System.getProperty("java.class.path", ""),
-                    "-source", "1.8",
-                    "-target", "1.8"
-            );
-            compiled = compiler.getTask(null, fileManager, diagnostics, options, null, units).call();
-        } catch (Exception e) {
-            ChatUtil.sendFormatted("&7[&bScript&7]&r Compile failed (&o" + name + "&r): " + this.shortError(e));
-            this.closeQuietly(fileManager);
-            return false;
-        } finally {
-            this.closeQuietly(fileManager);
-        }
-        if (!compiled) {
-            this.reportDiagnostics(name, diagnostics);
-            return false;
-        }
-        SecureScriptClassLoader loader = null;
-        try {
-            loader = new SecureScriptClassLoader(new URL[]{outDir.toURI().toURL()}, Script.class.getClassLoader());
-            Class<?> clazz = loader.loadClass(name);
-            if (!Script.class.isAssignableFrom(clazz)) {
-                ChatUtil.sendFormatted("&7[&bScript&7]&r Class (&o" + name + "&r) must extend atlas.script.Script.");
-                loader.close();
-                return false;
-            }
-            Script instance = (Script) clazz.newInstance();
-            instance.initName(name);
-            /* 2026-10-30 (audit): a file never seen before is loaded but not run until ".script enable" -- a
-               .java dropped into the folder used to start running by itself. */
-            boolean enabled = this.enabledState.containsKey(name) && this.enabledState.get(name);
-            LoadedScript slot = new LoadedScript(name, file, instance, loader, enabled);
-            this.scripts.put(name, slot);
-            try {
-                instance.onLoad();
-                if (enabled) {
-                    instance.onEnable();
-                }
-            } catch (Throwable t) {
-                slot.lastError = this.shortError(t);
-                ChatUtil.sendFormatted("&7[&bScript&7]&r Runtime error in (&o" + name + "&r): " + slot.lastError);
-            }
-            ChatUtil.sendFormatted("&7[&bScript&7]&r Loaded (&o" + name + "&r)"
-                    + (enabled ? "." : ", off: &o.script enable " + name + "&r to run it."));
-            return true;
-        } catch (ClassNotFoundException e) {
-            ChatUtil.sendFormatted("&7[&bScript&7]&r Blocked unsafe reference in (&o" + name + "&r): " + e.getMessage());
-            this.closeQuietly(loader);
-            return false;
-        } catch (Exception e) {
-            ChatUtil.sendFormatted("&7[&bScript&7]&r Load failed (&o" + name + "&r): " + this.shortError(e));
-            this.closeQuietly(loader);
-            return false;
-        }
-    }
-
-    // Source pre-checks. String matching is advisory: it stops accidents and
-    // the donor's remote-include idiom, not a determined attacker.
-    private String rejectUnsafeSource(String source) {
-        if (source.contains("load - \"")) {
-            return "remote load directives are not supported, vendor the code into the file";
-        }
-        if (source.contains("http://") || source.contains("https://")) {
-            return "network addresses are not allowed in scripts";
-        }
-        for (String line : source.split("\n")) {
-            String trimmed = line.trim();
-            if (trimmed.startsWith("package ")) {
-                return "package declarations are not allowed, ship the file in the default package";
+        for (ScriptEntry entry : this.all) {
+            if (ModuleManager.sameName(entry.name, name)) {
+                return entry;
             }
         }
         return null;
     }
 
-    private void reportDiagnostics(String name, DiagnosticCollector<JavaFileObject> diagnostics) {
-        ChatUtil.sendFormatted("&7[&bScript&7]&r Compile errors in (&o" + name + "&r):");
-        int shown = 0;
-        for (Diagnostic<? extends JavaFileObject> d : diagnostics.getDiagnostics()) {
-            if (shown >= MAX_ERROR_LINES) {
-                break;
-            }
-            if (d.getKind() != Diagnostic.Kind.ERROR) {
-                continue;
-            }
-            shown++;
-            ChatUtil.sendFormatted("&7»&r line " + d.getLineNumber() + ": " + String.valueOf(d.getMessage(Locale.ROOT)));
-        }
-        if (shown == 0) {
-            ChatUtil.sendFormatted("&7»&r unknown compile error, see log.");
-        }
+    /** The script whose module this is, or null. */
+    public static ScriptEntry of(Module module) {
+        return module instanceof ScriptHost ? ((ScriptHost) module).entry() : null;
     }
 
-    private void reportRuntime(LoadedScript slot, Throwable t) {
-        slot.lastError = this.shortError(t);
-        ChatUtil.sendFormatted("&7[&bScript&7]&r Runtime error in (&o" + slot.name + "&r): " + slot.lastError);
+    public int version() {
+        return this.version;
     }
 
-    private String shortError(Throwable t) {
-        String msg = t == null ? "unknown" : t.toString();
-        if (msg.length() > 160) {
-            msg = msg.substring(0, 160);
-        }
-        return msg;
-    }
-
-    private String readSource(File file) {
-        StringBuilder out = new StringBuilder();
-        BufferedReader reader = null;
-        try {
-            reader = new BufferedReader(new FileReader(file));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                out.append(line).append('\n');
-            }
-            return out.toString();
-        } catch (Exception e) {
-            return null;
-        } finally {
-            if (reader != null) {
-                try {
-                    reader.close();
-                } catch (Exception ignored) {
-                }
+    public boolean isBusy() {
+        for (ScriptEntry entry : this.all) {
+            if (entry.compiling) {
+                return true;
             }
         }
+        return false;
     }
 
-    private void ensureDirs() {
-        if (!SCRIPTS_DIR.exists()) {
-            SCRIPTS_DIR.mkdirs();
-        }
-        if (!CLASSES_DIR.exists()) {
-            CLASSES_DIR.mkdirs();
-        }
+    public String compilerStatus() {
+        return ScriptCompiler.status();
     }
 
-    private boolean isInsideScriptsDir(File file) {
-        try {
-            String root = SCRIPTS_DIR.getCanonicalPath();
-            String target = file.getCanonicalPath();
-            return target.startsWith(root + File.separator);
-        } catch (Exception e) {
-            return false;
-        }
-    }
+    // ---- start, watch, reload ------------------------------------------
 
-    private void cleanDir(File dir) {
-        if (dir == null || !dir.exists()) {
+    /** At startup, once the modules and the config are loaded. */
+    public void start() {
+        if (this.started) {
             return;
         }
+        this.started = true;
+        ensureDirs();
+        this.state = readState();
+        this.savedState = this.state.toString();
+        Runtime.getRuntime().addShutdownHook(new Thread(this::saveState, "Atlas scripts state"));
+        this.scan(false);
+    }
+
+    /** Every client tick: watch the files, save the state now and then. */
+    void tick() {
+        if (!this.started) {
+            return;
+        }
+        this.ticks++;
+        if (this.ticks % POLL_TICKS == 0) {
+            this.scan(false);
+        }
+        if (this.ticks % SAVE_TICKS == 0) {
+            this.saveState();
+        }
+    }
+
+    /** Compiles every script again. */
+    public void reloadAll() {
+        ensureDirs();
+        this.scan(true);
+        ChatUtil.sendFormatted("&7[&bScripts&7] Reloading " + this.all.size() + " script(s) ...&r");
+    }
+
+    public void reload(ScriptEntry entry) {
+        if (entry != null && entry.file.isFile()) {
+            this.compile(entry);
+        }
+    }
+
+    /** New files get an entry, changed ones are compiled, gone ones unloaded. */
+    private void scan(boolean force) {
+        List<File> files = new ArrayList<File>();
+        files.addAll(javaFiles(ROOT));
+        files.addAll(javaFiles(RAVEN16_DIR));
+        files.addAll(javaFiles(RAVEN17_DIR));
+        files.addAll(javaFiles(LEGACY_RAVEN_DIR));
+        for (ScriptEntry entry : this.all) {
+            if (!files.contains(entry.file)) {
+                this.unload(entry);
+                this.all.remove(entry);
+            }
+        }
+        for (File file : files) {
+            ScriptEntry entry = this.byFile(file);
+            if (entry == null) {
+                ScriptKind kind = kindOf(file);
+                entry = new ScriptEntry(this.freeName(stripJava(file.getName()), kind), kind, file);
+                this.all.add(entry);
+                this.version++;
+                this.compile(entry);
+            } else if (!entry.compiling && (force || file.lastModified() != entry.lastModified
+                    || file.length() != entry.length)) {
+                this.compile(entry);
+            }
+        }
+    }
+
+    /** The version a file is written for, by its folder. */
+    static ScriptKind kindOf(File file) {
+        File dir = file.getAbsoluteFile().getParentFile();
+        if (dir.equals(RAVEN17_DIR.getAbsoluteFile())) {
+            return ScriptKind.RAVEN17;
+        }
+        if (dir.equals(RAVEN16_DIR.getAbsoluteFile()) || dir.equals(LEGACY_RAVEN_DIR.getAbsoluteFile())) {
+            return ScriptKind.RAVEN16;
+        }
+        return ScriptKind.ATLAS;
+    }
+
+    /** The folder a version's new scripts go in. */
+    public static File dirOf(ScriptKind kind) {
+        return kind == ScriptKind.RAVEN16 ? RAVEN16_DIR : kind == ScriptKind.RAVEN17 ? RAVEN17_DIR : ROOT;
+    }
+
+    private ScriptEntry byFile(File file) {
+        for (ScriptEntry entry : this.all) {
+            if (entry.file.equals(file)) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    private static List<File> javaFiles(File dir) {
+        List<File> out = new ArrayList<File>();
+        File[] files = dir.getAbsoluteFile().listFiles();
+        if (files == null) {
+            return out;
+        }
+        Arrays.sort(files);
+        for (File file : files) {
+            String name = file.getName();
+            if (file.isFile() && name.endsWith(".java") && !name.startsWith("_") && name.length() > 5) {
+                out.add(file.getAbsoluteFile());
+            }
+        }
+        return out;
+    }
+
+    private static String stripJava(String name) {
+        return name.endsWith(".java") ? name.substring(0, name.length() - 5) : name;
+    }
+
+    /** A module name nothing else has: a built-in module or another script keeps its own. */
+    private String freeName(String base, ScriptKind kind) {
+        String name = base;
+        if (this.taken(name)) {
+            name = base + (kind == ScriptKind.RAVEN16 ? " (bS 16)" : kind == ScriptKind.RAVEN17 ? " (bS 17)" : " (script)");
+        }
+        int n = 2;
+        String stem = name;
+        while (this.taken(name)) {
+            name = stem + " " + n++;
+        }
+        return name;
+    }
+
+    private boolean taken(String name) {
+        if (this.byName(name) != null) {
+            return true;
+        }
+        Module module = Atlas.moduleManager == null ? null : Atlas.moduleManager.getModule(name);
+        return module != null && !(module instanceof ScriptHost);
+    }
+
+    // ---- compile (worker) and install (client) -----------------------------
+
+    /** What compiling one script gave. */
+    static final class Compiled {
+        final boolean ok;
+        final List<String> problems;
+        final String scriptClass;
+        final String hostClass;
+        final int headerLines;
+        final Map<String, byte[]> classes;
+
+        Compiled(boolean ok, List<String> problems, ScriptSource.Wrapped wrapped, Map<String, byte[]> classes) {
+            this.ok = ok;
+            this.problems = problems;
+            this.scriptClass = wrapped == null ? "" : wrapped.scriptClass;
+            this.hostClass = wrapped == null ? "" : wrapped.hostClass;
+            this.headerLines = wrapped == null ? 0 : wrapped.headerLines;
+            this.classes = classes;
+        }
+
+        static Compiled failed(String... problems) {
+            return new Compiled(false, Arrays.asList(problems), null, null);
+        }
+    }
+
+    private void compile(ScriptEntry entry) {
+        entry.compiling = true;
+        entry.lastModified = entry.file.lastModified();
+        entry.length = entry.file.length();
+        final int gen = ++this.generation;
+        this.worker.submit(() -> {
+            Compiled compiled;
+            try {
+                String source = new String(Files.readAllBytes(entry.file.toPath()), StandardCharsets.UTF_8);
+                compiled = this.build(entry, source, gen);
+            } catch (Throwable e) {
+                compiled = Compiled.failed("could not read " + entry.shownPath() + ": " + e);
+            }
+            final Compiled result = compiled;
+            onClient(() -> this.install(entry, result));
+        });
+    }
+
+    /** Wraps and compiles one script (worker thread); the class files come back as bytes. */
+    Compiled build(ScriptEntry entry, String source, int gen) throws Exception {
+        ScriptSource.Wrapped wrapped = ScriptSource.wrap(entry.kind, entry.name, source, gen);
+        if (wrapped.problem != null) {
+            return Compiled.failed(wrapped.problem);
+        }
+        JavaCompiler javac = ScriptCompiler.get();
+        if (javac == null) {
+            return Compiled.failed(ScriptCompiler.status());
+        }
+        if (this.classpath == null) {
+            this.classpath = ScriptCompiler.classpath();
+        }
+        File dir = new File(BUILD_DIR, wrapped.scriptClass);
+        deleteTree(dir);
+        File sources = new File(dir, "src/" + ScriptSource.PACKAGE);
+        File out = new File(dir, "classes");
+        List<ScriptCompiler.Unit> units = Arrays.asList(
+                new ScriptCompiler.Unit(new File(sources, wrapped.scriptClass + ".java"), wrapped.code,
+                        wrapped.headerLines, entry.shownPath()),
+                new ScriptCompiler.Unit(new File(sources, wrapped.hostClass + ".java"), wrapped.hostCode, 0,
+                        "(host)"));
+        try {
+            ScriptCompiler.Result result = ScriptCompiler.compile(javac, units, out, this.classpath);
+            if (!result.ok) {
+                List<String> problems = new ArrayList<String>();
+                for (ScriptCompiler.Problem problem : result.problems) {
+                    if (problem.error && problems.size() < 8) {
+                        problems.add(problem.toString());
+                    }
+                }
+                if (problems.isEmpty()) {
+                    problems.add(result.firstError());
+                }
+                return new Compiled(false, problems, wrapped, null);
+            }
+            return new Compiled(true, Collections.<String>emptyList(), wrapped, readClasses(out));
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
+    /** The compiled classes by binary name. */
+    static Map<String, byte[]> readClasses(File root) throws Exception {
+        Map<String, byte[]> out = new HashMap<String, byte[]>();
+        readClasses(root, root, out);
+        return out;
+    }
+
+    private static void readClasses(File root, File dir, Map<String, byte[]> out) throws Exception {
         File[] files = dir.listFiles();
         if (files == null) {
             return;
         }
         for (File file : files) {
             if (file.isDirectory()) {
-                this.cleanDir(file);
-            }
-            file.delete();
-        }
-    }
-
-    private void closeQuietly(Object closeable) {
-        if (closeable instanceof StandardJavaFileManager) {
-            try {
-                ((StandardJavaFileManager) closeable).close();
-            } catch (Exception ignored) {
-            }
-        } else if (closeable instanceof SecureScriptClassLoader) {
-            try {
-                ((SecureScriptClassLoader) closeable).close();
-            } catch (Exception ignored) {
+                readClasses(root, file, out);
+            } else if (file.getName().endsWith(".class")) {
+                String relative = root.toURI().relativize(file.toURI()).getPath();
+                String name = relative.substring(0, relative.length() - 6).replace('/', '.');
+                out.put(name, Files.readAllBytes(file.toPath()));
             }
         }
     }
 
-    private String cleanName(String name) {
-        if (name == null) {
-            return null;
-        }
-        String clean = name.trim();
-        if (clean.endsWith(".java")) {
-            clean = clean.substring(0, clean.length() - 5);
-        }
-        if (clean.isEmpty() || clean.contains("/") || clean.contains("\\") || clean.contains(".")) {
-            return null;
-        }
-        return clean;
-    }
-
-    private String stripExtension(String fileName) {
-        if (fileName.endsWith(".java")) {
-            return fileName.substring(0, fileName.length() - 5);
-        }
-        return fileName;
-    }
-
-    // Enable state lives next to the normal config so it survives restarts
-    // without touching Config. Keyed by script name.
-    private void loadEnabledState() {
-        if (!STATE_FILE.isFile()) {
+    /** On the client thread: the new version replaces the old, keeping its state. */
+    private void install(ScriptEntry entry, Compiled compiled) {
+        entry.compiling = false;
+        if (!this.all.contains(entry)) {
             return;
         }
-        BufferedReader reader = null;
+        if (!compiled.ok) {
+            entry.problems = compiled.problems;
+            ChatUtil.sendFormatted("&7[&bScripts&7] &c" + entry.name + " did not compile"
+                    + (entry.isLoaded() ? " (the last version keeps running)" : "") + ": "
+                    + (compiled.problems.isEmpty() ? "" : compiled.problems.get(0)) + "&r");
+            return;
+        }
+        boolean reload = entry.isLoaded();
+        JsonObject saved = reload ? snapshot(entry.host, entry.properties) : objectOf(this.state.get(entry.name));
+        this.unload(entry);
+        entry.problems = Collections.emptyList();
+        entry.properties.clear();
+        entry.steps.clear();
+        entry.alphas.clear();
+        entry.group = null;
+        entry.runtimeError = null;
+        entry.runtimeErrors = 0;
+        entry.scriptClass = compiled.scriptClass;
+        entry.headerLines = compiled.headerLines;
+        ScriptLoader loader = new ScriptLoader(ScriptManager.class.getClassLoader(), compiled.classes);
+        ScriptHost host = null;
         try {
-            reader = new BufferedReader(new FileReader(STATE_FILE));
-            JsonElement parsed = new JsonParser().parse(reader);
-            if (parsed != null && parsed.isJsonObject()) {
-                JsonObject object = parsed.getAsJsonObject();
-                for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
-                    if (entry.getValue().isJsonPrimitive()) {
-                        this.enabledState.put(entry.getKey(), entry.getValue().getAsBoolean());
-                    }
-                }
+            Class<?> hostType = loader.loadClass(ScriptSource.PACKAGE + "." + compiled.hostClass);
+            host = (ScriptHost) hostType.getConstructor(String.class, String.class)
+                    .newInstance(entry.name, entry.kind.label + " script");
+            host.entry = entry;
+            entry.host = host;
+            Object instance;
+            CONSTRUCTING.set(entry);
+            try {
+                Constructor<?> constructor = loader.loadClass(ScriptSource.PACKAGE + "." + compiled.scriptClass)
+                        .getDeclaredConstructor();
+                constructor.setAccessible(true);
+                instance = constructor.newInstance();
+            } finally {
+                CONSTRUCTING.remove();
             }
-        } catch (Exception ignored) {
-        } finally {
-            if (reader != null) {
-                try {
-                    reader.close();
-                } catch (Exception ignored) {
-                }
+            entry.loader = loader;
+            entry.runtime = new ScriptRuntime(entry, instance);
+            entry.runtime.call("onLoad");
+            for (Property<?> property : entry.properties) {
+                property.setOwner(host);
             }
+            Atlas.propertyManager.properties.put(hostType, entry.properties);
+            Atlas.moduleManager.modules.put(hostType, host);
+            this.running.add(entry);
+            this.version++;
+            apply(host, entry.properties, saved);
+            if (reload) {
+                ChatUtil.sendFormatted("&7[&bScripts&7] &aReloaded " + entry.name + "&r");
+            }
+        } catch (Throwable e) {
+            Throwable cause = e instanceof InvocationTargetException && e.getCause() != null ? e.getCause()
+                    : e instanceof ExceptionInInitializerError && e.getCause() != null ? e.getCause() : e;
+            if (entry.runtime != null) {
+                entry.runtime.report(cause, "onLoad");
+            }
+            this.unregister(entry, host);
+            entry.problems = Collections.singletonList("could not start: " + cause);
+            ChatUtil.sendFormatted("&7[&bScripts&7] &c" + entry.name + " could not start: " + cause + "&r");
         }
     }
 
-    private void saveEnabledState() {
-        try {
-            if (STATE_FILE.getParentFile() != null) {
-                STATE_FILE.getParentFile().mkdirs();
+    /** Switched off (its onDisable runs), its state kept, its module taken out. */
+    private void unload(ScriptEntry entry) {
+        ScriptHost host = entry.host;
+        if (host != null && this.running.contains(entry)) {
+            try {
+                if (host.isEnabled()) {
+                    host.setEnabled(false);
+                }
+            } catch (Throwable ignored) {
+                // Its onDisable threw; it is going anyway.
             }
-            JsonObject object = new JsonObject();
-            for (Map.Entry<String, Boolean> entry : this.enabledState.entrySet()) {
-                object.addProperty(entry.getKey(), entry.getValue());
+            this.state.add(entry.name, snapshot(host, entry.properties));
+        }
+        this.unregister(entry, host);
+    }
+
+    private void unregister(ScriptEntry entry, ScriptHost host) {
+        this.running.remove(entry);
+        this.version++;
+        if (host != null) {
+            if (Atlas.moduleManager != null && Atlas.moduleManager.modules.get(host.getClass()) == host) {
+                Atlas.moduleManager.modules.remove(host.getClass());
             }
-            for (String name : this.scripts.keySet()) {
-                if (!object.has(name)) {
-                    object.addProperty(name, this.scripts.get(name).enabled);
+            if (Atlas.propertyManager != null) {
+                Atlas.propertyManager.properties.remove(host.getClass());
+            }
+        }
+        entry.host = null;
+        entry.runtime = null;
+        entry.loader = null;
+    }
+
+    // ---- state ----------------------------------------------------------
+
+    /** A module as profiles write it: on/off, key, hidden, its settings. */
+    static JsonObject snapshot(Module module, List<Property<?>> properties) {
+        JsonObject object = new JsonObject();
+        object.addProperty("toggled", module.isEnabled());
+        object.addProperty("key", module.getKey());
+        object.addProperty("hidden", module.isHidden());
+        for (Property<?> property : properties) {
+            try {
+                property.write(object);
+            } catch (Exception ignored) {
+                // One setting that cannot be written does not lose the others.
+            }
+        }
+        return object;
+    }
+
+    static void apply(Module module, List<Property<?>> properties, JsonObject object) {
+        if (object == null) {
+            return;
+        }
+        for (Property<?> property : properties) {
+            if (object.has(property.getName())) {
+                try {
+                    property.read(object);
+                } catch (Exception ignored) {
+                    // A value from an older version of the script: its default stays.
                 }
             }
-            PrintWriter writer = new PrintWriter(new FileWriter(STATE_FILE));
-            writer.println(this.gson.toJson(object));
-            writer.close();
-        } catch (Exception ignored) {
         }
+        if (object.has("key") && object.get("key").isJsonPrimitive()) {
+            module.setKey(object.get("key").getAsInt());
+        }
+        if (object.has("hidden") && object.get("hidden").isJsonPrimitive()) {
+            module.setHidden(object.get("hidden").getAsBoolean());
+        }
+        if (object.has("toggled") && object.get("toggled").isJsonPrimitive()) {
+            module.setEnabled(object.get("toggled").getAsBoolean());
+        }
+    }
+
+    private static JsonObject objectOf(JsonElement element) {
+        return element != null && element.isJsonObject() ? element.getAsJsonObject() : null;
+    }
+
+    /** Writes state.json when something changed (and at exit). */
+    public synchronized void saveState() {
+        try {
+            for (ScriptEntry entry : this.running) {
+                ScriptHost host = entry.host;
+                if (host != null) {
+                    this.state.add(entry.name, snapshot(host, entry.properties));
+                }
+            }
+            String text = new GsonBuilder().setPrettyPrinting().create().toJson(this.state);
+            if (text.equals(this.savedState)) {
+                return;
+            }
+            ensureDirs();
+            File temp = new File(STATE_FILE.getPath() + ".tmp");
+            Files.write(temp.toPath(), text.getBytes(StandardCharsets.UTF_8));
+            Files.move(temp.toPath(), STATE_FILE.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            this.savedState = text;
+        } catch (Exception e) {
+            System.err.println("[Atlas] Could not save the scripts' state: " + e);
+        }
+    }
+
+    private static JsonObject readState() {
+        try {
+            if (STATE_FILE.isFile()) {
+                JsonElement element = new JsonParser().parse(
+                        new String(Files.readAllBytes(STATE_FILE.toPath()), StandardCharsets.UTF_8));
+                if (element.isJsonObject()) {
+                    return element.getAsJsonObject();
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[Atlas] Could not read the scripts' state: " + e);
+        }
+        return new JsonObject();
+    }
+
+    // ---- the tab's buttons -------------------------------------------------
+
+    /** A new script from the template, opened in the system's editor; its file. */
+    public File newScript(ScriptKind kind) {
+        ensureDirs();
+        File dir = dirOf(kind);
+        String stem = kind == ScriptKind.RAVEN16 ? "NewBs16Script" : kind == ScriptKind.RAVEN17 ? "NewBs17Script" : "NewScript";
+        File file = new File(dir, stem + ".java");
+        for (int n = 2; file.exists(); n++) {
+            file = new File(dir, stem + n + ".java");
+        }
+        try {
+            Files.write(file.toPath(), ScriptSource.template(kind).getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            ChatUtil.sendFormatted("&7[&bScripts&7] &cCould not create " + file.getName() + ": " + e + "&r");
+            return null;
+        }
+        this.scan(false);
+        openInSystem(file);
+        ChatUtil.sendFormatted("&7[&bScripts&7] Created &f" + (kind.folder.isEmpty() ? "" : kind.folder + "/")
+                + file.getName() + "&7: saving it reloads the script.&r");
+        return file;
+    }
+
+    public void openFolder(ScriptKind kind) {
+        ensureDirs();
+        openInSystem(dirOf(kind));
+    }
+
+    public void openFile(ScriptEntry entry) {
+        if (entry != null) {
+            openInSystem(entry.file);
+        }
+    }
+
+    /** Raven bS's folder, where Raven players keep their scripts. */
+    public static File ravenHome() {
+        Minecraft mc = Minecraft.getMinecraft();
+        File base = mc == null || mc.mcDataDir == null ? new File(".") : mc.mcDataDir;
+        return new File(base, "keystrokes" + File.separator + "scripts");
+    }
+
+    /** Copies Raven bS's scripts in as that version's (none overwritten); how many came. */
+    public int importRaven(ScriptKind kind) {
+        ensureDirs();
+        int copied = 0;
+        File into = dirOf(kind == ScriptKind.ATLAS ? ScriptKind.RAVEN17 : kind);
+        for (File file : javaFiles(ravenHome())) {
+            File target = new File(into, file.getName());
+            if (target.exists()) {
+                continue;
+            }
+            try {
+                Files.copy(file.toPath(), target.toPath());
+                copied++;
+            } catch (Exception e) {
+                ChatUtil.sendFormatted("&7[&bScripts&7] &cCould not copy " + file.getName() + ": " + e + "&r");
+            }
+        }
+        ChatUtil.sendFormatted("&7[&bScripts&7] " + (copied == 0 ? "No new Raven scripts in "
+                + ravenHome().getPath() : "Copied " + copied + " Raven script(s) into " + into.getName() + "/") + "&r");
+        this.scan(false);
+        return copied;
+    }
+
+    /** The system's file browser or editor, off the client thread. */
+    private static void openInSystem(File file) {
+        Thread thread = new Thread(() -> {
+            try {
+                java.awt.Desktop.getDesktop().open(file.getAbsoluteFile());
+            } catch (Throwable e) {
+                try {
+                    org.lwjgl.Sys.openURL(file.getAbsoluteFile().toURI().toString());
+                } catch (Throwable ignored) {
+                    ChatUtil.sendFormatted("&7[&bScripts&7] Open it yourself: &f" + file.getAbsolutePath() + "&r");
+                }
+            }
+        }, "Atlas-OpenFile");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    // ---- helpers -------------------------------------------------------
+
+    private static void ensureDirs() {
+        ROOT.mkdirs();
+        RAVEN16_DIR.mkdirs();
+        RAVEN17_DIR.mkdirs();
+    }
+
+    private static void onClient(Runnable task) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc != null) {
+            mc.addScheduledTask(task);
+        } else {
+            task.run();
+        }
+    }
+
+    static void deleteTree(File file) {
+        File[] children = file.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                deleteTree(child);
+            }
+        }
+        file.delete();
+    }
+
+    /** Every loaded script's module that is switched on, for the dispatcher. */
+    List<ScriptEntry> running() {
+        return this.running;
+    }
+
+    static String lower(String text) {
+        return text.toLowerCase(Locale.ROOT);
     }
 }

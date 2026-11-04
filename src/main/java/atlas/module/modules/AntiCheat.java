@@ -294,6 +294,9 @@ public class AntiCheat extends Module {
         }
         violation.lastReport = now;
         this.named.add(name);
+        /* 2026-11-03: Raven scripts' onAntiCheatFlag(flag, player), as Raven's own Anticheat tells them. */
+        atlas.script.ScriptDispatcher.INSTANCE.onAntiCheatFlag(check,
+                mc.theWorld == null ? null : mc.theWorld.getPlayerEntityByName(name));
 
         if (this.chat.getValue()) {
             ChatUtil.sendFormatted(String.format(

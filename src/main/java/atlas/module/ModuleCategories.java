@@ -75,7 +75,7 @@ public final class ModuleCategories {
                 ClickGUIModule.class, GuiModule.class, FlagDetector.class,
                 FlagResponder.class, HitCheck.class, FightLog.class, Debug.class, Logs.class, PacketLogger.class,
                 ServerFingerprint.class, AutoTune.class, Adaptive.class, ServerProfiles.class,
-                LatencyGovernor.class, Panic.class, Rotations.class, Notifications.class, ScriptModule.class);
+                LatencyGovernor.class, Panic.class, Rotations.class, Notifications.class);
         put(Category.LEGIT,
                 Accessories.class, Ambience.class, Animations.class, ArmorHUD.class, AutoRespawn.class, Capes.class,
                 DynamicIsland.class, EffectsHUD.class, FPScounter.class, FreeLook.class, FullBright.class,

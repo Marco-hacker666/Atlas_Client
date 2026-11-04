@@ -108,6 +108,19 @@ public abstract class MixinNetworkManager {
         }
     }
 
+    /* 2026-11-03 (full check): Raven's onDispatchPacket -- every packet as it really goes out: held ones when they
+       are let go, and the ones modules send past the event (PacketUtil.sendPacketNoEvent). */
+    @Inject(
+            method = {"dispatchPacket"},
+            at = {@At("HEAD")}
+    )
+    private void dispatchPacket(Packet<?> packet, GenericFutureListener<? extends Future<? super Void>>[] listeners,
+                                CallbackInfo callbackInfo) {
+        if (!packet.getClass().getName().startsWith("net.minecraft.network.play.server")) {
+            atlas.script.ScriptDispatcher.INSTANCE.onDispatch(packet);
+        }
+    }
+
     @Inject(
             method = {"sendPacket(Lnet/minecraft/network/Packet;Lio/netty/util/concurrent/GenericFutureListener;[Lio/netty/util/concurrent/GenericFutureListener;)V"},
             at = {@At("HEAD")},

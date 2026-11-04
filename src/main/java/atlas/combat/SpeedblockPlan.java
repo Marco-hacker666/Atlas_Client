@@ -99,14 +99,17 @@ public final class SpeedblockPlan {
 
     // ---------------------------------------------------------------- prediction (2026-11-01)
 
+    /** 1.8.9 scales the keys' input by 0.98 before it pushes (EntityLivingBase.onLivingUpdate); left out at first, a
+        predicted sprint ran 2% fast (5.727 blocks a second against 5.612; review, 2026-11-02). */
+    static final double INPUT = 0.98;
     /** Ground: what a tick of friction leaves of the motion (slipperiness 0.6 x 0.91), and a sprint's push a tick. */
     static final double GROUND_DRAG = 0.546;
-    static final double GROUND_SPRINT = 0.13;
-    static final double GROUND_WALK = 0.1;
+    static final double GROUND_SPRINT = 0.13 * INPUT;
+    static final double GROUND_WALK = 0.1 * INPUT;
     /** Air: drag, and the push a sprint (or a walk) still gives. */
     static final double AIR_DRAG = 0.91;
-    static final double AIR_SPRINT = 0.026;
-    static final double AIR_WALK = 0.02;
+    static final double AIR_SPRINT = 0.026 * INPUT;
+    static final double AIR_WALK = 0.02 * INPUT;
     /** A look within this of the player counts as chasing them: the look then follows them. */
     static final double CHASE_CONE = 60.0;
     /** Degrees a tick a chaser's look turns to stay on the player. */
@@ -254,6 +257,30 @@ public final class SpeedblockPlan {
     public static int serverWallAfterTicks(int ownPingMs) {
         int own = ownPingMs > 0 && ownPingMs < 2000 ? ownPingMs : 100;
         return (int) Math.ceil(own / 50.0) + 1;
+    }
+
+    /**
+     * The first column along the run (cellsAlong's cells, in order) that already stops the runner, before it gets to
+     * the player's own cell: its feet cell walls, and with doubleHeight its head cell too. -1 when the way is open.
+     * Used by Press (2026-11-02): a run already walled is watched, not given another block.
+     *
+     * @return the index of that column's feet cell in {@code cells}
+     */
+    public static int firstWall(List<int[]> cells, boolean doubleHeight, double playerX, double playerZ,
+                                java.util.function.Predicate<int[]> walls) {
+        int perCell = doubleHeight ? 2 : 1;
+        int ownX = floor(playerX);
+        int ownZ = floor(playerZ);
+        for (int i = 0; i + perCell - 1 < cells.size(); i += perCell) {
+            int[] feet = cells.get(i);
+            if (feet[0] == ownX && feet[2] == ownZ) {
+                return -1;
+            }
+            if (walls.test(feet) && (!doubleHeight || walls.test(cells.get(i + 1)))) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** Math.floor, without the boxing. */

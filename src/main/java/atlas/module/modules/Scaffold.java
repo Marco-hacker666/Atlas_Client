@@ -53,6 +53,7 @@ public class Scaffold extends Module {
     /* 2026-10-13: after OpenB4's Scaffold (Strict rotations with "Jump facing
        forward" and "Legit motion", its defaults). See b4Plan. */
     private static final int ROTATION_B4 = 11;
+    private static final int ROTATION_SPEED_TELLY = 12;
     /* polar.json's GodBridge technique (LiquidBounce): the Mode index is also
        the ledge action the decision returns ({@link #polarLedgeAction}).
        Modes = [Jump], ForceSneakBelowCount = 5, SneakTime = 1..1. */
@@ -88,6 +89,8 @@ public class Scaffold extends Module {
     private int rotationTick = 0;
     private int lastSlot = -1;
     private int blockCount = -1;
+    private boolean turnedClutchOn;
+    private boolean holdingJump;
     private float yaw = -180.0F;
     private float pitch = 0.0F;
     private boolean canRotate = false;
@@ -112,7 +115,7 @@ public class Scaffold extends Module {
     private int threeFmcPlaceCooldown = 0;
     private float lastSnapPlaceYaw = Float.NaN;
     private float lastSnapPlacePitch = Float.NaN;
-    public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2", "POLAR", "TELLY"})
+    public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2", "POLAR", "TELLY", "SPEED-TELLY"})
             /* 2026-10-31 (owner's consolidation): SIDEWAYS and 3FMC retired (indices kept); a config naming one gets
                GODBRIDGE. SNAP and SNAP2 came back 2026-11-01 (owner: "put Scaffold snap back"), SNAP2 hidden as before. */
             .retire("GODBRIDGE", "SIDEWAYS", "3FMC")
@@ -212,6 +215,8 @@ public class Scaffold extends Module {
     /* B4: on each jump off the ground, face forward for the jump and turn back
        over a fixed few ticks before placing again (OpenB4 "Jump facing
        forward"). */
+    /* SPEED-TELLY (2026-11-04): walking forward jumps by itself. */
+    public final BooleanProperty tellyAutoJump = new BooleanProperty("telly-auto-jump", true, this::isSpeedTellyMode);
     public final BooleanProperty b4Telly = new BooleanProperty("telly-jump", true,
             () -> this.rotationMode.getValue() == ROTATION_B4);
     /* B4 state. The look the last block was placed with and when; the resting
@@ -915,6 +920,74 @@ public class Scaffold extends Module {
 
     public Scaffold() {
         super("Scaffold", false);
+        /* 2026-11-04 SPEED-TELLY (owner: Clutch held on F, walking forward and jumping, is a speed telly; make that a
+           Scaffold mode). Clutch's catch does the whole job, with Clutch's settings. Scaffold stays on, for its key, its
+           HUD entry and its block counter; the rest of it stands aside. */
+        this.pauseWhen(this::isSpeedTellyMode);
+    }
+
+    private boolean isSpeedTellyMode() {
+        return this.rotationMode.getValue() == ROTATION_SPEED_TELLY;
+    }
+
+    /** On, in SPEED-TELLY: Clutch treats this as its hold key being down. */
+    public boolean isSpeedTelly() {
+        return this.isEnabled() && this.isSpeedTellyMode();
+    }
+
+    /**
+     * SPEED-TELLY with keep-y set, on the terms any keep-y here has: Clutch then stays on the layer stood on. A jump
+     * straight up is left out by Clutch itself (plainJump), so towering in place still works.
+     */
+    public boolean isSpeedTellyKeepY() {
+        return this.isSpeedTelly() && this.keepY.getValue() != 0
+                && (!this.keepYonPress.getValue() || PlayerUtil.isUsingItem())
+                && (!this.disableWhileJumpActive.getValue() || !mc.thePlayer.isPotionActive(Potion.jump));
+    }
+
+    /*
+     * SPEED-TELLY's auto jump: the jump key itself is held down while W is, so to everything that reads it this is the
+     * player holding it. Setting movementInput.jump alone jumped, but Clutch's snap-on-jump reads the key, and without it
+     * the look did not come back for the next jump (owner: "with auto jump on it has no effect").
+     * whenDisabled: it runs while the rest of this module is paused, and lets go when the module goes off.
+     */
+    @EventTarget(whenDisabled = true)
+    public void onTellyTick(TickEvent event) {
+        if (event.getType() != EventType.PRE) {
+            return;
+        }
+        int jumpKey = mc.gameSettings.keyBindJump.getKeyCode();
+        if (this.isSpeedTelly() && this.tellyAutoJump.getValue() && mc.currentScreen == null
+                && mc.gameSettings.keyBindForward.isKeyDown() && !mc.gameSettings.keyBindBack.isKeyDown()
+                && !mc.gameSettings.keyBindSneak.isKeyDown()) {
+            KeyBindUtil.setKeyBindState(jumpKey, true);
+            this.holdingJump = true;
+        } else if (this.holdingJump) {
+            KeyBindUtil.updateKeyState(jumpKey);
+            this.holdingJump = false;
+        }
+    }
+
+    /** SPEED-TELLY runs on Clutch: switched on for it if it was off, and off again afterwards. */
+    private void syncClutch() {
+        Module clutch = Atlas.moduleManager == null ? null : Atlas.moduleManager.getModule(Clutch.class);
+        if (clutch == null) {
+            return;
+        }
+        if (this.isSpeedTelly() && !clutch.isEnabled()) {
+            clutch.setEnabled(true);
+            this.turnedClutchOn = true;
+        } else if (!this.isSpeedTelly() && this.turnedClutchOn) {
+            clutch.setEnabled(false);
+            this.turnedClutchOn = false;
+        }
+    }
+
+    @Override
+    public void verifyValue(String name) {
+        if ("rotations".equals(name) && this.isEnabled()) {
+            this.syncClutch();
+        }
     }
 
     public int getSlot() {
@@ -1957,7 +2030,8 @@ public class Scaffold extends Module {
         }
     }
 
-    @EventTarget
+    /* Runs while SPEED-TELLY has the rest of this module paused. */
+    @EventTarget(whenDisabled = true)
     public void onRender(Render2DEvent event) {
         if (this.isEnabled()) {
             if (this.blockCounter.getValue()) {
@@ -2119,11 +2193,13 @@ public class Scaffold extends Module {
         this.b4YawOffset = RandomUtil.nextFloat(-0.5F, 0.5F);
         this.b4Script = 0;
         this.b4Ticks = 0;
+        this.syncClutch();
     }
 
     @Override
     public void onDisabled() {
-        if (mc.thePlayer != null && this.lastSlot != -1) {
+        this.syncClutch();
+        if (mc.thePlayer != null && this.lastSlot != -1 && !this.isSpeedTellyMode()) {
             mc.thePlayer.inventory.currentItem = this.lastSlot;
         }
         /* The shared engine hands the look back to the camera by itself once this stops asking. */

@@ -1201,6 +1201,9 @@ public class Clutch extends Module {
                 || mc.thePlayer.isInLava() || mc.thePlayer.isOnLadder() || mc.thePlayer.isRiding()) {
             return false;
         }
+        if (scaffoldTelly()) {
+            return true;
+        }
         int mode = this.trigger.getValue();
         if (mode == 1) {
             return holdActive();
@@ -1695,7 +1698,7 @@ public class Clutch extends Module {
      * before this fall. No limit when keep-y is off or nothing was stood on.
      */
     private int keepYTop() {
-        return this.keepY.getValue() && this.lastGround != null && !this.plainJump
+        return (this.keepY.getValue() || scaffoldTellyKeepY()) && this.lastGround != null && !this.plainJump
                 ? MathHelper.floor_double(this.lastGround.yCoord - 1.0E-3) : Integer.MAX_VALUE;
     }
 
@@ -2636,7 +2639,19 @@ public class Clutch extends Module {
 
     private boolean scaffolding() {
         Module scaffold = Atlas.moduleManager.getModule(Scaffold.class);
-        return scaffold != null && scaffold.isEnabled();
+        return scaffold != null && scaffold.isEnabled() && !scaffoldTelly();
+    }
+
+    /** Scaffold's own keep-y, in SPEED-TELLY: this module's setting stays what it is for the hold key. */
+    private boolean scaffoldTellyKeepY() {
+        Scaffold scaffold = (Scaffold) Atlas.moduleManager.getModule(Scaffold.class);
+        return scaffold != null && scaffold.isSpeedTellyKeepY();
+    }
+
+    /** Scaffold's SPEED-TELLY (2026-11-04): the same as the hold key being down, whatever the trigger says. */
+    private boolean scaffoldTelly() {
+        Scaffold scaffold = (Scaffold) Atlas.moduleManager.getModule(Scaffold.class);
+        return scaffold != null && scaffold.isSpeedTelly();
     }
 
     // -------------------------------------------------------------- attempts

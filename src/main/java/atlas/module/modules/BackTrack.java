@@ -121,6 +121,15 @@ public class BackTrack extends Module {
     private volatile EntityLivingBase target;
     /** The target's position with what is held applied: where the server has them. */
     private volatile Vec3 realPosition;
+
+    /** For scripts (Raven bS 17's modules.getBacktrackTarget / getBacktrackPosition), 2026-11-03: read only. */
+    public EntityLivingBase getBacktrackTarget() {
+        return this.target;
+    }
+
+    public Vec3 getBacktrackPosition() {
+        return this.realPosition;
+    }
     private volatile long backtrackStartTime = 0L;
     private volatile int rolledDelay = 0;
     /** Holds opened since enabled: the suffix shows it, so it can be seen working. */

@@ -120,7 +120,7 @@ public class OnlineConfigCommand extends Command {
         }
         if (!result.skipped.isEmpty()) {
             ChatUtil.sendFormatted(String.format("&7Not taken from a shared config: %d (key binds, text settings, "
-                    + "ScriptModule/AutoAuth/chat modules on-off)&r", result.skipped.size()));
+                    + "scripts/AutoAuth/chat modules on-off)&r", result.skipped.size()));
         }
     }
 

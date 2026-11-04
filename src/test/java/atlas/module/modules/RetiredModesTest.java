@@ -34,6 +34,24 @@ public class RetiredModesTest {
         }
     }
 
+    /** 2026-11-04 (owner): SPEED-TELLY is in the menu; it went on the end, so saved configs keep their indices. */
+    @Test
+    public void scaffoldSpeedTellyIsAddedAtTheEnd() {
+        Scaffold scaffold = new Scaffold();
+        assertTrue(java.util.Arrays.asList(scaffold.rotationMode.visibleModes()).contains("SPEED-TELLY"));
+        assertTrue(scaffold.rotationMode.parseString("SPEED-TELLY"));
+        assertEquals(12, (int) scaffold.rotationMode.getValue());
+        assertFalse("off, it asks nothing of Clutch", scaffold.isSpeedTelly());
+        assertFalse("nor keep-y", scaffold.isSpeedTellyKeepY());
+        assertTrue("auto jump comes on", scaffold.tellyAutoJump.getValue());
+        assertTrue(scaffold.tellyAutoJump.isVisible());
+        assertTrue(scaffold.rotationMode.parseString("TELLY"));
+        assertEquals(11, (int) scaffold.rotationMode.getValue());
+        assertFalse("its switch is this mode's", scaffold.tellyAutoJump.isVisible());
+        assertTrue(scaffold.rotationMode.parseString("POLAR"));
+        assertEquals(10, (int) scaffold.rotationMode.getValue());
+    }
+
     /** 2026-11-01 (owner): SNAP is back in the menu; SNAP2 loads as itself again, hidden as before. */
     @Test
     public void scaffoldSnapIsBack() {

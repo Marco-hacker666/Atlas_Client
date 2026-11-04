@@ -189,6 +189,10 @@ final class ModuleDocsEn {
         help("SpeedBlocker", "contact-ticks", "How far ahead the run is predicted, in ticks: a runner further off than this is not blocked yet.");
         help("SpeedBlocker", "blocks-per-run", "Blocks one run gets (a pair with DOUBLE); then nothing more for that player until it stops coming in.");
         help("SpeedBlocker", "record-runs", "Records how well the run prediction does: every moving player nearby is predicted and then checked against where it really went, into config/Atlas/speedblock-runs-*.csv. Switching it off prints the mean error against a straight line.");
+        help("SpeedBlocker", "trigger", "Auto: blocks whenever someone runs in. Press: press press-key and the runner coming in is blocked at once, and again if it gets round the block, until it is within stop-distance or press-time is up; holding the key keeps it going.");
+        help("SpeedBlocker", "press-key", "Press: the key that starts a burst (R by default).");
+        help("SpeedBlocker", "press-time", "Press: how long a press keeps working, seconds after the key was last down.");
+        help("SpeedBlocker", "stop-distance", "Press: no more blocks once the runner is this close (blocks); a block then lands after it is through.");
         help("SpeedBlocker", "show-plan", "Draws where everyone moving nearby is predicted to run (grey), the target's run (yellow) and the cell chosen for the block (blue).");
         help("SpeedBlocker", "height", "FEET: one block, enough to stop a walk. DOUBLE: a two-high wall, also stops a jump over it.");
         help("SpeedBlocker", "restore-delay", "Ticks the block stays in your hand after the last placement, then the slot you had comes back.");
@@ -779,6 +783,7 @@ final class ModuleDocsEn {
         help(cl, "max-speed", "Most degrees per tick.");
         help("Scaffold", "turn-speed", "Most degrees turned per tick (DEFAULT to Hypixel modes). The look no longer snaps; if it is not there yet, the click waits a tick. 180 = no limit.");
         help("Scaffold", "humanize", "Turns use the Rotations engine's speed variation and curve.");
+        help("Scaffold", "telly-auto-jump", "SPEED-TELLY mode: jump by itself while W is held on the ground; let go to stop.");
         help("Scaffold", "telly-jump", "TELLY mode: on each jump, face forward for the jump, then turn back over a few ticks and place (telly bridging); no clicks while turning.");
         help("Scaffold", "pause-on-correction", "After a setback, wait a round trip before placing; a refused block pauses too. Stops strings of ghost blocks placed from the wrong position.");
         help(cl, "pre-aim", "Turn roughly toward the spot before it is time, so less turning is left.");

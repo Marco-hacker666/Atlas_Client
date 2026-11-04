@@ -1,17 +1,20 @@
 package atlas.command.commands;
 
-// Ported from OpenSkid (GPL-3.0). Kept thin: parse, delegate, report. All
-// real work lives in ScriptManager.
 import atlas.Atlas;
 import atlas.command.Command;
+import atlas.script.ScriptEntry;
+import atlas.script.ScriptKind;
 import atlas.script.ScriptManager;
 import atlas.util.ChatUtil;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Locale;
 
+/**
+ * .script: the Scripts tab from chat (2026-11-03). list, reload [name], new [16|17], folder [16|17],
+ * import [16|17] (Raven bS's scripts, as that version; 17 when not said), open name, on name, off name.
+ */
 public class ScriptCommand extends Command {
     public ScriptCommand() {
         super(new ArrayList<String>(Arrays.asList("script", "scripts")));
@@ -19,86 +22,79 @@ public class ScriptCommand extends Command {
 
     @Override
     public void runCommand(ArrayList<String> args) {
-        if (args.size() < 2) {
-            this.sendUsage(args);
-            return;
-        }
-        ScriptManager manager = ScriptManager.getInstance();
-        String sub = args.get(1).toLowerCase(Locale.ROOT);
-        if (sub.equals("l")) {
-            sub = "list";
-        } else if (sub.equals("r")) {
-            sub = "reload";
-        }
+        ScriptManager manager = ScriptManager.get();
+        String sub = args.size() < 2 ? "list" : args.get(1).toLowerCase(Locale.ROOT);
+        String rest = args.size() < 3 ? "" : String.join(" ", args.subList(2, args.size()));
+        ScriptKind version = rest.equals("16") || rest.equalsIgnoreCase("bs16") ? ScriptKind.RAVEN16
+                : rest.equals("17") || rest.equalsIgnoreCase("bs17") || rest.equalsIgnoreCase("raven") ? ScriptKind.RAVEN17
+                : ScriptKind.ATLAS;
         switch (sub) {
             case "list":
-                this.listScripts(manager);
-                return;
-            case "load":
-                if (args.size() < 3) {
-                    ChatUtil.sendFormatted(String.format("%sUsage: .%s load <&oname&r>&r", Atlas.clientName, args.get(0)));
-                    return;
-                }
-                manager.load(args.get(2));
-                return;
-            case "unload":
-                if (args.size() < 3) {
-                    ChatUtil.sendFormatted(String.format("%sUsage: .%s unload <&oname&r>&r", Atlas.clientName, args.get(0)));
-                    return;
-                }
-                manager.unload(args.get(2));
+            case "l":
+                this.list(manager);
                 return;
             case "reload":
-                if (args.size() < 3) {
+            case "r":
+                if (rest.isEmpty()) {
                     manager.reloadAll();
-                    ChatUtil.sendFormatted(String.format("%sScripts reloaded&r", Atlas.clientName));
-                    return;
+                } else {
+                    ScriptEntry entry = this.find(manager, rest);
+                    if (entry != null) {
+                        manager.reload(entry);
+                    }
                 }
-                manager.reload(args.get(2));
                 return;
-            case "enable":
+            case "new":
+                manager.newScript(version);
+                return;
+            case "folder":
+                manager.openFolder(version);
+                return;
+            case "import":
+                manager.importRaven(version == ScriptKind.RAVEN16 ? ScriptKind.RAVEN16 : ScriptKind.RAVEN17);
+                return;
+            case "open": {
+                ScriptEntry entry = this.find(manager, rest);
+                if (entry != null) {
+                    manager.openFile(entry);
+                }
+                return;
+            }
             case "on":
-                if (args.size() < 3) {
-                    ChatUtil.sendFormatted(String.format("%sUsage: .%s enable <&oname&r>&r", Atlas.clientName, args.get(0)));
-                    return;
+            case "off": {
+                ScriptEntry entry = this.find(manager, rest);
+                if (entry != null) {
+                    entry.module().setEnabled(sub.equals("on"));
                 }
-                manager.setEnabled(args.get(2), true);
                 return;
-            case "disable":
-            case "off":
-                if (args.size() < 3) {
-                    ChatUtil.sendFormatted(String.format("%sUsage: .%s disable <&oname&r>&r", Atlas.clientName, args.get(0)));
-                    return;
-                }
-                manager.setEnabled(args.get(2), false);
-                return;
+            }
             default:
-                ChatUtil.sendFormatted(String.format("%sInvalid argument (&o%s&r)&r", Atlas.clientName, args.get(1)));
+                ChatUtil.sendFormatted(String.format("%sUsage: .%s list | reload [name] | new [16|17] | folder [16|17]"
+                        + " | import [16|17] | open <name> | on <name> | off <name>&r", Atlas.clientName, args.get(0)));
         }
     }
 
-    private void listScripts(ScriptManager manager) {
-        List<String> loaded = manager.getScriptNames();
-        List<String> files = manager.availableScriptFiles();
-        if (loaded.isEmpty() && files.isEmpty()) {
-            ChatUtil.sendFormatted(String.format("%sNo scripts found (&o./config/Atlas/scripts/&r)&r", Atlas.clientName));
+    private ScriptEntry find(ScriptManager manager, String name) {
+        ScriptEntry entry = manager.byName(name);
+        if (entry == null) {
+            ChatUtil.sendFormatted(String.format("%sNo script named &o%s&r", Atlas.clientName, name));
+        }
+        return entry;
+    }
+
+    private void list(ScriptManager manager) {
+        if (manager.entries().isEmpty()) {
+            ChatUtil.sendFormatted(String.format("%sNo scripts. Put .java files in config/Atlas/scripts (Atlas), raven16/ (Raven bS 16)"
+                    + " or raven17/ (Raven bS 17), or .script new [16|17]&r", Atlas.clientName));
             return;
         }
-        ChatUtil.sendFormatted(String.format("%sScripts:&r", Atlas.clientName));
-        for (String name : loaded) {
-            String state = manager.isEnabled(name) ? "&aon" : "&coff";
-            ChatUtil.sendFormatted(String.format("&7»&r &o%s&r [%s&r]", name, state));
+        ChatUtil.sendFormatted(String.format("%sScripts (compiler: %s):&r", Atlas.clientName, manager.compilerStatus()));
+        for (ScriptEntry entry : manager.entries()) {
+            String state = entry.isCompiling() ? "&ecompiling"
+                    : !entry.problems().isEmpty() ? entry.isLoaded() ? "&elast save did not compile" : "&cdid not load"
+                    : entry.module().isEnabled() ? "&aon" : "&7off";
+            ChatUtil.sendFormatted("  &f" + entry.name + " &8(" + entry.kind.label + ", " + entry.shownPath() + ") "
+                    + state + (entry.problems().isEmpty() ? "" : "&7: " + entry.problems().get(0)) + "&r");
         }
-        for (String name : files) {
-            if (!manager.isLoaded(name)) {
-                ChatUtil.sendFormatted(String.format("&7»&r &o%s&r [&7not loaded&r]", name));
-            }
-        }
-    }
-
-    private void sendUsage(ArrayList<String> args) {
-        String base = args.isEmpty() ? "script" : args.get(0).toLowerCase(Locale.ROOT);
-        ChatUtil.sendFormatted(String.format("%sUsage: .%s &olist&r | .%s &oload&r/&ounload&r/&oreload&r <&oname&r> | .%s &oenable&r/&odisable&r <&oname&r>&r",
-                Atlas.clientName, base, base, base));
     }
 }

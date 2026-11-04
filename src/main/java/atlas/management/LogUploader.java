@@ -50,7 +50,10 @@ public final class LogUploader {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File THEME_FILE = new File("./config/Atlas/atlas-theme.json");
     private static final File NOTICE_FILE = new File("./config/Atlas/auto-send-logs-notice-2.txt");
-    public static final String SETTING = "auto-send-logs";
+    /* 2026-11-02 (review): "-v2". atlas-theme.json saves every setting with its value, so a player who had ever
+       changed the look kept "auto-send-logs": true from the old default and went on sending though they never chose
+       to. Under a new key everyone starts from off (the default) and only a player who turns it on sends. */
+    public static final String SETTING = "auto-send-logs-v2";
 
     static final int FLAG_LIMIT = 8;
     static final long FLAG_WINDOW_MS = 60_000L;

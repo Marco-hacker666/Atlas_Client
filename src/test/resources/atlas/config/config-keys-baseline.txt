@@ -1693,6 +1693,7 @@ Scaffold sneak-delay
 Scaffold speed-motion
 Scaffold sprint
 Scaffold swing
+Scaffold telly-auto-jump
 Scaffold telly-jump
 Scaffold telly-normal-rotation-max-speed
 Scaffold telly-normal-rotation-min-speed
@@ -1700,7 +1701,6 @@ Scaffold telly-start-rotation-max-speed
 Scaffold telly-start-rotation-min-speed
 Scaffold tower
 Scaffold turn-speed
-ScriptModule #name ScriptModule
 ServerFingerprint #name ServerFingerprint
 ServerFingerprint chat
 ServerFingerprint follow-up

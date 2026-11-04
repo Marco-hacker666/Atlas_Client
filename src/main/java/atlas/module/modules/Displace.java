@@ -26,7 +26,6 @@ import atlas.util.RotationUtil;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.network.play.client.C03PacketPlayer;
@@ -57,17 +56,19 @@ public class Displace extends Module {
     private static final double ARROW_HEAD_BACKSET = 0.18D;
     private static final double ARROW_HEAD_LENGTH = 0.52D;
     private static final double ARROW_HEAD_HALF_HEIGHT = 0.30D;
+    /** A turn at least this big moves the player sideways enough to take the step back next tick. */
+    private static final float COMPENSATE_TURN = 45.0F;
     private static final double[] VOID_SCAN_X = new double[VOID_SCAN_DIRECTIONS];
     private static final double[] VOID_SCAN_Z = new double[VOID_SCAN_DIRECTIONS];
 
     public final ModeProperty dynamicAngle =
             new ModeProperty("Dynamic-angle", 0, new String[] {"Static", "Dynamic"});
     public final FloatProperty yawOffset =
-            new FloatProperty("Yaw-offset", 90F, 0F, 180F, () -> dynamicAngle.getValue() == 0);
+            new FloatProperty("Yaw-offset", 90F, 0F, 180F);
     public final FloatProperty delay = new FloatProperty("Delay", 0F, 0F, 500F);
     public final ModeProperty direction =
             new ModeProperty(
-                    "Direction", 0, new String[] {"Left", "Right"}, () -> dynamicAngle.getValue() == 0);
+                    "Direction", 0, new String[] {"Left", "Right"});
     public final BooleanProperty showDirection = new BooleanProperty("Show-direction", true);
     public final BooleanProperty findVoid =
             new BooleanProperty("Find-void", false, () -> dynamicAngle.getValue() == 0);
@@ -80,14 +81,21 @@ public class Displace extends Module {
        and Grim and Polar check that look's ray against the target's hitbox: 90 degrees off it cannot meet a
        box about +-9 degrees wide at 2.5 blocks, so the hit is refused and nothing is displaced. On: the turn
        goes only as far as the look still meets the box (with a margin for the target moving). Off: as before. */
-    public final BooleanProperty keepHitbox = new BooleanProperty("Keep-hitbox", true);
+    public final BooleanProperty keepHitbox = new BooleanProperty("Keep-hitbox", false);
 
     private boolean displaceThisTick = false;
     private boolean active = false;
     private boolean hasKB = false;
     private boolean compensateNextTick = false;
     private boolean displaceLeft = false;
-    private boolean wasDisplacingLastTick = false;
+    /* 2026-11-04 (owner: "make it work", then "can't every hit count?"). A hit counts from the look the server had last,
+       so a look turned every other tick only ever caught some hits. Now the look follows the hits: every hit is held at
+       the click (holdHit), the look turns in that tick's update, and the hit goes out at the start of the next tick,
+       the first packet after the turned one. It costs each hit one tick, two for KillAura's. */
+    private Entity heldTarget = null;
+    private boolean hitDue = false;
+    private boolean sendingHit = false;
+    private boolean turnedFar = false;
     private boolean releaseBlinkNextGameTick = false;
     private boolean blinkingModule = false;
     private Float dynamicVoidYaw = null;
@@ -127,7 +135,8 @@ public class Displace extends Module {
         active = false;
         hasKB = false;
         compensateNextTick = false;
-        wasDisplacingLastTick = false;
+        heldTarget = null;
+        hitDue = false;
         releaseBlinkNextGameTick = false;
         dynamicVoidYaw = null;
         renderDisplaceYaw = null;
@@ -142,7 +151,8 @@ public class Displace extends Module {
     public void onDisabled() {
         active = false;
         compensateNextTick = false;
-        wasDisplacingLastTick = false;
+        heldTarget = null;
+        hitDue = false;
         releaseBlinkNextGameTick = false;
         dynamicVoidYaw = null;
         renderDisplaceYaw = null;
@@ -153,7 +163,7 @@ public class Displace extends Module {
     }
 
     /** The yaw nearest to want, toward it from the target, whose ray from the eyes still meets the target's box. */
-    private static float clampToHitbox(EntityPlayer target, float want) {
+    static float clampToHitbox(Entity target, float want) {
         double dx = target.posX - mc.thePlayer.posX;
         double dz = target.posZ - mc.thePlayer.posZ;
         float base = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0F;
@@ -425,7 +435,6 @@ public class Displace extends Module {
         active = false;
         displaceThisTick = false;
         compensateNextTick = false;
-        wasDisplacingLastTick = false;
         dynamicVoidYaw = null;
         renderDisplaceYaw = null;
         renderTarget = null;
@@ -498,6 +507,35 @@ public class Displace extends Module {
         return elapsed >= delayTicks;
     }
 
+    private boolean passesItemCondition() {
+        if (!hasKnockback.getValue() && !itemWhitelistToggle.getValue()) {
+            return true;
+        }
+        boolean kbPass = !hasKnockback.getValue() || EnchantmentHelper.getKnockbackModifier(mc.thePlayer) > 0;
+        boolean wlPass = !itemWhitelistToggle.getValue() || itemWhitelist.matches(mc.thePlayer.getHeldItem());
+        return kbPass || wlPass;
+    }
+
+    /** Called for every attack before anything is sent. True: this module sends the hit itself, behind the turned look. */
+    public boolean holdHit(Entity target) {
+        if (sendingHit || !this.isEnabled() || mc.thePlayer == null || !(target instanceof EntityPlayer)) {
+            return false;
+        }
+        if (heldTarget != null) {
+            /* A second click would land first, along the look before the turn. */
+            return target == heldTarget;
+        }
+        EntityPlayer player = (EntityPlayer) target;
+        if (!passesItemCondition() || !CombatTargeting.isTrackablePlayer(player, ignoreTeammates.getValue())
+                || (EnchantmentHelper.getKnockbackModifier(mc.thePlayer) <= 0 && !anyMovementKey())
+                || !shouldDisplaceInCurrentWindow(player, tickCounter)) {
+            return false;
+        }
+        heldTarget = target;
+        hitDue = false;
+        return true;
+    }
+
     private void releaseBlink() {
         if (!blinkingModule) return;
         Atlas.blinkManager.setBlinkState(false, BlinkModules.DISPLACE);
@@ -510,6 +548,20 @@ public class Displace extends Module {
         if (releaseBlinkNextGameTick) {
             releaseBlink();
             releaseBlinkNextGameTick = false;
+        }
+        if (hitDue) {
+            hitDue = false;
+            Entity target = heldTarget;
+            heldTarget = null;
+            if (this.isEnabled() && target != null && !target.isDead && mc.thePlayer != null
+                    && mc.thePlayer.getDistanceToEntity(target) <= 6.0F) {
+                sendingHit = true;
+                try {
+                    mc.playerController.attackEntity(mc.thePlayer, target);
+                } finally {
+                    sendingHit = false;
+                }
+            }
         }
     }
 
@@ -657,11 +709,18 @@ public class Displace extends Module {
             return;
         }
 
-        if (!displaceThisTick || hasKB) return;
-        if (!anyMovementKey()) return;
+        if (!displaceThisTick || !anyMovementKey()) return;
+        if (hasKB) {
+            /* The enchant pushes without a sprint: the keys only keep their way against the turned yaw. */
+            if (renderDisplaceYaw != null) {
+                MoveUtil.fixStrafe(renderDisplaceYaw);
+            }
+            return;
+        }
 
+        /* Sprint's part of the knockback needs forward along the turned yaw. */
         mc.thePlayer.movementInput.moveForward = 1;
-        compensateNextTick = true;
+        compensateNextTick = turnedFar;
     }
 
     @EventTarget(Priority.HIGH)
@@ -688,26 +747,19 @@ public class Displace extends Module {
         if (e.getType() != EventType.PRE) return;
 
         tickCounter++;
-        int currentTick = tickCounter;
         pruneTargetDelayStates();
+        displaceThisTick = false;
+        /* Whatever happens below, a held hit goes out next tick: it is the player's. */
+        hitDue = heldTarget != null;
 
-        boolean passesItemCondition = true;
-        if (hasKnockback.getValue() || itemWhitelistToggle.getValue()) {
-            boolean kbPass = !hasKnockback.getValue() || EnchantmentHelper.getKnockbackModifier(mc.thePlayer) > 0;
-            boolean wlPass =
-                    !itemWhitelistToggle.getValue() || itemWhitelist.matches(mc.thePlayer.getHeldItem());
-            passesItemCondition = kbPass || wlPass;
-        }
-        if (!passesItemCondition) {
+        if (!passesItemCondition()) {
             clearActiveState();
             return;
         }
 
-        EntityPlayer target = null;
-        boolean attacking =
-                mc.gameSettings.keyBindAttack.isKeyDown()
-                        || atlas.util.Auras.target() != null;
-        if (attacking) {
+        EntityPlayer target = heldTarget instanceof EntityPlayer ? (EntityPlayer) heldTarget : null;
+        if (target == null
+                && (mc.gameSettings.keyBindAttack.isKeyDown() || atlas.util.Auras.target() != null)) {
             target = CombatTargeting.findClosestTarget(9.0, ignoreTeammates.getValue());
         }
 
@@ -722,46 +774,30 @@ public class Displace extends Module {
                 isDynamicAngle()
                         ? findDynamicVoidYaw(target)
                         : findVoid.getValue() ? findStaticVoidYaw(target) : null;
-        if (dynamicVoidYaw == null && !isDynamicAngle()) {
+        /* Dynamic with no void in reach did nothing at all, so on open ground the module looked dead: it now turns by
+           Yaw-offset and Direction, as Static does. */
+        if (dynamicVoidYaw == null) {
             displaceLeft = direction.getValue() == 0;
         }
-        renderDisplaceYaw =
-                dynamicVoidYaw != null ? dynamicVoidYaw : isDynamicAngle() ? null : getFixedDisplaceYaw();
-        renderTarget = renderDisplaceYaw != null ? target : null;
-        if (renderDisplaceYaw == null) {
-            clearActiveState();
-            return;
-        }
+        renderDisplaceYaw = dynamicVoidYaw != null ? dynamicVoidYaw : getFixedDisplaceYaw();
+        renderTarget = target;
 
         hasKB = hasKBEnchant;
-        displaceThisTick = !displaceThisTick;
-        if (displaceThisTick && !shouldDisplaceInCurrentWindow(target, currentTick)) {
-            startArrowFade();
-            displaceThisTick = false;
-            compensateNextTick = false;
-            wasDisplacingLastTick = false;
-            dynamicVoidYaw = null;
-            renderDisplaceYaw = null;
-            renderTarget = null;
+        if (heldTarget == null) {
             return;
         }
-
-        if (!displaceThisTick && wasDisplacingLastTick) {
-            int key = mc.gameSettings.keyBindAttack.getKeyCode();
-            if (key != 0) {
-                KeyBinding.onTick(key);
-            }
-        }
-
-        wasDisplacingLastTick = displaceThisTick;
-
-        if (!displaceThisTick || renderDisplaceYaw == null) return;
 
         if (keepHitbox.getValue()) {
             renderDisplaceYaw = clampToHitbox(target, renderDisplaceYaw);
         }
+        float turn = MathHelper.wrapAngleTo180_float(renderDisplaceYaw - mc.thePlayer.rotationYaw);
+        displaceLeft = turn < 0.0F;
+        turnedFar = Math.abs(turn) >= COMPENSATE_TURN;
         e.setRotation(renderDisplaceYaw, mc.thePlayer.rotationPitch, 100);
-        MoveUtil.fixMovement(renderDisplaceYaw);
+        /* fixMovement here did nothing: this tick's keys are read after this event. The move has to go along the look
+           the server is told, and onPostInput sets the keys for it. */
+        e.setPervRotation(renderDisplaceYaw, 100);
+        displaceThisTick = true;
     }
 
     /* 2026-10-31 (audit): a world unload leaves its entities alive (isDead stays false), and one kept here held the

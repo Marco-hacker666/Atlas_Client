@@ -1046,6 +1046,7 @@ Hitflick Blink
 Hitflick Cooldown
 Hitflick Custom-Angle
 Hitflick Direction
+Hitflick Keep-hitbox
 Hitflick mode
 Hitflick move-fix
 Hotbar #name Hotbar

@@ -901,6 +901,14 @@ public class KillAura extends Module {
                         && !this.aimedAt(yaw, pitch)) {
                     return false;
                 }
+                if (Hitflick.holdsHit(this.target.getEntity())) {
+                    /* Hitflick sends it, a tick later, behind its turned look. */
+                    if (human != null) {
+                        this.atlasHumanizer.landed(humanNow);
+                    }
+                    this.hitRegistered = true;
+                    return true;
+                }
                 ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
                 /* Fired where vanilla fires it (MixinPlayerControllerMP: after
                    the slot sync, before the attack packet). The aura sends

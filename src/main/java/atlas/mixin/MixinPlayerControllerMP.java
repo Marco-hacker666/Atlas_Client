@@ -27,6 +27,12 @@ public abstract class MixinPlayerControllerMP {
     private void attackEntity(
             EntityPlayer entityPlayer, Entity targetEntity, CallbackInfo callbackInfo
     ) {
+        /* Hitflick sends this hit itself a tick later, behind the turned look. Held here, before the event, so
+           the modules that watch hits see the one that goes out, once. */
+        if (atlas.module.modules.Hitflick.holdsHit(targetEntity)) {
+            callbackInfo.cancel();
+            return;
+        }
         AttackEvent event = new AttackEvent(targetEntity);
         EventManager.call(event);
         /* A listener may drop a hit the server would not count (Clutch, 2026-10-22). */

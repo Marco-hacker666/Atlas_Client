@@ -4,18 +4,21 @@ import atlas.Atlas;
 import atlas.enums.BlinkModules;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
-import atlas.events.AttackEvent;
 import atlas.events.MoveInputEvent;
+import atlas.events.TickEvent;
 import atlas.events.UpdateEvent;
 import atlas.management.RotationState;
 import atlas.module.Module;
 import atlas.property.properties.*;
 import atlas.util.MoveUtil;
 import net.minecraft.client.Minecraft;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 
 public class Hitflick extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
+    /** Above every other look: a look an aura outranks is not the one the hit is judged from. */
+    private static final int LOOK_PRIORITY = 100;
 
     /* 2026-10-24 (owner): KBDisplacement and Displace are modes of this
        module now (ModuleBundle, as AutoClicker's types). Each keeps its own
@@ -29,6 +32,9 @@ public class Hitflick extends Module {
     public final FloatProperty customAngle = new FloatProperty("Custom-Angle", 90F, 1F, 180F, () -> this.direction.getValue() == 3);
     public final IntProperty cooldown = new IntProperty("Cooldown", 1, 1, 40);
     public final BooleanProperty blink = new BooleanProperty("Blink", false);
+    /* 2026-11-04: the hit now really is judged from the flicked look, so a look that misses the target's box loses the
+       hit on a server that checks it (Grim, Polar). On: the flick goes only as far as the look still meets the box. */
+    public final BooleanProperty keepHitbox = new BooleanProperty("Keep-hitbox", false);
 
     /* NONE by default, unlike the other rotating modules: a flick lasts one
        tick, and move-fix costs something on every flick.
@@ -55,9 +61,14 @@ public class Hitflick extends Module {
     private float flickYaw;
     private float moveYaw = Float.NaN;
     private FlickState state = FlickState.IDLE;
+    /* 2026-11-04 (owner: "fix FLICK too"). The flick came after the C02, and a server takes the knockback's yaw when it
+       reads the C02, so it never steered anything. Now the hit waits: held at the click, the look turned in this tick's
+       update, the hit sent at the start of the next tick, the first packet after the turned one, then the look back. */
+    private Entity heldTarget;
+    private boolean sendingHit;
 
     private enum FlickState {
-        IDLE, FLICKING_AWAY, RESTORING
+        IDLE, FLICKING_AWAY, HIT_DUE, RESTORING
     }
 
     public Hitflick() {
@@ -68,25 +79,37 @@ public class Hitflick extends Module {
     public void onEnabled() {
         sinceLastFlick = 0;
         state = FlickState.IDLE;
+        heldTarget = null;
     }
 
     @Override
     public void onDisabled() {
         state = FlickState.IDLE;
+        heldTarget = null;
         sinceLastFlick = 0;
         if (blink.getValue()) {
             Atlas.blinkManager.setBlinkState(false, BlinkModules.HITFLICK);
         }
     }
 
-    @EventTarget
-    public void onAttack(AttackEvent event) {
-        if (!this.isEnabled()) return;
-        if (event.getTarget() == null || event.getTarget() == mc.thePlayer) return;
-        if (state != FlickState.IDLE || sinceLastFlick < cooldown.getValue()) return;
-        if (!(event.getTarget() instanceof EntityLivingBase)) return;
+    /** Called for every attack before anything is sent. True: this module sends the hit itself, after the flick. */
+    public boolean holdHit(Entity target) {
+        if (sendingHit || !this.isRunning() || mc.thePlayer == null) return false;
+        if (state == FlickState.FLICKING_AWAY || state == FlickState.HIT_DUE) {
+            /* A second click on the same target would land first, along the look before the flick. */
+            return target == heldTarget;
+        }
+        if (target == null || target == mc.thePlayer) return false;
+        if (!(target instanceof EntityLivingBase)) return false;
+        /* Cooldown 1 is every hit (owner: "can't every hit count?"): the tick of the turn back counts, and a hit on it
+           starts the next flick from the view that flick was going back to. */
+        boolean restoring = state == FlickState.RESTORING;
+        if (!restoring && sinceLastFlick + 1 < cooldown.getValue()) return false;
 
-        originalYaw = mc.thePlayer.rotationYaw;
+        heldTarget = target;
+        if (!restoring) {
+            originalYaw = mc.thePlayer.rotationYaw;
+        }
         flickYaw = originalYaw + getFlickAngle();
         state = FlickState.FLICKING_AWAY;
 
@@ -94,9 +117,41 @@ public class Hitflick extends Module {
             Atlas.blinkManager.setBlinkState(false, Atlas.blinkManager.getBlinkingModule());
             Atlas.blinkManager.setBlinkState(true, BlinkModules.HITFLICK);
         }
+        return true;
     }
 
+    /** Every attack, whichever mode has it. True: the hit is held, and goes out a tick later behind the turned look. */
+    public static boolean holdsHit(Entity target) {
+        if (Atlas.moduleManager == null) {
+            return false;
+        }
+        Hitflick flick = (Hitflick) Atlas.moduleManager.modules.get(Hitflick.class);
+        if (flick != null && flick.holdHit(target)) {
+            return true;
+        }
+        Displace displace = atlas.module.ModuleBundle.of(Displace.class);
+        return displace != null && displace.holdHit(target);
+    }
+
+    /** Before this tick's clicks and its update: the look the server has last is the flicked one. */
     @EventTarget
+    public void onGameTick(TickEvent event) {
+        if (event.getType() != EventType.PRE || state != FlickState.HIT_DUE) return;
+        Entity target = heldTarget;
+        heldTarget = null;
+        state = FlickState.RESTORING;
+        if (target == null || target.isDead || mc.thePlayer == null || mc.thePlayer.getDistanceToEntity(target) > 6.0F) {
+            return;
+        }
+        sendingHit = true;
+        try {
+            mc.playerController.attackEntity(mc.thePlayer, target);
+        } finally {
+            sendingHit = false;
+        }
+    }
+
+    @EventTarget(atlas.event.types.Priority.LOWEST)
     public void onUpdate(UpdateEvent event) {
         if (!this.isEnabled()) return;
         if (event.getType() != EventType.PRE) return;
@@ -109,8 +164,9 @@ public class Hitflick extends Module {
         }
 
         if (state == FlickState.FLICKING_AWAY) {
-            rotate(event, flickYaw);
-            state = FlickState.RESTORING;
+            rotate(event, keepHitbox.getValue() && heldTarget != null
+                    ? Displace.clampToHitbox(heldTarget, flickYaw) : flickYaw);
+            state = FlickState.HIT_DUE;
         } else if (state == FlickState.RESTORING) {
             rotate(event, originalYaw);
             state = FlickState.IDLE;
@@ -122,23 +178,23 @@ public class Hitflick extends Module {
     }
 
     private void rotate(UpdateEvent event, float yaw) {
-        event.setRotation(yaw, mc.thePlayer.rotationPitch, 0);
+        event.setRotation(yaw, mc.thePlayer.rotationPitch, LOOK_PRIORITY);
         moveYaw = moveFix.getValue() != 0 ? yaw : mc.thePlayer.rotationYaw;
-        event.setPervRotation(moveYaw, 0);
+        event.setPervRotation(moveYaw, LOOK_PRIORITY);
         if (moveFix.getModeString().equals("REAL")) {
             /* REAL: the camera turns as well, spread over this tick's frames by
                RotationManager; the mouse still works (not forced). */
-            Atlas.rotationManager.setRotation(yaw, mc.thePlayer.rotationPitch, 0, false);
+            Atlas.rotationManager.setRotation(yaw, mc.thePlayer.rotationPitch, LOOK_PRIORITY, false);
         }
     }
 
     @EventTarget
     public void onMoveInput(MoveInputEvent event) {
         if (!this.isEnabled()) return;
-        // Only this module's own rotation; AntiFireball also rotates at 0.
+        // Only this module's own rotation.
         if (moveFix.getValue() == 1
                 && RotationState.isActived()
-                && RotationState.getPriority() == 0
+                && RotationState.getPriority() == LOOK_PRIORITY
                 && RotationState.getSmoothedYaw() == moveYaw
                 && MoveUtil.isForwardPressed()) {
             MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
@@ -169,6 +225,7 @@ public class Hitflick extends Module {
         this.customAngle.alsoWhen(flick);
         this.cooldown.alsoWhen(flick);
         this.blink.alsoWhen(flick);
+        this.keepHitbox.alsoWhen(flick);
         this.moveFix.alsoWhen(flick);
     }
 }

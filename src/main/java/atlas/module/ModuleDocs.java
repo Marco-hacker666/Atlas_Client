@@ -354,6 +354,7 @@ public final class ModuleDocs {
         d("AutoHeal", "血量低時自動使用治療物品（湯、藥水、頭）。");
         d("BackTrack", "對手往後退時，暫時把他留在你最後看到的位置，讓攻擊還能打到伺服器記錄中的位置。");
         d("Hitflick", "改變你打出去的擊退方向：FLICK 打中瞬間甩開視角再轉回；HAZARD 靜默轉向附近的虛空或岩漿；DISPLACE 攻擊瞬間轉向虛空或指定角度。");
+        help("Hitflick", "Keep-hitbox", "FLICK：只甩到視角還打得到對手碰撞箱的角度（Grim、Polar 會檢查），開著時只有 5～10 度。關掉可以照 Direction 甩滿，但會檢查視角的伺服器不算那一下。");
         help("Hitflick", "mode", "FLICK：甩開再轉回。HAZARD：原本的 KBDisplacement。DISPLACE：原本的 Displace。各自的設定在下面。");
         d("ServerLag", "把伺服器送來的封包延後處理，模擬伺服器延遲；受傷、血量、音效、聊天照常即時。可當成 FakeLag 的「收到延遲」一起用。");
         d("FakeLag", "延後送出自己的移動，讓伺服器上的你落後於實際位置，方便先手。");
@@ -423,6 +424,7 @@ public final class ModuleDocs {
         help("BlockHit", "ManualChance", "每次打中後舉劍一下的機率（每秒格擋次數 = CPS × 機率）。Silent Aura 自己有格擋時不作用。");
         d("ThrowAura", "自動把雪球、蛋等投擲物丟向敵人。");
         d("Displace", "攻擊瞬間轉向，把對手的擊退方向導向虛空或指定方向。");
+        help("Displace", "Dynamic-angle", "Static：照 Yaw-offset 和 Direction 轉。Dynamic：先找旁邊的虛空，找不到就照 Yaw-offset 和 Direction 轉。");
         help("Displace", "Keep-hitbox", "打人的那一下伺服器那邊的視角只轉到還能打到對手碰撞箱的角度（Grim、Polar 會檢查視角打不打得到）；轉太多那一下就不算。開著時只能偏 5～10 度，而且只影響疾跑和擊退附魔那部分的擊退，在 Pika、Grim 這類伺服器上效果很小。關掉＝照設定的角度轉，只適合不檢查攻擊視角的伺服器。");
         d("KeepSprint", "攻擊後不讓衝刺被打斷，保持移動速度。");
         d("InvulnTiming", "算準目標無敵時間結束的時機再出手，並把多餘的攻擊轉給打得動的人。");

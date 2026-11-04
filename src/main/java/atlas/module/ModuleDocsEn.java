@@ -73,6 +73,7 @@ final class ModuleDocsEn {
         d("AutoHeal", "Uses healing items (soup, potions, heads) when health is low.");
         d("BackTrack", "Keeps a retreating target where you last saw them a moment longer, so a swing reaches the position the server still has.");
         d("Hitflick", "Steers the knockback of your hits: FLICK flicks the view away on a hit and back; HAZARD silently aims it at nearby void or lava; DISPLACE turns at the hit toward the void or a set angle.");
+        help("Hitflick", "Keep-hitbox", "FLICK: flick only as far as the look still meets the target's hitbox (Grim and Polar check that), about 5-10 degrees. Off: the full Direction, but a server that checks the look does not count the hit.");
         help("Hitflick", "mode", "FLICK: the flick away and back. HAZARD: what KBDisplacement did. DISPLACE: what Displace did. Each has its own settings below.");
         d("ServerLag", "Delays the packets the server sends, as if the server lagged; damage, health, sounds and chat still arrive at once. Works as FakeLag's incoming half.");
         d("FakeLag", "Delays your outgoing movement so the server's copy of you runs behind, for the first hit.");
@@ -177,6 +178,7 @@ final class ModuleDocsEn {
         help("AntiBounce", "log", "One line per time stuck in config/Atlas/stuck-*.txt: which block, whether you just placed it, time since the last correction, ping, and the way out.");
         d("ThrowAura", "Throws snowballs and eggs at enemies.");
         d("Displace", "Turns at the moment of a hit to aim the target's knockback at the void or a chosen direction.");
+        help("Displace", "Dynamic-angle", "Static: turn by Yaw-offset and Direction. Dynamic: toward nearby void, or by Yaw-offset and Direction when there is none.");
         help("Displace", "Keep-hitbox", "Turn the server-side look only as far as it still meets the target's hitbox (Grim and Polar check that); turned further the hit does not count. On, the turn is only 5-10 degrees and moves only the sprint / Knockback part of the push, so on servers like Pika or Grim the effect is small. Off = the full offset, for servers that do not check the hit's look.");
         d("KeepSprint", "Keeps sprinting after an attack instead of slowing down.");
         d("InvulnTiming", "Times attacks to the end of the target's invulnerability, and spends spare swings on someone who can be hurt.");

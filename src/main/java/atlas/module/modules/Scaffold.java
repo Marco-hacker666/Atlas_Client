@@ -214,6 +214,8 @@ public class Scaffold extends Module {
     public final BooleanProperty pauseOnCorrection = new BooleanProperty("pause-on-correction", true);
     /* SPEED-TELLY (2026-11-04): walking forward jumps by itself. */
     public final BooleanProperty tellyAutoJump = new BooleanProperty("telly-auto-jump", true, this::isSpeedTellyMode);
+    /* 2026-11-05: yaw allowed over 5 s (Intave flags at 2250, 1750 at low trust); past it a jump keeps its look. 0 is off. */
+    public final IntProperty tellyYawLimit = new IntProperty("telly-yaw-limit", 1700, 0, 3000, this::isSpeedTellyMode);
     private int tick = 0;
     private int pauseTicks = 0;
     private volatile boolean correctionPending = false;

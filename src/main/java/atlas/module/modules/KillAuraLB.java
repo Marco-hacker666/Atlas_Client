@@ -317,6 +317,13 @@ public class KillAuraLB extends Module {
             () -> this.rhythmShown.getAsBoolean() && this.rhythmLag.getValue());
     public final BooleanProperty rhythmLog = new BooleanProperty("Rhythm-Log", true, this.rhythmShown);
     // ---- L3: FailSwing (KillAuraFailSwing) and NotifyWhenFail
+    /* 2026-11-05 (owner: "move the good ones over", from the Atlas engine). Off by default. AttackOnDamage: this many
+       clicks right after this player takes knockback, past the plan and past HitSelect, the plan's enforced click.
+       NoAirSprintHit: no click while sprinting in the air. Neither runs under Rhythm, which has its own click. */
+    public final IntProperty attackOnDamage = new IntProperty("AttackOnDamage", 0, 0, 4);
+    public final BooleanProperty noAirSprintHit = new BooleanProperty("NoAirSprintHit", false);
+    /** A miss spends no click of these. */
+    private final DamageHits damageHits = new DamageHits();
     public final BooleanProperty failSwing = new BooleanProperty("FailSwing", false);
     public final FloatRange failSwingRange = new FloatRange("FailSwing-AdditionalRange", 2.5F, 3.0F, 0.0F, 10.0F, this.failSwing::getValue);
     public final ModeProperty notifyWhenFail = new ModeProperty("NotifyWhenFail", 1, new String[]{"None", "Box", "Sound"},
@@ -449,6 +456,19 @@ public class KillAuraLB extends Module {
 
     public KillAuraLB() {
         super("LiquidAura", false, false, "LiquidBounce's KillAura");
+        this.clicker.setEnforced(tick -> tick == 0 && damageHitDue());
+    }
+
+    private boolean damageHitDue() {
+        return this.damageHits.due(System.currentTimeMillis());
+    }
+
+    /* Ahead of Velocity, which cancels the packet at HIGH: the hit was taken all the same. */
+    @EventTarget(Priority.HIGHEST)
+    public void onKnockbackTaken(atlas.events.PacketEvent event) {
+        if (this.isEnabled()) {
+            this.damageHits.onPacket(event, this.attackOnDamage.getValue());
+        }
     }
 
     // ---- 2026-10-26: placing blocks by hand comes first ----
@@ -545,6 +565,7 @@ public class KillAuraLB extends Module {
 
     @Override
     public void onDisabled() {
+        this.damageHits.clear();
         if (mc.thePlayer != null) {
             stopBlocking(false);
         }
@@ -577,6 +598,7 @@ public class KillAuraLB extends Module {
 
     @EventTarget
     public void onWorld(atlas.events.LoadWorldEvent event) {
+        this.damageHits.clear();
         this.serverSamples.clear();
         this.rotations.reset();
         this.enforcedBlocking = false;
@@ -1666,8 +1688,18 @@ public class KillAuraLB extends Module {
                 ((IAccessorPlayerControllerMP) mc.playerController).getIsHittingBlock());
     }
 
-    private static boolean hitSelectHolds(Entity target) {
+    /** This tick's click stays in the hand: HitSelect holds it, or NoAirSprintHit. A click after knockback goes. */
+    private boolean holdsClick(Entity target) {
         HitSelect hitSelect = (HitSelect) atlas.Atlas.moduleManager.modules.get(HitSelect.class);
+        if (damageHitDue()) {
+            if (hitSelect != null) {
+                hitSelect.passForcedHit();
+            }
+            return false;
+        }
+        if (this.noAirSprintHit.getValue() && !mc.thePlayer.onGround && mc.thePlayer.isSprinting()) {
+            return true;
+        }
         return hitSelect != null && target instanceof net.minecraft.entity.EntityLivingBase
                 && hitSelect.dropsAuraHit((net.minecraft.entity.EntityLivingBase) target);
     }
@@ -1688,7 +1720,7 @@ public class KillAuraLB extends Module {
                the click (nothing sent, the click plan keeps it) rather than land a hit valid only on an old place. */
             return;
         }
-        if (inRange && this.clicker.isClickTick() && hitSelectHolds(target)) {
+        if (inRange && this.clicker.isClickTick() && holdsClick(target)) {
             /* 2026-11-05: this engine never asked HitSelect, so ACTIVE did nothing for it and the other modes cut the
                packet after the swing. The click is spent with nothing sent, as for the sword kept up below: the plan
                drops a press unused on its tick, and spending it keeps the combo from counting as idle. */
@@ -1773,6 +1805,7 @@ public class KillAuraLB extends Module {
                         this.humanizer.landed(System.currentTimeMillis());
                     }
                 }
+                this.damageHits.spend();
                 if (this.humanizer.doubleClick()) {
                     /* 2026-10-26 (review: click-double was never read): a second press in the same tick, as a
                        finger's double click does; vanilla takes both clicks of a tick. The target is invulnerable

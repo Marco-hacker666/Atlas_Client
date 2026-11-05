@@ -29,6 +29,8 @@ final class HitSelectGate {
     private int waitTarget = -1;
     private long waitStart;
     private long waitAsked;
+    /** Until then no wait starts: knockback ended the one there was. */
+    private long noWaitUntil;
 
     /** The damage of a hit: a critical adds half of the base, enchantments stay out of it, as in vanilla. */
     static double damage(double base, double enchantment, boolean critical) {
@@ -54,11 +56,12 @@ final class HitSelectGate {
     }
 
     /** This player took knockback: the combo is broken, and so is any wait for the other side's first hit. */
-    synchronized void knockedBack() {
+    synchronized void knockedBack(long now) {
         this.combo = 0;
         this.waitTarget = -1;
         this.waitStart = 0L;
         this.waitAsked = 0L;
+        this.noWaitUntil = now + WAIT_FORGET_MS;
     }
 
     synchronized int combo(long now) {
@@ -81,7 +84,7 @@ final class HitSelectGate {
 
     /** Before a first hit: held for this long from the first time it was asked, unless knockback ends it. */
     synchronized boolean waiting(int target, long now, long millis) {
-        if (millis <= 0L || !firstHit(target, now)) {
+        if (millis <= 0L || now < this.noWaitUntil || !firstHit(target, now)) {
             return false;
         }
         if (target != this.waitTarget || now - this.waitAsked > WAIT_FORGET_MS) {
@@ -101,5 +104,6 @@ final class HitSelectGate {
         this.waitTarget = -1;
         this.waitStart = 0L;
         this.waitAsked = 0L;
+        this.noWaitUntil = 0L;
     }
 }

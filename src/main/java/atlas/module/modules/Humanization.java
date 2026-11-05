@@ -34,6 +34,9 @@ public class Humanization extends Module {
     public final ModeProperty preset = new ModeProperty("preset", 0, new String[]{"Legit", "Good", "Tryhard", "Custom"});
     // ---- who it applies to
     public final BooleanProperty applySilentAura = new BooleanProperty("apply-silent-aura", true);
+    /* 2026-11-05: aim error only: these two make no clicks of their own to land or miss. */
+    public final BooleanProperty applyHitflick = new BooleanProperty("apply-hitflick", true);
+    public final BooleanProperty applyScaffold = new BooleanProperty("apply-scaffold", true);
     public final BooleanProperty applyKillAura2 = new BooleanProperty("apply-killaura2", true);
     public final BooleanProperty applyAimAssist = new BooleanProperty("apply-aimassist", false);
     public final BooleanProperty applyAutoClicker = new BooleanProperty("apply-autoclicker", false);
@@ -266,6 +269,8 @@ public class Humanization extends Module {
         applies[Humanizer.CONSUMER_KILLAURA2] = this.applyKillAura2.getValue();
         applies[Humanizer.CONSUMER_AIMASSIST] = this.applyAimAssist.getValue();
         applies[Humanizer.CONSUMER_AUTOCLICKER] = this.applyAutoClicker.getValue();
+        applies[Humanizer.CONSUMER_HITFLICK] = this.applyHitflick.getValue();
+        applies[Humanizer.CONSUMER_SCAFFOLD] = this.applyScaffold.getValue();
         Humanizer.publish(p, applies);
     }
 

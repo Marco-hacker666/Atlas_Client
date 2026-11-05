@@ -51,6 +51,11 @@ public final class Clicker {
                 .nextInterval(recent, comboMs, minCps, maxCps, r), random);
     }
 
+    /** A press wanted on this tick from now though none is planned there (ClickPlan.setEnforced). */
+    public void setEnforced(java.util.function.IntPredicate enforced) {
+        this.plan.setEnforced(enforced);
+    }
+
     /** Start of a client tick: the settings for this tick and the time. */
     public void tick(int technique, int minCps, int maxCps, int maxPerTick, long nowMs) {
         this.ticksSinceLastClick++;

@@ -118,7 +118,7 @@ public class HitSelect extends Module {
     private boolean auraSkips;
     /** The aura is holding a hit now: one held hit counts once, however many ticks it waits. */
     private boolean auraHolding;
-    /** The tick the aura's hit was let through: its click, if it makes one, is not judged a second time. */
+    /** The tick the aura's hit was let through: neither its click nor its attack packet is judged a second time. */
     private int auraPassedTick = -1;
 
     /** Burst clicks still to make, one a tick, and on whom. */
@@ -316,6 +316,16 @@ public class HitSelect extends Module {
         return false;
     }
 
+    /**
+     * An aura's forced hit (AttackOnDamage) this tick: nothing here holds it. A forced hit skips dropsAuraHit, but the
+     * click still reaches onClick and the attack packet still reaches onPacket, and either could have stopped it.
+     */
+    public void passForcedHit() {
+        if (mc.thePlayer != null) {
+            this.auraPassedTick = mc.thePlayer.ticksExisted;
+        }
+    }
+
     /** Nothing is held for this hit, whatever the mode says. */
     private boolean letThrough(EntityLivingBase target) {
         if (this.lowHealth.getValue() > 0 && !mc.thePlayer.capabilities.isCreativeMode
@@ -435,7 +445,11 @@ public class HitSelect extends Module {
                once two round trips have passed without it being answered. */
             int spacing = Math.max(2, expected * 2);
             if (now - this.lastAllowedTick >= spacing || now < this.lastAllowedTick) {
-                this.lastAllowedTick = now;
+                /* An aura may still not hit this tick (its sword going down first), so its opening is only taken when
+                   the attack goes out (onPacket). A hand's click attacks at once. */
+                if (!aura) {
+                    this.lastAllowedTick = now;
+                }
                 this.armBurst(target);
                 return false;
             }
@@ -483,7 +497,7 @@ public class HitSelect extends Module {
                 this.sinceVelocity = 0;
                 this.reducedThisKnockback = false;
                 this.hitBackLeft = this.hitBack.getValue();
-                this.gate.knockedBack();
+                this.gate.knockedBack(System.currentTimeMillis());
             }
             return;
         }
@@ -522,7 +536,10 @@ public class HitSelect extends Module {
 
             EntityLivingBase living = (EntityLivingBase) target;
             boolean allow = true;
-            boolean decided = this.mode.getValue() != 3 && this.letThrough(living);
+            /* A hit the aura already let through is not judged again: AttackEvent has fired, and SprintReset may have
+               changed what W_TAP reads. */
+            boolean decided = this.mode.getValue() != 3
+                    && (this.auraPassedTick == mc.thePlayer.ticksExisted || this.letThrough(living));
             if (!decided && this.mode.getValue() != 3 && this.firstHitWaits(living)) {
                 decided = true;
                 allow = false;
@@ -548,6 +565,7 @@ public class HitSelect extends Module {
                 this.blockedHits++;
             } else {
                 this.allowedHits++;
+                this.lastAllowedTick = mc.thePlayer.ticksExisted;
                 this.gate.attacked(living.getEntityId(), hitDamage(living), System.currentTimeMillis());
             }
         }
@@ -733,6 +751,12 @@ public class HitSelect extends Module {
     public void onWorld(LoadWorldEvent event) {
         this.gate.clear();
         this.hitBackLeft = 0;
+    }
+
+    @Override
+    public void onEnabled() {
+        /* Switched on mid-sprint no sprint packet comes, and W_TAP would hold every hit until one did. */
+        this.sprintState = mc.thePlayer != null && mc.thePlayer.isSprinting();
     }
 
     @Override

@@ -10,6 +10,13 @@ import static org.junit.Assert.assertTrue;
 public class BlockHitYuriTest {
 
     @Test
+    public void aModeStandsAsideOnlyForAnAuraBlockingAlone() {
+        assertTrue(BlockHitYuri.standsAside(false, true));
+        assertFalse("nobody else has the key", BlockHitYuri.standsAside(false, false));
+        assertFalse("the aura's own block mode", BlockHitYuri.standsAside(true, true));
+    }
+
+    @Test
     public void aHitBlocksAfterTheComboDelayAndLetsGoAfterTheBlockDelay() {
         BlockHitYuri y = new BlockHitYuri();
         assertTrue(y.hit(true, 2.5, 3.0, 0.5, 100, 1000));

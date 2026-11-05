@@ -197,6 +197,7 @@ public class Scaffold extends Module {
     /* Hidden since 2026-10-31: the speed wander and bow are the shared engine's, set in the Rotations module
        for every module on it. Kept so saved configs still load. */
     public final BooleanProperty humanize = new BooleanProperty("humanize", true, () -> false);
+    private final atlas.humanize.Humanizer human = new atlas.humanize.Humanizer(atlas.humanize.Humanizer.CONSUMER_SCAFFOLD);
     /* 2026-10-17 (a player: "your scaffold rotations need randomization"):
        SNAP and the fixed-target modes aimed at the same yaw and pitch for every
        placement (exactly back, pitch 85). The aim now wanders within
@@ -1145,6 +1146,17 @@ public class Scaffold extends Module {
                     /* The shared engine turns (in the turning modes at most turn-speed a tick on each axis --
                        LiquidBounce: RotationsValueGroup), keeps the grid and the DuplicateRotPlace guard. */
                     float cap = this.turnLimited() && !towerRotating ? this.turnSpeed.getValue() : RotationHelper.NO_LIMIT;
+                    if (!snapMode) {
+                        /* 2026-11-05 (owner): Humanization's aim error on the way to a block, none within HumanTurn.SETTLED
+                           of it. Kept only while the look still lands on the face, as the wander above, so an overshoot
+                           never costs a placement. A snap has one tick and is left exact. */
+                        float[] aimed = atlas.humanize.HumanTurn.apply(this.human, event.getYaw(), event.getPitch(),
+                                targetYaw, targetPitch);
+                        if (blockData == null || this.lookHit(blockData, aimed[0], aimed[1]) != null) {
+                            targetYaw = aimed[0];
+                            targetPitch = aimed[1];
+                        }
+                    }
                     /* A snap lands in the tick it is made: the click waits only snapDelay ticks for it. */
                     float[] onGrid = RotationHelper.request(this, targetYaw, targetPitch, 3, this.moveMode(), false, cap,
                             snapMode ? SNAP_STEP : MIN_STEP);

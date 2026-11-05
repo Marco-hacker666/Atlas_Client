@@ -14,6 +14,55 @@ import static org.junit.Assert.assertTrue;
 /** The humanization engine (2026-10-25). */
 public class HumanizeTest {
 
+    @Test
+    public void humanTurnLeavesTheLookAloneWhenOffOrClose() {
+        Humanizer off = new Humanizer(Humanizer.CONSUMER_SCAFFOLD, new Random(1L));
+        assertEquals(50.0F, HumanTurn.apply(off, 0.0F, 0.0F, 50.0F, 20.0F)[0], 0.0F);
+        boolean[] on = new boolean[Humanizer.CONSUMERS];
+        on[Humanizer.CONSUMER_SCAFFOLD] = true;
+        Humanizer.publish(HumanProfile.preset(HumanProfile.PRESET_LEGIT), on);
+        float[] close = HumanTurn.apply(off, 10.0F, 10.0F, 12.0F, 11.0F);
+        assertEquals(12.0F, close[0], 0.0F);
+        assertEquals(11.0F, close[1], 0.0F);
+    }
+
+    /** A settled tick has to end the turn, or the next one rolls no overshoot and the look turns exactly. */
+    @Test
+    public void aSettledTickLetsTheNextTurnRollAgain() {
+        boolean[] on = new boolean[Humanizer.CONSUMERS];
+        on[Humanizer.CONSUMER_SCAFFOLD] = true;
+        HumanProfile p = HumanProfile.preset(HumanProfile.PRESET_LEGIT);
+        p.overshootChance = 100.0F;
+        p.undershootChance = 0.0F;
+        p.overshootMin = 20.0F;
+        p.overshootMax = 20.0F;
+        p.trackingNoise = 0.0F;
+        Humanizer.publish(p, on);
+        Humanizer humanizer = new Humanizer(Humanizer.CONSUMER_SCAFFOLD, new Random(3L));
+        assertEquals(108.0F, HumanTurn.apply(humanizer, 0.0F, 0.0F, 90.0F, 0.0F)[0], 0.5F);
+        HumanTurn.apply(humanizer, 89.0F, 0.0F, 90.0F, 0.0F);
+        for (int i = 0; i < 12; i++) {
+            HumanTurn.apply(humanizer, 90.0F, 0.0F, 90.0F, 0.0F);
+        }
+        assertEquals(108.0F, HumanTurn.apply(humanizer, 0.0F, 0.0F, 90.0F, 0.0F)[0], 0.5F);
+    }
+
+    @Test
+    public void humanTurnMovesAFarLookAndKeepsThePitchInRange() {
+        boolean[] on = new boolean[Humanizer.CONSUMERS];
+        on[Humanizer.CONSUMER_HITFLICK] = true;
+        Humanizer.publish(HumanProfile.preset(HumanProfile.PRESET_LEGIT), on);
+        Humanizer humanizer = new Humanizer(Humanizer.CONSUMER_HITFLICK, new Random(7L));
+        boolean moved = false;
+        for (int i = 0; i < 200; i++) {
+            float[] look = HumanTurn.apply(humanizer, 0.0F, 0.0F, 90.0F, 90.0F);
+            moved |= look[0] != 90.0F;
+            assertTrue(look[1] <= 90.0F && look[1] >= -90.0F);
+            assertFalse(Float.isNaN(look[0]));
+        }
+        assertTrue(moved);
+    }
+
     @After
     public void unpublish() {
         Humanizer.publish(null, null);

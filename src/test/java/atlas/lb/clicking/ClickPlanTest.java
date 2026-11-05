@@ -9,6 +9,7 @@ import java.util.Random;
 import java.util.function.IntConsumer;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /** LiquidBounce NextGen's ClickPlanTest, ported (2026-10-24). */
@@ -190,5 +191,29 @@ public class ClickPlanTest {
             now += ClickPlan.TICK_MS;
         }
         assertTrue("combo is " + plan.comboMs() + " ms", plan.comboMs() < 250);
+    }
+    /** 2026-11-05: AttackOnDamage's click: a press on a tick with none planned, this tick only, spent like any other. */
+    @Test
+    public void anEnforcedClickComesOnlyWhereItIsAskedFor() {
+        Clicker clicker = new Clicker(new Random(1L));
+        long now = 1000L;
+        clicker.tick(Clicker.TECHNIQUE_CONSTANT, 1, 1, 1, now);
+        for (int i = 0; i < 40 && clicker.isClickTick(); i++) {
+            now += 50L;
+            clicker.tick(Clicker.TECHNIQUE_CONSTANT, 1, 1, 1, now);
+        }
+        assertFalse(clicker.isClickTick());
+        boolean[] want = {true};
+        clicker.setEnforced(tick -> tick == 0 && want[0]);
+        assertTrue(clicker.isClickTick());
+        int[] runs = {0};
+        assertEquals(1, clicker.click(() -> true, () -> {
+            runs[0]++;
+            return true;
+        }));
+        assertEquals(1, runs[0]);
+        assertEquals("spent", 0, clicker.click(() -> true, () -> true));
+        want[0] = false;
+        assertFalse(clicker.isClickTick());
     }
 }

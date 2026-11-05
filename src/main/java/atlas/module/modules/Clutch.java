@@ -486,6 +486,9 @@ public class Clutch extends Module {
     private int planLead;
     /** Stairs a diagonal lane walks along what is built before it stops looking: more than one jump can cross. */
     private static final int LANE_STAIR_CELLS = 16;
+    /** Ticks to the crossing at or under which a lane look is exact. */
+    private static final int LANE_HUMAN_TICKS = LANE_RESCUE_TICKS + 3;
+    private final atlas.humanize.Humanizer laneHuman = new atlas.humanize.Humanizer(atlas.humanize.Humanizer.CONSUMER_SCAFFOLD);
     private TellyLane lane;
     /** This tick's blocks go along the lane. */
     private boolean laneNow;
@@ -1961,6 +1964,13 @@ public class Clutch extends Module {
 
     /** A catch or pre-aim turn: step scaled by turn-random, yaw drifting while the look is steep. */
     private void turnTo(float targetYaw, float targetPitch, float step, boolean urgent) {
+        if (this.laneNow && this.laneCrossing > LANE_HUMAN_TICKS) {
+            /* SPEED-TELLY only, and only with time in hand: Humanization's aim error on the way to a lane block. None
+               near the block (HumanTurn.SETTLED) or close to the crossing, so a catch stays what it was. */
+            float[] look = atlas.humanize.HumanTurn.apply(this.laneHuman, this.sentYaw, this.sentPitch, targetYaw, targetPitch);
+            targetYaw = look[0];
+            targetPitch = look[1];
+        }
         float r = this.turnRandom.getValue() / 100.0F;
         if (r > 0.0F) {
             float u = wander(0);

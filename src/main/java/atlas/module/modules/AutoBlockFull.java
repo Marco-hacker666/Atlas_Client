@@ -270,7 +270,7 @@ final class AutoBlockFull {
 
     private boolean wanted() {
         return mc.currentScreen == null && !mc.thePlayer.isDead && ItemUtil.isHoldingSword()
-                && !atlas.util.Auras.blocksByItself() && !Arbiter.catching()
+                && !this.module.auraBlocksAlone() && !Arbiter.catching()
                 && KeyBindUtil.isKeyDown(mc.gameSettings.keyBindAttack.getKeyCode());
     }
 

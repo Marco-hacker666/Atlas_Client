@@ -83,12 +83,7 @@ public class KillAura extends Module {
        a hit ends the sprint for the landing. */
     public final IntProperty attackOnDamage = new IntProperty("AttackOnDamage", 0, 0, 4, this::atlasEngine);
     public final BooleanProperty noAirSprintHit = new BooleanProperty("NoAirSprintHit", false, this::atlasEngine);
-    /** Forced clicks left from the last knockback, and when they lapse. */
-    private volatile int damageHitsLeft;
-    private volatile long damageHitsUntil;
-    private volatile long lastKnockbackAt;
-    private static final long DAMAGE_HITS_MS = 500L;
-    private static final long DAMAGE_HITS_GAP_MS = 250L;
+    private final DamageHits damageHits = new DamageHits();
     /* Yuri auto-block modes (2026-10-24, KillAuraYuri): auto-block 11-14. */
     private static final int YURI_FIRST = 11;
     public final BooleanProperty yuriOnlyWhenHurt = new BooleanProperty("yuri-only-when-hurt", false,
@@ -858,7 +853,7 @@ public class KillAura extends Module {
                         && !this.aimedAt(yaw, pitch)) {
                     return false;
                 }
-                boolean forced = this.damageHitsLeft > 0;
+                boolean forced = this.damageHits.due(System.currentTimeMillis());
                 if (!forced && (this.noAirSprintHit.getValue() && !mc.thePlayer.onGround && mc.thePlayer.isSprinting()
                         || this.hitSelectHolds())) {
                     /* K7: no swing, no hit, no slowdown. */
@@ -866,7 +861,11 @@ public class KillAura extends Module {
                     return false;
                 }
                 if (forced) {
-                    this.damageHitsLeft--;
+                    this.damageHits.spend();
+                    HitSelect hitSelect = (HitSelect) Atlas.moduleManager.modules.get(HitSelect.class);
+                    if (hitSelect != null) {
+                        hitSelect.passForcedHit();
+                    }
                 }
 
                 /* Added to what is left, not set: the aura can only act on a
@@ -1485,12 +1484,8 @@ public class KillAura extends Module {
                 if (this.attackDelayMS > 0L) {
                     this.attackDelayMS -= 50L;
                 }
-                if (this.damageHitsLeft > 0) {
-                    if (System.currentTimeMillis() > this.damageHitsUntil) {
-                        this.damageHitsLeft = 0;
-                    } else {
-                        this.attackDelayMS = Math.min(this.attackDelayMS, 0L);
-                    }
+                if (this.damageHits.due(System.currentTimeMillis())) {
+                    this.attackDelayMS = Math.min(this.attackDelayMS, 0L);
                 }
                 /* Set again below by the Advanced branch; never carried over. */
                 this.kbDisplacing = false;
@@ -2415,16 +2410,8 @@ public class KillAura extends Module {
     /* Ahead of Velocity, which cancels the packet at HIGH: the hit was taken all the same. */
     @EventTarget(Priority.HIGHEST)
     public void onKnockback(PacketEvent event) {
-        if (this.isEnabled() && this.attackOnDamage.getValue() > 0 && mc.thePlayer != null
-                && event.getPacket() instanceof net.minecraft.network.play.server.S12PacketEntityVelocity
-                && ((net.minecraft.network.play.server.S12PacketEntityVelocity) event.getPacket()).getEntityID()
-                == mc.thePlayer.getEntityId()) {
-            long now = System.currentTimeMillis();
-            if (now - this.lastKnockbackAt > DAMAGE_HITS_GAP_MS) {
-                this.damageHitsLeft = this.attackOnDamage.getValue();
-                this.damageHitsUntil = now + DAMAGE_HITS_MS;
-            }
-            this.lastKnockbackAt = now;
+        if (this.isEnabled()) {
+            this.damageHits.onPacket(event, this.attackOnDamage.getValue());
         }
     }
 
@@ -2621,7 +2608,7 @@ public class KillAura extends Module {
             this.switchTick = 0;
             this.hitRegistered = false;
             this.attackDelayMS = 0L;
-            this.damageHitsLeft = 0;
+            this.damageHits.clear();
             this.blockTick = 0;
             /* Config.load enables modules at startup, before there is a
                player. The NPE here used to abort the rest of the config load,

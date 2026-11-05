@@ -4,13 +4,10 @@ import atlas.Atlas;
 import atlas.enums.BlinkModules;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
-import atlas.events.MoveInputEvent;
 import atlas.events.TickEvent;
 import atlas.events.UpdateEvent;
-import atlas.management.RotationState;
 import atlas.module.Module;
 import atlas.property.properties.*;
-import atlas.util.MoveUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -26,7 +23,11 @@ public class Hitflick extends Module {
        class's own flick, paused while another mode is picked. Settings and
        on/off saved under the old module names are read once (ModuleBundle
        .readLegacy). */
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"FLICK", "HAZARD", "DISPLACE"});
+    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"FLICK", "HAZARD", "DISPLACE", "VOID"});
+    /** VOID is DISPLACE's code with its own rule for which hit turns (Displace.voidMode). */
+    static final int MODE_VOID = 3;
+    /** The aim error of the turn for a hit, read from Humanization. */
+    static final atlas.humanize.Humanizer HUMAN = new atlas.humanize.Humanizer(atlas.humanize.Humanizer.CONSUMER_HITFLICK);
 
     public final ModeProperty direction = new ModeProperty("Direction", 0, new String[]{"Left", "Right", "Back", "Custom"});
     public final FloatProperty customAngle = new FloatProperty("Custom-Angle", 90F, 1F, 180F, () -> this.direction.getValue() == 3);
@@ -59,7 +60,6 @@ public class Hitflick extends Module {
     private long sinceLastFlick;
     private float originalYaw;
     private float flickYaw;
-    private float moveYaw = Float.NaN;
     private FlickState state = FlickState.IDLE;
     /* 2026-11-04 (owner: "fix FLICK too"). The flick came after the C02, and a server takes the knockback's yaw when it
        reads the C02, so it never steered anything. Now the hit waits: held at the click, the look turned in this tick's
@@ -170,7 +170,6 @@ public class Hitflick extends Module {
         if (!this.isEnabled()) return;
         if (event.getType() != EventType.PRE) return;
         if (mc.thePlayer == null) return;
-        moveYaw = Float.NaN;
 
         if (state == FlickState.IDLE) {
             sinceLastFlick++;
@@ -180,13 +179,15 @@ public class Hitflick extends Module {
         boolean aside = standsAside();
         if (state == FlickState.FLICKING_AWAY) {
             if (!aside) {
-                rotate(event, keepHitbox.getValue() && heldTarget != null
-                        ? Displace.clampToHitbox(heldTarget, flickYaw) : flickYaw);
+                /* The pitch the server has: with Silent Aura the camera's can be far off the target. */
+                float[] wanted = humanTurn(flickYaw, atlas.management.RotationHelper.serverPitch());
+                rotate(keepHitbox.getValue() && heldTarget != null
+                        ? Displace.clampToHitbox(heldTarget, wanted[0], wanted[1]) : wanted[0], wanted[1]);
             }
             state = FlickState.HIT_DUE;
         } else if (state == FlickState.RESTORING) {
             if (!aside) {
-                rotate(event, originalYaw);
+                rotate(originalYaw, atlas.management.RotationHelper.serverPitch());
             }
             state = FlickState.IDLE;
             sinceLastFlick = 0;
@@ -196,28 +197,29 @@ public class Hitflick extends Module {
         }
     }
 
-    private void rotate(UpdateEvent event, float yaw) {
-        event.setRotation(yaw, mc.thePlayer.rotationPitch, LOOK_PRIORITY);
-        moveYaw = moveFix.getValue() != 0 ? yaw : mc.thePlayer.rotationYaw;
-        event.setPervRotation(moveYaw, LOOK_PRIORITY);
+    /** The look for a hit, through the shared engine (2026-11-05): whole mouse counts, its wander with Rotations on, and a turn back handed over gradually. */
+    private void rotate(float yaw, float pitch) {
+        int move = moveFix.getValue() == 0 ? atlas.management.RotationHelper.MOVE_CAMERA
+                : moveFix.getValue() == 1 ? atlas.management.RotationHelper.MOVE_FIX
+                : atlas.management.RotationHelper.MOVE_LOOK;
+        /* NO_LIMIT as the first step too: this hit goes next tick, so the turn has one tick to land. */
+        float[] look = atlas.management.RotationHelper.request(this, yaw, pitch, LOOK_PRIORITY, move,
+                false, atlas.management.RotationHelper.NO_LIMIT, atlas.management.RotationHelper.NO_LIMIT);
+        if (look == null) {
+            return;
+        }
         if (moveFix.getModeString().equals("REAL")) {
             /* REAL: the camera turns as well, spread over this tick's frames by
                RotationManager; the mouse still works (not forced). */
-            Atlas.rotationManager.setRotation(yaw, mc.thePlayer.rotationPitch, LOOK_PRIORITY, false);
+            Atlas.rotationManager.setRotation(look[0], look[1], LOOK_PRIORITY, false);
         }
     }
 
-    @EventTarget
-    public void onMoveInput(MoveInputEvent event) {
-        if (!this.isEnabled()) return;
-        // Only this module's own rotation.
-        if (moveFix.getValue() == 1
-                && RotationState.isActived()
-                && RotationState.getPriority() == LOOK_PRIORITY
-                && RotationState.getSmoothedYaw() == moveYaw
-                && MoveUtil.isForwardPressed()) {
-            MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
-        }
+    /** A turn for a hit, with Humanization's aim error on it. Each turn is a fresh roll of overshoot and undershoot. */
+    static float[] humanTurn(float toYaw, float toPitch) {
+        HUMAN.reset();
+        return atlas.humanize.HumanTurn.apply(HUMAN, atlas.management.RotationHelper.serverYaw(),
+                atlas.management.RotationHelper.serverPitch(), toYaw, toPitch);
     }
 
     private float getFlickAngle() {
@@ -234,8 +236,12 @@ public class Hitflick extends Module {
                     new KBDisplacement(), "hazard", "Hazard", () -> this.mode.getValue() == 1)
             .deselectWith(() -> this.mode.setValue(0)).selectWith(() -> this.mode.setValue(1));
     public final atlas.module.ModuleBundle displaceMerged = atlas.module.ModuleBundle.forMode(this,
-                    new Displace(), "displace", "Displace", () -> this.mode.getValue() == 2)
-            .deselectWith(() -> this.mode.setValue(0)).selectWith(() -> this.mode.setValue(2));
+                    new Displace(), "displace", "Displace", () -> this.mode.getValue() >= 2)
+            .deselectWith(() -> this.mode.setValue(0)).selectWith(() -> {
+                if (this.mode.getValue() < 2) {
+                    this.mode.setValue(2);
+                }
+            });
 
     {
         this.pauseWhen(() -> this.mode.getValue() != 0);

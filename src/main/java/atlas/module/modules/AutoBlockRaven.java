@@ -187,7 +187,7 @@ final class AutoBlockRaven {
         boolean hurtAgain = hurt > this.lastHurt;
         this.lastHurt = hurt;
         /* Driven by the aura (BlockMode Raven), the aura's auto-block is this mode: standing aside would leave no block. */
-        if (!ItemUtil.isHoldingSword() || this.module.drivenMode() < 0 && atlas.util.Auras.blocksByItself()) {
+        if (!ItemUtil.isHoldingSword() || this.module.auraBlocksAlone()) {
             reset(false);
             return;
         }

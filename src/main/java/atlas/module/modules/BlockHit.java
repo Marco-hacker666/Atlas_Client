@@ -327,6 +327,15 @@ public class BlockHit extends Module {
         }
     }
 
+    /**
+     * The aura has the sword itself, so a mode of this module must keep its hands off: two owners of one use key raise
+     * and lower it against each other (2026-11-05, Yuri beside BlockMode Basic). Not when the aura drives this mode:
+     * then this mode is the aura's block, and standing aside would leave none.
+     */
+    boolean auraBlocksAlone() {
+        return BlockHitYuri.standsAside(this.drivenMode >= 0, atlas.util.Auras.blocksByItself());
+    }
+
     /** The mode index Silent Aura drives, or -1. */
     public int drivenMode() {
         return this.drivenMode;
@@ -584,7 +593,7 @@ public class BlockHit extends Module {
         int hurt = mc.thePlayer.hurtTime;
         boolean hurtAgain = hurt > this.sLastHurt;
         this.sLastHurt = hurt;
-        if (!ItemUtil.isHoldingSword() || atlas.util.Auras.blocksByItself()) {
+        if (!ItemUtil.isHoldingSword() || auraBlocksAlone()) {
             /* No sword, or the aura is blocking by itself: hands off. */
             slinkyReset(false);
             return;
@@ -975,7 +984,7 @@ public class BlockHit extends Module {
         if (this.manualTicks > 0 || mc.thePlayer.isUsingItem() || mc.currentScreen != null) {
             return;
         }
-        if (atlas.util.Auras.blocksByItself()) {
+        if (auraBlocksAlone()) {
             return;
         }
         if (Math.random() * 100.0 >= this.manualChance.getValue()) {
@@ -1006,7 +1015,7 @@ public class BlockHit extends Module {
             if (this.modeIndex() == 5) {
                 manualBlock();
             }
-            if (this.modeIndex() == 8) {
+            if (this.modeIndex() == 8 && !auraBlocksAlone()) {
                 this.yuri.hit(true, mc.thePlayer.getDistanceToEntity(event.getTarget()), this.yRange.getValue(),
                         Math.random(), this.yChance.getValue(), System.currentTimeMillis());
             }
@@ -1019,7 +1028,7 @@ public class BlockHit extends Module {
         if (event.getType() != EventType.PRE || mc.thePlayer == null) {
             return;
         }
-        if (!this.isRunning() || this.modeIndex() != 8 || !mc.inGameHasFocus) {
+        if (!this.isRunning() || this.modeIndex() != 8 || !mc.inGameHasFocus || auraBlocksAlone()) {
             if (this.yuri.blocking) {
                 KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), false);
             }

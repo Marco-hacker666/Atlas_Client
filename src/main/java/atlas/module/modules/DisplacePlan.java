@@ -57,6 +57,11 @@ final class DisplacePlan {
         return lockedTarget == target && tick - lastTurnTick < LOCK_TICKS;
     }
 
+    /** VOID: the nearer drop first; 90 degrees of turn weighs as a block of distance. */
+    static double edgeCost(double dropDistance, float turn) {
+        return dropDistance + turn / 90.0;
+    }
+
     /** A random offset in [-range, range], from a random number in [0, 1). */
     static float jitter(float range, double random) {
         return (float) ((random * 2.0 - 1.0) * range);

@@ -15,6 +15,7 @@ import atlas.events.TickEvent;
 import atlas.events.UpdateEvent;
 import atlas.event.types.EventType;
 import atlas.event.types.Priority;
+import atlas.management.RotationHelper;
 import atlas.module.Module;
 import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.FloatProperty;
@@ -91,8 +92,15 @@ public class Displace extends Module {
        Angle-random, Direction-lock and Only-facing-away work in both, and are off by default.
        Direction Random and the strafe ways are for when there is no void to aim for. */
     public final ModeProperty hitMode = new ModeProperty("Hit-mode", 0, new String[] {"Every", "Effective"});
-    public final IntProperty maxHurtTime = new IntProperty("Max-hurt-time", 3, 0, 10, () -> hitMode.getValue() == 1);
-    public final IntProperty hitCooldown = new IntProperty("Hit-cooldown", 500, 0, 3000, () -> hitMode.getValue() == 1);
+    public final IntProperty maxHurtTime = new IntProperty("Max-hurt-time", 3, 0, 10, () -> hitMode.getValue() == 1 || voidMode());
+    public final IntProperty hitCooldown = new IntProperty("Hit-cooldown", 500, 0, 3000, () -> hitMode.getValue() == 1 || voidMode());
+    /* 2026-11-05 (owner: "a Void mode: hit them into the void, only at the edge"). Hitflick mode VOID: only a target
+       with a drop within Void-edge blocks of it, the way clear, turns; the turn goes at the nearest drop, the smaller
+       turn winning a tie; every other hit goes at once. Max-hurt-time and Hit-cooldown apply. Void-max-turn is how far
+       off the line to the target a drop may be; Keep-hitbox caps it at KEEP_HITBOX_TURN, as a wider turn cannot land. */
+    public final FloatProperty voidEdge = new FloatProperty("Void-edge", 3.0F, 1.0F, 6.0F, Displace::voidMode);
+    public final FloatProperty voidMaxTurn = new FloatProperty("Void-max-turn", 90.0F, 10.0F, 150.0F, Displace::voidMode);
+    private static final float KEEP_HITBOX_TURN = 25.0F;
     public final FloatProperty angleRandom = new FloatProperty("Angle-random", 0F, 0F, 15F);
     public final BooleanProperty directionLock = new BooleanProperty("Direction-lock", false);
     public final BooleanProperty onlyFacingAway = new BooleanProperty("Only-facing-away", false);
@@ -194,14 +202,13 @@ public class Displace extends Module {
     }
 
     /** The yaw nearest to want, toward it from the target, whose ray from the eyes still meets the target's box. */
-    static float clampToHitbox(Entity target, float want) {
+    static float clampToHitbox(Entity target, float want, float pitch) {
         double dx = target.posX - mc.thePlayer.posX;
         double dz = target.posZ - mc.thePlayer.posZ;
         float base = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0F;
         float diff = MathHelper.wrapAngleTo180_float(want - base);
         float sign = Math.signum(diff);
         float most = Math.abs(diff);
-        float pitch = mc.thePlayer.rotationPitch;
         AxisAlignedBB box = target.getEntityBoundingBox().expand(0.1, 0.1, 0.1);
         if (RotationUtil.rayTrace(box, base, pitch, 6.0) == null) {
             /* The pitch is off the box too: none of these yaws would count. */
@@ -566,7 +573,6 @@ public class Displace extends Module {
                 || !shouldDisplaceInCurrentWindow(player, tickCounter)) {
             return false;
         }
-        lastTurnMs = System.currentTimeMillis();
         heldTarget = target;
         hitDue = false;
         return true;
@@ -577,9 +583,70 @@ public class Displace extends Module {
                 MathHelper.wrapAngleTo180_float(player.rotationYaw - mc.thePlayer.rotationYaw))) {
             return false;
         }
-        return hitMode.getValue() == 0 || DisplacePlan.worthTurning(player.hurtTime, maxHurtTime.getValue(),
-                mc.thePlayer.isSprinting(), EnchantmentHelper.getKnockbackModifier(mc.thePlayer) > 0,
-                System.currentTimeMillis() - lastTurnMs, hitCooldown.getValue());
+        boolean edge = voidMode();
+        if (hitMode.getValue() != 0 || edge) {
+            if (!DisplacePlan.worthTurning(player.hurtTime, maxHurtTime.getValue(), mc.thePlayer.isSprinting(),
+                    EnchantmentHelper.getKnockbackModifier(mc.thePlayer) > 0, System.currentTimeMillis() - lastTurnMs,
+                    hitCooldown.getValue())) {
+                return false;
+            }
+        }
+        return !edge || findEdgeVoidYaw(player) != null;
+    }
+
+    /** Hitflick is on its VOID mode. */
+    static boolean voidMode() {
+        if (Atlas.moduleManager == null) {
+            return false;
+        }
+        Hitflick flick = (Hitflick) Atlas.moduleManager.modules.get(Hitflick.class);
+        return flick != null && flick.mode.getValue() == Hitflick.MODE_VOID;
+    }
+
+    /** VOID: the yaw of the knock at the nearest drop past this target, or null when it is not at an edge. */
+    private Float findEdgeVoidYaw(EntityPlayer target) {
+        float aim = (float) Math.toDegrees(Math.atan2(target.posZ - mc.thePlayer.posZ, target.posX - mc.thePlayer.posX)) - 90.0F;
+        float maxTurn = keepHitbox.getValue() ? Math.min(voidMaxTurn.getValue(), KEEP_HITBOX_TURN) : voidMaxTurn.getValue();
+        AxisAlignedBB box = target.getEntityBoundingBox().contract(DYNAMIC_COLLISION_INSET, 0.0D, DYNAMIC_COLLISION_INSET);
+        double bestCost = Double.MAX_VALUE;
+        double bestX = 0.0D;
+        double bestZ = 0.0D;
+        for (int i = 0; i < VOID_SCAN_DIRECTIONS; i++) {
+            float turn = Math.abs(MathHelper.wrapAngleTo180_float(yawFromForward(VOID_SCAN_X[i], VOID_SCAN_Z[i]) - aim));
+            if (turn > maxTurn) {
+                continue;
+            }
+            double drop = edgeDistance(target, box, VOID_SCAN_X[i], VOID_SCAN_Z[i]);
+            if (drop < 0.0D) {
+                continue;
+            }
+            double cost = DisplacePlan.edgeCost(drop, turn);
+            if (cost < bestCost) {
+                bestCost = cost;
+                bestX = VOID_SCAN_X[i];
+                bestZ = VOID_SCAN_Z[i];
+            }
+        }
+        if (bestCost == Double.MAX_VALUE) {
+            return null;
+        }
+        updateDisplaceSide(target, target.posX + bestX, target.posZ + bestZ);
+        return yawFromForward(bestX, bestZ);
+    }
+
+    /** Blocks along this way to the first column with nothing under it, or -1: none within Void-edge, or a wall first. */
+    private double edgeDistance(EntityPlayer target, AxisAlignedBB box, double forwardX, double forwardZ) {
+        double checked = 0.0D;
+        for (double forward = VOID_SCAN_STEP; forward <= voidEdge.getValue() + 1.0E-4D; forward += VOID_SCAN_STEP) {
+            if (!isDynamicPathClear(target, box, forwardX, forwardZ, checked, forward)) {
+                return -1.0D;
+            }
+            checked = forward;
+            if (isVoidColumn(target.posX + forwardX * forward, target.posY, target.posZ + forwardZ * forward)) {
+                return forward;
+            }
+        }
+        return -1.0D;
     }
 
     /** The direction of the last turn holds for this target (Direction-lock). */
@@ -823,9 +890,17 @@ public class Displace extends Module {
         }
 
         boolean locked = directionLocked(target);
+        boolean edge = voidMode();
+        if (heldTarget != null && !locked) {
+            /* Rolled before the turn, so the side a lock then holds is the side this turn takes. */
+            randomLeft = Math.random() < 0.5D;
+        }
+        /* VOID always asks afresh: holdHit found a drop now, and the last turn's may be behind the target. */
         dynamicVoidYaw =
-                locked && lockedVoidYaw != null
+                !edge && locked && lockedVoidYaw != null
                         ? lockedVoidYaw
+                        : edge
+                        ? findEdgeVoidYaw(target)
                         : isDynamicAngle()
                         ? findDynamicVoidYaw(target)
                         : findVoid.getValue() ? findStaticVoidYaw(target) : null;
@@ -839,6 +914,12 @@ public class Displace extends Module {
         if (dynamicVoidYaw == null) {
             displaceLeft = DisplacePlan.left(direction.getValue(), lastStrafe, randomLeft);
         }
+        if (edge && dynamicVoidYaw == null) {
+            /* VOID never turns on open ground. A hit held just before the edge moved away goes on the normal look. */
+            renderDisplaceYaw = null;
+            renderTarget = null;
+            return;
+        }
         renderDisplaceYaw = dynamicVoidYaw != null ? dynamicVoidYaw : getFixedDisplaceYaw();
         renderTarget = target;
 
@@ -849,12 +930,20 @@ public class Displace extends Module {
         }
 
         Float turnVoidYaw = dynamicVoidYaw;
-        renderDisplaceYaw += DisplacePlan.jitter(angleRandom.getValue(), Math.random());
-        if (keepHitbox.getValue()) {
-            renderDisplaceYaw = clampToHitbox(target, renderDisplaceYaw);
+        /* The pitch the server has: with Silent Aura the camera's can be far off the target. */
+        float[] wanted = Hitflick.humanTurn(renderDisplaceYaw + DisplacePlan.jitter(angleRandom.getValue(), Math.random()),
+                RotationHelper.serverPitch());
+        float wantedYaw = keepHitbox.getValue() ? clampToHitbox(target, wanted[0], wanted[1]) : wanted[0];
+        /* Through the shared engine (2026-11-05): whole mouse counts, its wander with Rotations on, and the look handed
+           back gradually after, not in one jump. The hit goes next tick, so the turn gets this one tick. */
+        float[] look = RotationHelper.request(this, wantedYaw, wanted[1], 100, RotationHelper.MOVE_LOOK, false,
+                RotationHelper.NO_LIMIT, RotationHelper.NO_LIMIT);
+        if (look == null) {
+            return;
         }
+        renderDisplaceYaw = look[0];
+        lastTurnMs = System.currentTimeMillis();
         if (!locked) {
-            randomLeft = Math.random() < 0.5D;
             lockedVoidYaw = turnVoidYaw;
         }
         lockedTarget = target.getEntityId();
@@ -862,10 +951,8 @@ public class Displace extends Module {
         float turn = MathHelper.wrapAngleTo180_float(renderDisplaceYaw - mc.thePlayer.rotationYaw);
         displaceLeft = turn < 0.0F;
         turnedFar = Math.abs(turn) >= COMPENSATE_TURN;
-        e.setRotation(renderDisplaceYaw, mc.thePlayer.rotationPitch, 100);
         /* fixMovement here did nothing: this tick's keys are read after this event. The move has to go along the look
-           the server is told, and onPostInput sets the keys for it. */
-        e.setPervRotation(renderDisplaceYaw, 100);
+           the server is told (MOVE_LOOK), and onPostInput sets the keys for it. */
         displaceThisTick = true;
     }
 

@@ -24,6 +24,11 @@ final class BlockHitYuri {
     private long hitAt;
     private long pressedAt;
 
+    /** A mode beside an aura that blocks by itself stands aside, unless the aura is what drives it. */
+    static boolean standsAside(boolean drivenByAura, boolean auraBlocksByItself) {
+        return !drivenByAura && auraBlocksByItself;
+    }
+
     void reset() {
         this.blocking = false;
         this.pending = false;

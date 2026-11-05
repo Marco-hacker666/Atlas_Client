@@ -355,7 +355,9 @@ public final class ModuleDocs {
         d("BackTrack", "對手往後退時，暫時把他留在你最後看到的位置，讓攻擊還能打到伺服器記錄中的位置。");
         d("Hitflick", "改變你打出去的擊退方向：FLICK 打中瞬間甩開視角再轉回；HAZARD 靜默轉向附近的虛空或岩漿；DISPLACE 攻擊瞬間轉向虛空或指定角度。");
         help("Hitflick", "Keep-hitbox", "FLICK：只甩到視角還打得到對手碰撞箱的角度（Grim、Polar 會檢查），開著時只有 5～10 度。關掉可以照 Direction 甩滿，但會檢查視角的伺服器不算那一下。");
-        help("Hitflick", "mode", "FLICK：甩開再轉回。HAZARD：原本的 KBDisplacement。DISPLACE：原本的 Displace。各自的設定在下面。");
+        help("Hitflick", "mode", "FLICK：甩開再轉回。HAZARD：原本的 KBDisplacement。DISPLACE：原本的 Displace。VOID：只在目標靠近虛空邊緣時轉向，把人打下去。各自的設定在下面。");
+        help("Hitflick", "displace-Void-edge", "VOID：目標距離虛空邊緣幾格內才轉向。");
+        help("Hitflick", "displace-Void-max-turn", "VOID：虛空方向最多偏離目標方向幾度。開 Keep-hitbox 時上限 25 度。");
         d("ServerLag", "把伺服器送來的封包延後處理，模擬伺服器延遲；受傷、血量、音效、聊天照常即時。可當成 FakeLag 的「收到延遲」一起用。");
         d("FakeLag", "延後送出自己的移動，讓伺服器上的你落後於實際位置，方便先手。");
         d("HitSelect", "挑出手時機：只在對自己有利（例如減少吃擊退）的時候讓攻擊送出。所有模式都會管 Silent Aura 的攻擊。可用 combo、第一下、低血量、被打後反擊等條件放行。");
@@ -500,6 +502,8 @@ public final class ModuleDocs {
         d("Velocity", "減少或改變自己吃到的擊退。");
         d("Humanization", "讓戰鬥模組像人一樣：會揮空、會瞄偏、有反應時間。全域設定，Silent Aura 等模組都能套用。");
         help("Humanization", "preset", "一次填好所有數值：Legit（40%）、Good（55%）、Tryhard（70%）。之後每項都還能改；Custom 不會覆蓋。");
+        help("Humanization", "apply-hitflick", "套用到 Hitflick：轉向時加上抖動和過轉。");
+        help("Humanization", "apply-scaffold", "套用到 Scaffold 和 Speed Telly：轉向方塊的途中加上抖動，接近方塊時恢復精準。");
         help("Humanization", "apply-silent-aura", "套用到 Silent Aura（LiquidBounce 和 Atlas 引擎）。");
         help("Humanization", "hit-rate", "目標命中率：點擊中真正打到的比例。真人大約 40-60%。");
         help("Humanization", "hit-rate-spread", "命中率會在目標上下慢慢漂移的幅度（百分點）。");
@@ -693,6 +697,9 @@ public final class ModuleDocs {
         // ------------------------------------------------------------ CLIENT
         d("ClickGUIModule", "點擊選單的樣式設定：外觀、顏色、視窗大小。");
         d("GuiModule", "開啟點擊選單（預設右 Shift）。");
+        d("MoveCheck", "只記錄、不改任何東西：檢查你的移動跟送出的視角對不對得上，寫進 moves-*.txt。");
+        help("MoveCheck", "threshold", "移動差多少格才算對不上。");
+        help("MoveCheck", "log-every", "每幾秒寫一行統計。");
         d("FlagDetector", "偵測伺服器的拉回、方塊被退回、傷害被減，並推斷是哪個模組造成的。");
         d("FlagResponder", "某個模組一直被伺服器拉回時，自動把它關掉。");
         d("HitCheck", "統計哪幾刀真的有打到，並解釋沒打到的原因。");

@@ -52,6 +52,20 @@ public class DisplaceTest {
     }
 
     @Test
+    public void voidIsAHitflickModeAndKeepsItsSettingsOutOfTheOtherModes() {
+        Hitflick flick = new Hitflick();
+        assertTrue(flick.mode.parseString("VOID"));
+        assertEquals(Hitflick.MODE_VOID, flick.mode.getValue().intValue());
+        assertFalse(new Displace().voidEdge.isVisible());
+    }
+
+    @Test
+    public void theNearerDropWinsAndTheSmallerTurnBreaksATie() {
+        assertTrue(DisplacePlan.edgeCost(1.0, 80.0F) < DisplacePlan.edgeCost(2.5, 0.0F));
+        assertTrue(DisplacePlan.edgeCost(2.0, 10.0F) < DisplacePlan.edgeCost(2.0, 40.0F));
+    }
+
+    @Test
     public void onlyAHitThatCanDoSomethingIsWorthTheTick() {
         assertTrue(DisplacePlan.worthTurning(3, 3, true, false, 500L, 500L));
         assertTrue("Knockback needs no sprint", DisplacePlan.worthTurning(0, 3, false, true, 500L, 500L));

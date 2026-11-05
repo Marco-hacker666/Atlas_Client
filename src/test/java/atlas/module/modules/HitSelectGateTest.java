@@ -25,7 +25,7 @@ public class HitSelectGateTest {
         HitSelectGate gate = new HitSelectGate();
         gate.attacked(1, 7.0, 1000L);
         gate.hurt(1, 1100L);
-        gate.knockedBack();
+        gate.knockedBack(1200L);
         assertEquals(0, gate.combo(1200L));
         gate.attacked(1, 7.0, 2000L);
         gate.hurt(1, 2100L);
@@ -65,9 +65,19 @@ public class HitSelectGateTest {
         assertTrue(gate.waiting(1, 1150L, 200L));
         assertFalse(gate.waiting(1, 1200L, 200L));
         assertFalse("done until the player leaves", gate.waiting(1, 1250L, 200L));
-        gate.knockedBack();
+        gate.knockedBack(1260L);
         gate.attacked(1, 7.0, 1300L);
         assertFalse("hit once: not a first hit", gate.waiting(1, 1300L, 200L));
+    }
+
+    /** Knockback ends a wait: it must not start a new one for the next hit. */
+    @Test
+    public void knockbackDuringAWaitLetsTheNextHitGo() {
+        HitSelectGate gate = new HitSelectGate();
+        assertTrue(gate.waiting(1, 1000L, 300L));
+        gate.knockedBack(1100L);
+        assertFalse(gate.waiting(1, 1150L, 300L));
+        assertFalse("nor for anyone else", gate.waiting(2, 1200L, 300L));
     }
 
     @Test

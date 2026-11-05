@@ -74,7 +74,9 @@ final class ModuleDocsEn {
         d("BackTrack", "Keeps a retreating target where you last saw them a moment longer, so a swing reaches the position the server still has.");
         d("Hitflick", "Steers the knockback of your hits: FLICK flicks the view away on a hit and back; HAZARD silently aims it at nearby void or lava; DISPLACE turns at the hit toward the void or a set angle.");
         help("Hitflick", "Keep-hitbox", "FLICK: flick only as far as the look still meets the target's hitbox (Grim and Polar check that), about 5-10 degrees. Off: the full Direction, but a server that checks the look does not count the hit.");
-        help("Hitflick", "mode", "FLICK: the flick away and back. HAZARD: what KBDisplacement did. DISPLACE: what Displace did. Each has its own settings below.");
+        help("Hitflick", "mode", "FLICK: the flick away and back. HAZARD: what KBDisplacement did. DISPLACE: what Displace did. VOID: turns only when the target is near a void edge, to knock it off. Each has its own settings below.");
+        help("Hitflick", "displace-Void-edge", "VOID: the target has to be this many blocks from a void edge.");
+        help("Hitflick", "displace-Void-max-turn", "VOID: how far off the line to the target the void may be. At most 25 degrees with Keep-hitbox.");
         d("ServerLag", "Delays the packets the server sends, as if the server lagged; damage, health, sounds and chat still arrive at once. Works as FakeLag's incoming half.");
         d("FakeLag", "Delays your outgoing movement so the server's copy of you runs behind, for the first hit.");
         d("HitSelect", "Lets an attack through only when it suits you, e.g. when it costs less knockback. Every mode also decides Silent Aura's hits. Combo, first hit, low health and hit-back conditions can let hits through.");
@@ -120,6 +122,8 @@ final class ModuleDocsEn {
         help("Velocity", "polar-only-in-fight", "Polar: only with another player (not a bot or teammate) within 6 blocks.");
         d("Humanization", "Makes combat modules look human: they miss, aim off and take time to react. One global set of rules that Silent Aura and others apply.");
         help("Humanization", "preset", "Fills every value at once: Legit (40 %), Good (55 %), Tryhard (70 %). Each can still be changed; Custom overwrites nothing.");
+        help("Humanization", "apply-hitflick", "Applies to Hitflick: tremor and overshoot on its turns.");
+        help("Humanization", "apply-scaffold", "Applies to Scaffold and Speed Telly: tremor on the way to a block, exact once close to it.");
         help("Humanization", "apply-silent-aura", "Applies to Silent Aura (both engines, LiquidBounce and Atlas).");
         help("Humanization", "hit-rate", "The hit rate aimed for: clicks that land out of clicks. People land roughly 40-60 %.");
         help("Humanization", "hit-rate-spread", "How far the rate slowly wanders around the aim (points).");
@@ -415,6 +419,9 @@ final class ModuleDocsEn {
         help("ClickGUIModule", "glide-accent", "Glide style: the colour of enabled modules, switches and sliders.");
         help("ClickGUIModule", "glide-blur", "Glide style: blur the world behind the panels. Off is lighter on weak PCs.");
         d("GuiModule", "Opens the click menu (Right Shift by default).");
+        d("MoveCheck", "Log only, changes nothing: checks whether your moves fit the look you send, in moves-*.txt.");
+        help("MoveCheck", "threshold", "How many blocks off a move has to be to count as not fitting.");
+        help("MoveCheck", "log-every", "Seconds between summary lines.");
         d("FlagDetector", "Detects server corrections, refused blocks and reduced damage, and works out which module caused them.");
         d("FlagResponder", "Switches off a module the server keeps correcting.");
         d("HitCheck", "Counts which swings landed and explains the misses.");

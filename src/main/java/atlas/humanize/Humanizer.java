@@ -22,7 +22,9 @@ public final class Humanizer {
     public static final int CONSUMER_KILLAURA2 = 2;
     public static final int CONSUMER_AIMASSIST = 3;
     public static final int CONSUMER_AUTOCLICKER = 4;
-    public static final int CONSUMERS = 5;
+    public static final int CONSUMER_HITFLICK = 5;
+    public static final int CONSUMER_SCAFFOLD = 6;
+    public static final int CONSUMERS = 7;
 
     /** Published by the Humanization module each tick: the profile, and who it applies to. */
     private static volatile HumanProfile published;

@@ -603,6 +603,12 @@ public final class ModuleDocs {
         help("Pointers", "scale", "箭頭大小。");
         help("Pointers", "radius", "圓圈半徑。");
         help("Pointers", "distance-radius", "越遠的人箭頭離準心越遠。");
+        d("TellyRecorder", "錄下真人怎麼疊橋（Telly），之後用來讓 Speed Telly 更像真人。開著就會錄，關掉就存檔，檔案在 config/Atlas/recordings。會錄你自己（視角、位置、按鍵、放方塊；開著 Scaffold、Clutch 或 BridgeAssist 的 tick 會標記起來；BridgeAssist 只會自動蹲，不影響視角和點擊，所以開著它錄也可以用；AimAssist、Silent Aura 的 Legit／LockView 轉頭等會自己動視角的功能開著時也會標記，那些 tick 不會拿來用）和附近的其他玩家（伺服器傳來的原始視角和位置，以及他們腳下出現的方塊）。資料只存在你電腦裡；其他玩家只記成編號，不記名字、UUID 或伺服器位址。");
+        help("TellyRecorder", "record-self", "錄你自己。錄的時候請關掉 Scaffold 和 Clutch，自己疊；BridgeAssist 可以開。");
+        help("TellyRecorder", "record-others", "錄附近的其他玩家。");
+        help("TellyRecorder", "range", "多遠內的玩家才錄（格）。");
+        help("TellyRecorder", "only-bridging", "只錄正在疊橋的人：他們腳下出現方塊前 2 秒到最後一個方塊後 3 秒。關掉就錄範圍內所有人。");
+        help("TellyRecorder", "max-file-mb", "檔案到這個大小就自動停止。");
         d("PingFix", "延遲類功能扣住封包時，Keep-Alive 封包照常立刻送出／處理，Tab 顯示的 ping 維持你的真實 ping，不會跟著暴增。會讓 PingSpoof 和 Disabler 扣不住 Keep-Alive。（來源：Slinky）");
         d("ItemUseFix", "挖方塊時也能使用物品（吃東西、舉劍、丟東西）：原版挖方塊時右鍵會被忽略。（來源：Slinky）");
         help("KeepSprint", "motion-min", "打中人時保留多少速度（%，每下從 min～max 之間隨機）。100＝完全不減速，60＝原版。參考 LiquidBounce NextGen。");

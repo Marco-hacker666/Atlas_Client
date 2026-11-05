@@ -54,6 +54,11 @@ public class BlockHit extends Module {
     private final BooleanProperty sRequireLeft = new BooleanProperty("require-left-click", true, slinky);
     private final BooleanProperty sRequireRight = new BooleanProperty("require-right-click", false, slinky);
     private final BooleanProperty sRequireDamage = new BooleanProperty("require-damage", false, slinky);
+    /* 2026-11-05 (OpenB4): a hold of a fixed length is a rhythm; and a pause after lowering spaces the block out. */
+    private final IntProperty sRandomHold = new IntProperty("random-hold-ticks", 0, 0, 5, slinky);
+    private final IntProperty sCooldown = new IntProperty("block-cooldown-ms", 0, 0, 500, slinky);
+    private int sExtraHold;
+    private long sBlockEndedAt = -1L;
     private final IntProperty sHurt = new IntProperty("max-hurt-time", 6, 1, 10,
             () -> slinky.getAsBoolean() && this.sRequireDamage.getValue());
     private final BooleanProperty sFake = new BooleanProperty("fake-animation", false, slinky);
@@ -86,6 +91,17 @@ public class BlockHit extends Module {
     final BooleanProperty ravenBlockAgain = new BooleanProperty("raven-block-again-immediately", true,
             () -> ravenMode.getAsBoolean() && this.ravenLagChance.getValue() > 0);
     final BooleanProperty ravenAnimation = new BooleanProperty("raven-block-animation", true, ravenMode);
+    /* 2026-11-05 (owner: "build what the others have"; OpenB4 and Raven bS, behaviour only). Off by default. */
+    /* Off: right click has to be held, as Raven. On: no button needed, an enemy in range is enough. */
+    final BooleanProperty ravenAuto = new BooleanProperty("raven-auto", false, ravenMode);
+    final IntProperty ravenRandomHold = new IntProperty("raven-random-hold-ms", 0, 0, 300, ravenMode);
+    final IntProperty ravenCooldown = new IntProperty("raven-cooldown-ms", 0, 0, 500, ravenMode);
+    final BooleanProperty ravenReleaseOnHit = new BooleanProperty("raven-release-on-hit", false, ravenMode);
+    final BooleanProperty ravenNoChasing = new BooleanProperty("raven-no-chasing", false, ravenMode);
+    final ModeProperty ravenOutOfRange = new ModeProperty("raven-out-of-range", 0,
+            new String[]{"Keep", "Once", "Always", "Fake"}, ravenMode);
+    final BooleanProperty ravenForceAttack = new BooleanProperty("raven-force-attack", false, ravenMode);
+    final BooleanProperty ravenMobs = new BooleanProperty("raven-mobs", false, ravenMode);
     private final AutoBlockRaven raven = new AutoBlockRaven(this);
     /* ---- Full (2026-10-21): sword up whenever an enemy is in range, every hit swapped in within
        one tick (release, hit, block again), so the server has it up for every hit taken. See AutoBlockFull. */
@@ -615,7 +631,7 @@ public class BlockHit extends Module {
                 slinkyStart(tick);
             }
             if (this.sBlocking) {
-                int hold = this.sHold.getValue();
+                int hold = this.sHold.getValue() + this.sExtraHold;
                 boolean stop = this.sBlockStart >= 0 && tick - this.sBlockStart >= hold;
                 if (this.sRequireDamage.getValue() && hurtAgain) {
                     stop = true;
@@ -632,9 +648,11 @@ public class BlockHit extends Module {
     }
 
     private void slinkyStart(int tick) {
-        if (!ItemUtil.isHoldingSword()) {
+        long since = this.sBlockEndedAt < 0L ? -1L : System.currentTimeMillis() - this.sBlockEndedAt;
+        if (!ItemUtil.isHoldingSword() || AutoBlockRules.coolingDown(this.sCooldown.getValue(), since)) {
             return;
         }
+        this.sExtraHold = AutoBlockRules.extraHoldTicks(this.sRandomHold.getValue(), Math.random(), Math.random());
         int key = mc.gameSettings.keyBindUseItem.getKeyCode();
         KeyBindUtil.setKeyBindState(key, true);
         net.minecraft.client.settings.KeyBinding.onTick(key);
@@ -645,6 +663,9 @@ public class BlockHit extends Module {
     private void slinkyStop(boolean force) {
         if (this.sBlocking || force) {
             KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), false);
+            if (this.sBlocking) {
+                this.sBlockEndedAt = System.currentTimeMillis();
+            }
             this.sBlocking = false;
             this.sBlockStart = -1;
         }
@@ -731,8 +752,8 @@ public class BlockHit extends Module {
     /** While held packets wait, a right click must not raise the sword on its own. */
     @EventTarget
     public void onSlinkyRightClick(atlas.events.RightClickMouseEvent event) {
-        if (this.isRunning() && (this.sLagging || this.raven.lagging()) && mc.currentScreen == null
-                && ItemUtil.isHoldingSword()) {
+        if (this.isRunning() && (this.sLagging || this.raven.lagging() || this.modeIndex() == 9 && this.raven.cancelsUse())
+                && mc.currentScreen == null && ItemUtil.isHoldingSword()) {
             event.setCancelled(true);
         }
     }

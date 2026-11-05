@@ -5,6 +5,7 @@ import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.event.types.Priority;
 import atlas.events.LeftClickMouseEvent;
+import atlas.events.LoadWorldEvent;
 import atlas.events.PacketEvent;
 import atlas.events.TickEvent;
 import atlas.events.UpdateEvent;
@@ -13,15 +14,21 @@ import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.IntProperty;
 import atlas.property.properties.ModeProperty;
 import atlas.property.properties.PercentProperty;
+import atlas.util.ItemUtil;
 import atlas.util.KeyBindUtil;
 import atlas.util.TeamUtil;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.entity.EntityPlayerSP;
+import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.SharedMonsterAttributes;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.projectile.EntityLargeFireball;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C0BPacketEntityAction;
+import net.minecraft.network.play.server.S19PacketEntityStatus;
+import net.minecraft.potion.Potion;
 import net.minecraft.util.Vec3;
 
 public class HitSelect extends Module {
@@ -80,6 +87,40 @@ public class HitSelect extends Module {
             () -> this.mode.getValue() == 3 && this.burst.getValue());
     public final BooleanProperty reduce = new BooleanProperty("reduce", true, () -> this.mode.getValue() == 3);
 
+    /* 2026-11-05 (owner: bring in what OpenB4 and the other clients do better), behaviour only, every mode, each off
+       by default:
+
+       only-in-combo: hold nothing until this many hits in a row have landed (the server's hurt status on the target
+       just attacked). Knockback on this player or COMBO_MS without an attack ends the combo.
+       first-hit: the first attack on a target in FIRST_HIT_MS always goes.
+       wait-first: milliseconds to hold a first hit, for the other side to come in. Knockback ends it.
+       low-health: at or under this health nothing is held.
+       hit-back: ticks after knockback in which nothing is held.
+       only-jumping, weapon-only: hold only with the jump key down, or with a sword or tool in hand.
+       more-damage: a held hit goes if it beats the last one on the target (a critical after a plain hit): inside its
+       hurt time the server takes the difference.
+       fake-swing: a held hit swings on this client only. */
+    public final IntProperty onlyInCombo = new IntProperty("only-in-combo", 0, 0, 10);
+    public final BooleanProperty firstHit = new BooleanProperty("first-hit", false);
+    public final IntProperty waitFirst = new IntProperty("wait-first", 0, 0, 500);
+    public final IntProperty lowHealth = new IntProperty("low-health", 0, 0, 20);
+    public final IntProperty hitBack = new IntProperty("hit-back", 0, 0, 10);
+    public final BooleanProperty onlyJumping = new BooleanProperty("only-jumping", false);
+    public final BooleanProperty weaponOnly = new BooleanProperty("weapon-only", false);
+    public final BooleanProperty moreDamage = new BooleanProperty("more-damage", false);
+    public final BooleanProperty fakeSwing = new BooleanProperty("fake-swing", false);
+
+    private final HitSelectGate gate = new HitSelectGate();
+    /** Ticks of hit-back still running. */
+    private volatile int hitBackLeft;
+    /** The chance is rolled once for each aura hit, not on every tick the hit waits. */
+    private boolean auraRolled;
+    private boolean auraSkips;
+    /** The aura is holding a hit now: one held hit counts once, however many ticks it waits. */
+    private boolean auraHolding;
+    /** The tick the aura's hit was let through: its click, if it makes one, is not judged a second time. */
+    private int auraPassedTick = -1;
+
     /** Burst clicks still to make, one a tick, and on whom. */
     private int burstLeft;
     private int burstTarget = -1;
@@ -116,6 +157,9 @@ public class HitSelect extends Module {
             return;
         }
 
+        if (event.getType() != EventType.POST && this.hitBackLeft > 0) {
+            this.hitBackLeft--;
+        }
         if (event.getType() == EventType.POST) {
             this.resetMotion();
         } else if (this.velocityTicks > 0) {
@@ -151,11 +195,15 @@ public class HitSelect extends Module {
             drop(event);
             return;
         }
+        if (this.auraPassedTick == mc.thePlayer.ticksExisted) {
+            /* simulate-clicks: the aura's click, already let through. A second look would find the opening taken. */
+            return;
+        }
         this.lastClickMs = System.currentTimeMillis();
         EntityLivingBase target = mc.objectMouseOver != null
                 && mc.objectMouseOver.entityHit instanceof EntityLivingBase
                 ? (EntityLivingBase) mc.objectMouseOver.entityHit : null;
-        if (this.activeDrops(target)) {
+        if (this.activeDrops(target, false)) {
             drop(event);
             if (target != null) {
                 this.waited++;
@@ -240,26 +288,118 @@ public class HitSelect extends Module {
     }
 
     /**
-     * K7 (2026-10-08): KillAura asks before an aura hit. True when ACTIVE
-     * would drop this click on {@code target} -- the same decision as for a
-     * hand click, so the aura and the mouse never follow two rules. The aura
-     * counts a dropped click as a click (its CPS rhythm goes on), as a hand
-     * click dropped here is still a click.
+     * K7 (2026-10-08): KillAura asks before an aura hit. True when this hit
+     * is to be held -- the same decision as for a hand click, so the aura and
+     * the mouse never follow two rules. 2026-11-05: every mode answers here,
+     * before the aura swings or tells anyone it hit. SECOND, CRITICALS and
+     * W_TAP used to cancel the packet after that, so Criticals, SprintReset
+     * and the rest acted on a hit that never went out. The aura may ask on
+     * every tick while it waits.
      */
     public boolean dropsAuraHit(EntityLivingBase target) {
-        if (!this.isEnabled() || this.mode.getValue() != 3 || mc.thePlayer == null || target == null) {
+        if (!this.isEnabled() || mc.thePlayer == null || target == null) {
             return false;
         }
-        if (this.activeDrops(target)) {
-            this.dropped++;
+        boolean holds = this.mode.getValue() == 3 ? this.activeDrops(target, true)
+                : !this.letThrough(target) && (this.firstHitWaits(target) || !this.ruleLetsThrough(target));
+        if (holds) {
+            if (!this.auraHolding) {
+                this.auraHolding = true;
+                this.dropped++;
+            }
+            this.swingLocally();
             return true;
         }
+        this.auraHolding = false;
+        this.auraRolled = false;
+        this.auraPassedTick = mc.thePlayer.ticksExisted;
         return false;
     }
 
+    /** Nothing is held for this hit, whatever the mode says. */
+    private boolean letThrough(EntityLivingBase target) {
+        if (this.lowHealth.getValue() > 0 && !mc.thePlayer.capabilities.isCreativeMode
+                && mc.thePlayer.getHealth() <= this.lowHealth.getValue()) {
+            return true;
+        }
+        if (this.onlyJumping.getValue() && !mc.gameSettings.keyBindJump.isKeyDown()) {
+            return true;
+        }
+        if (this.weaponOnly.getValue() && !ItemUtil.isHoldingSword() && !ItemUtil.isHoldingTool()) {
+            return true;
+        }
+        if (this.hitBackLeft > 0) {
+            return true;
+        }
+        long now = System.currentTimeMillis();
+        int id = target.getEntityId();
+        if (this.onlyInCombo.getValue() > 0 && this.gate.combo(now) < this.onlyInCombo.getValue()) {
+            return true;
+        }
+        if (this.firstHit.getValue() && this.gate.firstHit(id, now)) {
+            return true;
+        }
+        return this.moreDamage.getValue() && target.hurtTime > 0 && this.gate.beats(id, hitDamage(target));
+    }
+
+    private boolean firstHitWaits(EntityLivingBase target) {
+        return this.waitFirst.getValue() > 0 && !this.firstHit.getValue()
+                && this.gate.waiting(target.getEntityId(), System.currentTimeMillis(), this.waitFirst.getValue());
+    }
+
+    /** What this hit would do, as the server works it out before armour. */
+    private static double hitDamage(EntityLivingBase target) {
+        EntityPlayerSP player = mc.thePlayer;
+        double base = player.getEntityAttribute(SharedMonsterAttributes.attackDamage).getAttributeValue();
+        double enchantment = EnchantmentHelper.getModifierForCreature(player.getHeldItem(), target.getCreatureAttribute());
+        boolean critical = player.fallDistance > 0.0F && !player.onGround && !player.isOnLadder() && !player.isInWater()
+                && !player.isPotionActive(Potion.blindness) && player.ridingEntity == null;
+        return HitSelectGate.damage(base, enchantment, critical);
+    }
+
+    /** SECOND, CRITICALS or W_TAP on this hit, with no side effect. */
+    private boolean ruleLetsThrough(EntityLivingBase target) {
+        switch (this.mode.getValue()) {
+            case 0:
+                return this.secondHitGoes(mc.thePlayer, target);
+            case 1:
+                return this.criticalHitGoes(mc.thePlayer);
+            case 2:
+                return this.wTapHitGoes(mc.thePlayer, this.sprintState);
+            default:
+                return true;
+        }
+    }
+
+    /** The hand's arm only: nothing goes to the server, and the arm is not restarted in the first half of a swing. */
+    private void swingLocally() {
+        EntityPlayerSP player = mc.thePlayer;
+        if (this.fakeSwing.getValue() && (!player.isSwingInProgress || player.swingProgressInt >= 3
+                || player.swingProgressInt < 0)) {
+            player.swingProgressInt = -1;
+            player.isSwingInProgress = true;
+        }
+    }
+
     /** ACTIVE's rule for one click; target may be null (nothing under the crosshair). */
-    private boolean activeDrops(EntityLivingBase target) {
-        if (Math.random() * 100.0 >= this.chance.getValue()) {
+    private boolean activeDrops(EntityLivingBase target, boolean aura) {
+        if (target != null) {
+            if (this.letThrough(target)) {
+                return false;
+            }
+            if (this.firstHitWaits(target)) {
+                return true;
+            }
+        }
+        if (aura) {
+            if (!this.auraRolled) {
+                this.auraRolled = true;
+                this.auraSkips = Math.random() * 100.0 >= this.chance.getValue();
+            }
+            if (this.auraSkips) {
+                return false;
+            }
+        } else if (Math.random() * 100.0 >= this.chance.getValue()) {
             return false;
         }
         if (this.velocityTicks > 0) {
@@ -318,6 +458,7 @@ public class HitSelect extends Module {
     private void drop(LeftClickMouseEvent event) {
         event.setCancelled(true);
         this.dropped++;
+        this.swingLocally();
     }
 
     @EventTarget(Priority.HIGHEST)
@@ -326,6 +467,14 @@ public class HitSelect extends Module {
             return;
         }
         if (event.getType() == EventType.RECEIVE) {
+            if (event.getPacket() instanceof S19PacketEntityStatus && mc.theWorld != null) {
+                S19PacketEntityStatus status = (S19PacketEntityStatus) event.getPacket();
+                Entity hurt = status.getOpCode() == 2 ? status.getEntity(mc.theWorld) : null;
+                if (hurt != null) {
+                    this.gate.hurt(hurt.getEntityId(), System.currentTimeMillis());
+                }
+                return;
+            }
             if (event.getPacket() instanceof net.minecraft.network.play.server.S12PacketEntityVelocity
                     && mc.thePlayer != null
                     && ((net.minecraft.network.play.server.S12PacketEntityVelocity) event.getPacket()).getEntityID()
@@ -333,6 +482,8 @@ public class HitSelect extends Module {
                 this.velocityTicks = VELOCITY_TICKS;
                 this.sinceVelocity = 0;
                 this.reducedThisKnockback = false;
+                this.hitBackLeft = this.hitBack.getValue();
+                this.gate.knockedBack();
             }
             return;
         }
@@ -371,9 +522,15 @@ public class HitSelect extends Module {
 
             EntityLivingBase living = (EntityLivingBase) target;
             boolean allow = true;
+            boolean decided = this.mode.getValue() != 3 && this.letThrough(living);
+            if (!decided && this.mode.getValue() != 3 && this.firstHitWaits(living)) {
+                decided = true;
+                allow = false;
+                this.fixMotion();
+            }
 
-            switch (this.mode.getValue()) {
-                case 3: // ACTIVE decides at the click, above
+            switch (decided ? 3 : this.mode.getValue()) {
+                case 3: // ACTIVE decides at the click, above; or the checks just made
                     break;
                 case 0: // SECOND
                     allow = this.prioritizeSecondHit(mc.thePlayer, living);
@@ -391,11 +548,21 @@ public class HitSelect extends Module {
                 this.blockedHits++;
             } else {
                 this.allowedHits++;
+                this.gate.attacked(living.getEntityId(), hitDamage(living), System.currentTimeMillis());
             }
         }
     }
 
     private boolean prioritizeSecondHit(EntityLivingBase player, EntityLivingBase target) {
+        if (this.secondHitGoes(player, target)) {
+            return true;
+        }
+        // Block the hit and fix motion
+        this.fixMotion();
+        return false;
+    }
+
+    private boolean secondHitGoes(EntityLivingBase player, EntityLivingBase target) {
         // If target is already hurt, allow the hit
         if (target.hurtTime != 0) {
             return true;
@@ -417,16 +584,19 @@ public class HitSelect extends Module {
             return true;
         }
 
-        if (!this.isMovingTowards(player, target, 60.0)) {
+        return !this.isMovingTowards(player, target, 60.0);
+    }
+
+    private boolean prioritizeCriticalHits(EntityLivingBase player) {
+        if (this.criticalHitGoes(player)) {
             return true;
         }
-
         // Block the hit and fix motion
         this.fixMotion();
         return false;
     }
 
-    private boolean prioritizeCriticalHits(EntityLivingBase player) {
+    private boolean criticalHitGoes(EntityLivingBase player) {
         // If on ground, allow the hit
         if (player.onGround) {
             return true;
@@ -438,16 +608,19 @@ public class HitSelect extends Module {
         }
 
         // If falling, allow the hit (for crits)
-        if (player.fallDistance > 0.0f) {
+        return player.fallDistance > 0.0f;
+    }
+
+    private boolean prioritizeWTapHits(EntityLivingBase player, boolean sprinting) {
+        if (this.wTapHitGoes(player, sprinting)) {
             return true;
         }
-
         // Block the hit and fix motion
         this.fixMotion();
         return false;
     }
 
-    private boolean prioritizeWTapHits(EntityLivingBase player, boolean sprinting) {
+    private boolean wTapHitGoes(EntityLivingBase player, boolean sprinting) {
         // If against wall, allow the hit
         if (player.isCollidedHorizontally) {
             return true;
@@ -459,13 +632,7 @@ public class HitSelect extends Module {
         }
 
         // If already sprinting, allow the hit
-        if (sprinting) {
-            return true;
-        }
-
-        // Block the hit and fix motion
-        this.fixMotion();
-        return false;
+        return sprinting;
     }
 
     private void fixMotion() {
@@ -562,6 +729,12 @@ public class HitSelect extends Module {
         return dotProduct >= Math.cos(Math.toRadians(maxAngle));
     }
 
+    @EventTarget
+    public void onWorld(LoadWorldEvent event) {
+        this.gate.clear();
+        this.hitBackLeft = 0;
+    }
+
     @Override
     public void onDisabled() {
         this.resetMotion();
@@ -571,6 +744,10 @@ public class HitSelect extends Module {
         this.blockedHits = 0;
         this.allowedHits = 0;
         this.velocityTicks = 0;
+        this.hitBackLeft = 0;
+        this.gate.clear();
+        this.auraRolled = false;
+        this.auraHolding = false;
         this.dropped = 0;
         this.burstLeft = 0;
         this.waited = 0;

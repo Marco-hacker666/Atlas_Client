@@ -92,6 +92,19 @@ public class Hitflick extends Module {
         }
     }
 
+    /**
+     * 2026-11-05 (owner: mitigation with Scaffold, Silent Aura and Hitflick together). Scaffold and a Clutch catch place
+     * by their own look at priority 7 at most; a turn here is 100, so it took the look from under a placement. No turn
+     * while they run: the hit goes on the look they have.
+     */
+    static boolean standsAside() {
+        if (atlas.management.Arbiter.catching()) {
+            return true;
+        }
+        Module scaffold = Atlas.moduleManager == null ? null : Atlas.moduleManager.modules.get(Scaffold.class);
+        return scaffold != null && scaffold.isEnabled();
+    }
+
     /** Called for every attack before anything is sent. True: this module sends the hit itself, after the flick. */
     public boolean holdHit(Entity target) {
         if (sendingHit || !this.isRunning() || mc.thePlayer == null) return false;
@@ -99,6 +112,7 @@ public class Hitflick extends Module {
             /* A second click on the same target would land first, along the look before the flick. */
             return target == heldTarget;
         }
+        if (standsAside()) return false;
         if (target == null || target == mc.thePlayer) return false;
         if (!(target instanceof EntityLivingBase)) return false;
         /* Cooldown 1 is every hit (owner: "can't every hit count?"): the tick of the turn back counts, and a hit on it
@@ -163,12 +177,17 @@ public class Hitflick extends Module {
             return;
         }
 
+        boolean aside = standsAside();
         if (state == FlickState.FLICKING_AWAY) {
-            rotate(event, keepHitbox.getValue() && heldTarget != null
-                    ? Displace.clampToHitbox(heldTarget, flickYaw) : flickYaw);
+            if (!aside) {
+                rotate(event, keepHitbox.getValue() && heldTarget != null
+                        ? Displace.clampToHitbox(heldTarget, flickYaw) : flickYaw);
+            }
             state = FlickState.HIT_DUE;
         } else if (state == FlickState.RESTORING) {
-            rotate(event, originalYaw);
+            if (!aside) {
+                rotate(event, originalYaw);
+            }
             state = FlickState.IDLE;
             sinceLastFlick = 0;
             if (blink.getValue()) {

@@ -1666,6 +1666,12 @@ public class KillAuraLB extends Module {
                 ((IAccessorPlayerControllerMP) mc.playerController).getIsHittingBlock());
     }
 
+    private static boolean hitSelectHolds(Entity target) {
+        HitSelect hitSelect = (HitSelect) atlas.Atlas.moduleManager.modules.get(HitSelect.class);
+        return hitSelect != null && target instanceof net.minecraft.entity.EntityLivingBase
+                && hitSelect.dropsAuraHit((net.minecraft.entity.EntityLivingBase) target);
+    }
+
     private void attackTarget(Entity target, Rotation rotation) {
         if (rhythmSelected()) {
             /* Rhythm decides both the click and the block; none of the paths below runs. */
@@ -1680,6 +1686,14 @@ public class KillAuraLB extends Module {
         if (inRange && !lagOk(target)) {
             /* LagAware: in reach as shown, not where the server will have the target when the hit lands. Hold
                the click (nothing sent, the click plan keeps it) rather than land a hit valid only on an old place. */
+            return;
+        }
+        if (inRange && this.clicker.isClickTick() && hitSelectHolds(target)) {
+            /* 2026-11-05: this engine never asked HitSelect, so ACTIVE did nothing for it and the other modes cut the
+               packet after the swing. The click is spent with nothing sent, as for the sword kept up below: the plan
+               drops a press unused on its tick, and spending it keeps the combo from counting as idle. */
+            this.verdict = null;
+            this.clicker.click(this::missOk, () -> false);
             return;
         }
         if (inRange && this.lbOwnsKey && mc.thePlayer.isUsingItem() && this.clicker.isClickTick()

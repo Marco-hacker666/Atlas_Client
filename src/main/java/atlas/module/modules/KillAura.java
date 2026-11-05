@@ -78,6 +78,17 @@ public class KillAura extends Module {
     public ModeProperty autoBlock;
     /* Read by NoSlow ("No Attack" with SWAP autoblock): the block tick on which no hit goes out. */
     public final IntProperty attackTick = new IntProperty("AttackTick", 0, 1, 5, () -> this.autoBlock.getValue() == 6);
+    /* 2026-11-05 (behaviour seen in OpenB4; off by default). AttackOnDamage: this many clicks after this player takes
+       knockback go at once, past the CPS and past HitSelect. NoAirSprintHit: no click while sprinting in the air, where
+       a hit ends the sprint for the landing. */
+    public final IntProperty attackOnDamage = new IntProperty("AttackOnDamage", 0, 0, 4, this::atlasEngine);
+    public final BooleanProperty noAirSprintHit = new BooleanProperty("NoAirSprintHit", false, this::atlasEngine);
+    /** Forced clicks left from the last knockback, and when they lapse. */
+    private volatile int damageHitsLeft;
+    private volatile long damageHitsUntil;
+    private volatile long lastKnockbackAt;
+    private static final long DAMAGE_HITS_MS = 500L;
+    private static final long DAMAGE_HITS_GAP_MS = 250L;
     /* Yuri auto-block modes (2026-10-24, KillAuraYuri): auto-block 11-14. */
     private static final int YURI_FIRST = 11;
     public final BooleanProperty yuriOnlyWhenHurt = new BooleanProperty("yuri-only-when-hurt", false,
@@ -812,10 +823,21 @@ public class KillAura extends Module {
         return point.distanceTo(new Vec3(x, y, z));
     }
 
-    /** K7 (2026-10-08): the user's HitSelect (ACTIVE) decides about aura hits too. */
+    /** K7 (2026-10-08): the user's HitSelect decides about aura hits too. */
     private boolean hitSelectHolds() {
         HitSelect hitSelect = (HitSelect) Atlas.moduleManager.modules.get(HitSelect.class);
         return hitSelect != null && this.target != null && hitSelect.dropsAuraHit(this.target.getEntity());
+    }
+
+    /**
+     * 2026-11-05: a held hit keeps its click, so it goes on the first tick it may, not a click later. Under an
+     * auto-block the click is still spent: the block and unblock run on this clock, and a click that stays due would
+     * flap the sword every other tick.
+     */
+    private void spendHeldClick() {
+        if (this.autoBlock.getValue() != 0 && this.canAutoBlock()) {
+            this.attackDelayMS += this.getAttackDelay();
+        }
     }
 
     private boolean performAttack(float yaw, float pitch) {
@@ -829,17 +851,22 @@ public class KillAura extends Module {
                    inventory click: no hand does both (TickActions). */
                 atlas.management.TickActions.refuse();
                 return false;
-            } else if (this.hitSelectHolds()) {
-                /* K7: HitSelect ACTIVE keeps this click back (the target is
-                   still inside its hurt time): no swing, no hit, no
-                   slowdown. The click is spent all the same. */
-                this.attackDelayMS += this.getAttackDelay();
-                return false;
             } else {
+                /* Before HitSelect is asked: it takes the opening when it says yes. */
                 if ((this.rotations.getValue() == 4 || this.rotations.getValue() == 6)
                         && !(this.kbDisplacing && this.isBoxInAttackRange(this.target.getBox()))
                         && !this.aimedAt(yaw, pitch)) {
                     return false;
+                }
+                boolean forced = this.damageHitsLeft > 0;
+                if (!forced && (this.noAirSprintHit.getValue() && !mc.thePlayer.onGround && mc.thePlayer.isSprinting()
+                        || this.hitSelectHolds())) {
+                    /* K7: no swing, no hit, no slowdown. */
+                    this.spendHeldClick();
+                    return false;
+                }
+                if (forced) {
+                    this.damageHitsLeft--;
                 }
 
                 /* Added to what is left, not set: the aura can only act on a
@@ -1457,6 +1484,13 @@ public class KillAura extends Module {
                 this.deferredPending = false;
                 if (this.attackDelayMS > 0L) {
                     this.attackDelayMS -= 50L;
+                }
+                if (this.damageHitsLeft > 0) {
+                    if (System.currentTimeMillis() > this.damageHitsUntil) {
+                        this.damageHitsLeft = 0;
+                    } else {
+                        this.attackDelayMS = Math.min(this.attackDelayMS, 0L);
+                    }
                 }
                 /* Set again below by the Advanced branch; never carried over. */
                 this.kbDisplacing = false;
@@ -2378,6 +2412,22 @@ public class KillAura extends Module {
         }
     }
 
+    /* Ahead of Velocity, which cancels the packet at HIGH: the hit was taken all the same. */
+    @EventTarget(Priority.HIGHEST)
+    public void onKnockback(PacketEvent event) {
+        if (this.isEnabled() && this.attackOnDamage.getValue() > 0 && mc.thePlayer != null
+                && event.getPacket() instanceof net.minecraft.network.play.server.S12PacketEntityVelocity
+                && ((net.minecraft.network.play.server.S12PacketEntityVelocity) event.getPacket()).getEntityID()
+                == mc.thePlayer.getEntityId()) {
+            long now = System.currentTimeMillis();
+            if (now - this.lastKnockbackAt > DAMAGE_HITS_GAP_MS) {
+                this.damageHitsLeft = this.attackOnDamage.getValue();
+                this.damageHitsUntil = now + DAMAGE_HITS_MS;
+            }
+            this.lastKnockbackAt = now;
+        }
+    }
+
     @EventTarget(Priority.LOWEST)
     public void onPacket(PacketEvent event) {
         if (this.isEnabled() && !event.isCancelled()) {
@@ -2571,6 +2621,7 @@ public class KillAura extends Module {
             this.switchTick = 0;
             this.hitRegistered = false;
             this.attackDelayMS = 0L;
+            this.damageHitsLeft = 0;
             this.blockTick = 0;
             /* Config.load enables modules at startup, before there is a
                player. The NPE here used to abort the rest of the config load,

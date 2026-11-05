@@ -6,8 +6,6 @@ import org.junit.Test;
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 import java.io.File;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,7 +18,7 @@ import static org.junit.Assert.*;
 /**
  * Scripts as players write them compile against this client's classes alone -- no Minecraft classes, as in the
  * game, where the Minecraft jar on the class path is obfuscated -- with the JDK's compiler and with ECJ (the one
- * players download), and their hooks are called (2026-11-03).
+ * players download, in a JVM of its own: see IsolatedEcj), and their hooks are called (2026-11-03).
  */
 public class ScriptCompileTest {
 
@@ -156,13 +154,11 @@ public class ScriptCompileTest {
 
     @Test
     public void bothKindsCompileWithEcj() throws Exception {
-        File jar = new File("../backups/scripts-work/ecj-" + ScriptCompiler.ECJ_VERSION + ".jar");
-        Assume.assumeTrue("ECJ is not in backups/scripts-work", jar.isFile());
-        assertEquals("the pinned ECJ", ScriptCompiler.ECJ_SHA256, ScriptCompiler.sha256(jar));
-        URLClassLoader loader = new URLClassLoader(new URL[]{jar.toURI().toURL()}, getClass().getClassLoader());
-        JavaCompiler ecj = (JavaCompiler) Class.forName("org.eclipse.jdt.internal.compiler.tool.EclipseCompiler", true,
-                loader).newInstance();
-        assertCompiles(ecj, "ecj");
+        for (ScriptKind kind : ScriptKind.values()) {
+            IsolatedEcj.Outcome outcome = IsolatedEcj.compile(kind,
+                    Collections.singletonList(kind.raven() ? RAVEN : ATLAS)).get(0);
+            assertTrue("ecj " + kind + ": " + outcome.errors, outcome.ok);
+        }
     }
 
     @Test

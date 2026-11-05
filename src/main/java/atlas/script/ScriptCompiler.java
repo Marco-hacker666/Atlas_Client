@@ -6,8 +6,13 @@ import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -18,10 +23,18 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+import java.util.jar.JarOutputStream;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Turns script sources into classes (2026-11-02, owner: "a tab that loads everyone's scripts, Raven's API and ours").
@@ -36,6 +49,11 @@ import java.util.Set;
  *
  * ECJ's javax.tools front end reads sources from files, not memory, so each source is written under the build
  * folder first; the classes come out next to it.
+ *
+ * Scripts compile without the game's classes (the jar on the class path is obfuscated), and a compiler weighing
+ * overloads reads every signature of that name: new Vec3(0, 64, 0) failed in ECJ on Vec3(net.minecraft.util.Vec3),
+ * and javac the same way on same-arity overloads. So the classes this client names are stubbed (2026-11-04): empty
+ * classes in a small jar, last on the class path, for compiling only. A script class never loads one.
  */
 public final class ScriptCompiler {
     static final String ECJ_VERSION = "3.21.0";
@@ -52,6 +70,11 @@ public final class ScriptCompiler {
     private static URLClassLoader ecjLoader;
     private static volatile String status = "not loaded yet";
     private static volatile boolean downloading;
+    private static File gameStubs;
+    private static boolean gameStubsMade;
+
+    /** Types in descriptors and generic signatures; the group after the name opens a type's arguments. */
+    private static final Pattern TYPE_IN_SIGNATURE = Pattern.compile("L([A-Za-z_][\\w]*(?:/[\\w$]+)+)([;<])");
 
     private ScriptCompiler() {
     }
@@ -310,7 +333,276 @@ public final class ScriptCompiler {
                 out.add(file);
             }
         }
+        File stubs = gameStubs(own);
+        if (stubs != null) {
+            /* Last: a real class always wins over its stub. */
+            out.add(stubs);
+        }
         return new ArrayList<File>(out);
+    }
+
+    /** One class this client names but does not hold, as a stub has to show it. */
+    static final class StubType {
+        boolean isInterface;
+        int typeParameters;
+    }
+
+    /** The stubs, made once a run. Null if that fails: scripts then compile as they did without them. */
+    private static synchronized File gameStubs(File own) {
+        if (!gameStubsMade) {
+            gameStubsMade = true;
+            try {
+                gameStubs = own == null ? null : writeStubs(stubTypes(own), compilerDir);
+            } catch (Throwable ignored) {
+                gameStubs = null;
+            }
+        }
+        return gameStubs;
+    }
+
+    /** Every class outside this client and the JDK that this client's own classes name. */
+    static Map<String, StubType> stubTypes(File own) throws IOException {
+        Map<String, StubType> found = new TreeMap<String, StubType>();
+        if (own.isDirectory()) {
+            scanFolder(new File(own, "atlas"), found);
+        } else {
+            try (JarFile jar = new JarFile(own)) {
+                Enumeration<JarEntry> entries = jar.entries();
+                while (entries.hasMoreElements()) {
+                    JarEntry entry = entries.nextElement();
+                    if (entry.getName().startsWith("atlas/") && entry.getName().endsWith(".class")) {
+                        try (InputStream in = jar.getInputStream(entry)) {
+                            scanClass(readAll(in), found);
+                        }
+                    }
+                }
+            }
+        }
+        /* EnumFacing$Axis needs its EnumFacing: compilers look a nested class up through it. */
+        for (String name : new ArrayList<String>(found.keySet())) {
+            for (int dollar = name.indexOf('$', 1); dollar > 0; dollar = name.indexOf('$', dollar + 1)) {
+                stubType(name.substring(0, dollar), found);
+            }
+        }
+        return found;
+    }
+
+    private static void scanFolder(File folder, Map<String, StubType> found) throws IOException {
+        File[] files = folder.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File file : files) {
+            if (file.isDirectory()) {
+                scanFolder(file, found);
+            } else if (file.getName().endsWith(".class")) {
+                scanClass(Files.readAllBytes(file.toPath()), found);
+            }
+        }
+    }
+
+    private static byte[] readAll(InputStream in) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int n;
+        while ((n = in.read(buffer)) > 0) {
+            out.write(buffer, 0, n);
+        }
+        return out.toByteArray();
+    }
+
+    private static StubType stubType(String name, Map<String, StubType> found) {
+        if (name.startsWith("atlas/") || name.startsWith("java/") || name.startsWith("javax/")) {
+            return null;
+        }
+        StubType type = found.get(name);
+        if (type == null) {
+            type = new StubType();
+            found.put(name, type);
+        }
+        return type;
+    }
+
+    /** Reads a class file's constant pool: its Class entries, and the types inside its descriptors and signatures. */
+    private static void scanClass(byte[] bytes, Map<String, StubType> found) throws IOException {
+        DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));
+        in.readInt();
+        in.readInt();
+        int count = in.readUnsignedShort();
+        String[] texts = new String[count];
+        int[] classes = new int[count];
+        boolean[] interfaces = new boolean[count];
+        for (int i = 1; i < count; i++) {
+            int tag = in.readUnsignedByte();
+            switch (tag) {
+                case 1:
+                    texts[i] = in.readUTF();
+                    break;
+                case 3:
+                case 4:
+                    in.readInt();
+                    break;
+                case 5:
+                case 6:
+                    in.readLong();
+                    i++;
+                    break;
+                case 7:
+                    classes[i] = in.readUnsignedShort();
+                    break;
+                case 8:
+                case 16:
+                    in.readUnsignedShort();
+                    break;
+                case 11:
+                    interfaces[in.readUnsignedShort()] = true;
+                    in.readUnsignedShort();
+                    break;
+                case 9:
+                case 10:
+                case 12:
+                case 18:
+                    in.readInt();
+                    break;
+                case 15:
+                    in.readUnsignedByte();
+                    in.readUnsignedShort();
+                    break;
+                default:
+                    throw new IOException("constant tag " + tag);
+            }
+        }
+        in.readUnsignedShort();
+        in.readUnsignedShort();
+        in.readUnsignedShort();
+        for (int left = in.readUnsignedShort(); left > 0; left--) {
+            interfaces[in.readUnsignedShort()] = true;
+        }
+        for (int i = 1; i < count; i++) {
+            if (texts[i] != null) {
+                Matcher matcher = TYPE_IN_SIGNATURE.matcher(texts[i]);
+                while (matcher.find()) {
+                    StubType type = stubType(matcher.group(1), found);
+                    if (type != null && matcher.group(2).equals("<")) {
+                        type.typeParameters = Math.max(type.typeParameters, typeArguments(texts[i], matcher.end()));
+                    }
+                }
+            }
+            if (classes[i] != 0 && texts[classes[i]] != null && texts[classes[i]].charAt(0) != '[') {
+                StubType type = stubType(texts[classes[i]], found);
+                if (type != null && interfaces[i]) {
+                    type.isInterface = true;
+                }
+            }
+        }
+    }
+
+    /** How many type arguments a signature gives from {@code at}, just past the opening bracket. */
+    static int typeArguments(String signature, int at) {
+        int count = 0;
+        int i = at;
+        while (i < signature.length()) {
+            char c = signature.charAt(i);
+            if (c == '>') {
+                return count;
+            }
+            if (c == '+' || c == '-' || c == '[') {
+                i++;
+                continue;
+            }
+            count++;
+            if (c != 'L' && c != 'T') {
+                /* The wildcard, or the primitive of an array. */
+                i++;
+                continue;
+            }
+            int depth = 0;
+            for (; i < signature.length(); i++) {
+                char inner = signature.charAt(i);
+                if (inner == '<') {
+                    depth++;
+                } else if (inner == '>') {
+                    depth--;
+                } else if (inner == ';' && depth == 0) {
+                    i++;
+                    break;
+                }
+            }
+        }
+        return 0;
+    }
+
+    /** The jar is named by what is in it, so a second game on this folder never finds it half written. */
+    static File writeStubs(Map<String, StubType> types, File dir) throws Exception {
+        StringBuilder list = new StringBuilder();
+        for (Map.Entry<String, StubType> entry : types.entrySet()) {
+            list.append(entry.getKey()).append(' ').append(entry.getValue().isInterface).append(' ')
+                    .append(entry.getValue().typeParameters).append('\n');
+        }
+        String id = hex(MessageDigest.getInstance("SHA-256").digest(list.toString().getBytes(StandardCharsets.UTF_8)));
+        File jar = new File(dir, "game-stubs-" + id.substring(0, 12) + ".jar");
+        if (jar.isFile()) {
+            return jar;
+        }
+        if (!dir.isDirectory() && !dir.mkdirs()) {
+            throw new IOException("cannot create " + dir);
+        }
+        File temp = File.createTempFile("game-stubs", ".part", dir);
+        try {
+            try (JarOutputStream out = new JarOutputStream(new FileOutputStream(temp))) {
+                for (Map.Entry<String, StubType> entry : types.entrySet()) {
+                    out.putNextEntry(new JarEntry(entry.getKey() + ".class"));
+                    out.write(stubClass(entry.getKey(), entry.getValue()));
+                    out.closeEntry();
+                }
+            }
+            Files.move(temp.toPath(), jar.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            temp.delete();
+        }
+        return jar;
+    }
+
+    /** A class file with no members, written by hand: Forge's ASM is not on every path this runs on. */
+    static byte[] stubClass(String name, StubType type) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(bytes);
+        boolean generic = type.typeParameters > 0;
+        out.writeInt(0xCAFEBABE);
+        out.writeShort(0);
+        out.writeShort(52);
+        out.writeShort(generic ? 7 : 5);
+        out.writeByte(1);
+        out.writeUTF(name);
+        out.writeByte(7);
+        out.writeShort(1);
+        out.writeByte(1);
+        out.writeUTF("java/lang/Object");
+        out.writeByte(7);
+        out.writeShort(3);
+        if (generic) {
+            StringBuilder signature = new StringBuilder("<");
+            for (int i = 0; i < type.typeParameters; i++) {
+                signature.append('T').append(i).append(":Ljava/lang/Object;");
+            }
+            out.writeByte(1);
+            out.writeUTF("Signature");
+            out.writeByte(1);
+            out.writeUTF(signature.append(">Ljava/lang/Object;").toString());
+        }
+        out.writeShort(type.isInterface ? 0x0601 : 0x0021);
+        out.writeShort(2);
+        out.writeShort(4);
+        out.writeShort(0);
+        out.writeShort(0);
+        out.writeShort(0);
+        out.writeShort(generic ? 1 : 0);
+        if (generic) {
+            out.writeShort(5);
+            out.writeInt(2);
+            out.writeShort(6);
+        }
+        return bytes.toByteArray();
     }
 
     /** The jar or folder a class was loaded from, or null. */

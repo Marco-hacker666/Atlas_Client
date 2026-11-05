@@ -358,7 +358,7 @@ public final class ModuleDocs {
         help("Hitflick", "mode", "FLICK：甩開再轉回。HAZARD：原本的 KBDisplacement。DISPLACE：原本的 Displace。各自的設定在下面。");
         d("ServerLag", "把伺服器送來的封包延後處理，模擬伺服器延遲；受傷、血量、音效、聊天照常即時。可當成 FakeLag 的「收到延遲」一起用。");
         d("FakeLag", "延後送出自己的移動，讓伺服器上的你落後於實際位置，方便先手。");
-        d("HitSelect", "挑出手時機：只在對自己有利（例如減少吃擊退）的時候讓攻擊送出。ACTIVE 也會管 Silent Aura 的攻擊。");
+        d("HitSelect", "挑出手時機：只在對自己有利（例如減少吃擊退）的時候讓攻擊送出。所有模式都會管 Silent Aura 的攻擊。可用 combo、第一下、低血量、被打後反擊等條件放行。");
         d("MoreKB", "攻擊時重置衝刺，讓每一下打出更多擊退。");
         d("FastBow", "加快拉弓射箭的速度。");
         d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Slinky（預設）：按著左鍵、敵人在範圍內就舉劍，舉滿幾 tick 放下一 tick 讓攻擊打出去，再舉起來；可選只在快被打到時舉、放下時延遲封包。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Full：照原版的擋劍節奏（放下、下一 tick 打、打完立刻舉起），只在能保護你的時候舉劍。Raven：Raven bS 的 Auto Block，按著右鍵時才作用：同時在打範圍內的敵人就舉劍、放下讓攻擊打出去再舉起，放下時可延遲封包；只按右鍵就是普通格擋。Helper / Auto / Lag：其他方式。");
@@ -384,6 +384,16 @@ public final class ModuleDocs {
         help("BlockHit", "raven-lag-max-ms", "Raven：封包最多扣到舉劍後這麼多 ms 就放出去。");
         help("BlockHit", "raven-prevent-delaying-attacks", "Raven：一攻擊就先把扣住的封包放出去，攻擊不會被延遲。");
         help("BlockHit", "raven-block-again-immediately", "Raven：扣住的封包放出去後（攻擊或時間到），馬上再舉劍。");
+        help("BlockHit", "random-hold-ticks", "Slinky：每次舉劍隨機多舉 0 到這麼多 tick，短的比較常出現。0 = 固定。");
+        help("BlockHit", "block-cooldown-ms", "Slinky：放下劍後至少隔這麼多 ms 才再舉。0 = 不等。");
+        help("BlockHit", "raven-auto", "Raven：開啟後不用按滑鼠，敵人在範圍內就自動格擋。關閉時要按住右鍵。");
+        help("BlockHit", "raven-random-hold-ms", "Raven：每次舉劍隨機多舉 0 到這麼多 ms，短的比較常出現。0 = 固定。");
+        help("BlockHit", "raven-cooldown-ms", "Raven：放下劍後至少隔這麼多 ms 才再舉。0 = 不等。");
+        help("BlockHit", "raven-release-on-hit", "Raven：被打中時放下劍一 tick，讓你馬上反擊。");
+        help("BlockHit", "raven-no-chasing", "Raven：目標正在逃開時不舉劍，追人不會被拖慢。");
+        help("BlockHit", "raven-out-of-range", "Raven：範圍內沒人時按住右鍵的處理。Keep 照常格擋；Once 離開範圍時放下一次；Always 不舉劍；Fake 不舉劍但畫面顯示舉劍。箱子、門等互動不受影響。");
+        help("BlockHit", "raven-force-attack", "Raven：舉劍時按左鍵不會丟掉點擊，會放下劍再打。只用於手動，開著 Aura 時不作用。");
+        help("BlockHit", "raven-mobs", "Raven：沒有玩家時，範圍內的怪物也算要格擋的對象。");
         help("BlockHit", "raven-block-animation", "Raven：舉劍或扣封包時，畫面上顯示舉劍動畫。");
         help("BlockHit", "full-range", "Full：敵人在這個距離內（眼睛到碰撞箱）才會舉劍。");
         help("BlockHit", "full-style", "Full：Always＝敵人在範圍內就一直舉著（最安全、最慢）；Smart＝只在快被打到時、被盯上時、在空中時舉（減速少很多）。");
@@ -850,7 +860,7 @@ public final class ModuleDocs {
                 h("Manual", "ManualChance"),
                 h("Predict", "Rhythm*"),
                 h("Swing（舊）", "Predict*"),
-                h("Slinky 格擋", "block-range", "max-hold-ticks", "require-*", "max-hurt-time"),
+                h("Slinky 格擋", "block-range", "max-hold-ticks", "random-hold-ticks", "block-cooldown-ms", "require-*", "max-hurt-time"),
                 h("Slinky 假動畫", "fake-animation*"),
                 h("Slinky 延遲封包", "lag-*"),
                 h("Raven", "raven-*"));

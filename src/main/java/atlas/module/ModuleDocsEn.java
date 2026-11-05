@@ -77,7 +77,7 @@ final class ModuleDocsEn {
         help("Hitflick", "mode", "FLICK: the flick away and back. HAZARD: what KBDisplacement did. DISPLACE: what Displace did. Each has its own settings below.");
         d("ServerLag", "Delays the packets the server sends, as if the server lagged; damage, health, sounds and chat still arrive at once. Works as FakeLag's incoming half.");
         d("FakeLag", "Delays your outgoing movement so the server's copy of you runs behind, for the first hit.");
-        d("HitSelect", "Lets an attack through only when it suits you, e.g. when it costs less knockback. ACTIVE also decides Silent Aura's hits.");
+        d("HitSelect", "Lets an attack through only when it suits you, e.g. when it costs less knockback. Every mode also decides Silent Aura's hits. Combo, first hit, low health and hit-back conditions can let hits through.");
         d("MoreKB", "Resets sprint on attack so each hit deals more knockback.");
         d("FastBow", "Draws and shoots the bow faster.");
         help("BlockHit", "ManualChance", "Chance that a hit is followed by a one-tick block (blocks per second = CPS x chance). Idle while Silent Aura blocks by itself.");

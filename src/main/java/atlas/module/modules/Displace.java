@@ -18,6 +18,7 @@ import atlas.event.types.Priority;
 import atlas.module.Module;
 import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.FloatProperty;
+import atlas.property.properties.IntProperty;
 import atlas.property.properties.ItemListProperty;
 import atlas.property.properties.ModeProperty;
 import atlas.util.CombatTargeting;
@@ -68,7 +69,7 @@ public class Displace extends Module {
     public final FloatProperty delay = new FloatProperty("Delay", 0F, 0F, 500F);
     public final ModeProperty direction =
             new ModeProperty(
-                    "Direction", 0, new String[] {"Left", "Right"});
+                    "Direction", 0, new String[] {"Left", "Right", "Random", "With-strafe", "Against-strafe"});
     public final BooleanProperty showDirection = new BooleanProperty("Show-direction", true);
     public final BooleanProperty findVoid =
             new BooleanProperty("Find-void", false, () -> dynamicAngle.getValue() == 0);
@@ -82,6 +83,26 @@ public class Displace extends Module {
        box about +-9 degrees wide at 2.5 blocks, so the hit is refused and nothing is displaced. On: the turn
        goes only as far as the look still meets the box (with a margin for the target moving). Off: as before. */
     public final BooleanProperty keepHitbox = new BooleanProperty("Keep-hitbox", false);
+
+    /* 2026-11-05 (owner: "fill in Displace", after reading OpenB4, Yuri, Slinky and Raven; behaviour only).
+       Hit-mode Every is what this was: every hit waits a tick behind a turned look. Effective keeps the turn for a hit
+       that can do something: the target at or under Max-hurt-time, this player sprinting or with Knockback, and
+       Hit-cooldown since the last turn. Every other hit goes at once, on the normal look.
+       Angle-random, Direction-lock and Only-facing-away work in both, and are off by default.
+       Direction Random and the strafe ways are for when there is no void to aim for. */
+    public final ModeProperty hitMode = new ModeProperty("Hit-mode", 0, new String[] {"Every", "Effective"});
+    public final IntProperty maxHurtTime = new IntProperty("Max-hurt-time", 3, 0, 10, () -> hitMode.getValue() == 1);
+    public final IntProperty hitCooldown = new IntProperty("Hit-cooldown", 500, 0, 3000, () -> hitMode.getValue() == 1);
+    public final FloatProperty angleRandom = new FloatProperty("Angle-random", 0F, 0F, 15F);
+    public final BooleanProperty directionLock = new BooleanProperty("Direction-lock", false);
+    public final BooleanProperty onlyFacingAway = new BooleanProperty("Only-facing-away", false);
+
+    private long lastTurnMs = 0L;
+    private int lastTurnTick = 0;
+    private int lockedTarget = -1;
+    private Float lockedVoidYaw = null;
+    private boolean randomLeft = true;
+    private float lastStrafe = 0.0F;
 
     private boolean displaceThisTick = false;
     private boolean active = false;
@@ -144,6 +165,7 @@ public class Displace extends Module {
         clearArrowState();
         tickCounter = 0;
         targetWindowStartTicks.clear();
+        clearTurnState();
         releaseBlink();
     }
 
@@ -159,7 +181,16 @@ public class Displace extends Module {
         renderTarget = null;
         clearArrowState();
         targetWindowStartTicks.clear();
+        clearTurnState();
         releaseBlink();
+    }
+
+    private void clearTurnState() {
+        lastTurnMs = 0L;
+        lastTurnTick = 0;
+        lockedTarget = -1;
+        lockedVoidYaw = null;
+        lastStrafe = 0.0F;
     }
 
     /** The yaw nearest to want, toward it from the target, whose ray from the eyes still meets the target's box. */
@@ -525,15 +556,36 @@ public class Displace extends Module {
             /* A second click would land first, along the look before the turn. */
             return target == heldTarget;
         }
+        if (Hitflick.standsAside()) {
+            return false;
+        }
         EntityPlayer player = (EntityPlayer) target;
         if (!passesItemCondition() || !CombatTargeting.isTrackablePlayer(player, ignoreTeammates.getValue())
                 || (EnchantmentHelper.getKnockbackModifier(mc.thePlayer) <= 0 && !anyMovementKey())
+                || !turnWorthwhile(player)
                 || !shouldDisplaceInCurrentWindow(player, tickCounter)) {
             return false;
         }
+        lastTurnMs = System.currentTimeMillis();
         heldTarget = target;
         hitDue = false;
         return true;
+    }
+
+    private boolean turnWorthwhile(EntityPlayer player) {
+        if (onlyFacingAway.getValue() && !DisplacePlan.facingAway(
+                MathHelper.wrapAngleTo180_float(player.rotationYaw - mc.thePlayer.rotationYaw))) {
+            return false;
+        }
+        return hitMode.getValue() == 0 || DisplacePlan.worthTurning(player.hurtTime, maxHurtTime.getValue(),
+                mc.thePlayer.isSprinting(), EnchantmentHelper.getKnockbackModifier(mc.thePlayer) > 0,
+                System.currentTimeMillis() - lastTurnMs, hitCooldown.getValue());
+    }
+
+    /** The direction of the last turn holds for this target (Direction-lock). */
+    private boolean directionLocked(EntityPlayer target) {
+        return directionLock.getValue()
+                && DisplacePlan.lockHolds(lockedTarget, target.getEntityId(), lastTurnTick, tickCounter);
     }
 
     private void releaseBlink() {
@@ -770,26 +822,43 @@ public class Displace extends Module {
             return;
         }
 
+        boolean locked = directionLocked(target);
         dynamicVoidYaw =
-                isDynamicAngle()
+                locked && lockedVoidYaw != null
+                        ? lockedVoidYaw
+                        : isDynamicAngle()
                         ? findDynamicVoidYaw(target)
                         : findVoid.getValue() ? findStaticVoidYaw(target) : null;
+        /* The keys, not moveStrafing: this module's own step back after a turn sets that, and would pick the next side. */
+        boolean strafeLeft = mc.gameSettings.keyBindLeft.isKeyDown();
+        if (strafeLeft != mc.gameSettings.keyBindRight.isKeyDown()) {
+            lastStrafe = strafeLeft ? 1.0F : -1.0F;
+        }
         /* Dynamic with no void in reach did nothing at all, so on open ground the module looked dead: it now turns by
            Yaw-offset and Direction, as Static does. */
         if (dynamicVoidYaw == null) {
-            displaceLeft = direction.getValue() == 0;
+            displaceLeft = DisplacePlan.left(direction.getValue(), lastStrafe, randomLeft);
         }
         renderDisplaceYaw = dynamicVoidYaw != null ? dynamicVoidYaw : getFixedDisplaceYaw();
         renderTarget = target;
 
         hasKB = hasKBEnchant;
-        if (heldTarget == null) {
+        /* A hit held just before a catch began still goes, next tick, on the catch's look. */
+        if (heldTarget == null || Hitflick.standsAside()) {
             return;
         }
 
+        Float turnVoidYaw = dynamicVoidYaw;
+        renderDisplaceYaw += DisplacePlan.jitter(angleRandom.getValue(), Math.random());
         if (keepHitbox.getValue()) {
             renderDisplaceYaw = clampToHitbox(target, renderDisplaceYaw);
         }
+        if (!locked) {
+            randomLeft = Math.random() < 0.5D;
+            lockedVoidYaw = turnVoidYaw;
+        }
+        lockedTarget = target.getEntityId();
+        lastTurnTick = tickCounter;
         float turn = MathHelper.wrapAngleTo180_float(renderDisplaceYaw - mc.thePlayer.rotationYaw);
         displaceLeft = turn < 0.0F;
         turnedFar = Math.abs(turn) >= COMPENSATE_TURN;

@@ -6,8 +6,6 @@ import org.junit.Test;
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 import java.io.File;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
@@ -25,7 +23,6 @@ import static org.junit.Assert.*;
  */
 public class RavenVersionsTest {
     private static final File REAL_SCRIPT = new File("../backups/scripts-work/LEGITTELLY.java");
-    private static final File ECJ = new File("../backups/scripts-work/ecj-" + ScriptCompiler.ECJ_VERSION + ".jar");
 
     static final String BS17_ONLY = String.join("\n",
             "long started = client.nanoTime();",
@@ -47,13 +44,6 @@ public class RavenVersionsTest {
                 new ScriptCompiler.Unit(new File(sources, wrapped.hostClass + ".java"), wrapped.hostCode, 0, "(host)"));
         return ScriptCompiler.compile(javac, units, new File(dir, "classes"),
                 Collections.singletonList(ScriptCompiler.codeSource(ScriptSource.class)));
-    }
-
-    private static JavaCompiler ecj() throws Exception {
-        Assume.assumeTrue("ECJ is not in backups/scripts-work", ECJ.isFile());
-        URLClassLoader loader = new URLClassLoader(new URL[]{ECJ.toURI().toURL()}, RavenVersionsTest.class.getClassLoader());
-        return (JavaCompiler) Class.forName("org.eclipse.jdt.internal.compiler.tool.EclipseCompiler", true, loader)
-                .newInstance();
     }
 
     @Test
@@ -180,8 +170,8 @@ public class RavenVersionsTest {
                 ScriptCompiler.Result result = compile(javac, ScriptKind.RAVEN17, "LEGITTELLY", source, new File(dir, "javac"));
                 assertTrue("javac: " + result.problems, result.ok);
             }
-            ScriptCompiler.Result result = compile(ecj(), ScriptKind.RAVEN17, "LEGITTELLY", source, new File(dir, "ecj"));
-            assertTrue("ecj: " + result.problems, result.ok);
+            IsolatedEcj.Outcome outcome = IsolatedEcj.compile(ScriptKind.RAVEN17, Collections.singletonList(source)).get(0);
+            assertTrue("ecj: " + outcome.errors, outcome.ok);
         } finally {
             ScriptManager.deleteTree(dir);
         }

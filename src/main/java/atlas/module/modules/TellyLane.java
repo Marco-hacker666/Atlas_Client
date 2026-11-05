@@ -2,6 +2,9 @@ package atlas.module.modules;
 
 import net.minecraft.util.MathHelper;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * The one line of cells Scaffold's SPEED-TELLY builds along (2026-11-04, owner: "only stack in one direction, do not
  * look for the nearest place"). It starts at the block stood on and goes one of eight ways, the yaw rounded to 45
@@ -47,7 +50,7 @@ final class TellyLane {
         this.lineZ = z + 0.5;
     }
 
-    private boolean diagonal() {
+    boolean diagonal() {
         return this.stepX != 0 && this.stepZ != 0;
     }
 
@@ -71,6 +74,30 @@ final class TellyLane {
             return z == this.originZ ? (x - this.originX) * this.stepX : OFF;
         }
         return x == this.originX ? (z - this.originZ) * this.stepZ : OFF;
+    }
+
+    /**
+     * A diagonal lane's next columns from the head of its stairs toward where the jump lands, the longer way first.
+     * Empty once the head is level with the landing on both axes. Either step keeps the stairs joined, and the
+     * count is the same both ways, so the caller takes whichever it can click soonest. A sprint jump keeps the
+     * momentum it started with, so the stairs follow the real flight instead of a fixed zigzag it may never be over.
+     */
+    List<int[]> stepsToward(int headX, int headZ, int landX, int landZ) {
+        int leftX = (landX - headX) * this.stepX;
+        int leftZ = (landZ - headZ) * this.stepZ;
+        List<int[]> steps = new ArrayList<int[]>(2);
+        int[] alongX = {headX + this.stepX, headZ};
+        int[] alongZ = {headX, headZ + this.stepZ};
+        if (leftX > 0 && leftX >= leftZ) {
+            steps.add(alongX);
+        }
+        if (leftZ > 0) {
+            steps.add(alongZ);
+        }
+        if (leftX > 0 && leftX < leftZ) {
+            steps.add(alongX);
+        }
+        return steps;
     }
 
     /** The cell level with this position along the lane, whatever its distance beside it. */

@@ -9,6 +9,39 @@ public class TellyLaneTest {
 
     private static final float[] YAWS = {0F, 45F, 90F, 135F, 180F, -135F, -90F, -45F};
 
+    /** 2026-11-04 (owner: "cannot stack diagonally"): the stairs follow the flight, however lopsided it is. */
+    @Test
+    public void diagonalStairsReachWhereTheJumpLands() {
+        int[][] landings = {{2, 4}, {4, 2}, {3, 3}, {0, 5}, {5, 0}};
+        for (int[] landing : landings) {
+            for (float yaw : new float[]{45F, 135F, -135F, -45F}) {
+                TellyLane lane = new TellyLane(10, 20, 64, yaw);
+                int landX = 10 + lane.stepX * landing[0];
+                int landZ = 20 + lane.stepZ * landing[1];
+                int[] head = {10, 20};
+                int cells = 0;
+                while (!lane.stepsToward(head[0], head[1], landX, landZ).isEmpty()) {
+                    int[] next = lane.stepsToward(head[0], head[1], landX, landZ).get(0);
+                    assertEquals("joined", 1, Math.abs(next[0] - head[0]) + Math.abs(next[1] - head[1]));
+                    head = next;
+                    assertTrue("no block past the landing", ++cells <= landing[0] + landing[1]);
+                }
+                assertArrayEquals(new int[]{landX, landZ}, head);
+            }
+        }
+    }
+
+    @Test
+    public void bothStepsAreOfferedWhileBothAxesRemain() {
+        TellyLane lane = new TellyLane(0, 0, 64, 45F);
+        assertEquals(-1, lane.stepX);
+        assertEquals(1, lane.stepZ);
+        assertEquals(2, lane.stepsToward(0, 0, -2, 3).size());
+        assertArrayEquals("the longer way first", new int[]{0, 1}, lane.stepsToward(0, 0, -2, 3).get(0));
+        assertEquals("only the axis left", 1, lane.stepsToward(-2, 0, -2, 3).size());
+        assertTrue("nothing behind the head", lane.stepsToward(-2, 3, -1, 2).isEmpty());
+    }
+
     @Test
     public void yawZeroGoesSouthAndNinetyWest() {
         TellyLane south = new TellyLane(10, 20, 64, 3.0F);

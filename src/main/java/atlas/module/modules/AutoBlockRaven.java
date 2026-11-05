@@ -4,13 +4,18 @@ import atlas.Atlas;
 import atlas.enums.BlinkModules;
 import atlas.event.types.EventType;
 import atlas.events.PacketEvent;
+import atlas.util.BlockUtil;
 import atlas.util.CombatTargeting;
 import atlas.util.ItemUtil;
 import atlas.util.KeyBindUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.monster.EntityMob;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.network.play.client.C02PacketUseEntity;
+import net.minecraft.util.BlockPos;
+import net.minecraft.util.MovingObjectPosition;
 
 /**
  * AutoBlock's Raven mode (2026-10-31, owner: "make me Raven's auto block"): Raven bS's Autoblock, ported from its
@@ -48,6 +53,26 @@ final class AutoBlockRaven {
     private int lagStart = -1;
     private int tick;
     private int lastHurt;
+    /* 2026-11-05 (owner: "build what the others have"), all off by default; behaviour from OpenB4 and Raven bS. */
+    private static final int OUT_ONCE = 1;
+    private static final int OUT_ALWAYS = 2;
+    private static final int OUT_FAKE = 3;
+    private static final int MAX_PENDING_ATTACKS = 3;
+    /** Ticks this hold runs past max-hold. */
+    private int extraHold;
+    /** When the last block ended; -1 before the first. */
+    private long blockEndedAt = -1L;
+    private boolean wasInRange;
+    /** Once: left range with right click held; no block until it is let go or someone comes back. */
+    private boolean unblockedAfterLeaving;
+    /** Always, Fake: nobody in range, so right click raises nothing. */
+    private boolean nobodyInRange;
+    /** Fake: the sword drawn up with nobody in range and right click held. */
+    private boolean fakeOutOfRange;
+    /** Force attack: clicks vanilla dropped because the sword was up, to be made once it is down. */
+    private int pendingAttacks;
+    private boolean forceUnblocked;
+    private boolean attackWasDown;
 
     AutoBlockRaven(BlockHit module) {
         this.module = module;
@@ -72,9 +97,88 @@ final class AutoBlockRaven {
         return Math.max(1, Math.min(10, (int) Math.round(maxHurtMs / 50.0)));
     }
 
+    /** A right click must not raise the sword this tick. A chest or a door under the crosshair still opens. */
+    boolean cancelsUse() {
+        return this.forceUnblocked || this.nobodyInRange && !lookingAtSomethingToUse();
+    }
+
+    private static boolean lookingAtSomethingToUse() {
+        MovingObjectPosition over = mc.objectMouseOver;
+        if (over == null) {
+            return false;
+        }
+        if (over.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) {
+            BlockPos pos = over.getBlockPos();
+            return pos != null && BlockUtil.isInteractable(pos);
+        }
+        return over.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY
+                && over.entityHit != null && !(over.entityHit instanceof EntityPlayer);
+    }
+
     /** Raven's onPrePlayerInteract: the start of the tick, before vanilla's clicks. */
     void tick() {
         this.active = true;
+        this.forceUnblocked = false;
+        this.nobodyInRange = false;
+        this.fakeOutOfRange = false;
+        step();
+        forceAttack();
+    }
+
+    /**
+     * Force attack: vanilla drops a click while the sword is up. This tick comes before the mouse is read, so a press
+     * is seen a tick after vanilla dropped it: the sword goes down, and the click is made the tick the item is no
+     * longer in use. The player's own hand only: an aura plans its own clicks around the block.
+     */
+    private void forceAttack() {
+        boolean on = this.module.ravenForceAttack.getValue() && mc.thePlayer != null && !mc.thePlayer.isDead
+                && mc.currentScreen == null && mc.inGameHasFocus && ItemUtil.isHoldingSword()
+                && !atlas.util.Auras.anyEnabled() && !bedNukerDigging();
+        int key = mc.gameSettings.keyBindAttack.getKeyCode();
+        boolean down = KeyBindUtil.isKeyDown(key);
+        boolean pressed = down && !this.attackWasDown;
+        this.attackWasDown = down;
+        if (!on) {
+            this.pendingAttacks = 0;
+            return;
+        }
+        if (this.pendingAttacks > 0 && !mc.thePlayer.isUsingItem()) {
+            for (int i = 0; i < this.pendingAttacks; i++) {
+                KeyBinding.onTick(key);
+            }
+            this.pendingAttacks = 0;
+            return;
+        }
+        if (pressed && mc.thePlayer.isUsingItem()) {
+            this.pendingAttacks = Math.min(MAX_PENDING_ATTACKS, this.pendingAttacks + 1);
+            this.forceUnblocked = true;
+            releaseLag();
+            stop(true);
+            this.manual = false;
+        }
+    }
+
+    /** The enemy to block against: a player, else a monster when raven-mobs is on. */
+    private Entity enemy(double range) {
+        EntityPlayer player = CombatTargeting.findTarget(range * range, this.module.ravenIgnoreTeammates.getValue());
+        if (player != null || !this.module.ravenMobs.getValue()) {
+            return player;
+        }
+        Entity nearest = null;
+        double best = range;
+        for (Entity entity : mc.theWorld.loadedEntityList) {
+            if (entity instanceof EntityMob && !entity.isDead && ((EntityMob) entity).getHealth() > 0.0F) {
+                double distance = BlockHit.boxDistance(entity);
+                if (distance <= best) {
+                    best = distance;
+                    nearest = entity;
+                }
+            }
+        }
+        return nearest;
+    }
+
+    private void step() {
         if (mc.thePlayer == null || mc.thePlayer.isDead || mc.currentScreen != null || bedNukerDigging()) {
             reset(true);
             return;
@@ -82,25 +186,79 @@ final class AutoBlockRaven {
         int hurt = mc.thePlayer.hurtTime;
         boolean hurtAgain = hurt > this.lastHurt;
         this.lastHurt = hurt;
-        if (!ItemUtil.isHoldingSword() || atlas.util.Auras.blocksByItself()) {
+        /* Driven by the aura (BlockMode Raven), the aura's auto-block is this mode: standing aside would leave no block. */
+        if (!ItemUtil.isHoldingSword() || this.module.drivenMode() < 0 && atlas.util.Auras.blocksByItself()) {
             reset(false);
             return;
         }
         int now = ++this.tick;
+        if (this.pendingAttacks > 0) {
+            /* Force attack: the sword stays down until the click has gone. */
+            this.forceUnblocked = true;
+            releaseLag();
+            stop(true);
+            this.manual = false;
+            animation();
+            return;
+        }
         double range = this.module.ravenRange.getValue();
-        EntityPlayer target = CombatTargeting.findTarget(range * range, this.module.ravenIgnoreTeammates.getValue());
+        Entity target = enemy(range);
         /* Raven: KillAura on (and not waiting for the mouse) with an enemy in range counts as left click. */
         boolean auraFighting = atlas.util.Auras.anyEnabled() && target != null;
-        boolean right = KeyBindUtil.isKeyDown(mc.gameSettings.keyBindUseItem.getKeyCode());
-        boolean left = KeyBindUtil.isKeyDown(mc.gameSettings.keyBindAttack.getKeyCode()) || auraFighting;
+        /* raven-auto: with an enemy in range it runs as if both buttons were held, and with nobody it does nothing. */
+        boolean auto = this.module.ravenAuto.getValue() && target != null;
+        boolean right = KeyBindUtil.isKeyDown(mc.gameSettings.keyBindUseItem.getKeyCode()) || auto;
+        boolean left = KeyBindUtil.isKeyDown(mc.gameSettings.keyBindAttack.getKeyCode()) || auraFighting || auto;
+        boolean hasTarget = target != null;
+        boolean leftRange = this.wasInRange && !hasTarget;
+        int outOfRange = this.module.ravenOutOfRange.getValue();
+        boolean nobody = outOfRange >= OUT_ALWAYS && !hasTarget;
         if (!right) {
+            int pending = this.pendingAttacks;
             reset(true);
+            this.pendingAttacks = pending;
+            this.wasInRange = hasTarget;
+            /* Set here too: the press comes after this tick's start, and has to find it. */
+            this.nobodyInRange = nobody;
+            return;
+        }
+        this.wasInRange = hasTarget;
+        this.nobodyInRange = nobody;
+        if (outOfRange != OUT_ONCE || hasTarget) {
+            this.unblockedAfterLeaving = false;
+        }
+        if (nobody) {
+            releaseLag();
+            stop(true);
+            this.manual = false;
+            this.fakeOutOfRange = outOfRange == OUT_FAKE && !lookingAtSomethingToUse();
+            animation();
+            return;
+        }
+        if (outOfRange == OUT_ONCE && leftRange) {
+            releaseLag();
+            stop(true);
+            this.manual = false;
+            this.unblockedAfterLeaving = true;
+            animation();
+            return;
+        }
+        if (this.module.ravenReleaseOnHit.getValue() && hurtAgain) {
+            /* OpenB4: the hit has landed, so there is nothing left to block for now: a tick down, for the reply. */
+            releaseLag();
+            stop(true);
+            this.manual = false;
+            animation();
             return;
         }
         if (!left) {
             /* Right click alone: a plain block. */
             if (this.lagging) {
                 releaseLag();
+            }
+            if (this.unblockedAfterLeaving) {
+                animation();
+                return;
             }
             if (!this.blocking) {
                 start(now);
@@ -113,7 +271,7 @@ final class AutoBlockRaven {
             stop(true);
             this.manual = false;
         }
-        boolean wanted = target != null;
+        boolean wanted = hasTarget && !(this.module.ravenNoChasing.getValue() && targetRunning(target));
         if (this.lagging) {
             int lagMax = msToTicks(this.module.ravenLagMax.getValue());
             boolean expired = lagMax > 0 && this.lagStart >= 0 && now - this.lagStart >= lagMax;
@@ -136,7 +294,7 @@ final class AutoBlockRaven {
         }
         if (this.blocking) {
             int maxHold = msToTicks(this.module.ravenMaxHold.getValue());
-            boolean down = maxHold > 0 && this.blockStart >= 0 && now - this.blockStart >= maxHold;
+            boolean down = maxHold > 0 && this.blockStart >= 0 && now - this.blockStart >= maxHold + this.extraHold;
             if (damaged && hurtAgain) {
                 down = true;
             }
@@ -171,6 +329,12 @@ final class AutoBlockRaven {
         }
     }
 
+    /** OpenB4's disable while chasing: a target running from this player cannot hit it. */
+    private static boolean targetRunning(Entity target) {
+        return AutoBlockRules.movingAway(target.posX - target.lastTickPosX, target.posZ - target.lastTickPosZ,
+                target.posX - mc.thePlayer.posX, target.posZ - mc.thePlayer.posZ);
+    }
+
     private boolean lagRoll() {
         int chance = this.module.ravenLagChance.getValue();
         if (chance <= 0) {
@@ -180,9 +344,13 @@ final class AutoBlockRaven {
     }
 
     private void start(int now) {
-        if (!ItemUtil.isHoldingSword()) {
+        long since = this.blockEndedAt < 0L ? -1L : System.currentTimeMillis() - this.blockEndedAt;
+        if (!ItemUtil.isHoldingSword() || this.forceUnblocked
+                || AutoBlockRules.coolingDown(this.module.ravenCooldown.getValue(), since)) {
             return;
         }
+        this.extraHold = AutoBlockRules.extraHoldTicks(msToTicks(this.module.ravenRandomHold.getValue()),
+                Math.random(), Math.random());
         int key = mc.gameSettings.keyBindUseItem.getKeyCode();
         KeyBindUtil.setKeyBindState(key, true);
         KeyBinding.onTick(key);
@@ -195,6 +363,9 @@ final class AutoBlockRaven {
             return;
         }
         KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), false);
+        if (this.blocking) {
+            this.blockEndedAt = System.currentTimeMillis();
+        }
         this.blocking = false;
         this.blockStart = -1;
     }
@@ -225,11 +396,11 @@ final class AutoBlockRaven {
 
     /** Raven's force-block-animation: the sword drawn up while blocking or lagging. */
     private void animation() {
-        if (!this.module.ravenAnimation.getValue() || !ItemUtil.isHoldingSword()) {
+        if (!this.module.ravenAnimation.getValue() && !this.fakeOutOfRange || !ItemUtil.isHoldingSword()) {
             animationOff();
             return;
         }
-        if (this.blocking || this.lagging) {
+        if (this.blocking || this.lagging || this.fakeOutOfRange) {
             ((atlas.mixin.IAccessorEntityPlayer) mc.thePlayer).setItemInUseCount(72000);
             this.animation = true;
         } else {
@@ -249,6 +420,11 @@ final class AutoBlockRaven {
     /** Raven's resetState: held packets go, the sword down, the use key back to the player. */
     void reset(boolean releaseKey) {
         releaseLag();
+        this.pendingAttacks = 0;
+        this.unblockedAfterLeaving = false;
+        this.nobodyInRange = false;
+        this.fakeOutOfRange = false;
+        this.wasInRange = false;
         if (mc.gameSettings == null) {
             this.blocking = false;
             this.manual = false;

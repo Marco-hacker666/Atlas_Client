@@ -484,6 +484,8 @@ public class Clutch extends Module {
     private int settleTicks;
     /** How many ticks ahead the plan was made from: 0 is from where the player is now. */
     private int planLead;
+    /** Stairs a diagonal lane walks along what is built before it stops looking: more than one jump can cross. */
+    private static final int LANE_STAIR_CELLS = 16;
     private TellyLane lane;
     /** This tick's blocks go along the lane. */
     private boolean laneNow;
@@ -2507,6 +2509,11 @@ public class Clutch extends Module {
             this.lane = keys ? new TellyLane(stood.getX(), stood.getZ(), layer, moving) : null;
             return;
         }
+        if (this.lane.diagonal()) {
+            /* Same way, but its stairs start from this landing: laneLevels follows the flight from here. */
+            this.lane = new TellyLane(stood.getX(), stood.getZ(), layer, this.lane.yaw);
+            return;
+        }
         this.lane.anchor = index;
         this.lane.layer = layer;
     }
@@ -2562,6 +2569,9 @@ public class Clutch extends Module {
             return null;
         }
         this.laneCrossing = crossing;
+        if (this.lane.diagonal()) {
+            return stairLevels(this.path.get(crossing));
+        }
         int stop = laneIndexAt(this.path.get(crossing));
         for (int i = this.lane.anchor; i <= stop; i++) {
             BlockPos cell = laneCell(i);
@@ -2570,6 +2580,43 @@ public class Clutch extends Module {
             }
         }
         return null;
+    }
+
+    /**
+     * A diagonal lane: from the stood block along what is already built, the one or two cells that carry the stairs
+     * toward the column the feet come down in. Both go in one level, so the plan takes the cheaper click: on a
+     * staircase the next face changes side every block, and a fixed order spent the jump turning back and forth
+     * (2026-11-04, 65 degree turns, then a fall). Empty when the stairs reach the landing.
+     */
+    private List<List<BlockPos>> stairLevels(AxisAlignedBB landing) {
+        int landX = MathHelper.floor_double((landing.minX + landing.maxX) / 2.0);
+        int landZ = MathHelper.floor_double((landing.minZ + landing.maxZ) / 2.0);
+        int[] head = this.lane.cell(0);
+        for (int guard = 0; guard < LANE_STAIR_CELLS; guard++) {
+            int[] built = null;
+            for (int[] step : this.lane.stepsToward(head[0], head[1], landX, landZ)) {
+                if (!BlockUtil.isReplaceable(new BlockPos(step[0], this.lane.layer, step[1]))) {
+                    built = step;
+                    break;
+                }
+            }
+            if (built == null) {
+                break;
+            }
+            head = built;
+        }
+        List<int[]> steps = this.lane.stepsToward(head[0], head[1], landX, landZ);
+        if (steps.isEmpty()) {
+            return new ArrayList<List<BlockPos>>();
+        }
+        List<BlockPos> cells = new ArrayList<BlockPos>(2);
+        for (int[] step : steps) {
+            BlockPos cell = new BlockPos(step[0], this.lane.layer, step[1]);
+            if (!intersects(this.pathStart, cell) && !opponentIn(cell)) {
+                cells.add(cell);
+            }
+        }
+        return cells.isEmpty() ? null : Collections.singletonList(cells);
     }
 
     /** Keep-y off: the block one up where this jump lands, as Clutch built before the lane. Null with keep-y on. */
@@ -2581,7 +2628,11 @@ public class Clutch extends Module {
         if (crossing < 0) {
             return null;
         }
-        BlockPos cell = laneCell(laneIndexAt(this.path.get(crossing))).up();
+        AxisAlignedBB land = this.path.get(crossing);
+        BlockPos cell = (this.lane.diagonal()
+                ? new BlockPos(MathHelper.floor_double((land.minX + land.maxX) / 2.0), this.lane.layer,
+                        MathHelper.floor_double((land.minZ + land.maxZ) / 2.0))
+                : laneCell(laneIndexAt(land))).up();
         if (!BlockUtil.isReplaceable(cell) || BlockUtil.isReplaceable(cell.down()) || intersects(this.pathStart, cell)
                 || opponentIn(cell) || catchTick(this.path, this.pathStart, cell, PLAN_TICKS) < 0) {
             return null;

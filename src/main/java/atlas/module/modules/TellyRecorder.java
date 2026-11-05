@@ -43,7 +43,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * - "S" rows are you: the camera's yaw and pitch (the mouse, not any module's silent look), position, ground,
  *   the movement keys, sprint, the use key and the placements sent that tick. Assist says which helpers were on,
  *   as bits: 1 Scaffold or Clutch (they turn the look and click: leave those ticks out), 2 BridgeAssist (it only
- *   crouches at the edge: the look, jumps and clicks are still your own, the sneak column is not).
+ *   crouches at the edge: the look, jumps and clicks are still your own, the sneak column is not), 4 a module
+ *   that moves the camera itself (AimAssist, Silent Aura on Legit or LockView, AutoClicker's jitter, Tower,
+ *   AutoHeadHitter, AutoBedDef, ProjectileAimBot, AutoRod, Freecam): the look is not only the mouse's.
  * - "O" rows are other players: the yaw and pitch exactly as the server sent them (look packets, not the
  *   smoothed model), the position as sent, ground, sneak, sprint, and the blocks that appeared under them that
  *   tick. With only-bridging on, a player is recorded from PRE_ROLL ticks before a block appears under them until
@@ -212,9 +214,25 @@ public class TellyRecorder extends Module {
 
     static final int ASSIST_PLACING = 1;
     static final int ASSIST_EDGE = 2;
+    static final int ASSIST_LOOK = 4;
 
     private static int assisted() {
-        return (on(Scaffold.class) || on(Clutch.class) ? ASSIST_PLACING : 0) | (on(Eagle.class) ? ASSIST_EDGE : 0);
+        return (on(Scaffold.class) || on(Clutch.class) ? ASSIST_PLACING : 0) | (on(Eagle.class) ? ASSIST_EDGE : 0)
+                | (lookMoved() ? ASSIST_LOOK : 0);
+    }
+
+    /** A module that turns the camera itself is on; Silent Aura only on the modes that turn it. */
+    private static boolean lookMoved() {
+        if (on(AimAssist.class) || on(AutoClicker.class) || on(Tower.class) || on(AutoHeadHitter.class)
+                || on(AutoBedDef.class) || on(ProjectileAimBot.class) || on(AutoRod.class) || on(Freecam.class)) {
+            return true;
+        }
+        Module aura = atlas.Atlas.moduleManager.getModule(KillAura.class);
+        if (aura == null || !aura.isEnabled()) {
+            return false;
+        }
+        String rotations = ((KillAura) aura).rotations.getModeString();
+        return "Legit".equals(rotations) || "LockView".equals(rotations);
     }
 
     private static boolean on(Class<?> type) {

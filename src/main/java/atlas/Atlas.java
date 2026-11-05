@@ -230,6 +230,7 @@ public class Atlas {
         moduleManager.modules.put(NullMove.class, new NullMove());
         moduleManager.modules.put(Pointers.class, new Pointers());
         moduleManager.modules.put(PingFix.class, new PingFix());
+        moduleManager.modules.put(TellyRecorder.class, new TellyRecorder());
         moduleManager.modules.put(ItemUseFix.class, new ItemUseFix());
         moduleManager.modules.put(AutoAuth.class, new AutoAuth());
         moduleManager.modules.put(Capes.class, new Capes());

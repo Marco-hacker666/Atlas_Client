@@ -334,6 +334,12 @@ final class ModuleDocsEn {
         help("Pointers", "scale", "Arrow size.");
         help("Pointers", "radius", "Ring radius.");
         help("Pointers", "distance-radius", "Farther players' arrows sit farther from the crosshair.");
+        d("TellyRecorder", "Records how real players bridge (telly), to make Speed Telly look human later. It records while on and saves when turned off, to config/Atlas/recordings. It records you (camera look, position, keys and placements; ticks with Scaffold or Clutch on are marked) and nearby players (the look and position exactly as the server sent them, and the blocks that appear under them). Nothing leaves your computer; other players are only numbers, with no names, UUIDs or server address.");
+        help("TellyRecorder", "record-self", "Record yourself. Turn Scaffold and Clutch off and bridge by hand while it records.");
+        help("TellyRecorder", "record-others", "Record nearby players.");
+        help("TellyRecorder", "range", "How close a player has to be to be recorded (blocks).");
+        help("TellyRecorder", "only-bridging", "Only players who are bridging: from 2 seconds before a block appears under them to 3 seconds after the last one. Off records everyone in range.");
+        help("TellyRecorder", "max-file-mb", "Stop recording when the file reaches this size.");
         d("PingFix", "While lag modules hold packets, keep-alives still go straight through both ways, so the ping in the tab list stays your real one instead of jumping. Stops PingSpoof and Disabler from holding keep-alives. (From Slinky)");
         d("ItemUseFix", "Use items while breaking a block (eat, block, throw): vanilla ignores right click while mining. (From Slinky)");
         help("KeepSprint", "motion-min", "How much speed a hit leaves, in percent, drawn between min and max on each hit. 100 keeps all of it, 60 is vanilla. After LiquidBounce NextGen.");

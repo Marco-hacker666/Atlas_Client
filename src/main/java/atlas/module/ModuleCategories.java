@@ -67,7 +67,7 @@ public final class ModuleCategories {
                 AntiCheat.class, AntiObfuscate.class, MouseRawInput.class,
                 ResourceSpoofer.class, NoRotate.class, ExploitFixer.class,
                 AutoReconnect.class, StaffDetector.class,
-                MurderMystery.class, PingFix.class);
+                MurderMystery.class, PingFix.class, TellyRecorder.class);
         put(Category.EXPLOIT,
                 Disabler.class, GhostHand.class, ClientSpoofer.class,
                 PingSpoof.class, ServerLag.class, TickBase.class, Freeze.class, ResetVL.class);

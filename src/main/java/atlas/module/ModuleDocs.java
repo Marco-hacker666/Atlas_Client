@@ -603,8 +603,8 @@ public final class ModuleDocs {
         help("Pointers", "scale", "箭頭大小。");
         help("Pointers", "radius", "圓圈半徑。");
         help("Pointers", "distance-radius", "越遠的人箭頭離準心越遠。");
-        d("TellyRecorder", "錄下真人怎麼疊橋（Telly），之後用來讓 Speed Telly 更像真人。開著就會錄，關掉就存檔，檔案在 config/Atlas/recordings。會錄你自己（視角、位置、按鍵、放方塊；開著 Scaffold 或 Clutch 的 tick 會標記起來）和附近的其他玩家（伺服器傳來的原始視角和位置，以及他們腳下出現的方塊）。資料只存在你電腦裡；其他玩家只記成編號，不記名字、UUID 或伺服器位址。");
-        help("TellyRecorder", "record-self", "錄你自己。錄的時候請關掉 Scaffold 和 Clutch，自己疊。");
+        d("TellyRecorder", "錄下真人怎麼疊橋（Telly），之後用來讓 Speed Telly 更像真人。開著就會錄，關掉就存檔，檔案在 config/Atlas/recordings。會錄你自己（視角、位置、按鍵、放方塊；開著 Scaffold、Clutch 或 BridgeAssist 的 tick 會標記起來；BridgeAssist 只會自動蹲，不影響視角和點擊，所以開著它錄也可以用）和附近的其他玩家（伺服器傳來的原始視角和位置，以及他們腳下出現的方塊）。資料只存在你電腦裡；其他玩家只記成編號，不記名字、UUID 或伺服器位址。");
+        help("TellyRecorder", "record-self", "錄你自己。錄的時候請關掉 Scaffold 和 Clutch，自己疊；BridgeAssist 可以開。");
         help("TellyRecorder", "record-others", "錄附近的其他玩家。");
         help("TellyRecorder", "range", "多遠內的玩家才錄（格）。");
         help("TellyRecorder", "only-bridging", "只錄正在疊橋的人：他們腳下出現方塊前 2 秒到最後一個方塊後 3 秒。關掉就錄範圍內所有人。");

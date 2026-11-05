@@ -41,8 +41,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * One CSV per recording in config/Atlas/recordings, one row per player per tick:
  * - "S" rows are you: the camera's yaw and pitch (the mouse, not any module's silent look), position, ground,
- *   the movement keys, sprint, the use key and the placements sent that tick. Assist is 1 while Scaffold or
- *   Clutch is on, so those ticks can be left out: only your own hands are wanted.
+ *   the movement keys, sprint, the use key and the placements sent that tick. Assist says which helpers were on,
+ *   as bits: 1 Scaffold or Clutch (they turn the look and click: leave those ticks out), 2 BridgeAssist (it only
+ *   crouches at the edge: the look, jumps and clicks are still your own, the sneak column is not).
  * - "O" rows are other players: the yaw and pitch exactly as the server sent them (look packets, not the
  *   smoothed model), the position as sent, ground, sneak, sprint, and the blocks that appeared under them that
  *   tick. With only-bridging on, a player is recorded from PRE_ROLL ticks before a block appears under them until
@@ -209,10 +210,16 @@ public class TellyRecorder extends Module {
                 assisted()), true);
     }
 
-    private static boolean assisted() {
-        Module scaffold = atlas.Atlas.moduleManager.getModule(Scaffold.class);
-        Module clutch = atlas.Atlas.moduleManager.getModule(Clutch.class);
-        return scaffold != null && scaffold.isEnabled() || clutch != null && clutch.isEnabled();
+    static final int ASSIST_PLACING = 1;
+    static final int ASSIST_EDGE = 2;
+
+    private static int assisted() {
+        return (on(Scaffold.class) || on(Clutch.class) ? ASSIST_PLACING : 0) | (on(Eagle.class) ? ASSIST_EDGE : 0);
+    }
+
+    private static boolean on(Class<?> type) {
+        Module module = atlas.Atlas.moduleManager.getModule(type);
+        return module != null && module.isEnabled();
     }
 
     private void recordOthers() {
@@ -242,7 +249,7 @@ public class TellyRecorder extends Module {
                     look == null ? player.rotationYaw : look[0], look == null ? player.rotationPitch : look[1],
                     player.serverPosX / 32.0, player.serverPosY / 32.0, player.serverPosZ / 32.0, player.onGround,
                     Float.NaN, Float.NaN, false, player.isSneaking(), player.isSprinting(), false,
-                    count == null ? 0 : count, -1, false);
+                    count == null ? 0 : count, -1, 0);
             Integer until = this.activeUntil.get(id);
             boolean active = !this.onlyBridging.getValue() || until != null && until >= this.tick;
             if (active) {
@@ -316,11 +323,11 @@ public class TellyRecorder extends Module {
 
     static String row(int tick, String src, String id, float yaw, float pitch, double x, double y, double z,
                       boolean ground, float forward, float strafe, boolean jump, boolean sneak, boolean sprint,
-                      boolean use, int place, int ping, boolean assist) {
+                      boolean use, int place, int ping, int assist) {
         return String.format(Locale.ROOT, "%d,%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%s,%s,%d,%d,%d,%d,%d,%d,%d",
                 tick, src, id, yaw, pitch, x, y, z, ground ? 1 : 0, Float.isNaN(forward) ? "" : key(forward),
                 Float.isNaN(strafe) ? "" : key(strafe), jump ? 1 : 0, sneak ? 1 : 0, sprint ? 1 : 0, use ? 1 : 0,
-                place, ping, assist ? 1 : 0);
+                place, ping, assist);
     }
 
     private static String key(float input) {

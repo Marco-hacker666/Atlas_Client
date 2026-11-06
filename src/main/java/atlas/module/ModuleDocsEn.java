@@ -798,7 +798,7 @@ final class ModuleDocsEn {
         help(cl, "max-speed", "Most degrees per tick.");
         help("Scaffold", "turn-speed", "Most degrees turned per tick (DEFAULT to Hypixel modes). The look no longer snaps; if it is not there yet, the click waits a tick. 180 = no limit.");
         help("Scaffold", "humanize", "Turns use the Rotations engine's speed variation and curve.");
-        help("Scaffold", "telly-auto-jump", "SPEED-TELLY mode: jump by itself while W is held on the ground; let go to stop.");
+        help("Scaffold", "telly-auto-jump", "SPEED-TELLY and WEIRD-TELLY: jump by itself while W is held on the ground; let go to stop.");
         help("Scaffold", "pause-on-correction", "After a setback, wait a round trip before placing; a refused block pauses too. Stops strings of ghost blocks placed from the wrong position.");
         help(cl, "pre-aim", "Turn roughly toward the spot before it is time, so less turning is left.");
         help(cl, "counter-knockback", "Walk back when knocked, cancelling part of the knockback.");

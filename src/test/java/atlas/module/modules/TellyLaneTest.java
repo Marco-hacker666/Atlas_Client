@@ -106,4 +106,65 @@ public class TellyLaneTest {
         assertArrayEquals("already on the line", point, again, 1.0E-9);
         assertTrue("further along", point[0] > 0.5 && point[1] > 0.5);
     }
+
+    @Test
+    public void aHalfTurnIsCutShortAndNothingElseIs() {
+        assertEquals(-45.0F, TellyLane.awayFromHalfTurn(-210.0F, -45.0F, 150.0F), 1.0E-3F);
+        assertEquals(-130.0F, TellyLane.awayFromHalfTurn(-280.0F, -105.0F, 150.0F), 1.0E-3F);
+        assertEquals("turning the other way", -430.0F, TellyLane.awayFromHalfTurn(-280.0F, -455.0F, 150.0F), 1.0E-3F);
+    }
+
+    @Test
+    public void theGridIsEveryFortyFiveDegreesAtAnyAngle() {
+        for (float yaw : new float[]{0.0F, 45.0F, -45.0F, -450.0F, 765.0F, 90.05F, -135.08F}) {
+            assertTrue(String.valueOf(yaw), TellyLane.onGrid(yaw));
+        }
+        assertFalse(TellyLane.onGrid(47.0F));
+        assertFalse(TellyLane.onGrid(-45.3F));
+    }
+
+    @Test
+    public void aLookComesHomeShortOfTheGrid() {
+        assertEquals(-45.5F, TellyLane.offGrid(-45.0F, -210.0F, 0.5F), 1.0E-3F);
+        assertEquals(-44.5F, TellyLane.offGrid(-45.0F, 100.0F, 0.5F), 1.0E-3F);
+        assertEquals("not on the grid: left alone", 28.35F, TellyLane.offGrid(28.35F, 200.0F, 0.5F), 1.0E-3F);
+        assertFalse(TellyLane.onGrid(TellyLane.offGrid(-45.0F, -210.0F, 0.3F)));
+    }
+
+    @Test
+    public void theTurnWaitsOnlyWhileEveryBlockStillFits() {
+        assertTrue("four blocks, eleven ticks", TellyLane.waits(11, 4));
+        assertTrue(TellyLane.waits(10, 4));
+        assertTrue(TellyLane.waits(9, 4));
+        assertFalse("turn 4, blocks 4, no spare", TellyLane.waits(8, 4));
+        assertFalse("a diagonal jump has no time to give", TellyLane.waits(10, 6));
+        assertFalse(TellyLane.waits(0, 1));
+        assertFalse("no crossing", TellyLane.waits(-1, 1));
+    }
+
+    @Test
+    public void stairsCountTheStepsLeftOnBothAxes() {
+        TellyLane lane = new TellyLane(0, 0, 64, -45.0F);
+        assertTrue(lane.diagonal());
+        assertEquals(6, lane.stepsLeft(0, 0, 3, 3));
+        assertEquals(1, lane.stepsLeft(3, 2, 3, 3));
+        assertEquals(0, lane.stepsLeft(3, 3, 3, 3));
+        assertEquals("past the landing counts for nothing", 2, lane.stepsLeft(5, 1, 3, 3));
+    }
+
+    @Test
+    public void aBigStepHomeStopsShortOnTheWay() {
+        assertEquals(-60.0F, TellyLane.shortOfHome(-210.0F, -45.0F, 15.0F), 1.0E-3F);
+        assertEquals(-30.0F, TellyLane.shortOfHome(100.0F, -45.0F, 15.0F), 1.0E-3F);
+        assertEquals("a small step goes home", -45.0F, TellyLane.shortOfHome(-80.0F, -45.0F, 15.0F), 1.0E-3F);
+        assertEquals("across the seam", -135.0F, TellyLane.shortOfHome(120.0F, -120.0F, 15.0F), 1.0E-3F);
+        assertEquals("a small step across the seam", 180.0F, TellyLane.shortOfHome(-150.0F, 180.0F, 15.0F), 1.0E-3F);
+    }
+
+    @Test
+    public void aJumpGoesFromOneSideOfTheViewOrTheOther() {
+        assertEquals(-45.0F, TellyLane.jumpYaw(0.0F, -1, 45.0F), 1.0E-3F);
+        assertEquals(45.0F, TellyLane.jumpYaw(0.0F, 1, 45.0F), 1.0E-3F);
+        assertEquals("off: the view", 90.0F, TellyLane.jumpYaw(90.0F, 1, 0.0F), 1.0E-3F);
+    }
 }

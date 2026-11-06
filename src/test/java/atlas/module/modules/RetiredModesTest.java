@@ -61,6 +61,20 @@ public class RetiredModesTest {
         assertFalse(java.util.Arrays.asList(scaffold.rotationMode.visibleModes()).contains("TELLY"));
     }
 
+    /** 2026-11-06 (owner): the angled jump is a mode of its own, on the end; only it shows the angle. */
+    @Test
+    public void weirdTellyIsAddedAtTheEnd() {
+        Scaffold scaffold = new Scaffold();
+        assertTrue(scaffold.rotationMode.parseString("WEIRD-TELLY"));
+        assertEquals(13, (int) scaffold.rotationMode.getValue());
+        assertTrue(java.util.Arrays.asList(scaffold.rotationMode.visibleModes()).contains("WEIRD-TELLY"));
+        assertTrue(scaffold.tellyJumpAngle.isVisible());
+        assertTrue("same switches as SPEED-TELLY", scaffold.tellyAutoJump.isVisible());
+        assertFalse("off, nothing is angled", scaffold.isWeirdTelly());
+        assertTrue(scaffold.rotationMode.parseString("SPEED-TELLY"));
+        assertFalse(scaffold.tellyJumpAngle.isVisible());
+    }
+
     /** 2026-11-01 (owner): SNAP is back in the menu; SNAP2 loads as itself again, hidden as before. */
     @Test
     public void scaffoldSnapIsBack() {

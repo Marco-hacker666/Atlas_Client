@@ -17,6 +17,17 @@ final class TellyLane {
 
     /** indexOf: not a cell of this lane. */
     static final int OFF = Integer.MIN_VALUE;
+    /** A yaw step this big counts as a half turn; Intave SharpRotation starts at 170. */
+    static final float HALF_TURN = 168.0F;
+    /** Degrees from a multiple of 45 that count as on the grid; Intave AngleSnap uses 0.08. */
+    static final float GRID_MARGIN = 0.12F;
+    private static final float GRID = 45.0F;
+    /** A yaw step above this between two still ticks reads as a snap (Intave RotationSnapHeuristic). */
+    static final float SNAP = 40.0F;
+    /** Ticks a turn from forward to the blocks takes: about 45 degrees a tick from rest. */
+    static final int TURN_TICKS = 4;
+    /** Ticks in hand on top of the turn and one tick for each block. */
+    static final int SPARE_TICKS = 0;
 
     /** The way it goes, on the 45 degree grid. */
     final float yaw;
@@ -109,5 +120,45 @@ final class TellyLane {
     double[] ahead(double x, double z, double distance) {
         double along = (x - this.lineX) * this.dirX + (z - this.lineZ) * this.dirZ + distance;
         return new double[]{this.lineX + this.dirX * along, this.lineZ + this.dirZ * along};
+    }
+
+    /** The yaw to step to on the way from one look to another: only this far round when the whole step is a half turn. */
+    static float awayFromHalfTurn(float from, float to, float room) {
+        float delta = MathHelper.wrapAngleTo180_float(to - from);
+        return Math.abs(delta) < HALF_TURN ? to : from + Math.signum(delta) * room;
+    }
+
+    static boolean onGrid(float yaw) {
+        float left = (yaw % GRID + GRID) % GRID;
+        return Math.min(left, GRID - left) < GRID_MARGIN;
+    }
+
+    /** This yaw, or a little short of it on the side of {@code from} when it is on the grid. */
+    static float offGrid(float yaw, float from, float amount) {
+        if (!onGrid(yaw)) {
+            return yaw;
+        }
+        return yaw + (MathHelper.wrapAngleTo180_float(from - yaw) < 0.0F ? -amount : amount);
+    }
+
+    /** Blocks the stairs still need from this head to the landing column. */
+    int stepsLeft(int headX, int headZ, int landX, int landZ) {
+        return Math.max(0, (landX - headX) * this.stepX) + Math.max(0, (landZ - headZ) * this.stepZ);
+    }
+
+    /** Whether the turn can wait another tick: the feet reach the layer later than the turn and every block take. */
+    static boolean waits(int crossing, int blocksLeft) {
+        return crossing > blocksLeft + TURN_TICKS + SPARE_TICKS;
+    }
+
+    /** Where a big step home stops this tick: this far short, on the way. A step under SNAP goes all the way. */
+    static float shortOfHome(float from, float to, float rest) {
+        float delta = MathHelper.wrapAngleTo180_float(to - from);
+        return Math.abs(delta) <= SNAP ? to : to - Math.signum(delta) * rest;
+    }
+
+    /** The look a jump goes from: this far to one side of the view. */
+    static float jumpYaw(float view, int side, float angle) {
+        return view + side * angle;
     }
 }

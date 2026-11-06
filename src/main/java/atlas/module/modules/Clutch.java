@@ -497,10 +497,16 @@ public class Clutch extends Module {
     private float laneYaw;
     /** Ticks before a landing the look may start home, so the turn back is not one packet. */
     private static final int LANE_BACK_TICKS = 3;
-    /** A look closer to home than this is not worth a jump without sprint. */
-    private static final float LANE_KEEP_MIN = 45.0F;
-    /** The yaw Speed Telly really sent over the last seconds. */
-    private final TellyYawWindow yawWindow = new TellyYawWindow();
+    /** A look further than this from home is already on the blocks: no turning forward to wait. */
+    private static final float LANE_FORWARD_MAX = 60.0F;
+    /** Blocks the lane still wants this jump. */
+    private int laneLeft;
+    /** Off the view by more than this, the look is round at the blocks; under the second, it is back. */
+    private static final float LANE_ROUND = 100.0F;
+    private static final float LANE_BACK = 80.0F;
+    /** The side of the view the next jump goes from, 1 or -1. */
+    private int laneSide = 1;
+    private boolean laneRound;
     /** Ticks until the feet reach the layer being built. */
     private int laneCrossing;
     /** Where the steering heads for: the last standing place, or the ladder. */
@@ -840,9 +846,6 @@ public class Clutch extends Module {
         }
         Packet<?> packet = event.getPacket();
         if (event.getType() == EventType.SEND) {
-            if (this.lane != null && packet instanceof C03PacketPlayer && ((C03PacketPlayer) packet).getRotating()) {
-                this.yawWindow.look(((C03PacketPlayer) packet).getYaw(), System.currentTimeMillis());
-            }
             if (packet instanceof C03PacketPlayer.C06PacketPlayerPosLook && !this.inUpdate) {
                 corrected((C03PacketPlayer.C06PacketPlayerPosLook) packet);
             }
@@ -2015,7 +2018,7 @@ public class Clutch extends Module {
         for (int guard = 0; guard < 3 && turn > 2.0F
                 && (Math.abs(turn - this.placedTurn) < 1.0E-3F
                 || atlas.management.PlaceRotations.wouldDuplicate(next[0])
-                || this.lane != null && TellyYawWindow.onGrid(next[0])); guard++) {
+                || this.lane != null && TellyLane.onGrid(next[0])); guard++) {
             /* Grim DuplicateRotPlace flags a placement whose yaw step equals the
                one at the previous judged placement (22:09:20, x=0.0). One mouse
                count more breaks the tie. Checked against the server's memory
@@ -2073,8 +2076,8 @@ public class Clutch extends Module {
     }
 
     private float stepFor(Plan plan) {
-        if (plan.catchTick < 0) {
-            /* A chain has a deadline of its own blocks after this one. */
+        if (plan.catchTick < 0 || this.laneNow && lateTurn()) {
+            /* A chain has a deadline of its own blocks after this one; so has a lane that waited for the top. */
             return this.maxSpeed.getValue();
         }
         float needed = (float) plan.cost / Math.max(1, plan.catchTick);
@@ -2161,6 +2164,7 @@ public class Clutch extends Module {
         this.holdThisTick = false;
         this.laneKeys = false;
         updateLane();
+        updateLaneSide();
 
         updateOpponentBoxes();
         predict(false);
@@ -2242,17 +2246,11 @@ public class Clutch extends Module {
                 boolean laneJump = this.lane != null && MoveUtil.isForwardPressed()
                         && mc.gameSettings.keyBindJump.isKeyDown();
                 if (laneJump) {
-                    if (laneKeepsLook(backYaw)) {
-                        /* This jump stays turned round: no sprint boost, no half turn there and back. The look is
-                           already on the blocks, and the keys still go along the lane. */
-                        this.resetting = false;
+                    backYaw = laneHome(laneBackYaw());
+                    if (laneJumpAngle() > 0.0F) {
+                        /* W and a side key: sprint holds, and the jump's yaw is off the lane, not the walk. */
                         aimAlongLane();
-                        trace(state() + String.format(" | lane: look kept, %.0f degrees of yaw in the window",
-                                this.yawWindow.sum(System.currentTimeMillis())));
-                        holdRotation(event);
-                        return;
                     }
-                    backYaw = laneHome(backYaw);
                 }
                 if (!this.resetting) {
                     int spread = this.snapbackDelayRandom.getValue();
@@ -2267,8 +2265,14 @@ public class Clutch extends Module {
                 }
                 if (jump && !this.holdThisTick) {
                     /* Whatever an early start left: a jump goes on the yaw sent, so a little short costs little. */
-                    float toYaw = laneJump ? TellyYawWindow.awayFromHalfTurn(this.sentYaw, backYaw,
-                            150.0F + this.turnRandomSource.nextFloat() * 15.0F) : backYaw;
+                    float toYaw = backYaw;
+                    if (laneJump) {
+                        /* Not all of it in one packet with the ticks either side still: Intave RotationSnapHeuristic,
+                           [0.00/167.40/0.00] at 21:45:39. The rest goes out next tick. */
+                        toYaw = TellyLane.shortOfHome(this.sentYaw, backYaw, 12.0F + this.turnRandomSource.nextFloat() * 8.0F);
+                        toYaw = TellyLane.awayFromHalfTurn(this.sentYaw, toYaw, 150.0F + this.turnRandomSource.nextFloat() * 15.0F);
+                        this.engine.reset();
+                    }
                     float[] back = RotationEngine.quantize(this.sentYaw, this.sentPitch, toYaw, backPitch);
                     this.sentYaw = back[0];
                     this.sentPitch = back[1];
@@ -2363,6 +2367,11 @@ public class Clutch extends Module {
         if (levels != null && levels.isEmpty()) {
             trace(state() + " | lane: built as far as this jump lands");
             laneStartHome(event);
+            return;
+        }
+        if (levels != null && extra == null && laneWaitsForTop()) {
+            trace(state() + " | lane: facing forward, " + this.laneLeft + " to place, layer in " + this.laneCrossing + "t");
+            laneFaceForward(event);
             return;
         }
         if (levels == null) {
@@ -2510,31 +2519,76 @@ public class Clutch extends Module {
         this.lane = null;
         this.laneNow = false;
         this.laneKeys = false;
-        this.yawWindow.clear();
     }
 
-    /** The yaw home, from the look sent: the camera's, or the view before a REAL turn. */
+    /**
+     * WEIRD-TELLY's telly-jump-angle: how far off the view the look comes home for a jump. SILENT only: REAL would swing
+     * the camera with it. Every degree off is two less per jump for Intave RotationSpeed. SPEED-TELLY jumps at the view.
+     */
+    private float laneJumpAngle() {
+        Scaffold scaffold = (Scaffold) Atlas.moduleManager.getModule(Scaffold.class);
+        return scaffold == null || this.mode.getValue() == 1 || !scaffold.isWeirdTelly() ? 0.0F
+                : scaffold.tellyJumpAngle.getValue();
+    }
+
+    /** The side changes once per trip round to the blocks: a sprint jump goes along its yaw, so the drift cancels. */
+    private void updateLaneSide() {
+        if (this.lane == null || !this.hasSent) {
+            return;
+        }
+        float away = Math.abs(MathHelper.wrapAngleTo180_float(this.sentYaw - mc.thePlayer.rotationYaw));
+        if (away > LANE_ROUND && !this.laneRound) {
+            this.laneRound = true;
+            this.laneSide = -this.laneSide;
+        } else if (away < LANE_BACK) {
+            this.laneRound = false;
+        }
+    }
+
+    /** The yaw home, from the look sent: off the camera's by telly-jump-angle, or the view before a REAL turn. */
     private float laneBackYaw() {
         float view = this.mode.getValue() == 1 ? this.viewYaw : mc.thePlayer.rotationYaw;
-        return this.sentYaw + MathHelper.wrapAngleTo180_float(view - this.sentYaw);
+        float home = TellyLane.jumpYaw(view, this.laneSide, laneJumpAngle());
+        return this.sentYaw + MathHelper.wrapAngleTo180_float(home - this.sentYaw);
     }
 
     /** Off Intave's 45 degree grid, stopping short of it on the side the look comes from. */
     private float laneHome(float backYaw) {
-        return TellyYawWindow.offGrid(backYaw, this.sentYaw, 0.3F + this.turnRandomSource.nextFloat() * 0.4F);
+        return TellyLane.offGrid(backYaw, this.sentYaw, 0.3F + this.turnRandomSource.nextFloat() * 0.4F);
+    }
+
+    private boolean lateTurn() {
+        Scaffold scaffold = (Scaffold) Atlas.moduleManager.getModule(Scaffold.class);
+        return scaffold != null && scaffold.tellyLateTurn.getValue();
     }
 
     /**
-     * Turning home now and out again would take the yaw of the last seconds over telly-yaw-limit (Intave RotationSpeed
-     * sums yaw over 5 s; about 2250 flagged from 22:34:39 on). Keeping this jump's look is what is left to give: it
-     * costs the sprint boost of one jump, and leaves the aim and the blocks as they were.
+     * Stay facing forward for now: a telly player sprints up the jump and turns near the top (recording of 2026-11-06).
+     * Only while there is clearly time for the turn and every block, and never once anything is off: falling, hurt, or
+     * a block refused goes straight to the normal aim.
      */
-    private boolean laneKeepsLook(float backYaw) {
-        Scaffold scaffold = (Scaffold) Atlas.moduleManager.getModule(Scaffold.class);
-        int limit = scaffold == null ? 0 : scaffold.tellyYawLimit.getValue();
-        float away = Math.abs(MathHelper.wrapAngleTo180_float(backYaw - this.sentYaw));
-        return limit > 0 && away >= LANE_KEEP_MIN
-                && this.yawWindow.sum(System.currentTimeMillis()) + 2.0 * away > limit;
+    private boolean laneWaitsForTop() {
+        if (!lateTurn() || !MoveUtil.isForwardPressed() || !mc.gameSettings.keyBindJump.isKeyDown()
+                || mc.thePlayer.motionY <= 0.0 || mc.thePlayer.hurtTime > 0
+                || this.attemptRefused > 0 || this.pauseTicks > 0) {
+            return false;
+        }
+        if (this.hasSent && Math.abs(MathHelper.wrapAngleTo180_float(laneBackYaw() - this.sentYaw)) > LANE_FORWARD_MAX) {
+            return false;
+        }
+        return TellyLane.waits(this.laneCrossing, this.laneLeft);
+    }
+
+    /** The look stays home, following the mouse. Nothing to do while the camera's own look is what goes out. */
+    private void laneFaceForward(UpdateEvent event) {
+        if (!this.hasSent) {
+            return;
+        }
+        float backYaw = laneHome(laneBackYaw());
+        float backPitch = this.mode.getValue() == 1 ? this.viewPitch : mc.thePlayer.rotationPitch;
+        stepRotation(backYaw, backPitch, Math.max(this.speed.getValue(),
+                RotationEngine.angle(this.sentYaw, this.sentPitch, backYaw, backPitch)));
+        applyRotation(event);
     }
 
     /**
@@ -2543,7 +2597,7 @@ public class Clutch extends Module {
      */
     private void laneStartHome(UpdateEvent event) {
         boolean jumping = MoveUtil.isForwardPressed() && mc.gameSettings.keyBindJump.isKeyDown();
-        if (!jumping || this.landingTick < 1 || this.landingTick > LANE_BACK_TICKS || laneKeepsLook(laneBackYaw())) {
+        if (!jumping || this.landingTick < 1 || this.landingTick > LANE_BACK_TICKS) {
             holdRotation(event);
             return;
         }
@@ -2668,6 +2722,10 @@ public class Clutch extends Module {
         for (int i = this.lane.anchor; i <= stop; i++) {
             BlockPos cell = laneCell(i);
             if (BlockUtil.isReplaceable(cell)) {
+                this.laneLeft = 0;
+                for (int j = i; j <= stop; j++) {
+                    this.laneLeft += BlockUtil.isReplaceable(laneCell(j)) ? 1 : 0;
+                }
                 return intersects(this.pathStart, cell) || opponentIn(cell) ? null : one(cell);
             }
         }
@@ -2701,6 +2759,7 @@ public class Clutch extends Module {
         if (steps.isEmpty()) {
             return new ArrayList<List<BlockPos>>();
         }
+        this.laneLeft = this.lane.stepsLeft(head[0], head[1], landX, landZ);
         List<BlockPos> cells = new ArrayList<BlockPos>(2);
         for (int[] step : steps) {
             BlockPos cell = new BlockPos(step[0], this.lane.layer, step[1]);
@@ -2730,6 +2789,7 @@ public class Clutch extends Module {
             return null;
         }
         this.laneCrossing = crossing;
+        this.laneLeft = 1;
         return cell;
     }
 

@@ -51,6 +51,7 @@ public class Scaffold extends Module {
     private static final int ROTATION_SNAP2 = 9;
     private static final int ROTATION_POLAR = 10;
     private static final int ROTATION_SPEED_TELLY = 12;
+    private static final int ROTATION_WEIRD_TELLY = 13;
     /* polar.json's GodBridge technique (LiquidBounce): the Mode index is also
        the ledge action the decision returns ({@link #polarLedgeAction}).
        Modes = [Jump], ForceSneakBelowCount = 5, SneakTime = 1..1. */
@@ -112,12 +113,13 @@ public class Scaffold extends Module {
     private int threeFmcPlaceCooldown = 0;
     private float lastSnapPlaceYaw = Float.NaN;
     private float lastSnapPlacePitch = Float.NaN;
-    public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2", "POLAR", "TELLY", "SPEED-TELLY"})
+    public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2", "POLAR", "TELLY", "SPEED-TELLY", "WEIRD-TELLY"})
             /* 2026-10-31 (owner's consolidation): SIDEWAYS and 3FMC retired (indices kept); a config naming one gets
                GODBRIDGE. SNAP and SNAP2 came back 2026-11-01 (owner: "put Scaffold snap back"), SNAP2 hidden as before. */
             .retire("GODBRIDGE", "SIDEWAYS", "3FMC")
             /* 2026-11-04 (owner: "delete Telly, keep Speed Telly"): index 11 stays taken; a config naming it, or the
-               name it had before 2026-10-13, gets SPEED-TELLY. */
+               name it had before 2026-10-13, gets SPEED-TELLY. 2026-11-06 (owner: "bring speed telly back, call the
+               current one weird telly"): WEIRD-TELLY goes on the end; both run on Clutch, only the jump differs. */
             .retire("SPEED-TELLY", "TELLY")
             .alias("B4", "SPEED-TELLY")
             /* 2026-10-08: fewer modes in the menu; the rest still load from old configs. */
@@ -214,8 +216,10 @@ public class Scaffold extends Module {
     public final BooleanProperty pauseOnCorrection = new BooleanProperty("pause-on-correction", true);
     /* SPEED-TELLY (2026-11-04): walking forward jumps by itself. */
     public final BooleanProperty tellyAutoJump = new BooleanProperty("telly-auto-jump", true, this::isSpeedTellyMode);
-    /* 2026-11-05: yaw allowed over 5 s (Intave flags at 2250, 1750 at low trust); past it a jump keeps its look. 0 is off. */
-    public final IntProperty tellyYawLimit = new IntProperty("telly-yaw-limit", 1700, 0, 3000, this::isSpeedTellyMode);
+    /* 2026-11-06: sprint up the jump and turn near the top, when there is time for it. Off: turn from the first tick. */
+    public final BooleanProperty tellyLateTurn = new BooleanProperty("telly-late-turn", true, this::isSpeedTellyMode);
+    /* 2026-11-06, WEIRD-TELLY: degrees off the view a jump goes from, sides in turn, sprint kept. */
+    public final IntProperty tellyJumpAngle = new IntProperty("telly-jump-angle", 45, 0, 60, this::isWeirdTellyMode);
     private int tick = 0;
     private int pauseTicks = 0;
     private volatile boolean correctionPending = false;
@@ -701,7 +705,16 @@ public class Scaffold extends Module {
     }
 
     private boolean isSpeedTellyMode() {
-        return this.rotationMode.getValue() == ROTATION_SPEED_TELLY;
+        return this.rotationMode.getValue() == ROTATION_SPEED_TELLY || isWeirdTellyMode();
+    }
+
+    private boolean isWeirdTellyMode() {
+        return this.rotationMode.getValue() == ROTATION_WEIRD_TELLY;
+    }
+
+    /** On, in WEIRD-TELLY: jumps go from off to the side of the view. */
+    public boolean isWeirdTelly() {
+        return this.isEnabled() && this.isWeirdTellyMode();
     }
 
     /** On, in SPEED-TELLY: Clutch treats this as its hold key being down. */

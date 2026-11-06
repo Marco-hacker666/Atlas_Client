@@ -178,4 +178,14 @@ public class ScaffoldPolarTest {
         assertFalse(modes.parseString("JumpReset"));
         assertEquals("an unknown name leaves the mode alone", BACKWARDS, intValue(modes));
     }
+
+    @Test
+    public void aJumpComesEverySoManyBlocks() {
+        assertFalse("six of seven", Scaffold.jumpDue(6, 7, true, -1));
+        assertTrue(Scaffold.jumpDue(7, 7, true, -1));
+        assertTrue("late is still due", Scaffold.jumpDue(9, 7, true, -1));
+        assertFalse("only from the ground", Scaffold.jumpDue(7, 7, false, -1));
+        assertFalse("0 is off", Scaffold.jumpDue(20, 0, true, -1));
+        assertFalse("Jump Boost goes too high", Scaffold.jumpDue(7, 7, true, 2));
+    }
 }

@@ -173,6 +173,10 @@ public class Scaffold extends Module {
     private final ModeProperty polarModes = new ModeProperty("polar-modes", POLAR_JUMP,
             new String[]{"Jump", "Sneak", "StopInput", "Backwards"},
             this::lbGodBridge);
+    /* 2026-11-07 (owner: "stack seven, then jump, as LiquidBounce"): a jump every so many blocks. LiquidBounce has no
+       such count: it jumps at a ledge it cannot place at, which reads as a rhythm. 0 leaves only the ledge action. */
+    private final IntProperty jumpEveryBlocks = new IntProperty("jump-every-blocks", 7, 0, 20, this::lbGodBridge);
+    private int blocksSinceJump = 0;
     private int polarLedgeSneakTicks = 0;
     private boolean polarLedgeStopInput = false;
     private boolean polarLedgeStepBack = false;
@@ -218,8 +222,8 @@ public class Scaffold extends Module {
     public final BooleanProperty tellyAutoJump = new BooleanProperty("telly-auto-jump", true, this::isSpeedTellyMode);
     /* 2026-11-06: sprint up the jump and turn near the top, when there is time for it. Off: turn from the first tick. */
     public final BooleanProperty tellyLateTurn = new BooleanProperty("telly-late-turn", true, this::isSpeedTellyMode);
-    /* 2026-11-06, WEIRD-TELLY: degrees off the view a jump goes from, sides in turn, sprint kept. */
-    public final IntProperty tellyJumpAngle = new IntProperty("telly-jump-angle", 45, 0, 60, this::isWeirdTellyMode);
+    /* 2026-11-06, WEIRD-TELLY: degrees off the view a jump goes from, sides in turn. 45 drifted about 1.2 blocks a jump. */
+    public final IntProperty tellyJumpAngle = new IntProperty("telly-jump-offset", 8, 0, 30, this::isWeirdTellyMode);
     private int tick = 0;
     private int pauseTicks = 0;
     private volatile boolean correctionPending = false;
@@ -457,12 +461,27 @@ public class Scaffold extends Module {
         return enumFacing;
     }
 
+    /**
+     * 2026-11-07 (owner: "it still stacks upward"): a GodBridge jump is to cross a gap, not to climb, so in the air the
+     * block goes on the layer the jump left from. Keep-y itself is not used for this: it brings its own auto jump. The jump
+     * key held by hand still builds up.
+     */
+    private boolean godBridgeHoldsLayer() {
+        return this.lbGodBridge() && !mc.thePlayer.onGround && !mc.gameSettings.keyBindJump.isKeyDown();
+    }
+
     private BlockData getBlockData() {
+        return this.getBlockData(0.0, 0.0);
+    }
+
+    /** The block to place from, for the column this far from the player. */
+    private BlockData getBlockData(double aheadX, double aheadZ) {
         int startY = MathHelper.floor_double(mc.thePlayer.posY);
+        boolean holdLayer = (this.stage != 0 || this.godBridgeHoldsLayer()) && !this.shouldKeepY;
         BlockPos targetPos = new BlockPos(
-                MathHelper.floor_double(mc.thePlayer.posX),
-                (this.stage != 0 && !this.shouldKeepY ? Math.min(startY, this.startY) : startY) - 1,
-                MathHelper.floor_double(mc.thePlayer.posZ)
+                MathHelper.floor_double(mc.thePlayer.posX + aheadX),
+                (holdLayer ? Math.min(startY, this.startY) : startY) - 1,
+                MathHelper.floor_double(mc.thePlayer.posZ + aheadZ)
         );
         if (!BlockUtil.isReplaceable(targetPos)) {
             return null;
@@ -478,7 +497,7 @@ public class Scaffold extends Module {
                                 mc.thePlayer.getDistance((double) pos.getX() + 0.5, (double) pos.getY() + 0.5, (double) pos.getZ() + 0.5)
                                         > (double) mc.playerController.getBlockReachDistance()
                         )
-                                && (this.stage == 0 || this.shouldKeepY || pos.getY() < this.startY)) {
+                                && (!holdLayer || pos.getY() < this.startY)) {
                             for (EnumFacing facing : EnumFacing.VALUES) {
                                 if (facing != EnumFacing.DOWN) {
                                     BlockPos blockPos = pos.offset(facing);
@@ -540,6 +559,7 @@ public class Scaffold extends Module {
                 }
                 this.markPlaced(blockPos.offset(enumFacing));
                 this.eagleBlocksPlaced++;
+                this.blocksSinceJump++;
                 if (this.swing.getValue()) {
                     mc.thePlayer.swingItem();
                 } else {
@@ -870,6 +890,10 @@ public class Scaffold extends Module {
                         }
                     }
                 }
+                if (this.lbGodBridge()) {
+                    this.godBridgeTick(event);
+                    return;
+                }
                 float currentYaw = this.getCurrentYaw();
                 float yawDiffTo180 = RotationUtil.wrapAngleDiff(currentYaw - 180.0F, event.getYaw());
                 float diagonalYaw = this.isDiagonal(currentYaw)
@@ -903,24 +927,6 @@ public class Scaffold extends Module {
                                 this.pitch = RotationUtil.quantizeAngle(85.0F);
                             } else {
                                 this.yaw = RotationUtil.quantizeAngle(diagonalYaw);
-                            }
-                            break;
-                        case ROTATION_GODBRIDGE: // God Bridge Mode
-                        case ROTATION_POLAR: // Polar: LiquidBounce GodBridge technique
-                            // 1. SNAP YAW TO NEAREST 45-DEGREE DIAGONAL
-                            // This finds if you are facing 45, 135, -45, or -135 and locks you there perfectly.
-                            float roundedYaw = Math.round(currentYaw / 45.0f) * 45.0f;
-                            this.yaw = RotationUtil.quantizeAngle(roundedYaw);
-
-                            // 2. SET THE GODBRIDGE PITCH
-                            if (this.pitch == 0.0F || !this.canRotate) {
-        /*
-           75.6f to 79.5f is the "Golden Range" for Godbridging.
-           - 75.6f is good for high CPS/Short Drag
-           - 79.3f is common for "Telly" or standard Godbridge
-        */
-                                float godBridgePitch = 79.3f;
-                                this.pitch = RotationUtil.quantizeAngle(godBridgePitch);
                             }
                             break;
                         case 5:
@@ -960,15 +966,9 @@ public class Scaffold extends Module {
                     }
                 }
                 BlockData blockData = this.getBlockData();
-                boolean godBridge = this.rotationMode.getValue() == ROTATION_GODBRIDGE
-                        || this.rotationMode.getValue() == ROTATION_POLAR;
-                float[] godBridgeLook = godBridge && blockData != null ? this.godBridgeRotation(this.yaw) : null;
-                this.updatePolarLedge(blockData, godBridgeLook);
-                /* The aim is measured from the look already sent -- or, in
-                   GodBridge, from the fixed look, so a correction stays as
-                   close to it as the edge allows (S4c). */
-                float refYaw = godBridgeLook != null ? godBridgeLook[0] : event.getYaw();
-                float refPitch = godBridgeLook != null ? godBridgeLook[1] : event.getPitch();
+                /* The aim is measured from the look already sent. */
+                float refYaw = event.getYaw();
+                float refPitch = event.getPitch();
                 float aimDiff = Float.MAX_VALUE;
                 Vec3 hitVec = null;
                 if (blockData != null) {
@@ -1032,35 +1032,6 @@ public class Scaffold extends Module {
                         aimDiff = bestDiff;
                     } else if (threeFmcMode) {
                         this.canRotate = false;
-                    }
-                }
-                if (godBridgeLook != null) {
-                    /* S4 (2026-10-07): LiquidBounce's GodBridge. The look is
-                       fixed by the walking direction, not aimed at the block:
-                       it barely moves from tick to tick, and the click comes
-                       only when that look lands on a wanted face
-                       (onUpdateClick, lookHit). Until now this mode re-aimed
-                       at the block every tick -- 30-37 degree turns on the
-                       click ticks in the 2026-10-07 Pika log. */
-                    float[] fixed = godBridgeLook;
-                    if (!this.lbGodBridge()
-                            && aimDiff != Float.MAX_VALUE
-                            && this.lookHit(blockData, fixed[0], fixed[1]) == null) {
-                        /* S4d (2026-10-08): the fixed look misses the face from
-                           here: aim at the point on it nearest that look
-                           (this.yaw/pitch, from the face loop above, measured
-                           from the fixed look) and place there. No turn limit
-                           and no ledge jump any more -- the user wants the
-                           block aimed at and placed, not a jump. */
-                        fixed = new float[]{this.yaw, this.pitch};
-                    }
-                    this.yaw = fixed[0];
-                    this.pitch = fixed[1];
-                    this.canRotate = true;
-                    if (hitVec == null) {
-                        /* A placeholder only: onUpdateClick replaces it with
-                           where the sent look lands, or clicks nothing. */
-                        hitVec = new Vec3(blockData.blockPos()).addVector(0.5, 0.5, 0.5);
                     }
                 }
                 boolean towerRotating = this.towering || this.isTowering();
@@ -1149,7 +1120,7 @@ public class Scaffold extends Module {
                        0.0096, which is no one's sensitivity. The click is then
                        re-aimed along the rotation actually sent, so the face
                        and the point it claims are the ones that rotation hits. */
-                    if (this.turnLimited() && !towerRotating && !godBridge && blockData != null
+                    if (this.turnLimited() && !towerRotating && blockData != null
                             && this.lookHit(blockData, event.getYaw(), event.getPitch()) != null) {
                         /* S3: the look the server already has puts a block where
                            it is wanted -- keep it. No turn: the click is made with
@@ -1588,8 +1559,8 @@ public class Scaffold extends Module {
         return mode == ROTATION_GODBRIDGE || mode == ROTATION_POLAR;
     }
 
-    /** GodBridge: which side of the block row the player walks on. */
-    private boolean godBridgeRightSide;
+    /** GodBridge: the look of this run (2026-11-07). */
+    private final GodBridgeLook godBridge = new GodBridgeLook();
 
     /**
      * S4 (2026-10-07): LiquidBounce GodBridge's look
@@ -1601,27 +1572,45 @@ public class Scaffold extends Module {
      */
     private float[] godBridgeRotation(float aimYaw) {
         if (!MoveUtil.isForwardPressed()) {
+            this.godBridge.release();
             float axis = (float) Math.floor(aimYaw / 90.0F) * 90.0F;
             return new float[]{axis + 45.0F, 75.0F};
         }
-        float movingYaw = Math.round((this.getCurrentYaw() + 180.0F) / 45.0F) * 45.0F;
-        if (movingYaw % 90.0F != 0.0F) {
-            return new float[]{movingYaw, 75.6F};
+        return this.godBridge.look(this.getCurrentYaw(), mc.thePlayer.posX, mc.thePlayer.posZ);
+    }
+
+    /**
+     * GODBRIDGE and POLAR, a tick of them (2026-11-07, owner: "redo all of it"), in LiquidBounce's order, none of the other
+     * modes' state: the block for where the player will be next tick; the look, fixed by the walk and sent whether or not
+     * a block is due, so it is ready at the edge; the ledge; then the click at LOWEST, along whatever look really went
+     * out (onUpdateClick, lookHit), or none. The look is never aimed at the block and takes no wander or aim error: a
+     * godbridge is a look held still.
+     */
+    private void godBridgeTick(UpdateEvent event) {
+        BlockData target = this.getBlockData(mc.thePlayer.motionX, mc.thePlayer.motionZ);
+        boolean forward = MoveUtil.isForwardPressed();
+        float[] look = forward || target != null ? this.godBridgeRotation(event.getYaw()) : null;
+        if (!forward && target == null) {
+            this.godBridge.release();
         }
-        if (mc.thePlayer.onGround) {
-            double x = mc.thePlayer.posX;
-            double y = mc.thePlayer.posY;
-            double z = mc.thePlayer.posZ;
-            double rad = Math.toRadians(movingYaw);
-            this.godBridgeRightSide = Math.floor(x + Math.cos(rad) * 0.5) != Math.floor(x)
-                    || Math.floor(z + Math.sin(rad) * 0.5) != Math.floor(z);
-            EnumFacing toward = EnumFacing.fromAngle(movingYaw);
-            BlockPos ahead = new BlockPos(x + toward.getFrontOffsetX() * 0.6, y, z + toward.getFrontOffsetZ() * 0.6);
-            if (mc.theWorld.isAirBlock(new BlockPos(x, y, z).down()) && mc.theWorld.isAirBlock(ahead.down())) {
-                this.godBridgeRightSide = !this.godBridgeRightSide;
+        this.updatePolarLedge(target, look);
+        if (look != null) {
+            float[] sent = RotationHelper.request(this, look[0], look[1], 3, this.moveMode(), false,
+                    RotationHelper.NO_LIMIT, MIN_STEP);
+            if (sent != null && this.moveFix.getModeString().equals("REAL")) {
+                Atlas.rotationManager.setRotation(sent[0], sent[1], 3, false);
             }
+            this.yaw = look[0];
+            this.pitch = look[1];
+            this.canRotate = true;
         }
-        return new float[]{movingYaw + (this.godBridgeRightSide ? 45.0F : -45.0F), 75.7F};
+        this.planData = target;
+        /* A placeholder: onUpdateClick replaces it with where the sent look lands, or clicks nothing. */
+        this.planHitVec = target == null ? null : new Vec3(target.blockPos()).addVector(0.5, 0.5, 0.5);
+        this.planSnapCanPlace = true;
+        this.planSnapMode = false;
+        this.planThreeFmc = false;
+        this.planReady = true;
     }
 
     /**
@@ -1667,6 +1656,7 @@ public class Scaffold extends Module {
             this.polarLedgeStopInput = false;
             this.polarLedgeStepBack = false;
             this.polarLedgeJump = false;
+            this.blocksSinceJump = 0;
             return;
         }
         // A pending sneak keeps its tick budget until it runs out.
@@ -1687,6 +1677,9 @@ public class Scaffold extends Module {
         boolean onEdge = onGround && forward && hasTarget && this.edgeSneak();
         boolean canPlaceFromLook = hasTarget
                 && this.lookHit(blockData, godBridgeLook[0], godBridgeLook[1]) != null;
+        if (onEdge && !canPlaceFromLook) {
+            this.godBridge.missed(this.tick);
+        }
         switch (polarLedgeAction(onGround, forward, hasTarget, onEdge, canPlaceFromLook,
                 this.blockCount, this.polarForceSneakBelowCount.getValue(),
                 this.polarModes.getValue(), this.jumpBoostAmplifier())) {
@@ -1705,6 +1698,20 @@ public class Scaffold extends Module {
             default:
                 break;
         }
+        if (!forward) {
+            this.blocksSinceJump = 0;
+        } else if (this.polarLedgeSneakTicks == 0
+                && jumpDue(this.blocksSinceJump, this.jumpEveryBlocks.getValue(), onGround, this.jumpBoostAmplifier())) {
+            this.polarLedgeStopInput = false;
+            this.polarLedgeStepBack = false;
+            this.polarLedgeJump = true;
+            this.blocksSinceJump = 0;
+        }
+    }
+
+    /** Enough blocks since the last jump, on the ground, and a jump that does not go high enough to miss the layer. */
+    static boolean jumpDue(int placed, int every, boolean onGround, int jumpBoostAmplifier) {
+        return every > 0 && placed >= every && onGround && jumpApexHeight(jumpBoostAmplifier) < 2.0;
     }
 
     /**
@@ -1945,6 +1952,7 @@ public class Scaffold extends Module {
         this.rotationTick = 3;
         this.yaw = -180.0F;
         this.pitch = 0.0F;
+        this.godBridge.release();
         this.canRotate = false;
         this.towerTick = 0;
         this.towerDelay = 0;

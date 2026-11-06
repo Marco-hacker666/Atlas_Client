@@ -2522,7 +2522,7 @@ public class Clutch extends Module {
     }
 
     /**
-     * WEIRD-TELLY's telly-jump-angle: how far off the view the look comes home for a jump. SILENT only: REAL would swing
+     * WEIRD-TELLY's telly-jump-offset: how far off the view the look comes home for a jump. SILENT only: REAL would swing
      * the camera with it. Every degree off is two less per jump for Intave RotationSpeed. SPEED-TELLY jumps at the view.
      */
     private float laneJumpAngle() {
@@ -2545,7 +2545,7 @@ public class Clutch extends Module {
         }
     }
 
-    /** The yaw home, from the look sent: off the camera's by telly-jump-angle, or the view before a REAL turn. */
+    /** The yaw home, from the look sent: off the camera's by telly-jump-offset, or the view before a REAL turn. */
     private float laneBackYaw() {
         float view = this.mode.getValue() == 1 ? this.viewYaw : mc.thePlayer.rotationYaw;
         float home = TellyLane.jumpYaw(view, this.laneSide, laneJumpAngle());

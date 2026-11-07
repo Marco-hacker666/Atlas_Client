@@ -73,6 +73,8 @@ final class AutoBlockRaven {
     private int pendingAttacks;
     private boolean forceUnblocked;
     private boolean attackWasDown;
+    /** raven-auto-human's timing (2026-11-08). */
+    private final RavenAutoPlan autoPlan = new RavenAutoPlan(new java.util.Random());
 
     AutoBlockRaven(BlockHit module) {
         this.module = module;
@@ -131,7 +133,9 @@ final class AutoBlockRaven {
      * longer in use. The player's own hand only: an aura plans its own clicks around the block.
      */
     private void forceAttack() {
-        boolean on = this.module.ravenForceAttack.getValue() && mc.thePlayer != null && !mc.thePlayer.isDead
+        /* raven-auto-human keeps the sword up most of the time with no right click, so the player's own clicks would
+           be dropped by vanilla without force attack: it is implied there. */
+        boolean on = (this.module.ravenForceAttack.getValue() || humanAuto()) && mc.thePlayer != null && !mc.thePlayer.isDead
                 && mc.currentScreen == null && mc.inGameHasFocus && ItemUtil.isHoldingSword()
                 && !atlas.util.Auras.anyEnabled() && !bedNukerDigging();
         int key = mc.gameSettings.keyBindAttack.getKeyCode();
@@ -284,6 +288,23 @@ final class AutoBlockRaven {
         }
         if (!wanted) {
             stop(true);
+            this.autoPlan.reset();
+            animation();
+            return;
+        }
+        if (auto && humanAuto() && !KeyBindUtil.isKeyDown(mc.gameSettings.keyBindUseItem.getKeyCode())) {
+            /* raven-auto with nothing held: RavenAutoPlan decides; right click held is the player's own block. */
+            boolean up = this.autoPlan.wantUp(System.currentTimeMillis(), this.blocking, threatening(target), hurt,
+                    hurtAgain, ping(), msToTicks(this.module.ravenMaxHold.getValue()),
+                    msToTicks(this.module.ravenRandomHold.getValue()));
+            if (up && !this.blocking && !this.lagging) {
+                start(now);
+            } else if (!up && this.blocking) {
+                if (lagRoll()) {
+                    startLag(now);
+                }
+                stop(true);
+            }
             animation();
             return;
         }
@@ -327,6 +348,28 @@ final class AutoBlockRaven {
                 start(this.tick);
             }
         }
+    }
+
+    private boolean humanAuto() {
+        return this.module.ravenAuto.getValue() && this.module.ravenAutoHuman.getValue();
+    }
+
+    /** The enemy can hit this player now: a player looking this way, or any monster. */
+    private static boolean threatening(Entity target) {
+        if (!(target instanceof EntityPlayer)) {
+            return true;
+        }
+        return RavenAutoPlan.facingDeg(target.rotationYaw, mc.thePlayer.posX - target.posX,
+                mc.thePlayer.posZ - target.posZ) <= RavenAutoPlan.FACING_DEG;
+    }
+
+    /** This player's ping from the tab list, 0 when unknown (singleplayer). */
+    private static int ping() {
+        if (mc.getNetHandler() == null || mc.thePlayer == null) {
+            return 0;
+        }
+        net.minecraft.client.network.NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(mc.thePlayer.getUniqueID());
+        return info == null ? 0 : Math.max(0, info.getResponseTime());
     }
 
     /** OpenB4's disable while chasing: a target running from this player cannot hit it. */
@@ -420,6 +463,7 @@ final class AutoBlockRaven {
     /** Raven's resetState: held packets go, the sword down, the use key back to the player. */
     void reset(boolean releaseKey) {
         releaseLag();
+        this.autoPlan.reset();
         this.pendingAttacks = 0;
         this.unblockedAfterLeaving = false;
         this.nobodyInRange = false;

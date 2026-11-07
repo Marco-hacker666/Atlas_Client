@@ -75,6 +75,7 @@ final class ModuleDocsEn {
         d("Hitflick", "Steers the knockback of your hits: FLICK flicks the view away on a hit and back; HAZARD silently aims it at nearby void or lava; DISPLACE turns at the hit toward the void or a set angle.");
         help("Hitflick", "Keep-hitbox", "FLICK: flick only as far as the look still meets the target's hitbox (Grim and Polar check that), about 5-10 degrees. Off: the full Direction, but a server that checks the look does not count the hit.");
         help("Hitflick", "mode", "FLICK: the flick away and back. HAZARD: what KBDisplacement did. DISPLACE: what Displace did. VOID: turns only when the target is near a void edge, to knock it off. Each has its own settings below.");
+        help("Hitflick", "displace-Turn-range", "Only turn for a target within this many blocks; further hits go at once on your normal look. A hit that must still land can turn about 22 degrees at 1 block, 11 at 2 and 8 at 3. 0 is off.");
         help("Hitflick", "displace-Void-edge", "VOID: the target has to be this many blocks from a void edge.");
         help("Hitflick", "displace-Void-max-turn", "VOID: how far off the line to the target the void may be. At most 25 degrees with Keep-hitbox.");
         d("ServerLag", "Delays the packets the server sends, as if the server lagged; damage, health, sounds and chat still arrive at once. Works as FakeLag's incoming half.");
@@ -736,6 +737,8 @@ final class ModuleDocsEn {
         help("LiquidAura", "Technique", "Human: log-normal gaps around a CPS drawn per combo. Constant: evenly at the top of the CPS range.");
         help("LiquidAura", "MaxPerTick", "Most clicks in one tick (above 20 CPS).");
         help("LiquidAura", "MissCooldown", "Waits out vanilla's delay after a swing at the air, as a real click would.");
+        help("LiquidAura", "NearMiss", "Now and then a click turns just past the target's side and swings at the air, as a person misses by a hair; taken on a click the target is still immune to. Without any, Intave reads the attacks as automated and cuts your damage.");
+        help("LiquidAura", "NearMiss-Rate", "Near misses per 100 attacks. Intave wants at least 4.");
         help("LiquidAura", "RangeIncrease", "Reach = 3.0 + this. LiquidBounce's default 1.0 means 4.0 blocks: lower it for servers that check reach.");
         help("LiquidAura", "ThroughWallsRange", "Reach for a target behind a block (never more than the reach).");
         help("LiquidAura", "AngleSmooth", "How each tick turns: Linear (degrees a tick), Sigmoid, Interpolation (Bezier/sigmoid ease), Acceleration (turn rate built up from the last tick's), AimAssist (Atlas's AimAssist Smooth turn and aim point, using the AimAssist module's own speeds, smoothing, lead and multipoint; AimAssist itself can stay off).");
@@ -799,6 +802,8 @@ final class ModuleDocsEn {
         help("Scaffold", "turn-speed", "Most degrees turned per tick (DEFAULT to Hypixel modes). The look no longer snaps; if it is not there yet, the click waits a tick. 180 = no limit.");
         help("Scaffold", "humanize", "Turns use the Rotations engine's speed variation and curve.");
         help("Scaffold", "telly-auto-jump", "SPEED-TELLY and WEIRD-TELLY: jump by itself while W is held on the ground; let go to stop.");
+        help("Scaffold", "jump-every-blocks", "GODBRIDGE: a jump every this many blocks (one more at random), only on a straight run with the look settled and room for it in the pace; POLAR: a jump at this count on top of its ledge jumps. 0 = none.");
+        help("Scaffold", "legit-pace", "GODBRIDGE and POLAR: bridge at a pace a person can. Crouches for 3-5 ticks at an edge every 3-4.5 s, never for 1 tick, and holds a block or a jump that would place faster than Intave's placement checks allow (they flag a straight bridge with no crouch). Off: as before.");
         help("Scaffold", "pause-on-correction", "After a setback, wait a round trip before placing; a refused block pauses too. Stops strings of ghost blocks placed from the wrong position.");
         help(cl, "pre-aim", "Turn roughly toward the spot before it is time, so less turning is left.");
         help(cl, "counter-knockback", "Walk back when knocked, cancelling part of the knockback.");

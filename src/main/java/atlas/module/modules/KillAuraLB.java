@@ -61,6 +61,7 @@ import net.minecraft.network.play.client.C0DPacketCloseWindow;
 import net.minecraft.network.play.client.C16PacketClientStatus;
 import net.minecraft.potion.Potion;
 import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.util.MathHelper;
 import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
 import net.minecraft.world.WorldSettings;
@@ -98,6 +99,11 @@ public class KillAuraLB extends Module {
     public final IntRange cps = IntRange.of(this.minCps, this.maxCps);
     public final IntProperty maxPerTick = new IntProperty("MaxPerTick", 2, 1, 5);
     public final BooleanProperty missCooldown = new BooleanProperty("MissCooldown", true);
+    /* 2026-11-08 (Intave PreAttack / AccuracyLongTerm, atlas.lb.combat.NearMiss): now and then a click turns just past
+       the target's side and swings at the air, the way a person misses by a hair. Without any, Intave reads the
+       attacks as automated and cuts the damage. Taken on a click the target is still immune to where it can be. */
+    public final BooleanProperty nearMisses = new BooleanProperty("NearMiss", true);
+    public final IntProperty nearMissRate = new IntProperty("NearMiss-Rate", 7, 4, 15, this.nearMisses::getValue);
     // ---- range
     /* Defaults 0 here, not LiquidBounce's 1.0 / 3.0 (4.0 reach, hits through walls): those flag at once on a 1.8
        server. A Silent Aura profile from before the port brings its own reach and walls rule (seedLiquidBounce). */
@@ -409,6 +415,13 @@ public class KillAuraLB extends Module {
     private atlas.humanize.Humanizer.Verdict verdict;
     /** The reaction to the current target is over (true with humanization off). */
     private boolean reacted = true;
+    private final atlas.lb.combat.NearMiss nearMiss = new atlas.lb.combat.NearMiss();
+    /** This tick's click is a near miss: the look goes just past the box and the click only swings. */
+    private boolean nearMissPending;
+    /** Click ticks the pending near miss has waited for the look to get there. */
+    private int nearMissWaits;
+    /** This tick's turn was asked for the near miss look. */
+    private boolean nearMissAimed;
     private int angularTarget = -1;
     private float lastYawToTarget = Float.NaN;
     private final AuraRotations rotations = new AuraRotations();
@@ -623,6 +636,7 @@ public class KillAuraLB extends Module {
         if (event.getType() == EventType.SEND && !event.isCancelled() && event.getPacket() instanceof C02PacketUseEntity
                 && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK) {
             this.lbLastAttackTick = this.rhythmTick;
+            this.nearMiss.attacked();
         }
         if (this.isEnabled() && event.getType() == EventType.SEND && !event.isCancelled()
                 && event.getPacket() instanceof C02PacketUseEntity
@@ -954,6 +968,7 @@ public class KillAuraLB extends Module {
         boolean dead = mc.thePlayer.isDead || mc.thePlayer.getHealth() <= 0.0F || mc.thePlayer.isSpectator();
         boolean paused = shouldPauseCombat() || this.placeYieldTicks > 0;
         this.verdict = null;
+        this.nearMissAimed = false;
         this.rotations.speedScale = 1.0F;
         EntityLivingBase previousTarget = this.targetTracker.target();
         if (previousTarget != null && this.clicker.isClickTick() && this.humanizer.profile() != null
@@ -963,6 +978,13 @@ public class KillAuraLB extends Module {
             if (this.verdict != null && this.verdict.land && this.humanizer.dropClick()) {
                 this.verdict = new atlas.humanize.Humanizer.Verdict(false, atlas.humanize.Misses.Style.SKIP);
             }
+        }
+        if (previousTarget == null || !this.nearMisses.getValue() || this.verdict != null && !this.verdict.land) {
+            this.nearMissPending = false;
+        } else if (!this.nearMissPending && this.clicker.isClickTick()
+                && RotationUtil.distanceToBox(previousTarget, mc.thePlayer.getPositionEyes(1.0F)) <= interactionRange()) {
+            this.nearMissPending = this.nearMiss.due(this.nearMissRate.getValue(), immune(previousTarget));
+            this.nearMissWaits = 0;
         }
         if (inventory && !this.ignoreOpenInventory.getValue() || dead || !requirementsMet()) {
             this.targetTracker.reset();
@@ -1407,7 +1429,17 @@ public class KillAuraLB extends Module {
         }
         double distance = RotationUtil.distanceToBox(entity, mc.thePlayer.getPositionEyes(1.0F));
         boolean onCrosshair = lookingAt(entity, from, Math.max(3.0, distance), Math.max(3.0, distance)) != null;
-        this.rotations.request(humanAim(entity, from, rotation, distance), distance, onCrosshair);
+        Rotation aim = humanAim(entity, from, rotation, distance);
+        if (this.nearMissPending) {
+            Rotation off = nearMissLook(entity, from);
+            if (off != null) {
+                aim = off;
+                this.nearMissAimed = true;
+            } else {
+                this.nearMissPending = false;
+            }
+        }
+        this.rotations.request(aim, distance, onCrosshair);
         return true;
     }
 
@@ -1444,6 +1476,74 @@ public class KillAuraLB extends Module {
             return from;
         }
         return new Rotation(rotation.yaw + adjust.yaw, rotation.pitch + adjust.pitch);
+    }
+
+    /** A hit on it now deals nothing: inside the half of its hurt time when only a bigger blow counts. */
+    private static boolean immune(EntityLivingBase target) {
+        return target.hurtResistantTime > target.maxHurtResistantTime / 2.0F;
+    }
+
+    /** Vanilla's look vector for a rotation (Entity.getVectorForRotation). */
+    private static Vec3 lookVector(Rotation rotation) {
+        float yaw = MathHelper.cos(-rotation.yaw * 0.017453292F - (float) Math.PI);
+        float yawSin = MathHelper.sin(-rotation.yaw * 0.017453292F - (float) Math.PI);
+        float pitchCos = -MathHelper.cos(-rotation.pitch * 0.017453292F);
+        float pitchSin = MathHelper.sin(-rotation.pitch * 0.017453292F);
+        return new Vec3(yawSin * pitchCos, pitchSin, yaw * pitchCos);
+    }
+
+    /** The near miss look: just past the side of the box the current look is on. Null when none passes the check. */
+    private Rotation nearMissLook(EntityLivingBase entity, Rotation from) {
+        Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
+        AxisAlignedBB box = entity.getEntityBoundingBox();
+        int side = atlas.lb.combat.NearMiss.sideOf(eyes, box, lookVector(from));
+        Vec3 point = this.nearMiss.aimPoint(eyes, box, side);
+        if (point == null) {
+            return null;
+        }
+        Rotation look = Rotation.fromVector(point.xCoord - eyes.xCoord, point.yCoord - eyes.yCoord, point.zCoord - eyes.zCoord);
+        return new Rotation(from.yaw + Rotation.angleDifference(look.yaw, from.yaw), look.pitch);
+    }
+
+    /**
+     * The near miss itself, on a click tick: when the look this packet carries is one (isNearMiss, against the box
+     * the server knows), a swing and no attack, with vanilla's miss delay as a swing at the air has it. The look still
+     * on its way: the click waits, at most three click ticks, then the near miss is given up for now. Returns whether
+     * this tick's click was used.
+     */
+    private boolean nearMissClick(Entity target, Rotation rotation) {
+        if (!(target instanceof EntityLivingBase) || !this.clicker.isClickTick() || !canAttackNow(target)
+                || mc.thePlayer.isUsingItem()) {
+            return false;
+        }
+        if (!this.nearMissAimed) {
+            /* Not turned for it this tick (Snap or OnTick held the aim): an ordinary click, the near miss waits. */
+            return false;
+        }
+        Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
+        if (!atlas.lb.combat.NearMiss.isNearMiss(eyes, lookVector(rotation), target.getEntityBoundingBox())) {
+            if (++this.nearMissWaits > 3) {
+                this.nearMissPending = false;
+                return false;
+            }
+            if (lookingAt(target, rotation, interactionRange(), wallsRange()) != null) {
+                /* Still on the box on the way out: this click hits as any other. */
+                return false;
+            }
+            /* Off the box, not yet in the band: spent with nothing sent, as a press the look was not ready for. */
+            this.clicker.click(this::missOk, () -> false);
+            return true;
+        }
+        this.nearMissPending = false;
+        prepareForAttack(rotation, () -> {
+            mc.thePlayer.swingItem();
+            if (this.missCooldown.getValue() && mc.playerController.isNotCreative()) {
+                ((IAccessorMinecraft) mc).setLeftClickCounter(10);
+            }
+            this.nearMiss.missed();
+            return true;
+        });
+        return true;
     }
 
     /** The situation of a click on this target, for the accuracy. */
@@ -1705,6 +1805,9 @@ public class KillAuraLB extends Module {
     }
 
     private void attackTarget(Entity target, Rotation rotation) {
+        if (this.nearMissPending && nearMissClick(target, rotation)) {
+            return;
+        }
         if (rhythmSelected()) {
             /* Rhythm decides both the click and the block; none of the paths below runs. */
             this.verdict = null;

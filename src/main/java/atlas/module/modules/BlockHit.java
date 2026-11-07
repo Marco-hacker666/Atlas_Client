@@ -94,6 +94,9 @@ public class BlockHit extends Module {
     /* 2026-11-05 (owner: "build what the others have"; OpenB4 and Raven bS, behaviour only). Off by default. */
     /* Off: right click has to be held, as Raven. On: no button needed, an enemy in range is enough. */
     final BooleanProperty ravenAuto = new BooleanProperty("raven-auto", false, ravenMode);
+    /* 2026-11-08: raven-auto's threat-, reaction- and ping-aware timing (RavenAutoPlan); off gives the old square wave. */
+    final BooleanProperty ravenAutoHuman = new BooleanProperty("raven-auto-human", true,
+            () -> ravenMode.getAsBoolean() && this.ravenAuto.getValue());
     final IntProperty ravenRandomHold = new IntProperty("raven-random-hold-ms", 0, 0, 300, ravenMode);
     final IntProperty ravenCooldown = new IntProperty("raven-cooldown-ms", 0, 0, 500, ravenMode);
     final BooleanProperty ravenReleaseOnHit = new BooleanProperty("raven-release-on-hit", false, ravenMode);

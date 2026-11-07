@@ -16,6 +16,15 @@ public class DisplaceTest {
         assertFalse("still only Static's", displace.findVoid.isVisible());
     }
 
+    /** 2026-11-07 (owner): only turn up close; off unless set, so saved configs act as before. */
+    @Test
+    public void aFarHitDoesNotTurnOnceTurnRangeIsSet() {
+        assertEquals(0F, new Displace().turnRange.getValue(), 0F);
+        assertTrue("0 is off", DisplacePlan.inTurnRange(5.9F, 0F));
+        assertTrue(DisplacePlan.inTurnRange(2.0F, 2.0F));
+        assertFalse(DisplacePlan.inTurnRange(2.1F, 2.0F));
+    }
+
     /** 2026-11-04 (owner): Keep-hitbox is off by default, in both modes. */
     @Test
     public void keepHitboxStartsOff() {

@@ -165,17 +165,25 @@ public class Scaffold extends Module {
        does not fall off. polar.json runs it with:
          Modes = [Jump], ForceSneakBelowCount = 5, SneakTime = 1..1
        i.e. normally JUMP, but SNEAK when fewer than 5 blocks remain. */
-    private final IntProperty polarForceSneakBelowCount = new IntProperty("polar-force-sneak-below-count", 5, 0, 20, this::lbGodBridge);
-    private final IntProperty polarSneakTime = new IntProperty("polar-sneak-time", 1, 1, 10, this::lbGodBridge);
+    private final IntProperty polarForceSneakBelowCount = new IntProperty("polar-force-sneak-below-count", 5, 0, 20, this::polarShown);
+    private final IntProperty polarSneakTime = new IntProperty("polar-sneak-time", 1, 1, 10, this::polarShown);
     /* polar.json's Modes = [Jump]. A single choice, as the client's other mode
        settings are; the ledge decision reads it, so Sneak, StopInput and
        Backwards can be picked without a rebuild. */
     private final ModeProperty polarModes = new ModeProperty("polar-modes", POLAR_JUMP,
             new String[]{"Jump", "Sneak", "StopInput", "Backwards"},
-            this::lbGodBridge);
+            this::polarShown);
     /* 2026-11-07 (owner: "stack seven, then jump, as LiquidBounce"): a jump every so many blocks. LiquidBounce has no
        such count: it jumps at a ledge it cannot place at, which reads as a rhythm. 0 leaves only the ledge action. */
-    private final IntProperty jumpEveryBlocks = new IntProperty("jump-every-blocks", 7, 0, 20, this::lbGodBridge);
+    private final IntProperty jumpEveryBlocks = new IntProperty("jump-every-blocks", 7, 0, 20, this::godBridgeShown);
+    /* 2026-11-07: placement timing a human bridge has (PlacePace): a crouch of 3-5 ticks at an edge every 3-4.5 s,
+       no 1-tick crouches, no click or jump that would put the Speed or Sneak averages of Intave PlacementAnalysis under
+       their limits. Off: GODBRIDGE and POLAR exactly as before. */
+    public final BooleanProperty legitPace = new BooleanProperty("legit-pace", true, this::godBridgeShown);
+    private final PlacePace pace = new PlacePace();
+    private boolean paceWasOnGround;
+    private long nextSneakEvery = 3500L;
+    private final java.util.Random paceRandom = new java.util.Random();
     private int blocksSinceJump = 0;
     private int polarLedgeSneakTicks = 0;
     private boolean polarLedgeStopInput = false;
@@ -560,6 +568,9 @@ public class Scaffold extends Module {
                 this.markPlaced(blockPos.offset(enumFacing));
                 this.eagleBlocksPlaced++;
                 this.blocksSinceJump++;
+                if (this.rotationMode.getValue() == ROTATION_GODBRIDGE) {
+                    this.run.placed();
+                }
                 if (this.swing.getValue()) {
                     mc.thePlayer.swingItem();
                 } else {
@@ -728,6 +739,21 @@ public class Scaffold extends Module {
         return this.rotationMode.getValue() == ROTATION_SPEED_TELLY || isWeirdTellyMode();
     }
 
+    private boolean godBridgeShown() {
+        int mode = this.rotationMode.getValue();
+        return mode == ROTATION_GODBRIDGE || mode == ROTATION_POLAR;
+    }
+
+    /* 2026-11-08: GODBRIDGE has its own flow (GodBridge); the LiquidBounce ledge settings are POLAR's. */
+    private boolean polarShown() {
+        return this.rotationMode.getValue() == ROTATION_POLAR;
+    }
+
+    private boolean paceOn() {
+        return this.legitPace.getValue() && this.lbGodBridge();
+    }
+
+
     private boolean isWeirdTellyMode() {
         return this.rotationMode.getValue() == ROTATION_WEIRD_TELLY;
     }
@@ -763,6 +789,9 @@ public class Scaffold extends Module {
         if (event.getType() != EventType.PRE) {
             return;
         }
+        if (this.isEnabled() && mc.thePlayer != null) {
+            this.trackPace();
+        }
         int jumpKey = mc.gameSettings.keyBindJump.getKeyCode();
         if (this.isSpeedTelly() && this.tellyAutoJump.getValue() && mc.currentScreen == null
                 && mc.gameSettings.keyBindForward.isKeyDown() && !mc.gameSettings.keyBindBack.isKeyDown()
@@ -772,6 +801,54 @@ public class Scaffold extends Module {
         } else if (this.holdingJump) {
             KeyBindUtil.updateKeyState(jumpKey);
             this.holdingJump = false;
+        }
+    }
+
+    /** The crouches and jumps the server sees, for PlacePace; runs while the module is paused too. */
+    private void trackPace() {
+        long now = System.currentTimeMillis();
+        if (mc.thePlayer.isSneaking()) {
+            this.pace.sneaking(now);
+        }
+        boolean onGround = mc.thePlayer.onGround;
+        if (this.paceWasOnGround && !onGround && mc.thePlayer.motionY > 0.2) {
+            this.pace.jumped(now);
+        }
+        this.paceWasOnGround = onGround;
+    }
+
+    /**
+     * What this client places, as the server gets it: the placement books for legit-pace, from every placement whoever
+     * made it (Clutch's telly included). Runs while paused.
+     */
+    @EventTarget(value = Priority.LOWEST, whenDisabled = true)
+    public void onPaceSend(PacketEvent event) {
+        if (!this.isEnabled() || event.getType() != EventType.SEND || event.isCancelled() || mc.thePlayer == null
+                || mc.theWorld == null || !mc.isCallingFromMinecraftThread()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        Packet<?> packet = event.getPacket();
+        if (packet instanceof net.minecraft.network.play.client.C08PacketPlayerBlockPlacement) {
+            net.minecraft.network.play.client.C08PacketPlayerBlockPlacement place =
+                    (net.minecraft.network.play.client.C08PacketPlayerBlockPlacement) packet;
+            int side = place.getPlacedBlockDirection();
+            ItemStack stack = place.getStack();
+            if (side == 255 || side > 5 || place.getPosition() == null || stack == null
+                    || !(stack.getItem() instanceof ItemBlock)) {
+                return;
+            }
+            BlockPos support = place.getPosition();
+            BlockPos cell = support.offset(EnumFacing.getFront(side));
+            int neighbours = 0;
+            for (EnumFacing facing : EnumFacing.Plane.HORIZONTAL) {
+                if (!mc.theWorld.isAirBlock(cell.offset(facing))) {
+                    neighbours++;
+                }
+            }
+            boolean under = PlacePace.under(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ,
+                    cell.getX(), cell.getY(), cell.getZ());
+            this.pace.placed(now, under, cell.getY() == support.getY(), neighbours, cell.getX(), cell.getY(), cell.getZ());
         }
     }
 
@@ -889,6 +966,10 @@ public class Scaffold extends Module {
                             break;
                         }
                     }
+                }
+                if (this.rotationMode.getValue() == ROTATION_GODBRIDGE) {
+                    this.godBridgeRunTick(event);
+                    return;
                 }
                 if (this.lbGodBridge()) {
                     this.godBridgeTick(event);
@@ -1213,6 +1294,14 @@ public class Scaffold extends Module {
             along = this.lookHit(blockData, sentYaw, sentPitch);
             hitVec = along == null ? null : along.hitVec;
         }
+        if (blockData != null && hitVec != null && this.paceOn() && mc.thePlayer.onGround
+                && this.paceHolds(along != null ? along.getBlockPos() : blockData.blockPos(),
+                along != null ? along.sideHit : blockData.facing(), sentYaw)) {
+            /* legit-pace: this block now would be faster than a human bridge is allowed. On the ground only, where the
+               edge crouch holds the player (in GODBRIDGE the fall guard's stop, never a crouch); in the air a block
+               late is a fall. */
+            hitVec = null;
+        }
         if (blockData != null && hitVec != null && snapCanPlace && this.rotationTick <= 0) {
             if (along != null) {
                 this.place(along.getBlockPos(), along.sideHit, along.hitVec);
@@ -1470,10 +1559,23 @@ public class Scaffold extends Module {
                 return;
             }
             this.applyPolarLedgeInput();
+            this.applyGodBridgeInput();
             this.quietThreeFmcMovement();
             /* SILENT's keys are turned by the shared engine (RotationHelper). */
             if (mc.thePlayer.onGround && this.stage > 0 && MoveUtil.isForwardPressed()) {
                 mc.thePlayer.movementInput.jump = true;
+            }
+            if (this.rotationMode.getValue() == ROTATION_GODBRIDGE) {
+                /* GODBRIDGE never crouches (2026-11-08, owner: "god bridge is defined by NOT crouching"). The last
+                   guard is a stop instead, as late as it can be: the walk keys are let go only when one more tick of
+                   walking and the slide after it would leave the box with no floor, and friction holds the player on the
+                   block. Not at the early edge test the crouch used: the god bridge look places only with the feet well
+                   over the edge, so stopping there would never place. eagle is not used here. */
+                if (this.safeWalk.getValue() && this.wouldFallOnNextStep()) {
+                    mc.thePlayer.movementInput.moveForward = 0.0F;
+                    mc.thePlayer.movementInput.moveStrafe = 0.0F;
+                }
+                return;
             }
             if (this.safeWalk.getValue() && !mc.thePlayer.movementInput.sneak && this.edgeSneak()) {
                 /* S1 (2026-10-07): the edge is held by a real crouch, the way
@@ -1555,12 +1657,100 @@ public class Scaffold extends Module {
     private static final float SNAP_STEP = 360.0F;
 
     private boolean lbGodBridge() {
-        int mode = this.rotationMode.getValue();
-        return mode == ROTATION_GODBRIDGE || mode == ROTATION_POLAR;
+        return this.godBridgeShown();
     }
 
     /** GodBridge: the look of this run (2026-11-07). */
     private final GodBridgeLook godBridge = new GodBridgeLook();
+    /** GODBRIDGE (2026-11-08): the run, and this tick's plan for the input stage. */
+    private final GodBridge run = new GodBridge();
+    private GodBridge.Plan runPlan;
+
+    /**
+     * GODBRIDGE, a tick (2026-11-08): the block for where the player will be next tick; GodBridge plans the look, the
+     * crouch, the jump and the click from what is read here; the look goes through RotationHelper (whole mouse counts
+     * from the look the server has, DuplicateRotPlace); the click is onUpdateClick's, along the look really sent, and
+     * only on a tick the plan clicks. legit-pace's books say when a crouch is due and whether a jump has room.
+     */
+    private void godBridgeRunTick(UpdateEvent event) {
+        BlockData target = this.getBlockData(mc.thePlayer.motionX, mc.thePlayer.motionZ);
+        boolean forward = MoveUtil.isForwardPressed();
+        long now = System.currentTimeMillis();
+        boolean paced = this.paceOn();
+        GodBridge.Input in = new GodBridge.Input();
+        in.x = mc.thePlayer.posX;
+        in.z = mc.thePlayer.posZ;
+        in.onGround = mc.thePlayer.onGround;
+        in.forward = forward;
+        in.moveYaw = this.getCurrentYaw();
+        in.sentYaw = event.getYaw();
+        in.sentPitch = event.getPitch();
+        in.hasTarget = target != null;
+        in.edge = in.onGround && forward && target != null && this.edgeSneak();
+        in.lookPlaces = target != null && this.run.running()
+                && this.lookHit(target, this.run.lookYaw(), this.run.lookPitch()) != null;
+        if (in.edge && !in.lookPlaces && this.run.running()) {
+            in.placePitch = this.godBridgePlacePitch(target, this.run.lookYaw(), this.run.lookPitch());
+        }
+        /* No crouch in GODBRIDGE (2026-11-08): the pace is kept with jumps, the next block forecast one gap ahead. */
+        in.paceJump = paced && this.pace.jumpWanted(now, this.pace.lastGap(230L), event.getYaw(), this.speedLevel());
+        in.jumpEvery = this.jumpEveryBlocks.getValue();
+        in.now = now;
+        GodBridge.Plan plan = this.run.tick(in);
+        this.runPlan = plan;
+        if (plan.look) {
+            float[] aimed = atlas.humanize.HumanTurn.apply(this.human, event.getYaw(), event.getPitch(), plan.yaw, plan.pitch);
+            float[] sent = RotationHelper.request(this, aimed[0], aimed[1], 3, this.moveMode(), false,
+                    plan.maxTurn, Math.min(MIN_STEP, plan.maxTurn));
+            if (sent != null && this.moveFix.getModeString().equals("REAL")) {
+                Atlas.rotationManager.setRotation(sent[0], sent[1], 3, false);
+            }
+            this.yaw = plan.yaw;
+            this.pitch = plan.pitch;
+            this.canRotate = true;
+        }
+        this.planData = target;
+        this.planHitVec = target == null || !plan.click ? null : new Vec3(target.blockPos()).addVector(0.5, 0.5, 0.5);
+        this.planSnapCanPlace = true;
+        this.planSnapMode = false;
+        this.planThreeFmc = false;
+        this.planReady = true;
+    }
+
+    /** At this yaw, the pitch nearest {@code from} (within 8, 68 to 86) whose ray places the target from here; NaN for none. */
+    private float godBridgePlacePitch(BlockData target, float yaw, float from) {
+        for (int i = 1; i <= GODBRIDGE_PITCH_STEPS; i++) {
+            float away = (i + 1) / 2 * GODBRIDGE_PITCH_STEP * (i % 2 == 0 ? -1.0F : 1.0F);
+            float pitch = from + away;
+            if (pitch < GODBRIDGE_PITCH_MIN || pitch > GODBRIDGE_PITCH_MAX) {
+                continue;
+            }
+            if (this.lookHit(target, yaw, pitch) != null) {
+                return pitch;
+            }
+        }
+        return Float.NaN;
+    }
+
+    private static final int GODBRIDGE_PITCH_STEPS = 64;
+    private static final float GODBRIDGE_PITCH_STEP = 0.25F;
+    private static final float GODBRIDGE_PITCH_MIN = 68.0F;
+    private static final float GODBRIDGE_PITCH_MAX = 86.0F;
+
+    /** GODBRIDGE's crouch and jump, at the input stage, so vanilla acts on them. */
+    private void applyGodBridgeInput() {
+        GodBridge.Plan plan = this.runPlan;
+        if (this.rotationMode.getValue() != ROTATION_GODBRIDGE || plan == null) {
+            return;
+        }
+        if (plan.stop) {
+            mc.thePlayer.movementInput.moveForward = 0.0F;
+            mc.thePlayer.movementInput.moveStrafe = 0.0F;
+        }
+        if (plan.jump && !plan.stop && mc.thePlayer.onGround && !mc.thePlayer.isInWater()) {
+            mc.thePlayer.movementInput.jump = true;
+        }
+    }
 
     /**
      * S4 (2026-10-07): LiquidBounce GodBridge's look
@@ -1626,13 +1816,56 @@ public class Scaffold extends Module {
             return false;
         }
         long now = System.currentTimeMillis();
-        AxisAlignedBB next = mc.thePlayer.getEntityBoundingBox().expand(-0.2, 0.0, -0.2)
-                .offset(mc.thePlayer.motionX, -1.0, mc.thePlayer.motionZ);
-        if (mc.theWorld.getCollidingBoundingBoxes(mc.thePlayer, next).isEmpty()) {
+        if (this.floorlessNextStep()) {
             this.edgeSneakUntil = now + 100L + (long) (Math.random() * 100.0);
             return true;
         }
         return now < this.edgeSneakUntil;
+    }
+
+    /** Vape's test with no hold: the box shrunk by 0.2 a side, moved by this tick's motion and one block down, touches nothing. */
+    private boolean floorlessNextStep() {
+        if (!mc.thePlayer.onGround || mc.thePlayer.capabilities.isFlying) {
+            return false;
+        }
+        AxisAlignedBB next = mc.thePlayer.getEntityBoundingBox().expand(-0.2, 0.0, -0.2)
+                .offset(mc.thePlayer.motionX, -1.0, mc.thePlayer.motionZ);
+        return mc.theWorld.getCollidingBoundingBoxes(mc.thePlayer, next).isEmpty();
+    }
+
+    /**
+     * GODBRIDGE's fall guard: whether walking on one more tick and then letting go would carry the player's box past
+     * any floor. Ground friction keeps 0.546 of the motion a tick, so letting go slides about 1.2 times the motion
+     * after the step; the step is this motion plus one tick of walking input (0.098 a tick at walk speed).
+     */
+    private boolean wouldFallOnNextStep() {
+        if (!mc.thePlayer.onGround || mc.thePlayer.capabilities.isFlying) {
+            return false;
+        }
+        float forward = mc.thePlayer.movementInput.moveForward;
+        float strafe = mc.thePlayer.movementInput.moveStrafe;
+        double ix = 0.0;
+        double iz = 0.0;
+        float input = (float) Math.sqrt(forward * forward + strafe * strafe);
+        if (input > 1.0E-3F) {
+            double radians = Math.toRadians(mc.thePlayer.rotationYaw);
+            double sin = Math.sin(radians);
+            double cos = Math.cos(radians);
+            double scale = 0.098 / Math.max(1.0F, input);
+            ix = (strafe * cos - forward * sin) * scale;
+            iz = (forward * cos + strafe * sin) * scale;
+        }
+        double travel = 1.0 + 0.546 / (1.0 - 0.546);
+        double dx = (mc.thePlayer.motionX + ix) * travel;
+        double dz = (mc.thePlayer.motionZ + iz) * travel;
+        AxisAlignedBB next = mc.thePlayer.getEntityBoundingBox().expand(-0.02, 0.0, -0.02).offset(dx, -1.0, dz);
+        return mc.theWorld.getCollidingBoundingBoxes(mc.thePlayer, next).isEmpty();
+    }
+
+    /** The Speed potion level as PlacePace reads it (the amplifier: the stricter of Intave's two readings). */
+    private int speedLevel() {
+        PotionEffect speed = mc.thePlayer.getActivePotionEffect(Potion.moveSpeed);
+        return speed == null ? 0 : speed.getAmplifier();
     }
 
     /**
@@ -1680,11 +1913,23 @@ public class Scaffold extends Module {
         if (onEdge && !canPlaceFromLook) {
             this.godBridge.missed(this.tick);
         }
-        switch (polarLedgeAction(onGround, forward, hasTarget, onEdge, canPlaceFromLook,
+        boolean paced = this.paceOn();
+        long now = System.currentTimeMillis();
+        int action = polarLedgeAction(onGround, forward, hasTarget, onEdge, canPlaceFromLook,
                 this.blockCount, this.polarForceSneakBelowCount.getValue(),
-                this.polarModes.getValue(), this.jumpBoostAmplifier())) {
+                this.polarModes.getValue(), this.jumpBoostAmplifier());
+        if (paced) {
+            action = pacedLedgeAction(action, this.pace.roomForJump(),
+                    onEdge && this.pace.sneakDue(now, this.nextSneakEvery));
+        }
+        switch (action) {
             case POLAR_SNEAK:
-                this.polarLedgeSneakTicks = this.polarSneakTime.getValue();
+                this.polarLedgeSneakTicks = paced
+                        ? Math.max(this.polarSneakTime.getValue(), PlacePace.MIN_SNEAK_TICKS + this.paceRandom.nextInt(3))
+                        : this.polarSneakTime.getValue();
+                if (paced) {
+                    this.nextSneakEvery = 3000L + this.paceRandom.nextInt(1500);
+                }
                 break;
             case POLAR_STOP_INPUT:
                 this.polarLedgeStopInput = true;
@@ -1698,15 +1943,48 @@ public class Scaffold extends Module {
             default:
                 break;
         }
+        int every = this.jumpEveryBlocks.getValue();
         if (!forward) {
             this.blocksSinceJump = 0;
-        } else if (this.polarLedgeSneakTicks == 0
-                && jumpDue(this.blocksSinceJump, this.jumpEveryBlocks.getValue(), onGround, this.jumpBoostAmplifier())) {
+        } else if (this.polarLedgeSneakTicks == 0 && (!paced || this.pace.roomForJump())
+                && jumpDue(this.blocksSinceJump, every, onGround, this.jumpBoostAmplifier())) {
             this.polarLedgeStopInput = false;
             this.polarLedgeStepBack = false;
             this.polarLedgeJump = true;
             this.blocksSinceJump = 0;
         }
+    }
+
+    /**
+     * legit-pace on the ledge action (2026-11-07): a crouch that is due is taken here, at an edge, where a player
+     * crouches; and a jump that would put the next 750 ms under Intave's 300 ms a block becomes a crouch, which also
+     * keeps the player on the edge. Other actions are left as they were.
+     */
+    static int pacedLedgeAction(int action, boolean roomForJump, boolean sneakDueAtEdge) {
+        if (action == POLAR_JUMP && !roomForJump) {
+            return POLAR_SNEAK;
+        }
+        if (sneakDueAtEdge && (action == LEDGE_NONE || action == POLAR_JUMP)) {
+            return POLAR_SNEAK;
+        }
+        return action;
+    }
+
+    /** Whether a block clicked on this face now would break the PlacePace books, as the server will judge it. */
+    private boolean paceHolds(BlockPos support, EnumFacing side, float yaw) {
+        BlockPos cell = support.offset(side);
+        int neighbours = 0;
+        for (EnumFacing facing : EnumFacing.Plane.HORIZONTAL) {
+            if (!mc.theWorld.isAirBlock(cell.offset(facing))) {
+                neighbours++;
+            }
+        }
+        boolean under = PlacePace.under(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ,
+                cell.getX(), cell.getY(), cell.getZ());
+        PotionEffect speed = mc.thePlayer.getActivePotionEffect(Potion.moveSpeed);
+        return this.pace.wouldFlag(System.currentTimeMillis(), yaw, under, cell.getY() == support.getY(), neighbours,
+                /* The lower of the two readings of Intave's level (amplifier or amplifier + 1): the stricter limit. */
+                speed == null ? 0 : speed.getAmplifier());
     }
 
     /** Enough blocks since the last jump, on the ground, and a jump that does not go high enough to miss the layer. */
@@ -1953,6 +2231,8 @@ public class Scaffold extends Module {
         this.yaw = -180.0F;
         this.pitch = 0.0F;
         this.godBridge.release();
+        this.run.release();
+        this.runPlan = null;
         this.canRotate = false;
         this.towerTick = 0;
         this.towerDelay = 0;

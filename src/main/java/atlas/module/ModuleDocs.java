@@ -343,6 +343,8 @@ public final class ModuleDocs {
         help("AutoClicker", "randomization", "Human（建議）：CPS 在範圍內慢慢漂移再回來，每一下的間隔像手一樣偏斜（很少太快、偶爾慢一點），會重複節奏、偶爾停頓，每場一開始稍快。Normal / Extra / Extra+：舊的均勻隨機。");
         d("KnockbackDelay", "把收到的擊退延後一小段時間才吃下去，讓被打飛的時機變晚。");
         help("LiquidAura", "BlockHurtTime", "Basic/Interact：自己的受傷時間高於這個值時不舉劍。剛被打的十個 tick 內不會再受傷，這時舉劍只會減速。數字越小擋越少；10 等於關閉。每次被打都會在這個值附近隨機浮動一點，像手動一樣不固定。");
+        help("LiquidAura", "NearMiss", "偶爾讓一下點擊轉到目標側邊外一點點、只揮空，像人差一點沒打到；盡量挑目標還在無敵時間的那一下，不浪費傷害。完全沒有的話 Intave 會判定攻擊是自動的並降低你的傷害。");
+        help("LiquidAura", "NearMiss-Rate", "每 100 次攻擊有幾次差一點揮空。Intave 至少要 4 次。");
         help("LiquidAura", "Rhythm-FreeRaise", "Rhythm：舉劍那一 tick 在 Grim 允許時不減速（不會連續兩次）。預設關；照 Grim 的規則做，Polar 沒測過。");
         help("KnockbackDelay", "Mode", "Steady：打架時伺服器送來的所有封包都照順序晚一段時間（keep-alive、交易封包也是），延遲慢慢加上去、慢慢退掉，伺服器看來就是網路比較慢，不會有哪一次擊退特別突出。Spike（預設）：只在部分擊退時，把擊退和後面所有封包一起壓住，畫面會定格一下，你自己的移動照常送出。Air：只在空中被打時壓住（地上不延遲），每次延遲在 AirMax 附近隨機，最保守。");
         help("KnockbackDelay", "AirMax", "Air 模式每次大約壓多久（毫秒），實際在 0.75～1.35 倍之間隨機；也會被 ping 預算限制。");
@@ -356,6 +358,7 @@ public final class ModuleDocs {
         d("Hitflick", "改變你打出去的擊退方向：FLICK 打中瞬間甩開視角再轉回；HAZARD 靜默轉向附近的虛空或岩漿；DISPLACE 攻擊瞬間轉向虛空或指定角度。");
         help("Hitflick", "Keep-hitbox", "FLICK：只甩到視角還打得到對手碰撞箱的角度（Grim、Polar 會檢查），開著時只有 5～10 度。關掉可以照 Direction 甩滿，但會檢查視角的伺服器不算那一下。");
         help("Hitflick", "mode", "FLICK：甩開再轉回。HAZARD：原本的 KBDisplacement。DISPLACE：原本的 Displace。VOID：只在目標靠近虛空邊緣時轉向，把人打下去。各自的設定在下面。");
+        help("Hitflick", "displace-Turn-range", "只在目標距離這麼多格內才轉；更遠的打擊直接用原本視角送出。打擊仍要命中時，1 格約可轉 22 度，2 格約 11 度，3 格約 8 度。0 為關閉。");
         help("Hitflick", "displace-Void-edge", "VOID：目標距離虛空邊緣幾格內才轉向。");
         help("Hitflick", "displace-Void-max-turn", "VOID：虛空方向最多偏離目標方向幾度。開 Keep-hitbox 時上限 25 度。");
         d("ServerLag", "把伺服器送來的封包延後處理，模擬伺服器延遲；受傷、血量、音效、聊天照常即時。可當成 FakeLag 的「收到延遲」一起用。");
@@ -389,6 +392,7 @@ public final class ModuleDocs {
         help("BlockHit", "random-hold-ticks", "Slinky：每次舉劍隨機多舉 0 到這麼多 tick，短的比較常出現。0 = 固定。");
         help("BlockHit", "block-cooldown-ms", "Slinky：放下劍後至少隔這麼多 ms 才再舉。0 = 不等。");
         help("BlockHit", "raven-auto", "Raven：開啟後不用按滑鼠，敵人在範圍內就自動格擋。關閉時要按住右鍵。");
+        help("BlockHit", "raven-auto-human", "Raven auto：像真人一樣格擋。敵人面向你才舉劍、有反應時間、被打後先放下（反正無敵）並按延遲在無敵結束前舉回、每次舉劍長短不同。會自動補上被吃掉的左鍵。關閉就是舊的固定節奏。");
         help("BlockHit", "raven-random-hold-ms", "Raven：每次舉劍隨機多舉 0 到這麼多 ms，短的比較常出現。0 = 固定。");
         help("BlockHit", "raven-cooldown-ms", "Raven：放下劍後至少隔這麼多 ms 才再舉。0 = 不等。");
         help("BlockHit", "raven-release-on-hit", "Raven：被打中時放下劍一 tick，讓你馬上反擊。");
@@ -804,7 +808,7 @@ public final class ModuleDocs {
                 h("移動", "ground-motion", "air-motion", "speed-motion", "eagle",
                         "edge-distance", "sneak-delay", "blocks-per-sneak"),
                 h("疊高與高度", "hypixeltower", "keep-y-on-press", "no-keep-y-on-jump-potion"),
-                h("放置", "pause-on-correction", "safe", "safe-delay-ticks", "multi-place", "swing", "item-spoof"),
+                h("放置", "pause-on-correction", "legit-pace", "safe", "safe-delay-ticks", "multi-place", "swing", "item-spoof"),
                 h("顯示", "block-counter", "outline-esp", "outline-color"));
         g("Humanization",
                 h("預設與套用", "preset", "apply-*"),
@@ -1105,6 +1109,8 @@ public final class ModuleDocs {
         help("Scaffold", "turn-speed", "每 tick 最多轉幾度（DEFAULT～Hypixel 模式）。不再一次甩到位，轉不到就等下一 tick，不會亂點。180 = 不限制。");
         help("Scaffold", "humanize", "轉頭加上 Rotations 引擎的速度隨機與弧線，比較像人手。");
         help("Scaffold", "telly-auto-jump", "SPEED-TELLY 和 WEIRD-TELLY 模式：按住 W 在地上時自動跳，放開就停。");
+        help("Scaffold", "jump-every-blocks", "GODBRIDGE：每放這麼多格跳一次（隨機多一格），只在視角已固定、節奏允許時跳；POLAR：在它邊緣跳之外，到這個數也跳。0 = 不跳。");
+        help("Scaffold", "legit-pace", "GODBRIDGE 和 POLAR：用人做得到的速度搭橋。每 3-4.5 秒在邊緣蹲 3-5 tick，不會只蹲 1 tick；放得比 Intave 放置檢查允許的還快時，會先等方塊或不跳（直線不蹲的橋會被它標記）。關：跟以前一樣。");
         help("Scaffold", "pause-on-correction", "被伺服器拉回後，等一個來回延遲再放方塊；被退回的方塊也會暫停。避免在錯的位置連續放出 ghost block。");
         help(cl, "pre-aim", "還沒到時機前先把頭轉到大概的位置，等一下轉比較少。");
         help(cl, "counter-knockback", "被打飛時往回走，抵銷一部分擊退。");

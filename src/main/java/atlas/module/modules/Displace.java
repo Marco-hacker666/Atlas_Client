@@ -104,6 +104,10 @@ public class Displace extends Module {
     public final FloatProperty angleRandom = new FloatProperty("Angle-random", 0F, 0F, 15F);
     public final BooleanProperty directionLock = new BooleanProperty("Direction-lock", false);
     public final BooleanProperty onlyFacingAway = new BooleanProperty("Only-facing-away", false);
+    /* 2026-11-07 (owner chose "only turn up close"). A look that still has to meet the box can turn about 22 degrees at
+       1 block, 11 at 2 and 8 at 3, so far hits paid the tick for almost nothing. Above this distance the hit goes at
+       once, on the normal look. 0 is off: any distance. */
+    public final FloatProperty turnRange = new FloatProperty("Turn-range", 0F, 0F, 6F);
 
     private long lastTurnMs = 0L;
     private int lastTurnTick = 0;
@@ -579,6 +583,9 @@ public class Displace extends Module {
     }
 
     private boolean turnWorthwhile(EntityPlayer player) {
+        if (!DisplacePlan.inTurnRange(mc.thePlayer.getDistanceToEntity(player), turnRange.getValue())) {
+            return false;
+        }
         if (onlyFacingAway.getValue() && !DisplacePlan.facingAway(
                 MathHelper.wrapAngleTo180_float(player.rotationYaw - mc.thePlayer.rotationYaw))) {
             return false;

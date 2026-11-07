@@ -143,8 +143,8 @@ public class ScaffoldPolarTest {
     }
 
     /**
-     * The report: the polar settings showed while another rotation mode was selected. Since 2026-10-31 GodBridge is
-     * LiquidBounce's GodBridge whole, ledge included (owner), so they are GodBridge's too -- and still no other mode's.
+     * The report: the polar settings showed while another rotation mode was selected. Since 2026-11-08 GODBRIDGE has
+     * its own flow (GodBridge) with no LiquidBounce ledge, so they are POLAR's alone.
      */
     @Test
     public void thePolarSettingsAreShownOnlyForTheLiquidBounceGodBridge() throws Exception {
@@ -156,7 +156,7 @@ public class ScaffoldPolarTest {
             rotations.setValue(1);
             assertFalse(name + " is not a DEFAULT setting", setting(scaffold, name).isVisible());
             rotations.setValue(GODBRIDGE);
-            assertTrue(name + " is a GodBridge setting", setting(scaffold, name).isVisible());
+            assertFalse(name + " is not GODBRIDGE's since its rewrite", setting(scaffold, name).isVisible());
             rotations.setValue(POLAR);
             assertTrue(name + " is a polar setting", setting(scaffold, name).isVisible());
         }

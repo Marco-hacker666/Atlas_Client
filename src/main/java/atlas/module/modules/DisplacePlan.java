@@ -29,6 +29,11 @@ final class DisplacePlan {
         return targetHurtTime <= maxHurtTime && (sprinting || knockbackEnchant) && sinceLastMs >= cooldownMs;
     }
 
+    /** Close enough for the turn to count. A range of 0 is off. */
+    static boolean inTurnRange(float distance, float range) {
+        return range <= 0.0F || distance <= range;
+    }
+
     static boolean facingAway(float yawDifference) {
         return Math.abs(yawDifference) < FACING_AWAY;
     }

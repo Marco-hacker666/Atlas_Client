@@ -316,7 +316,9 @@ public class SprintReset extends Module {
             return;
         }
         int lastAttacker = mc.thePlayer.getLastAttackerTime();
-        boolean hit = this.crabLastAttackerTime != Integer.MIN_VALUE && lastAttacker != this.crabLastAttackerTime;
+        /* Changed, and to this tick or the last: a respawn (a new player entity) changes it without a hit. */
+        boolean hit = this.crabLastAttackerTime != Integer.MIN_VALUE && lastAttacker != this.crabLastAttackerTime
+                && lastAttacker >= mc.thePlayer.ticksExisted - 1;
         this.crabLastAttackerTime = lastAttacker;
         if (mc.thePlayer.isDead) {
             crabStop();

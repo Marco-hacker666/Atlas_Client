@@ -21,7 +21,8 @@ import java.util.Random;
  *
  * Each tick, while it may block (a sword in hand; left mouse held, with left-mouse; right mouse held exactly when
  * right-mouse is on; hurt at all, with damaged; and the player's hurt time no higher than max-hurt-time):
- * - with nobody's block running, the cooldown at 0 and the nearest enemy within range, it presses the use key with
+ * - with no block running, the cooldown at 0 and the enemy (under the crosshair, else the nearest) within range,
+ *   it presses the use key with
  *   one click of its own (vanilla raises the sword), starts a 10-tick cooldown and holds;
  * - it holds for max-hold, or until it may no longer block, then lets the key up; lag-chance of the time every
  *   outgoing packet is then held for lag-max (AutoBlock's blink);
@@ -111,7 +112,7 @@ final class AutoBlockCrab {
         int lastAttacker = mc.thePlayer.getLastAttackerTime();
         boolean attacked = false;
         if (++this.sinceAttack >= ATTACK_GAP_TICKS && this.lastAttackerTime != Integer.MIN_VALUE
-                && lastAttacker != this.lastAttackerTime) {
+                && lastAttacker != this.lastAttackerTime && lastAttacker >= mc.thePlayer.ticksExisted - 1) {
             this.sinceAttack = 0;
             attacked = true;
         }

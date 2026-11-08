@@ -349,6 +349,12 @@ public class ItemUtil {
         return itemStack.getItem() instanceof ItemSword;
     }
 
+    /** An axe in hand (2026-11-09: weapon checks that count axes as weapons, as Crab's Sprint Reset does). */
+    public static boolean isHoldingAxe() {
+        ItemStack itemStack = ItemUtil.mc.thePlayer.getHeldItem();
+        return itemStack != null && itemStack.getItem() instanceof net.minecraft.item.ItemAxe;
+    }
+
     public static boolean isHoldingTool() {
         ItemStack itemStack = ItemUtil.mc.thePlayer.getHeldItem();
         if (itemStack == null) {

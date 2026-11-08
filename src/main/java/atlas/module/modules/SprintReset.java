@@ -8,6 +8,7 @@ import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.IntProperty;
 import atlas.property.properties.PercentProperty;
 import atlas.property.properties.ModeProperty;
+import atlas.util.ItemUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -20,18 +21,20 @@ public class SprintReset extends Module {
        one STOP, then one START the tick after, exactly a w-tap. PACKET and
        SILENT send STOP and START in the same tick, two sprint changes in one
        tick, which no keyboard produces and which bad-packet checks count. */
-    public final ModeProperty mode = new ModeProperty("Mode", 1, new String[]{"PACKET", "LEGIT", "SILENT", "SOFT"});
-    private final BooleanProperty onlyWhileSprinting = new BooleanProperty("Only While Sprinting", true);
-    private final BooleanProperty onlyWhileMoving = new BooleanProperty("Only While Moving", true);
+    public final ModeProperty mode = new ModeProperty("Mode", 1, new String[]{"PACKET", "LEGIT", "SILENT", "SOFT", "CRAB"});
+    /** Every mode but CRAB uses the settings below; CRAB has its own (crab-...). */
+    private final java.util.function.BooleanSupplier notCrab = () -> this.mode.getValue() != CRAB;
+    private final BooleanProperty onlyWhileSprinting = new BooleanProperty("Only While Sprinting", true, notCrab);
+    private final BooleanProperty onlyWhileMoving = new BooleanProperty("Only While Moving", true, notCrab);
     /* Sends four made-up positions (a packet critical) with the reset. That
        is a movement no player makes, on every hit; off by default since
        2026-09-25, and not something to turn on on Pika. */
-    private final BooleanProperty resetOnCrit = new BooleanProperty("Reset On Crit", false);
+    private final BooleanProperty resetOnCrit = new BooleanProperty("Reset On Crit", false, notCrab);
     /* Ticks between resets. The server takes sprint away only on a hit that
        does damage, and a player can be damaged once every ten ticks; at 12-16
        clicks a second, resetting on every click let go of forward almost every
        tick. One reset per damage window is all the knockback needs. */
-    private final IntProperty minGap = new IntProperty("min-gap", 8, 0, 20);
+    private final IntProperty minGap = new IntProperty("min-gap", 8, 0, 20, notCrab);
     private int lastResetTick = -1000;
 
     /* The rest after Vape's WTap (studied 2026-09-25), rewritten here.
@@ -43,7 +46,7 @@ public class SprintReset extends Module {
          server takes sprint away only on a damaging hit, so a reset spent
          on one that cannot land is a slowdown for nothing.
        LEGIT only; PACKET and SILENT keep their old behaviour. */
-    private final PercentProperty chance = new PercentProperty("chance", 90);
+    private final PercentProperty chance = new PercentProperty("chance", 90, notCrab);
     private final IntProperty releaseDelay = new IntProperty("release-delay", 0, 0, 5,
             () -> this.mode.getValue() == 1 || this.mode.getValue() == 3);
     private final IntProperty releaseTicks = new IntProperty("release-ticks", 1, 1, 5,
@@ -60,14 +63,33 @@ public class SprintReset extends Module {
          20 ticks without being hit. */
     private final BooleanProperty randomize = new BooleanProperty("randomize", true,
             () -> this.mode.getValue() == 1 || this.mode.getValue() == 3);
-    private final BooleanProperty waitForDamage = new BooleanProperty("wait-for-damage", false);
+    private final BooleanProperty waitForDamage = new BooleanProperty("wait-for-damage", false, notCrab);
     private boolean waitingForDamage;
     private int waitTicks;
     private int lastHurtTime;
-    private final BooleanProperty selectHits = new BooleanProperty("select-hits", true);
+    private final BooleanProperty selectHits = new BooleanProperty("select-hits", true, notCrab);
     private int releaseWait = 0;
-    private final BooleanProperty smartReset = new BooleanProperty("Smart Reset", false);
-    private final BooleanProperty fastReset = new BooleanProperty("Fast Reset", false);
+    private final BooleanProperty smartReset = new BooleanProperty("Smart Reset", false, notCrab);
+    private final BooleanProperty fastReset = new BooleanProperty("Fast Reset", false, notCrab);
+    /* ---- CRAB (2026-11-09, owner: "port Crab's Sprint Reset, as close as you can"): rebuilt from what Crab
+       client's Sprint Reset does (its DLL, read with Ghidra); see CrabSprintPlan for the timing. A hit is seen the
+       way Crab sees it: the player's last-attacker time moving, which vanilla sets on every hit it makes (the
+       player's or an aura's), never on a swing at the air. The action is held by setting the key itself each tick,
+       and given back as the key really is, so a key the player let go of meanwhile is not pressed again. */
+    static final int CRAB = 4;
+    private final java.util.function.BooleanSupplier crab = () -> this.mode.getValue() == CRAB;
+    private final ModeProperty crabAction = new ModeProperty("crab-action", 0,
+            new String[]{"WTap", "Sneak", "NoStop"}, crab);
+    private final IntProperty crabDelay = new IntProperty("crab-delay-ms", 200, 0, 400, crab);
+    private final IntProperty crabStop = new IntProperty("crab-stop-duration-ms", 100, 50, 300, crab);
+    private final BooleanProperty crabRandomize = new BooleanProperty("crab-randomize", true, crab);
+    private final BooleanProperty crabDamaged = new BooleanProperty("crab-damaged", false, crab);
+    private final BooleanProperty crabWeapon = new BooleanProperty("crab-holding-weapon", false, crab);
+    private final CrabSprintPlan crabPlan = new CrabSprintPlan();
+    private final java.util.Random crabRandom = new java.util.Random();
+    private int crabLastAttackerTime = Integer.MIN_VALUE;
+    /** The action CRAB is holding, so a change of crab-action mid-reset gives back the right key. */
+    private int crabHeld = -1;
     private static final Minecraft mc = Minecraft.getMinecraft();
     private boolean attacked = false;
     private boolean needsReset = false;
@@ -104,6 +126,7 @@ public class SprintReset extends Module {
 
     @Override
     public void onDisabled() {
+        crabStop();
         waitingForDamage = false;
         waitTicks = 0;
         releaseWait = 0;
@@ -116,7 +139,7 @@ public class SprintReset extends Module {
 
     @EventTarget
     public void onAttack(AttackEvent event) {
-        if (!this.isEnabled()) return;
+        if (!this.isEnabled() || this.mode.getValue() == CRAB) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
 
         Entity target = event.getTarget();
@@ -173,7 +196,7 @@ public class SprintReset extends Module {
 
     @EventTarget
     public void onUpdate(UpdateEvent event) {
-        if (!this.isEnabled()) return;
+        if (!this.isEnabled() || this.mode.getValue() == CRAB) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
         // Once per tick: this used to count PRE and POST, two a tick.
         if (event.getType() != atlas.event.types.EventType.PRE) return;
@@ -282,9 +305,70 @@ public class SprintReset extends Module {
         }
     }
 
+    /** CRAB: once a tick, before vanilla reads the movement keys. */
+    @EventTarget
+    public void onPreMoveInput(atlas.events.PreMoveInputEvent event) {
+        if (!this.isEnabled() || mc.thePlayer == null || mc.gameSettings == null) {
+            return;
+        }
+        if (this.mode.getValue() != CRAB) {
+            crabStop();
+            return;
+        }
+        int lastAttacker = mc.thePlayer.getLastAttackerTime();
+        boolean hit = this.crabLastAttackerTime != Integer.MIN_VALUE && lastAttacker != this.crabLastAttackerTime;
+        this.crabLastAttackerTime = lastAttacker;
+        if (mc.thePlayer.isDead) {
+            crabStop();
+            return;
+        }
+        boolean weaponOk = !this.crabWeapon.getValue() || ItemUtil.isHoldingSword() || ItemUtil.isHoldingAxe();
+        int step = this.crabPlan.tick(System.nanoTime() / 1.0E9, hit, mc.thePlayer.hurtTime,
+                this.crabDelay.getValue() / 50.0F, this.crabStop.getValue() / 50.0F, this.crabRandomize.getValue(),
+                this.crabDamaged.getValue(), weaponOk, this.crabRandom);
+        if (step == CrabSprintPlan.APPLY) {
+            if (this.crabHeld >= 0 && this.crabHeld != this.crabAction.getValue()) {
+                crabAct(this.crabHeld, false);
+            }
+            this.crabHeld = this.crabAction.getValue();
+            crabAct(this.crabHeld, true);
+        } else if (step == CrabSprintPlan.RELEASE) {
+            crabRelease();
+        }
+    }
+
+    /** Lets go of whatever CRAB holds. */
+    private void crabStop() {
+        if (this.crabPlan.stop() == CrabSprintPlan.RELEASE || this.crabHeld >= 0) {
+            crabRelease();
+        }
+        this.crabLastAttackerTime = Integer.MIN_VALUE;
+    }
+
+    private void crabRelease() {
+        if (this.crabHeld >= 0 && mc.thePlayer != null && mc.gameSettings != null) {
+            crabAct(this.crabHeld, false);
+        }
+        this.crabHeld = -1;
+    }
+
+    /**
+     * Crab's three actions. on: WTap lets go of forward, Sneak holds crouch, NoStop drops sprint and lets go of the
+     * sprint key (the player keeps walking). off: the key goes back to what it really is; NoStop sprints again.
+     */
+    private static void crabAct(int action, boolean on) {
+        net.minecraft.client.settings.KeyBinding key = action == 1 ? mc.gameSettings.keyBindSneak
+                : action == 2 ? mc.gameSettings.keyBindSprint : mc.gameSettings.keyBindForward;
+        if (action == 2) {
+            mc.thePlayer.setSprinting(!on);
+        }
+        boolean physical = mc.currentScreen == null && atlas.util.KeyBindUtil.isKeyDown(key.getKeyCode());
+        ((atlas.mixin.IAccessorKeyBinding) key).setPressed(on ? action == 1 : physical);
+    }
+
     @EventTarget
     public void onMoveInput(atlas.events.MoveInputEvent event) {
-        if (!this.isEnabled() || mc.thePlayer == null) {
+        if (!this.isEnabled() || mc.thePlayer == null || this.mode.getValue() == CRAB) {
             return;
         }
         if (releaseWait > 0) {

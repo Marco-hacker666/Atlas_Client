@@ -25,7 +25,7 @@ public class BlockHit extends Module {
        AutoBlock the way Slinky does it"); the module is shown as AutoBlock.
        Saved configs keep the mode they name. */
     private final ModeProperty mode = new ModeProperty("Mode", 6,
-            new String[]{"Helper", "Auto", "Lag", "Swing", "Predict", "Manual", "Slinky", "Full", "Yuri", "Raven"})
+            new String[]{"Helper", "Auto", "Lag", "Swing", "Predict", "Manual", "Slinky", "Full", "Yuri", "Raven", "Crab"})
             .hide("Swing")
             /* 2026-10-31 (owner's consolidation): Auto, Lag, Swing and Predict retired; a config naming one gets Full. */
             .retire("Full", "Auto", "Lag", "Swing", "Predict")
@@ -106,6 +106,27 @@ public class BlockHit extends Module {
     final BooleanProperty ravenForceAttack = new BooleanProperty("raven-force-attack", false, ravenMode);
     final BooleanProperty ravenMobs = new BooleanProperty("raven-mobs", false, ravenMode);
     private final AutoBlockRaven raven = new AutoBlockRaven(this);
+    /* ---- Crab (2026-11-09, owner: "port Crab's Block Hit, as close as you can"): Crab client's Block Hit with its
+       settings and defaults, see AutoBlockCrab. Times are ms, 50 a tick, as Crab shows them. */
+    private final java.util.function.BooleanSupplier crabMode = () -> this.modeIndex() == 10;
+    final FloatProperty crabRange = new FloatProperty("crab-range", 3.1F, 2.0F, 6.0F, crabMode);
+    final IntProperty crabMaxHurt = new IntProperty("crab-max-hurt-time-ms", 300, 50, 500, crabMode);
+    final IntProperty crabMaxHold = new IntProperty("crab-max-hold-ms", 250, 50, 500, crabMode);
+    final BooleanProperty crabForceAnimation = new BooleanProperty("crab-force-animation", false, crabMode);
+    final BooleanProperty crabAnimation = new BooleanProperty("crab-animation", false, crabMode);
+    final BooleanProperty crabAnimationInRange = new BooleanProperty("crab-animation-in-range", false,
+            () -> crabMode.getAsBoolean() && this.crabAnimation.getValue());
+    final PercentProperty crabLagChance = new PercentProperty("crab-lag-chance", 0, crabMode);
+    final IntProperty crabLagMax = new IntProperty("crab-lag-max-ms", 100, 50, 500,
+            () -> crabMode.getAsBoolean() && this.crabLagChance.getValue() > 0);
+    final BooleanProperty crabPreventDelay = new BooleanProperty("crab-prevent-delaying-attacks", true,
+            () -> crabMode.getAsBoolean() && this.crabLagChance.getValue() > 0);
+    final BooleanProperty crabBlockAgain = new BooleanProperty("crab-block-again-immediately", false,
+            () -> crabMode.getAsBoolean() && this.crabLagChance.getValue() > 0);
+    final BooleanProperty crabLeftMouse = new BooleanProperty("crab-left-mouse", true, crabMode);
+    final BooleanProperty crabRightMouse = new BooleanProperty("crab-right-mouse", false, crabMode);
+    final BooleanProperty crabDamaged = new BooleanProperty("crab-damaged", false, crabMode);
+    private final AutoBlockCrab crab = new AutoBlockCrab(this);
     /* ---- Full (2026-10-21): sword up whenever an enemy is in range, every hit swapped in within
        one tick (release, hit, block again), so the server has it up for every hit taken. See AutoBlockFull. */
     private final java.util.function.BooleanSupplier full = () -> this.modeIndex() == 7;
@@ -369,6 +390,7 @@ public class BlockHit extends Module {
         this.lastDamageAt = 0L;
         slinkyReset(true);
         this.raven.reset(true);
+        this.crab.reset(true);
         this.fullBlock.reset();
     }
 
@@ -508,6 +530,11 @@ public class BlockHit extends Module {
                 this.raven.tick();
             } else if (this.raven.active()) {
                 this.raven.reset(true);
+            }
+            if (this.modeIndex() == 10) {
+                this.crab.tick();
+            } else if (this.crab.active()) {
+                this.crab.reset(true);
             }
         }
     }
@@ -764,7 +791,7 @@ public class BlockHit extends Module {
     /** While held packets wait, a right click must not raise the sword on its own. */
     @EventTarget
     public void onSlinkyRightClick(atlas.events.RightClickMouseEvent event) {
-        if (this.isRunning() && (this.sLagging || this.raven.lagging() || this.modeIndex() == 9 && this.raven.cancelsUse())
+        if (this.isRunning() && (this.sLagging || this.raven.lagging() || this.crab.lagging() || this.modeIndex() == 9 && this.raven.cancelsUse())
                 && mc.currentScreen == null && ItemUtil.isHoldingSword()) {
             event.setCancelled(true);
         }
@@ -775,6 +802,9 @@ public class BlockHit extends Module {
     public void onRavenPacket(atlas.events.PacketEvent event) {
         if (this.modeIndex() == 9 || this.raven.lagging()) {
             this.raven.onSend(event);
+        }
+        if (this.modeIndex() == 10 || this.crab.lagging()) {
+            this.crab.onSend(event);
         }
     }
 

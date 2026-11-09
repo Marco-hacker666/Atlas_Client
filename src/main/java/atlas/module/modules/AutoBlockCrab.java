@@ -68,6 +68,8 @@ final class AutoBlockCrab {
     private int sinceAttack;
     private int lastTargetId;
     private int lastAttackerTime = Integer.MIN_VALUE;
+    /** The player entity lastAttackerTime was read from: a new one (respawn, world change) starts over. */
+    private Object attackerOf;
     private boolean animationShown;
     private int animationCount = USE_DURATION;
 
@@ -162,6 +164,10 @@ final class AutoBlockCrab {
         }
 
         /* An attack, or a new target. */
+        if (this.attackerOf != mc.thePlayer) {
+            this.attackerOf = mc.thePlayer;
+            this.lastAttackerTime = Integer.MIN_VALUE;
+        }
         int lastAttacker = mc.thePlayer.getLastAttackerTime();
         boolean hit = false;
         if (++this.sinceAttack >= ATTACK_GAP_TICKS) {
@@ -305,8 +311,11 @@ final class AutoBlockCrab {
         this.sinceAttack = 0;
         this.rightRequired = false;
         this.lastAttackerTime = Integer.MIN_VALUE;
-        if (releaseKey && this.keyOwned && mc.gameSettings != null) {
-            setUseKey(mc.currentScreen == null && physicalUse());
+        this.attackerOf = null;
+        /* Handing over (to Silent Aura blocking by itself) the key goes up, or the aura could never lower the sword;
+           leaving, it goes back to what the player holds. Either way once: after that it is not ours. */
+        if (this.keyOwned && mc.gameSettings != null) {
+            setUseKey(releaseKey && mc.currentScreen == null && physicalUse());
             this.keyOwned = false;
         }
         endAnimation();

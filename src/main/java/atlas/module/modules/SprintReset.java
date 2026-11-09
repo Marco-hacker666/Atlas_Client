@@ -88,6 +88,8 @@ public class SprintReset extends Module {
     private final CrabSprintPlan crabPlan = new CrabSprintPlan();
     private final java.util.Random crabRandom = new java.util.Random();
     private int crabLastAttackerTime = Integer.MIN_VALUE;
+    /** The player entity crabLastAttackerTime was read from: a new one (respawn, world change, reconnect) starts over. */
+    private Object crabAttackerOf;
     /** The action CRAB is holding, so a change of crab-action mid-reset gives back the right key. */
     private int crabHeld = -1;
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -315,8 +317,12 @@ public class SprintReset extends Module {
             crabStop();
             return;
         }
+        if (this.crabAttackerOf != mc.thePlayer) {
+            this.crabAttackerOf = mc.thePlayer;
+            this.crabLastAttackerTime = Integer.MIN_VALUE;
+        }
         int lastAttacker = mc.thePlayer.getLastAttackerTime();
-        /* Changed, and to this tick or the last: a respawn (a new player entity) changes it without a hit. */
+        /* Changed (on the same player entity), and to this tick or the last. */
         boolean hit = this.crabLastAttackerTime != Integer.MIN_VALUE && lastAttacker != this.crabLastAttackerTime
                 && lastAttacker >= mc.thePlayer.ticksExisted - 1;
         this.crabLastAttackerTime = lastAttacker;
@@ -345,6 +351,7 @@ public class SprintReset extends Module {
             crabRelease();
         }
         this.crabLastAttackerTime = Integer.MIN_VALUE;
+        this.crabAttackerOf = null;   // no old world kept alive by it
     }
 
     private void crabRelease() {

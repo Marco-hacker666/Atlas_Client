@@ -366,7 +366,7 @@ public final class ModuleDocs {
         d("HitSelect", "挑出手時機：只在對自己有利（例如減少吃擊退）的時候讓攻擊送出。所有模式都會管 Silent Aura 的攻擊。可用 combo、第一下、低血量、被打後反擊等條件放行。");
         d("MoreKB", "攻擊時重置衝刺，讓每一下打出更多擊退。");
         d("FastBow", "加快拉弓射箭的速度。");
-        d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Slinky（預設）：按著左鍵、敵人在範圍內就舉劍，舉滿幾 tick 放下一 tick 讓攻擊打出去，再舉起來；可選只在快被打到時舉、放下時延遲封包。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Full：照原版的擋劍節奏（放下、下一 tick 打、打完立刻舉起），只在能保護你的時候舉劍。Raven：Raven bS 的 Auto Block，按著右鍵時才作用：同時在打範圍內的敵人就舉劍、放下讓攻擊打出去再舉起，放下時可延遲封包；只按右鍵就是普通格擋。Helper / Auto / Lag：其他方式。");
+        d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Slinky（預設）：按著左鍵、敵人在範圍內就舉劍，舉滿幾 tick 放下一 tick 讓攻擊打出去，再舉起來；可選只在快被打到時舉、放下時延遲封包。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Full：照原版的擋劍節奏（放下、下一 tick 打、打完立刻舉起），只在能保護你的時候舉劍。Raven：Raven bS 的 Auto Block，按著右鍵時才作用：同時在打範圍內的敵人就舉劍、放下讓攻擊打出去再舉起，放下時可延遲封包；只按右鍵就是普通格擋。Crab：Crab 客戶端的 Block Hit（和 Slinky 的 Auto Block 同一套）：可以格擋時敵人在範圍內就舉劍一下、最多舉幾 tick，10 tick 冷卻，被打中就重置，放下時可延遲封包。Helper / Auto / Lag：其他方式。");
         help("BlockHit", "yuri-range", "Yuri：打到這個距離內（腳到腳）的目標才會格擋。");
         help("BlockHit", "yuri-chance", "Yuri：有多少比例的攻擊會接著格擋。");
         help("BlockHit", "yuri-combo-delay", "Yuri：打完幾 ms 後舉劍（那時要按著前進）。");
@@ -899,7 +899,8 @@ public final class ModuleDocs {
                 h("Slinky 格擋", "block-range", "max-hold-ticks", "random-hold-ticks", "block-cooldown-ms", "require-*", "max-hurt-time"),
                 h("Slinky 假動畫", "fake-animation*"),
                 h("Slinky 延遲封包", "lag-*"),
-                h("Raven", "raven-*"));
+                h("Raven", "raven-*"),
+                h("Crab", "crab-*"));
         g("TargetHUD",
                 h("樣式", "style", "Anim Mode", "animations", "head", "indicator", "outline", "shadow"),
                 h("顏色", "color", "CustomColor", "Bg-Alpha", "background"),

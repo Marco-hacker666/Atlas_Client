@@ -1288,8 +1288,16 @@ public class AtlasClickGui extends GuiScreen {
             this.hint = "Move the HUD elements on screen";
         }
         /* One-click bug report (2026-10-07): copies everything #bug-reports asks for. */
+        /* 2026-11-09: the Theme window, everything about how the client looks in one place. */
+        float studioWidth = font(8.5F, true).width("Theme") + 34;
+        float studioX = editorX - 8 - studioWidth;
+        drawButton("themeStudio", null, studioX, cy, studioWidth, "    Theme", 0, mx, my);
+        icon("palette", studioX + 13.0F, cy, TEXT);
+        if (mx >= studioX && mx <= studioX + studioWidth && my >= cy - 10 && my <= cy + 10) {
+            this.hint = "Colours, menu, HUD and world looks in one window  ·  save them as themes";
+        }
         float reportWidth = font(8.5F, true).width("Report") + 34;
-        float reportX = editorX - 8 - reportWidth;
+        float reportX = studioX - 8 - reportWidth;
         drawButton("bugReport", null, reportX, cy, reportWidth, "    Report", 0, mx, my);
         drawWarning(reportX + 13.0F, cy, 5.0F);
         if (mx >= reportX && mx <= reportX + reportWidth && my >= cy - 10 && my <= cy + 10) {
@@ -4377,6 +4385,26 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
+    /* 2026-11-09: for the Theme window (ThemeStudio), which edits the same
+       Appearance settings and draws with the same look as this menu. */
+    AtlasTheme theme() {
+        return this.theme;
+    }
+
+    int accentColour() {
+        return accent();
+    }
+
+    /** Applies the Appearance settings to the shared drawing state (glass, font, springs, palette). */
+    void applyLook() {
+        applyTheme();
+        paintPalette();
+    }
+
+    static float textScale() {
+        return textScale;
+    }
+
     private int clickGuiAccent() {
         try {
             atlas.module.modules.ClickGUIModule gui =
@@ -4523,6 +4551,11 @@ public class AtlasClickGui extends GuiScreen {
         if ("bugReport".equals(target.kind)) {
             pulse("btn:bugReport");
             openReport();
+            return;
+        }
+        if ("themeStudio".equals(target.kind)) {
+            pulse("btn:themeStudio");
+            this.mc.displayGuiScreen(new ThemeStudio(this));
             return;
         }
         if ("hudEditor".equals(target.kind)) {

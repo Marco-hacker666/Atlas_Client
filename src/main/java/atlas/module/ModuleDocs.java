@@ -459,7 +459,11 @@ public final class ModuleDocs {
         d("ItemTags", "在掉落物上方顯示物品名稱和數量。");
         d("EntityCulling", "不繪製被擋住、看不到的實體，提高 FPS。");
         d("Notifications", "右下角顯示動畫通知（模組開關等），可設定開關音效。可在 HUD 編輯器拖曳。");
-        d("ExploitFixer", "擋下你自己送出的異常資料包和聊天封包（防禦用）。");
+        d("ExploitFixer", "擋下你自己送出的異常封包，以及伺服器送來會讓客戶端卡死或讀取你電腦檔案的封包（防禦用）。");
+        help("ExploitFixer", "fix-incoming", "擋下伺服器送來的異常封包：超量或 NaN 的粒子、爆炸、速度、傳送座標，以及假的試玩畫面和結尾畫面。真正的伺服器不會送這些。");
+        help("ExploitFixer", "max-particles", "一個粒子封包最多幾顆，超過就整包丟掉。");
+        help("ExploitFixer", "fix-chat-nesting", "聊天、標題、告示牌的文字巢狀太深或太多時換成一行提示，避免解析時卡死。");
+        help("ExploitFixer", "fix-pack-probe", "伺服器用 level:// 或其他非網址的資源包探測你電腦上的檔案時，一律回報下載失敗，不讀檔案。");
         d("HitBox", "放大其他實體的碰撞箱，比較容易打中，可選擇顯示放大的範圍。");
         d("LagRange", "靠近對手時延遲自己的封包，讓伺服器看到的你慢一步。進到近戰距離就逐漸放出，攻擊時幾乎沒有壓著的；攻擊、被擊退或被拉回時立刻放出並暫停。");
         help("LagRange", "range", "什麼時候壓：對手在這距離內、而且你正在靠近。");

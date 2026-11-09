@@ -221,7 +221,11 @@ final class ModuleDocsEn {
         d("ItemTags", "Names and counts above dropped items.");
         d("EntityCulling", "Skips drawing entities that are hidden from view, for more FPS.");
         d("Notifications", "Animated notifications in the bottom-right corner (module toggles and more), with toggle sounds. Movable in the HUD editor.");
-        d("ExploitFixer", "Blocks malformed payload and chat packets you send (defensive).");
+        d("ExploitFixer", "Blocks malformed packets you send, and server packets that freeze the client or read your files (defensive).");
+        help("ExploitFixer", "fix-incoming", "Drops server packets no real server sends: particles, explosions, velocity or teleports that are huge or NaN, and forced demo or credits screens.");
+        help("ExploitFixer", "max-particles", "Most particles one packet may spawn; a bigger packet is dropped.");
+        help("ExploitFixer", "fix-chat-nesting", "Chat, title or sign text nested too deep or too large is replaced with one line, so decoding it cannot hang the game.");
+        help("ExploitFixer", "fix-pack-probe", "A level:// or other non-web resource pack, used to look for files on your PC, always gets a failed download and no file is read.");
         d("HitBox", "Expands other entities' hitboxes so they are easier to hit; can draw them.");
         d("LagRange", "Delays your packets while closing on a target, so the server sees you late. Lets them out gradually within melee distance, so an attack finds little held; an attack, knockback or correction lets go at once and pauses holding.");
         help("LagRange", "mode", "RAVEN (Raven bS's rules): holds while closing in from beyond 3 blocks, and keeps holding after "

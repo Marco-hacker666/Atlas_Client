@@ -25,6 +25,8 @@ public final class RecordedAim extends AngleSmooth {
     public float follow = 4.0F;
     /** 0..1: how much of each recorded turn is used (1 = all of it). */
     public float strength = 1.0F;
+    /** Use ticks recorded while Silent Aura was on (record-with-aura). */
+    public boolean useAuraData = true;
     public AngleSmooth fallback = new Tracking();
 
     private volatile AimLibrary library = new AimLibrary();
@@ -36,6 +38,15 @@ public final class RecordedAim extends AngleSmooth {
         this.run = -1;
     }
 
+    /**
+     * A line the Recorder just wrote (AimFeed). Client thread. Rows that came
+     * in while the files were still being read are in the old library and are
+     * read again from the file next time.
+     */
+    public void addLive(String line) {
+        this.library.addLive(line);
+    }
+
     public AimLibrary library() {
         return this.library;
     }
@@ -43,6 +54,7 @@ public final class RecordedAim extends AngleSmooth {
     @Override
     public Rotation process(SmoothContext context, Rotation current, Rotation target) {
         AimLibrary lib = this.library;
+        lib.includeAura = this.useAuraData;
         float[] error = current.deltaTo(target);
         int pick = continued(lib, error);
         if (pick < 0) {
@@ -66,6 +78,9 @@ public final class RecordedAim extends AngleSmooth {
             return -1;
         }
         AimLibrary.Sample s = lib.get(next);
+        if (s.aura && !lib.includeAura) {
+            return -1;
+        }
         float dy = Math.abs(s.errYaw) - Math.abs(error[0]);
         float dp = s.errPitch - error[1];
         return dy * dy + dp * dp <= this.follow * this.follow ? next : -1;

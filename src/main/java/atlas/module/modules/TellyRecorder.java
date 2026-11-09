@@ -7,7 +7,10 @@ import atlas.events.LoadWorldEvent;
 import atlas.events.PacketEvent;
 import atlas.events.TickEvent;
 import atlas.module.Module;
+import atlas.lb.aiming.AimFeed;
+import atlas.lb.aiming.AimLibrary;
 import atlas.property.properties.BooleanProperty;
+import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
 import atlas.util.AsyncLog;
 import atlas.util.ChatUtil;
@@ -60,6 +63,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  * that turns the look, clicks, holds or delays packets, changes your fight movement, or shows players through
  * walls) and switches them back on after. Assist bit 8 marks a tick where one of them was on anyway.
  *
+ * Recording while playing (2026-11-10, owner: "can it record while I use it"): record-with-aura keeps Silent Aura on.
+ * Its turns are silent, so the camera is still your hand; those ticks carry assist bit 16 so Recorded can leave them
+ * out. A tick is not recorded while the aura moves the camera itself (LiquidBounce engine, MovementCorrection
+ * ChangeLook): that would be the aura learning from itself. Three filters keep only real aiming, with or without the
+ * aura: aim-fov (the look within that many degrees of the target), only-when-clicking (a swing or the attack key in
+ * the last second) and aura-target (the enemy the aura is fighting, rather than the one nearest your look). Every row
+ * also goes straight to Silent Aura's Recorded turn (AimFeed), so it learns while you play.
+ *
  * Nothing leaves the computer. Other players are "e" plus the entity id and the world number, which means nothing
  * outside the recording: no names, no UUIDs, no server address.
  */
@@ -80,6 +91,13 @@ public class TellyRecorder extends Module {
     public final BooleanProperty recordCombat = new BooleanProperty("record-combat", true);
     public final IntProperty combatRange = new IntProperty("combat-range", 8, 3, 16, this.recordCombat::getValue);
     public final BooleanProperty cleanRecording = new BooleanProperty("clean-recording", true);
+    public final BooleanProperty recordWithAura = new BooleanProperty("record-with-aura", false,
+            this.recordCombat::getValue);
+    public final BooleanProperty auraTarget = new BooleanProperty("aura-target", true,
+            () -> this.recordCombat.getValue() && this.recordWithAura.getValue());
+    public final FloatProperty aimFov = new FloatProperty("aim-fov", 30.0F, 5.0F, 180.0F, this.recordCombat::getValue);
+    public final BooleanProperty onlyWhenClicking = new BooleanProperty("only-when-clicking", true,
+            this.recordCombat::getValue);
 
     static final String AIM_HEADER = "tick,target,yaw,pitch,err_yaw,err_pitch,dist,tx,ty,tz,px,py,pz,"
             + "t_ground,p_ground,t_hurt,p_hurt,swings,attacks,attack_key,ping,assist";
@@ -94,6 +112,10 @@ public class TellyRecorder extends Module {
             "Velocity", "MoreKB", "SprintReset", "Wtap", "JumpReset", "Speed", "KeepSprint", "TargetStrafe",
             "BlockHit", "ESP", "Pointers", "Indicators"};
     static final int ASSIST_OTHER = 8;
+    static final int ASSIST_AURA = AimLibrary.ASSIST_AURA;
+    /** How recent a swing or the attack key must be for only-when-clicking. */
+    static final long CLICK_WINDOW_MS = 1000L;
+    private long lastClickAt;
     private final List<Module> switchedOff = new ArrayList<Module>();
     private File aimFile;
     private final List<String> aimPending = new ArrayList<String>();
@@ -140,6 +162,7 @@ public class TellyRecorder extends Module {
         this.aimFile = new File(DIR, this.file.getName().replace("telly-", "aim-"));
         this.aimPending.add(this.pending.get(0).replace("telly-recorder", "aim-recorder"));
         this.aimPending.add(AIM_HEADER);
+        AimFeed.publish(AIM_HEADER);
         this.swingsSent.set(0);
         this.attacksSent.set(0);
         this.switchedOff.clear();
@@ -147,7 +170,7 @@ public class TellyRecorder extends Module {
             StringBuilder names = new StringBuilder();
             for (String name : NOT_OWN) {
                 Module module = atlas.Atlas.moduleManager.getModule(name);
-                if (module != null && module != this && module.isEnabled()) {
+                if (module != null && module != this && module.isEnabled() && !keptForAura(module)) {
                     module.setEnabled(false);
                     this.switchedOff.add(module);
                     names.append(names.length() == 0 ? "" : ", ").append(module.getName());
@@ -307,15 +330,59 @@ public class TellyRecorder extends Module {
     private boolean notOwnOn() {
         for (String name : NOT_OWN) {
             Module module = atlas.Atlas.moduleManager.getModule(name);
-            if (module != null && module != this && module.isEnabled()) {
+            if (module != null && module != this && module.isEnabled() && !keptForAura(module)) {
                 return true;
             }
         }
         return false;
     }
 
+    /** Silent Aura (either engine), which record-with-aura leaves on: its silent turns do not move the camera. */
+    private boolean keptForAura(Module module) {
+        return this.recordWithAura.getValue() && (module instanceof KillAura || module instanceof KillAuraLB);
+    }
+
+    /** Silent Aura, when on. */
+    private static KillAura aura() {
+        Module module = atlas.Atlas.moduleManager.modules.get(KillAura.class);
+        return module != null && module.isEnabled() ? (KillAura) module : null;
+    }
+
+    /**
+     * The aura turns the camera itself, so there is nothing of yours to learn: the LiquidBounce engine with
+     * MovementCorrection ChangeLook, or the Atlas engine with Legit or LockView rotations.
+     */
+    private static boolean auraMovesCamera(KillAura aura) {
+        if (aura == null) {
+            return false;
+        }
+        KillAuraLB lb = aura.liquidBounce();
+        if (lb != null) {
+            return lb.movementCorrection.getValue() == 3;
+        }
+        String rotations = aura.rotations.getModeString();
+        return aura.atlasEngine() && ("Legit".equals(rotations) || "LockView".equals(rotations));
+    }
+
     /** One aim row while an enemy is within combat-range: the one your look is closest to. */
     private void recordAim(int swings, int attacks) {
+        long now = System.currentTimeMillis();
+        if (swings > 0 || attacks > 0 || mc.gameSettings.keyBindAttack.isKeyDown()) {
+            this.lastClickAt = now;
+        }
+        if (this.onlyWhenClicking.getValue() && now - this.lastClickAt > CLICK_WINDOW_MS) {
+            return;
+        }
+        KillAura aura = aura();
+        boolean withAura = aura != null && this.recordWithAura.getValue();
+        if (withAura && auraMovesCamera(aura)) {
+            /* The aura steers the camera itself: this tick is not your hand. */
+            return;
+        }
+        EntityPlayer auraPick = null;
+        if (withAura && this.auraTarget.getValue() && aura.getTarget() instanceof EntityPlayer) {
+            auraPick = (EntityPlayer) aura.getTarget();
+        }
         double range = this.combatRange.getValue();
         double ex = mc.thePlayer.posX;
         double ey = mc.thePlayer.posY + mc.thePlayer.getEyeHeight();
@@ -326,6 +393,10 @@ public class TellyRecorder extends Module {
         float[] bestErr = null;
         float bestOff = Float.MAX_VALUE;
         for (EntityPlayer player : mc.theWorld.playerEntities) {
+            if (auraPick != null && player != auraPick) {
+                /* aura-target: only the enemy the aura is fighting. */
+                continue;
+            }
             if (player == mc.thePlayer || player.isDead || player.getHealth() <= 0.0F
                     || player.getDistanceToEntity(mc.thePlayer) > range || atlas.util.TeamUtil.isFriend(player)
                     || atlas.util.TeamUtil.isSameTeam(player) || atlas.util.TeamUtil.isBot(player)) {
@@ -344,6 +415,10 @@ public class TellyRecorder extends Module {
         if (best == null) {
             return;
         }
+        if (Math.abs(bestErr[0]) > this.aimFov.getValue() || Math.abs(bestErr[1]) > this.aimFov.getValue()) {
+            /* Not aiming at them (aim-fov): a look elsewhere teaches nothing about following a target. */
+            return;
+        }
         int ping = 0;
         if (mc.getNetHandler() != null) {
             NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(mc.thePlayer.getUniqueID());
@@ -355,8 +430,10 @@ public class TellyRecorder extends Module {
                 best.getDistanceToEntity(mc.thePlayer), best.posX, best.posY, best.posZ, mc.thePlayer.posX,
                 mc.thePlayer.posY, mc.thePlayer.posZ, best.onGround ? 1 : 0, mc.thePlayer.onGround ? 1 : 0,
                 best.hurtTime, mc.thePlayer.hurtTime, swings, attacks,
-                mc.gameSettings.keyBindAttack.isKeyDown() ? 1 : 0, ping, assisted());
+                mc.gameSettings.keyBindAttack.isKeyDown() ? 1 : 0, ping,
+                assisted() | (withAura ? ASSIST_AURA : aura != null ? ASSIST_OTHER : 0));
         this.aimPending.add(line);
+        AimFeed.publish(line);
         this.bytes += line.length() + 1;
         this.aimRows++;
     }

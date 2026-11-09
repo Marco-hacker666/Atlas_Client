@@ -146,4 +146,42 @@ public class NoiseAndRecordedAimTest {
         Rotation next = aim.process(live(null), new Rotation(0.0F, 0.0F), new Rotation(30.0F, 0.0F));
         assertEquals(5.0F, next.yaw, 1e-3F);
     }
+
+    @Test
+    public void auraTicksAreMarkedAndCanBeLeftOut() {
+        AimLibrary library = new AimLibrary();
+        library.add(Arrays.asList(HEADER,
+                row(1, "a", 0.0F, 0.0F, 10.0F, 0.0F, AimLibrary.ASSIST_AURA),
+                row(2, "a", 5.0F, 0.0F, 5.0F, 0.0F, AimLibrary.ASSIST_AURA)));
+        assertEquals(1, library.size());
+        assertTrue(library.get(0).aura);
+        assertTrue(library.nearest(10.0F, 0.0F, new Random(1)) >= 0);
+        library.includeAura = false;
+        assertEquals(-1, library.nearest(10.0F, 0.0F, new Random(1)));
+    }
+
+    @Test
+    public void liveRowsLinkIntoRunsAcrossCalls() {
+        AimLibrary library = new AimLibrary();
+        library.addLive(HEADER);
+        library.addLive(row(1, "a", 0.0F, 0.0F, 10.0F, 0.0F, 0));
+        library.addLive(row(2, "a", 4.0F, 0.0F, 6.0F, 0.0F, 0));
+        assertEquals(1, library.size());
+        library.addLive(row(3, "a", 7.0F, 0.0F, 3.0F, 0.0F, 0));
+        assertEquals(2, library.size());
+        assertEquals(1, library.get(0).next);
+        /* A new recording's header starts over: no link across it. */
+        library.addLive(HEADER);
+        library.addLive(row(4, "a", 8.0F, 0.0F, 2.0F, 0.0F, 0));
+        assertEquals(2, library.size());
+    }
+
+    @Test
+    public void feedReachesListeners() {
+        final java.util.List<String> got = new java.util.ArrayList<String>();
+        java.util.function.Consumer<String> listener = got::add;
+        AimFeed.listen(listener);
+        AimFeed.publish("x");
+        assertEquals(java.util.Collections.singletonList("x"), got);
+    }
 }

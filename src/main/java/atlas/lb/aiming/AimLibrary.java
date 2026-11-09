@@ -23,6 +23,12 @@ import java.util.Map;
  * something other than the mouse; bit 8: a module that changes aim, clicks or
  * movement was on). Turns over 60 degrees in a tick are dropped as camera
  * snaps, not aim.
+ *
+ * Ticks recorded while Silent Aura was on (bit 16, record-with-aura) are
+ * kept but marked: the camera was still your hand, but a hand that knows the
+ * aura is hitting tends to aim less carefully, so Recorded can leave them
+ * out (includeAura). Rows also arrive live from the Recorder (addLive), so a
+ * recording made while playing is used at once.
  */
 public final class AimLibrary {
 
@@ -34,17 +40,33 @@ public final class AimLibrary {
         public final float turnPitch;
         /** Index of the next tick of the same run, or -1. */
         public final int next;
+        /** Recorded while Silent Aura was on. */
+        public final boolean aura;
 
         Sample(float errYaw, float errPitch, float turnYaw, float turnPitch, int next) {
+            this(errYaw, errPitch, turnYaw, turnPitch, next, false);
+        }
+
+        Sample(float errYaw, float errPitch, float turnYaw, float turnPitch, int next, boolean aura) {
             this.errYaw = errYaw;
             this.errPitch = errPitch;
             this.turnYaw = turnYaw;
             this.turnPitch = turnPitch;
             this.next = next;
+            this.aura = aura;
+        }
+
+        Sample withNext(int next) {
+            return new Sample(this.errYaw, this.errPitch, this.turnYaw, this.turnPitch, next, this.aura);
         }
     }
 
     static final int ASSIST_NOT_OWN = 4 | 8;
+    /** The Recorder's bit for a tick recorded while Silent Aura was on (record-with-aura). */
+    public static final int ASSIST_AURA = 16;
+    /** Whether ticks recorded with the aura on are used; set by Recorded every tick. */
+    public volatile boolean includeAura = true;
+    private Reader live;
     static final float SNAP = 60.0F;
     /** Bucket size of the lookup grid, degrees. */
     static final float CELL = 2.0F;
@@ -95,27 +117,49 @@ public final class AimLibrary {
 
     /** Adds one recording's lines (header and comment lines are skipped). */
     public void add(List<String> lines) {
-        Map<String, Integer> column = null;
-        float[] last = null;
-        String lastTarget = null;
-        long lastTick = Long.MIN_VALUE;
-        int lastAssist = 0;
-        int previousIndex = -1;
+        Reader reader = new Reader();
         for (String line : lines) {
-            if (line.isEmpty() || line.startsWith("#")) {
-                continue;
+            reader.line(line);
+        }
+    }
+
+    /**
+     * One line as the Recorder writes it, while it writes it: a header (which
+     * starts a new recording) or a row. Runs carry on across calls. Client
+     * thread, the same one Recorded reads from.
+     */
+    public void addLive(String line) {
+        if (this.live == null) {
+            this.live = new Reader();
+        }
+        this.live.line(line);
+    }
+
+    /** Reads rows into samples, remembering the last row so consecutive ticks link into runs. */
+    private final class Reader {
+        private Map<String, Integer> column;
+        private float[] last;
+        private String lastTarget;
+        private long lastTick = Long.MIN_VALUE;
+        private int lastAssist;
+        private int previousIndex = -1;
+
+        void line(String line) {
+            if (line == null || line.isEmpty() || line.startsWith("#")) {
+                return;
             }
             String[] cells = line.split(",", -1);
             if (cells.length > 0 && "tick".equals(cells[0])) {
-                column = new HashMap<String, Integer>();
+                this.column = new HashMap<String, Integer>();
                 for (int i = 0; i < cells.length; i++) {
-                    column.put(cells[i], i);
+                    this.column.put(cells[i], i);
                 }
-                last = null;
-                continue;
+                this.last = null;
+                this.previousIndex = -1;
+                return;
             }
-            if (column == null || !column.containsKey("err_yaw")) {
-                continue;
+            if (this.column == null || !this.column.containsKey("err_yaw")) {
+                return;
             }
             long tick;
             String target;
@@ -125,42 +169,41 @@ public final class AimLibrary {
             float errPitch;
             int assist;
             try {
-                tick = Long.parseLong(cells[column.get("tick")]);
-                target = cells[column.get("target")];
-                yaw = Float.parseFloat(cells[column.get("yaw")]);
-                pitch = Float.parseFloat(cells[column.get("pitch")]);
-                errYaw = Float.parseFloat(cells[column.get("err_yaw")]);
-                errPitch = Float.parseFloat(cells[column.get("err_pitch")]);
-                Integer at = column.get("assist");
+                tick = Long.parseLong(cells[this.column.get("tick")]);
+                target = cells[this.column.get("target")];
+                yaw = Float.parseFloat(cells[this.column.get("yaw")]);
+                pitch = Float.parseFloat(cells[this.column.get("pitch")]);
+                errYaw = Float.parseFloat(cells[this.column.get("err_yaw")]);
+                errPitch = Float.parseFloat(cells[this.column.get("err_pitch")]);
+                Integer at = this.column.get("assist");
                 assist = at == null || at >= cells.length ? 0 : Integer.parseInt(cells[at]);
             } catch (RuntimeException e) {
-                last = null;
-                continue;
+                this.last = null;
+                return;
             }
-            boolean follows = last != null && tick == lastTick + 1 && target.equals(lastTarget);
-            if (follows && (lastAssist & ASSIST_NOT_OWN) == 0 && (assist & ASSIST_NOT_OWN) == 0) {
-                float turnYaw = Rotation.angleDifference(yaw, last[0]);
-                float turnPitch = pitch - last[1];
-                if (Math.abs(turnYaw) <= SNAP && Math.abs(turnPitch) <= SNAP && this.samples.size() < MAX_SAMPLES) {
-                    int index = this.samples.size();
-                    this.samples.add(new Sample(last[2], last[3], turnYaw, turnPitch, -1));
-                    index(index, last[2], last[3]);
-                    if (previousIndex >= 0 && previousIndex == index - 1) {
-                        Sample before = this.samples.get(previousIndex);
-                        this.samples.set(previousIndex, new Sample(before.errYaw, before.errPitch, before.turnYaw,
-                                before.turnPitch, index));
+            boolean follows = this.last != null && tick == this.lastTick + 1 && target.equals(this.lastTarget);
+            if (follows && (this.lastAssist & ASSIST_NOT_OWN) == 0 && (assist & ASSIST_NOT_OWN) == 0) {
+                float turnYaw = Rotation.angleDifference(yaw, this.last[0]);
+                float turnPitch = pitch - this.last[1];
+                if (Math.abs(turnYaw) <= SNAP && Math.abs(turnPitch) <= SNAP && samples.size() < MAX_SAMPLES) {
+                    int index = samples.size();
+                    boolean aura = ((this.lastAssist | assist) & ASSIST_AURA) != 0;
+                    samples.add(new Sample(this.last[2], this.last[3], turnYaw, turnPitch, -1, aura));
+                    index(index, this.last[2], this.last[3]);
+                    if (this.previousIndex >= 0 && this.previousIndex == index - 1) {
+                        samples.set(this.previousIndex, samples.get(this.previousIndex).withNext(index));
                     }
-                    previousIndex = index;
+                    this.previousIndex = index;
                 } else {
-                    previousIndex = -1;
+                    this.previousIndex = -1;
                 }
             } else {
-                previousIndex = -1;
+                this.previousIndex = -1;
             }
-            last = new float[]{yaw, pitch, errYaw, errPitch};
-            lastTarget = target;
-            lastTick = tick;
-            lastAssist = assist;
+            this.last = new float[]{yaw, pitch, errYaw, errPitch};
+            this.lastTarget = target;
+            this.lastTick = tick;
+            this.lastAssist = assist;
         }
     }
 
@@ -206,6 +249,9 @@ public final class AimLibrary {
                     }
                     for (int index : list) {
                         Sample s = this.samples.get(index);
+                        if (s.aura && !this.includeAura) {
+                            continue;
+                        }
                         float dy = Math.abs(s.errYaw) - Math.abs(errYaw);
                         float dp = s.errPitch - errPitch;
                         float d = dy * dy + dp * dp;

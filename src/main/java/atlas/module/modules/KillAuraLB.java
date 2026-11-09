@@ -6,6 +6,7 @@ import atlas.event.types.Priority;
 import atlas.events.MoveInputEvent;
 import atlas.events.TickEvent;
 import atlas.events.UpdateEvent;
+import atlas.lb.aiming.AimFeed;
 import atlas.lb.aiming.AimLibrary;
 import atlas.lb.aiming.AngleSmooth;
 import atlas.lb.aiming.NoiseAim;
@@ -179,6 +180,9 @@ public class KillAuraLB extends Module {
     public final FloatProperty recordedFollow = new FloatProperty("Recorded-Follow", 4.0F, 0.5F, 15.0F,
             () -> this.angleSmooth.getValue() == SMOOTH_RECORDED);
     public final PercentProperty recordedStrength = new PercentProperty("Recorded-Strength", 100, 10, 100,
+            () -> this.angleSmooth.getValue() == SMOOTH_RECORDED);
+    /* Ticks the Recorder took while this aura was on (record-with-aura): your camera, but a lazier hand. */
+    public final BooleanProperty recordedUseAuraData = new BooleanProperty("Recorded-UseAuraData", true,
             () -> this.angleSmooth.getValue() == SMOOTH_RECORDED);
     public final FloatProperty trackingYawP = new FloatProperty("Tracking-YawP", 0.35F, 0.05F, 1.0F,
             () -> this.angleSmooth.getValue() == SMOOTH_TRACKING);
@@ -519,6 +523,8 @@ public class KillAuraLB extends Module {
 
     public KillAuraLB() {
         super("LiquidAura", false, false, "LiquidBounce's KillAura");
+        /* Rows the Recorder writes reach Recorded at once, so a recording made while playing counts straight away. */
+        AimFeed.listen(this.recordedAim::addLive);
         this.clicker.setEnforced(tick -> tick == 0 && damageHitDue());
     }
 
@@ -840,6 +846,7 @@ public class KillAuraLB extends Module {
                 readRecordings();
                 this.recordedAim.follow = this.recordedFollow.getValue();
                 this.recordedAim.strength = this.recordedStrength.getValue() / 100.0F;
+                this.recordedAim.useAuraData = this.recordedUseAuraData.getValue();
                 /* No recording near this error: the Tracking turn, as its settings have it. */
                 this.recordedAim.fallback = this.tracking;
                 this.rotations.smooth = this.recordedAim;

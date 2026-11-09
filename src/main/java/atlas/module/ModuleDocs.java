@@ -1094,6 +1094,11 @@ public final class ModuleDocs {
         help("LiquidAura", "React-MaxTurn", "Noise-React：一個 tick 最多轉多少，上下（低值）和左右（高值）。");
         help("LiquidAura", "Recorded-Follow", "Recorded：錄到的那段轉頭跟現在差多遠就換一段。越高越能保持你整段轉頭的樣子。");
         help("LiquidAura", "Recorded-Strength", "Recorded：每段錄到的轉頭用幾成。");
+        help("LiquidAura", "Recorded-UseAuraData", "Recorded：也用 Recorder 在這個 aura 開著時錄的資料（record-with-aura）。那還是你的視角，但知道 aura 在幫你打時，手常常瞄得比較隨便。");
+        help("TellyRecorder", "record-with-aura", "錄瞄準時不關 Silent Aura。它是靜默轉頭，視角還是你的手。MovementCorrection 是 ChangeLook 時不錄（那時 aura 會動視角）。這些資料會做記號，Recorded 可以選擇不用。");
+        help("TellyRecorder", "aura-target", "開 record-with-aura 時：錄 aura 正在打的那個人，不是離你準心最近的人。");
+        help("TellyRecorder", "aim-fov", "只錄準心在目標附近幾度內的 tick，看別的地方不算。");
+        help("TellyRecorder", "only-when-clicking", "最近 1 秒內有揮手或按著攻擊鍵才錄：真的在打，不是只站在人旁邊。");
         help("LiquidAura", "RangeIncrease", "攻擊距離 = 3.0 + 這個值。LB 預設 1.0 也就是 4 格，會檢查距離的伺服器請調低。");
         help("LiquidAura", "MovementCorrection", "Off：照鏡頭走。Strict：照伺服器朝向走。Silent：連按鍵方向一起轉。ChangeLook：鏡頭跟著瞄準轉。");
         help("LiquidAura", "AutoBlocking", "LB 的自動格擋：兩下之間舉劍，打之前放下。");

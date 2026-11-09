@@ -782,6 +782,11 @@ final class ModuleDocsEn {
         help("LiquidAura", "React-MaxTurn", "Noise-React: the most it turns in one tick, vertical (low) and horizontal (high).");
         help("LiquidAura", "Recorded-Follow", "Recorded: how far a recorded turn may drift from what is happening now before another one is picked. Higher keeps your turns whole.");
         help("LiquidAura", "Recorded-Strength", "Recorded: how much of each recorded turn is used.");
+        help("LiquidAura", "Recorded-UseAuraData", "Recorded: also use what the Recorder took while this aura was on (record-with-aura). That is still your camera, but a hand that knows the aura is hitting often aims less carefully.");
+        help("TellyRecorder", "record-with-aura", "Keep Silent Aura on while recording aim. Its turns are silent, so the camera is still your hand. Not recorded while MovementCorrection is ChangeLook (the aura moves the camera then). Those ticks are marked so Recorded can leave them out.");
+        help("TellyRecorder", "aura-target", "With record-with-aura: record against the enemy the aura is fighting, not the one nearest your look.");
+        help("TellyRecorder", "aim-fov", "Only record ticks where your look is within this many degrees of the target, so looking away teaches nothing.");
+        help("TellyRecorder", "only-when-clicking", "Only record when you swung or held the attack key in the last second: fighting, not just standing near someone.");
         help("LiquidAura", "MovementCorrection", "Off: walk by the camera. Strict: walk along the server yaw. Silent: also turn the walk keys. ChangeLook: the camera follows the aim.");
         help("LiquidAura", "RotationTiming", "Normal: aim all the time. Snap: aim only when a click will come as it arrives. OnTick: turn only on the click (look packets there and back).");
         help("LiquidAura", "Raycast", "What a click hits along the look: None (the target), Enemy (an enemy in the way), All (anything in the way).");

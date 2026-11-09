@@ -6,7 +6,9 @@ import java.util.Random;
 
 /**
  * When SprintReset's CRAB mode stops and restarts sprinting (2026-11-09, rebuilt from what Crab client's Sprint Reset
- * does; no code of its is used). One call a tick; times are in ticks and may be fractions, which carry over.
+ * does; no code of its is used). Crab's turned out to be Slinky's Sprint Reset step for step; this matches
+ * OpenSlinky's readable reconstruction (logic/combat/sprint_reset.cpp) too. One call a tick; times are in ticks and
+ * may be fractions, which carry over.
  *
  * - A hit arms it, at most one every 0.5 seconds.
  * - Idle and armed (and, with damaged, hurt this very tick; with the weapon check, a weapon in hand): wait delay.

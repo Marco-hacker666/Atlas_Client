@@ -3,7 +3,9 @@ package atlas.module.modules;
 import atlas.Atlas;
 import atlas.enums.BlinkModules;
 import atlas.event.types.EventType;
+import atlas.events.AttackEvent;
 import atlas.events.PacketEvent;
+import atlas.mixin.IAccessorEntityPlayer;
 import atlas.mixin.IAccessorKeyBinding;
 import atlas.util.CombatTargeting;
 import atlas.util.ItemUtil;
@@ -16,51 +18,58 @@ import net.minecraft.network.play.client.C02PacketUseEntity;
 import java.util.Random;
 
 /**
- * AutoBlock's Crab mode (2026-11-09, owner: "port Crab's Block Hit, as close as you can"): rebuilt from what Crab
- * client's Block Hit does (its DLL, read with Ghidra), with its settings and defaults; no code of its is used.
+ * AutoBlock's Crab mode (2026-11-09, owner: "port Crab's Block Hit, as close as you can"). Crab client's Block Hit,
+ * read from its DLL with Ghidra, turned out to be Slinky's Auto Block step for step (same settings, defaults and
+ * order); this follows that, checked against OpenSlinky's readable reconstruction (logic/combat/auto_block.cpp).
+ * No code of either is used.
  *
- * Each tick, while it may block (a sword in hand; left mouse held, with left-mouse; right mouse held exactly when
- * right-mouse is on; hurt at all, with damaged; and the player's hurt time no higher than max-hurt-time):
- * - with no block running, the cooldown at 0 and the enemy (under the crosshair, else the nearest) within range,
- *   it presses the use key with
- *   one click of its own (vanilla raises the sword), starts a 10-tick cooldown and holds;
- * - it holds for max-hold, or until it may no longer block, then lets the key up; lag-chance of the time every
- *   outgoing packet is then held for lag-max (AutoBlock's blink);
- * - a hit landing on the player (hurt time 10) ends the cooldown, so the next block comes as the hurt time falls
- *   back to max-hurt-time, just before the player can be hit again;
- * - prevent-delaying-attacks: an attack (seen at most once per 10 ticks, as the last-attacker time moving) or a
- *   change of target ends the lag; otherwise it runs out a tick at a time. block-again-immediately: a lag ending
- *   ends the cooldown too.
- * Times are ticks (the settings are in ms, 50 a tick) and a fraction is a chance of one more tick, as Crab's.
+ * Each tick:
+ * - Whether the use key is ours: with a sword in hand, left mouse held (left-mouse), right mouse held exactly when
+ *   right-mouse is on, hurt at all (damaged), and hurt time no higher than max-hurt-time. While it is, the key is
+ *   held down exactly while blocking (one more click each tick of it); when it stops being ours it goes back to
+ *   what the player holds (up, while right-mouse is on).
+ * - A hit landing on the player (hurt time 10) ends the re-block cooldown.
+ * - An attack (the last-attacker time moving, looked at once 10 ticks have passed) or a new target ends a lag with
+ *   prevent-delaying-attacks; otherwise the lag counts down. block-again-immediately: a lag ending ends the cooldown.
+ * - Blocking: held for max-hold (or until the key is not ours), then let go; lag-chance of the time every outgoing
+ *   packet is then held for lag-max (AutoBlock's blink).
+ * - Not blocking: the key ours, the cooldown over and the target (under the crosshair, else the nearest) within
+ *   range: press, a 10-tick cooldown, hold.
+ * - right-mouse: no attack goes out while not blocking.
+ * - animation: the sword drawn blocking while the key may be ours (only with the target in range, with
+ *   animation-in-range).
+ * Times are ticks (the settings are in ms, 50 a tick) and a fraction is a chance of one more tick.
  *
- * Differences, from this client: an attack packet sent during a lag lets the held packets go before it with
- * prevent-delaying-attacks (Crab notices the attack a tick later, so its attack can wait that tick); hands off
- * while Silent Aura blocks by itself, as the other modes; the block animation options are drawn the way Slinky's
- * fake animation is (Crab's drawing code was not followed in detail).
+ * Different here: an attack packet during a lag lets the held packets go before it (with prevent-delaying-attacks;
+ * the original notices the attack a tick later), and hands off while Silent Aura blocks by itself.
  */
 final class AutoBlockCrab {
     private static final Minecraft mc = Minecraft.getMinecraft();
     /** Ticks between two blocks starting, unless a hit on the player or block-again ends it sooner. */
     static final int COOLDOWN_TICKS = 10;
-    /** Ticks between two attacks being noticed. */
+    /** Ticks before an attack is looked for again. */
     static final int ATTACK_GAP_TICKS = 10;
     /** How far an enemy may be to count as the target at all (blocks); range decides the block. */
     static final double TARGET_SEARCH = 6.0;
+    /** A sword's full use time: where the drawn-blocking count starts. */
+    static final int USE_DURATION = 72000;
 
     private final BlockHit module;
     private final Random random = new Random();
     private boolean active;
-    private boolean holding;
-    /** The use key is down because of this mode: given back when the mode stops. */
+    private boolean blocking;
+    /** The use key is set by this mode, so it is given back when the mode stops. */
     private boolean keyOwned;
+    private boolean rightRequired;
     private boolean lagging;
-    private boolean animation;
     private int cooldown;
-    private int holdTicks;
+    private int heldTicks;
     private int lagTicks;
     private int sinceAttack;
     private int lastTargetId;
     private int lastAttackerTime = Integer.MIN_VALUE;
+    private boolean animationShown;
+    private int animationCount = USE_DURATION;
 
     AutoBlockCrab(BlockHit module) {
         this.module = module;
@@ -74,7 +83,7 @@ final class AutoBlockCrab {
         return this.lagging;
     }
 
-    /** floor(x), plus one with the chance of x's fraction: Crab's way of turning a time into whole ticks. */
+    /** floor(x), plus one with the chance of x's fraction. */
     static int ticks(float value, float roll) {
         if (Float.isNaN(value) || value <= 0.0F) {
             return 0;
@@ -89,69 +98,109 @@ final class AutoBlockCrab {
 
     void tick() {
         this.active = true;
+        endAnimation();
+        if (this.cooldown != 0) {
+            this.cooldown--;
+        }
         if (mc.thePlayer == null || mc.thePlayer.isDead || mc.currentScreen != null) {
-            reset(true);
+            if (this.keyOwned) {
+                setUseKey(physicalUse());
+                this.keyOwned = false;
+            }
+            this.rightRequired = false;
+            stopLag();
             return;
         }
         if (this.module.auraBlocksAlone()) {
             reset(false);
             return;
         }
-        if (this.cooldown > 0) {
-            this.cooldown--;
-        }
+
         int hurt = mc.thePlayer.hurtTime;
+        boolean sword = ItemUtil.isHoldingSword();
+        this.rightRequired = false;
+        boolean conditionsOk = false;
+        boolean keyOurs = false;
+        boolean skipKey = false;
+        boolean giveBack;
+        if (!sword) {
+            giveBack = this.keyOwned;
+            skipKey = !giveBack;
+        } else if (this.module.crabLeftMouse.getValue() && !KeyBindUtil.isKeyDown(mc.gameSettings.keyBindAttack.getKeyCode())) {
+            giveBack = true;
+        } else {
+            boolean needRight = this.module.crabRightMouse.getValue();
+            this.rightRequired = needRight;
+            if (needRight != physicalUse()) {
+                giveBack = true;
+            } else {
+                conditionsOk = true;
+                giveBack = hurt == 0 && this.module.crabDamaged.getValue()
+                        || hurt > ticksOfMs(this.module.crabMaxHurt.getValue());
+            }
+        }
+        if (!skipKey) {
+            if (giveBack) {
+                setUseKey(!this.rightRequired && physicalUse());
+            } else {
+                setUseKey(this.blocking);
+                keyOurs = true;
+                if (this.blocking) {
+                    click();
+                }
+            }
+            this.keyOwned = keyOurs;
+        }
+
         EntityPlayer target = CombatTargeting.findTarget(TARGET_SEARCH * TARGET_SEARCH, true);
         float range = this.module.crabRange.getValue();
         boolean inRange = target != null && mc.thePlayer.getDistanceSqToEntity(target) < range * range;
-        boolean may = mayBlock(hurt);
+        boolean animation = conditionsOk && this.module.crabAnimation.getValue()
+                && (!this.module.crabAnimationInRange.getValue() || inRange);
         if (hurt == 10) {
             this.cooldown = 0;
         }
 
+        /* An attack, or a new target. */
         int lastAttacker = mc.thePlayer.getLastAttackerTime();
-        boolean attacked = false;
-        if (++this.sinceAttack >= ATTACK_GAP_TICKS && this.lastAttackerTime != Integer.MIN_VALUE
-                && lastAttacker != this.lastAttackerTime && lastAttacker >= mc.thePlayer.ticksExisted - 1) {
-            this.sinceAttack = 0;
-            attacked = true;
+        boolean hit = false;
+        if (++this.sinceAttack >= ATTACK_GAP_TICKS) {
+            hit = this.lastAttackerTime != Integer.MIN_VALUE && lastAttacker != this.lastAttackerTime
+                    && lastAttacker >= mc.thePlayer.ticksExisted - 1;
+            if (hit) {
+                this.sinceAttack = 0;
+            }
         }
         this.lastAttackerTime = lastAttacker;
-
         int targetId = target == null ? 0 : target.getEntityId();
-        boolean lagEnded = false;
-        boolean prevent = this.module.crabPreventDelay.getValue();
         if (targetId != this.lastTargetId) {
             this.lastTargetId = targetId;
             this.sinceAttack = 0;
-            if (this.lagTicks != 0) {
-                lagEnded = prevent || --this.lagTicks == 0;
-                if (prevent) {
-                    this.lagTicks = 0;
-                }
-            }
-        } else if (this.lagTicks != 0) {
-            if (prevent && attacked) {
-                this.lagTicks = 0;
-                lagEnded = true;
-            } else {
-                lagEnded = --this.lagTicks == 0;
-            }
+            hit = true;
         }
-        if (lagEnded) {
-            releaseLag();
-            if (this.module.crabBlockAgain.getValue()) {
-                this.cooldown = 0;
+
+        if (this.lagTicks != 0) {
+            if (hit && this.module.crabPreventDelay.getValue()) {
+                this.lagTicks = 0;
+            } else {
+                this.lagTicks--;
+            }
+            if (this.lagTicks == 0) {
+                stopLag();
+                if (this.module.crabBlockAgain.getValue()) {
+                    this.cooldown = 0;
+                }
             }
         }
 
-        if (this.holding) {
-            this.holdTicks++;
-            if (may && this.holdTicks < ticksOfMs(this.module.crabMaxHold.getValue())) {
-                animation(may, inRange);
+        if (this.blocking) {
+            this.heldTicks++;
+            if (keyOurs && this.heldTicks < ticksOfMs(this.module.crabMaxHold.getValue())) {
+                showAnimation(animation);
                 return;
             }
             setUseKey(false);
+            this.keyOwned = true;
             int chance = this.module.crabLagChance.getValue();
             if (chance > 0 && this.random.nextFloat() * 100.0F < chance) {
                 this.lagTicks = ticksOfMs(this.module.crabLagMax.getValue());
@@ -159,44 +208,45 @@ final class AutoBlockCrab {
                     startLag();
                 }
             }
-            this.holding = false;
-            animation(may, inRange);
+            this.blocking = false;
+            showAnimation(animation);
             return;
         }
-        if (target != null && this.cooldown == 0 && may && inRange) {
-            KeyBinding use = mc.gameSettings.keyBindUseItem;
+
+        if (keyOurs && this.cooldown == 0 && inRange) {
             setUseKey(true);
-            ((IAccessorKeyBinding) use).setPressTime(((IAccessorKeyBinding) use).getPressTime() + 1);
-            this.holding = true;
+            click();
             this.keyOwned = true;
+            this.blocking = true;
             this.cooldown = COOLDOWN_TICKS;
-            this.holdTicks = 0;
-            this.lagTicks = 0;
-            releaseLag();
+            this.heldTicks = 0;
+            stopLag();
         }
-        animation(may, inRange);
+        showAnimation(animation);
     }
 
-    /** Crab's conditions for blocking this tick. */
-    private boolean mayBlock(int hurt) {
-        if (!ItemUtil.isHoldingSword()) {
-            return false;
-        }
-        if (this.module.crabLeftMouse.getValue() && !KeyBindUtil.isKeyDown(mc.gameSettings.keyBindAttack.getKeyCode())) {
-            return false;
-        }
-        /* Right mouse: held exactly when the setting is on. Off and held, the player is blocking by hand. */
-        if (this.module.crabRightMouse.getValue() != KeyBindUtil.isKeyDown(mc.gameSettings.keyBindUseItem.getKeyCode())) {
-            return false;
-        }
-        if (hurt == 0 && this.module.crabDamaged.getValue()) {
-            return false;
-        }
-        return ticksOfMs(this.module.crabMaxHurt.getValue()) >= hurt;
+    private static boolean physicalUse() {
+        return KeyBindUtil.isKeyDown(mc.gameSettings.keyBindUseItem.getKeyCode());
     }
 
     private static void setUseKey(boolean down) {
         ((IAccessorKeyBinding) mc.gameSettings.keyBindUseItem).setPressed(down);
+    }
+
+    /** One more press of the use key for vanilla's click loop. */
+    private static void click() {
+        KeyBinding use = mc.gameSettings.keyBindUseItem;
+        ((IAccessorKeyBinding) use).setPressTime(((IAccessorKeyBinding) use).getPressTime() + 1);
+    }
+
+    /** right-mouse: no attack while not blocking. Without a sword, any lag ends. */
+    void onAttack(AttackEvent event) {
+        if (!ItemUtil.isHoldingSword()) {
+            stopLag();
+        }
+        if (this.rightRequired && !this.blocking) {
+            event.setCancelled(true);
+        }
     }
 
     /** prevent-delaying-attacks: an attack lets the held packets go before it. */
@@ -206,8 +256,7 @@ final class AutoBlockCrab {
         }
         if (event.getPacket() instanceof C02PacketUseEntity
                 && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK) {
-            this.lagTicks = 0;
-            releaseLag();
+            stopLag();
             if (this.module.crabBlockAgain.getValue()) {
                 this.cooldown = 0;
             }
@@ -220,55 +269,48 @@ final class AutoBlockCrab {
         }
     }
 
-    private void releaseLag() {
+    private void stopLag() {
+        this.lagTicks = 0;
         if (this.lagging) {
             Atlas.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK_LAG);
         }
         this.lagging = false;
     }
 
-    /**
-     * crab-animation: the sword drawn up whenever it may block (only with the target in range, with
-     * crab-animation-in-range); crab-force-animation: drawn up while blocking or lagging.
-     */
-    private void animation(boolean may, boolean inRange) {
-        boolean show = ItemUtil.isHoldingSword()
-                && (this.module.crabForceAnimation.getValue() && (this.holding || this.lagging)
-                || this.module.crabAnimation.getValue() && may
-                && (!this.module.crabAnimationInRange.getValue() || inRange));
-        if (show) {
-            ((atlas.mixin.IAccessorEntityPlayer) mc.thePlayer).setItemInUseCount(72000);
-            this.animation = true;
-        } else if (this.animation) {
-            if (!mc.thePlayer.isUsingItem()) {
-                ((atlas.mixin.IAccessorEntityPlayer) mc.thePlayer).setItemInUseCount(0);
+    /** The drawn-blocking count runs down from a sword's use time while shown, as a real block's would. */
+    private void showAnimation(boolean show) {
+        if (!show) {
+            this.animationCount = USE_DURATION;
+            return;
+        }
+        this.animationShown = true;
+        ((IAccessorEntityPlayer) mc.thePlayer).setItemInUseCount(--this.animationCount);
+    }
+
+    private void endAnimation() {
+        if (this.animationShown) {
+            if (mc.thePlayer != null && !mc.thePlayer.isUsingItem()) {
+                ((IAccessorEntityPlayer) mc.thePlayer).setItemInUseCount(0);
             }
-            this.animation = false;
+            this.animationShown = false;
         }
     }
 
     /** Held packets go, the sword down, and the use key back to what the player really holds. */
     void reset(boolean releaseKey) {
-        releaseLag();
-        this.lagTicks = 0;
-        this.holding = false;
+        stopLag();
+        this.blocking = false;
         this.cooldown = 0;
-        this.holdTicks = 0;
+        this.heldTicks = 0;
         this.sinceAttack = 0;
+        this.rightRequired = false;
         this.lastAttackerTime = Integer.MIN_VALUE;
-        if (mc.gameSettings != null && this.keyOwned && releaseKey) {
-            int key = mc.gameSettings.keyBindUseItem.getKeyCode();
-            setUseKey(mc.currentScreen == null && KeyBindUtil.isKeyDown(key));
-        }
-        if (releaseKey) {
+        if (releaseKey && this.keyOwned && mc.gameSettings != null) {
+            setUseKey(mc.currentScreen == null && physicalUse());
             this.keyOwned = false;
         }
-        if (this.animation && mc.thePlayer != null) {
-            if (!mc.thePlayer.isUsingItem()) {
-                ((atlas.mixin.IAccessorEntityPlayer) mc.thePlayer).setItemInUseCount(0);
-            }
-            this.animation = false;
-        }
+        endAnimation();
+        this.animationCount = USE_DURATION;
         this.active = false;
     }
 }

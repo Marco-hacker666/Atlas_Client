@@ -89,15 +89,14 @@ final class ModuleDocsEn {
         help("BlockHit", "crab-range", "Crab: the nearest enemy must be within this distance for the sword to go up.");
         help("BlockHit", "crab-max-hurt-time-ms", "Crab: no block while your hurt time (counting down from 500 ms after a hit) is above this; a hit on you also ends the 10-tick cooldown, so the next block comes just before you can be hit again.");
         help("BlockHit", "crab-max-hold-ms", "Crab: the longest a block is held (50 ms a tick; a fraction is a chance of one more). No new block for 10 ticks after one starts.");
-        help("BlockHit", "crab-force-animation", "Crab: the sword drawn up on screen while blocking and while packets are held.");
-        help("BlockHit", "crab-animation", "Crab: the sword drawn up on screen whenever it may block (not a real block).");
+        help("BlockHit", "crab-animation", "Crab (the original's Force block animation): the sword drawn up on screen whenever the conditions to block are met (not a real block).");
         help("BlockHit", "crab-animation-in-range", "Crab: the above only with an enemy in range.");
         help("BlockHit", "crab-lag-chance", "Crab: when the sword comes down, the chance of holding every packet you send for a while.");
         help("BlockHit", "crab-lag-max-ms", "Crab: how long they are held.");
         help("BlockHit", "crab-prevent-delaying-attacks", "Crab: an attack or a change of target lets the held packets go at once, so the attack is not delayed.");
         help("BlockHit", "crab-block-again-immediately", "Crab: when the held packets go, the sword may go up again without waiting out the 10-tick cooldown.");
         help("BlockHit", "crab-left-mouse", "Crab: only while the attack button is held (turn it off for an aura that does not press it).");
-        help("BlockHit", "crab-right-mouse", "Crab: on, only while right click is held; off, a right click of your own is left alone.");
+        help("BlockHit", "crab-right-mouse", "Crab: on, only while right click is held, and no attack goes out while not blocking; off, a right click of your own is left alone.");
         help("BlockHit", "crab-damaged", "Crab: only while hurt (hurt time above 0).");
         help("BlockHit", "yuri-chance", "Yuri: share of your hits that start a block.");
         help("BlockHit", "yuri-combo-delay", "Yuri: ms after the hit before the sword goes up (only if you hold forward then).");

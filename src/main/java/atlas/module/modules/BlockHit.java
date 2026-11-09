@@ -107,12 +107,12 @@ public class BlockHit extends Module {
     final BooleanProperty ravenMobs = new BooleanProperty("raven-mobs", false, ravenMode);
     private final AutoBlockRaven raven = new AutoBlockRaven(this);
     /* ---- Crab (2026-11-09, owner: "port Crab's Block Hit, as close as you can"): Crab client's Block Hit with its
-       settings and defaults, see AutoBlockCrab. Times are ms, 50 a tick, as Crab shows them. */
+       settings and defaults, see AutoBlockCrab. Times are ms, 50 a tick, as Crab shows them. Its "Force block
+       animation" group is crab-animation ("Enabled") and crab-animation-in-range ("Only within range"). */
     private final java.util.function.BooleanSupplier crabMode = () -> this.modeIndex() == 10;
     final FloatProperty crabRange = new FloatProperty("crab-range", 3.1F, 2.0F, 6.0F, crabMode);
     final IntProperty crabMaxHurt = new IntProperty("crab-max-hurt-time-ms", 300, 50, 500, crabMode);
     final IntProperty crabMaxHold = new IntProperty("crab-max-hold-ms", 250, 50, 500, crabMode);
-    final BooleanProperty crabForceAnimation = new BooleanProperty("crab-force-animation", false, crabMode);
     final BooleanProperty crabAnimation = new BooleanProperty("crab-animation", false, crabMode);
     final BooleanProperty crabAnimationInRange = new BooleanProperty("crab-animation-in-range", false,
             () -> crabMode.getAsBoolean() && this.crabAnimation.getValue());
@@ -1047,6 +1047,9 @@ public class BlockHit extends Module {
             }
             if (this.modeIndex() == 5) {
                 manualBlock();
+            }
+            if (this.modeIndex() == 10) {
+                this.crab.onAttack(event);
             }
             if (this.modeIndex() == 8 && !auraBlocksAlone()) {
                 this.yuri.hit(true, mc.thePlayer.getDistanceToEntity(event.getTarget()), this.yRange.getValue(),

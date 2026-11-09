@@ -403,15 +403,14 @@ public final class ModuleDocs {
         help("BlockHit", "crab-range", "Crab：最近的敵人在這個距離內才舉劍。");
         help("BlockHit", "crab-max-hurt-time-ms", "Crab：你的受傷時間（被打後從 500 ms 往下數）高於這個就不舉劍；被打中會重置 10 tick 的冷卻，所以下一次格擋剛好在你又能被打之前。");
         help("BlockHit", "crab-max-hold-ms", "Crab：一次最多舉多久（50 ms 一個 tick，零頭是多一個 tick 的機率）。每次舉劍之後 10 tick 內不再舉。");
-        help("BlockHit", "crab-force-animation", "Crab：格擋和延遲封包時，畫面上的劍都是舉著的。");
-        help("BlockHit", "crab-animation", "Crab：只要可以格擋，畫面上的劍就舉著（不是真的格擋）。");
+        help("BlockHit", "crab-animation", "Crab（原本的 Force block animation）：只要條件符合可以格擋，畫面上的劍就舉著（不是真的格擋）。");
         help("BlockHit", "crab-animation-in-range", "Crab：上面那個只在敵人在範圍內時才顯示。");
         help("BlockHit", "crab-lag-chance", "Crab：放下劍時，有這個機率把你送出的封包全部扣住一段時間。");
         help("BlockHit", "crab-lag-max-ms", "Crab：扣住多久。");
         help("BlockHit", "crab-prevent-delaying-attacks", "Crab：你攻擊或換目標時立刻放出扣住的封包，攻擊不會被延遲。");
         help("BlockHit", "crab-block-again-immediately", "Crab：扣住結束後不用等 10 tick 冷卻，可以馬上再舉劍。");
         help("BlockHit", "crab-left-mouse", "Crab：要按著左鍵才舉劍（用 Aura 不按左鍵的話請關掉）。");
-        help("BlockHit", "crab-right-mouse", "Crab：開著時要按著右鍵才舉劍；關著時你自己按右鍵就不插手。");
+        help("BlockHit", "crab-right-mouse", "Crab：開著時要按著右鍵才舉劍，而且沒在格擋時不會送出攻擊；關著時你自己按右鍵就不插手。");
         help("BlockHit", "crab-damaged", "Crab：要在受傷狀態（受傷時間大於 0）才舉劍。");
         help("BlockHit", "raven-block-animation", "Raven：舉劍或扣封包時，畫面上顯示舉劍動畫。");
         help("BlockHit", "full-range", "Full：敵人在這個距離內（眼睛到碰撞箱）才會舉劍。");

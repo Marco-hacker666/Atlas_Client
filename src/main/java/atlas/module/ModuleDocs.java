@@ -366,7 +366,7 @@ public final class ModuleDocs {
         d("HitSelect", "挑出手時機：只在對自己有利（例如減少吃擊退）的時候讓攻擊送出。所有模式都會管 Silent Aura 的攻擊。可用 combo、第一下、低血量、被打後反擊等條件放行。");
         d("MoreKB", "攻擊時重置衝刺，讓每一下打出更多擊退。");
         d("FastBow", "加快拉弓射箭的速度。");
-        d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Slinky（預設）：按著左鍵、敵人在範圍內就舉劍，舉滿幾 tick 放下一 tick 讓攻擊打出去，再舉起來；可選只在快被打到時舉、放下時延遲封包。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Full：照原版的擋劍節奏（放下、下一 tick 打、打完立刻舉起），只在能保護你的時候舉劍。Raven：Raven bS 的 Auto Block，按著右鍵時才作用：同時在打範圍內的敵人就舉劍、放下讓攻擊打出去再舉起，放下時可延遲封包；只按右鍵就是普通格擋。Helper / Auto / Lag：其他方式。");
+        d("BlockHit", "攻擊之間自動舉劍格擋（block hit）。Slinky（預設）：按著左鍵、敵人在範圍內就舉劍，舉滿幾 tick 放下一 tick 讓攻擊打出去，再舉起來；可選只在快被打到時舉、放下時延遲封包。Manual：照你的點擊，打完舉劍一下。Predict：在你快能再被打到之前舉劍、被打到就放下。Full：照原版的擋劍節奏（放下、下一 tick 打、打完立刻舉起），只在能保護你的時候舉劍。Raven：Raven bS 的 Auto Block，按著右鍵時才作用：同時在打範圍內的敵人就舉劍、放下讓攻擊打出去再舉起，放下時可延遲封包；只按右鍵就是普通格擋。Crab：Crab 客戶端的 Block Hit（和 Slinky 的 Auto Block 同一套）：可以格擋時敵人在範圍內就舉劍一下、最多舉幾 tick，10 tick 冷卻，被打中就重置，放下時可延遲封包。Helper / Auto / Lag：其他方式。");
         help("BlockHit", "yuri-range", "Yuri：打到這個距離內（腳到腳）的目標才會格擋。");
         help("BlockHit", "yuri-chance", "Yuri：有多少比例的攻擊會接著格擋。");
         help("BlockHit", "yuri-combo-delay", "Yuri：打完幾 ms 後舉劍（那時要按著前進）。");
@@ -400,6 +400,18 @@ public final class ModuleDocs {
         help("BlockHit", "raven-out-of-range", "Raven：範圍內沒人時按住右鍵的處理。Keep 照常格擋；Once 離開範圍時放下一次；Always 不舉劍；Fake 不舉劍但畫面顯示舉劍。箱子、門等互動不受影響。");
         help("BlockHit", "raven-force-attack", "Raven：舉劍時按左鍵不會丟掉點擊，會放下劍再打。只用於手動，開著 Aura 時不作用。");
         help("BlockHit", "raven-mobs", "Raven：沒有玩家時，範圍內的怪物也算要格擋的對象。");
+        help("BlockHit", "crab-range", "Crab：最近的敵人在這個距離內才舉劍。");
+        help("BlockHit", "crab-max-hurt-time-ms", "Crab：你的受傷時間（被打後從 500 ms 往下數）高於這個就不舉劍；被打中會重置 10 tick 的冷卻，所以下一次格擋剛好在你又能被打之前。");
+        help("BlockHit", "crab-max-hold-ms", "Crab：一次最多舉多久（50 ms 一個 tick，零頭是多一個 tick 的機率）。每次舉劍之後 10 tick 內不再舉。");
+        help("BlockHit", "crab-animation", "Crab（原本的 Force block animation）：只要條件符合可以格擋，畫面上的劍就舉著（不是真的格擋）。");
+        help("BlockHit", "crab-animation-in-range", "Crab：上面那個只在敵人在範圍內時才顯示。");
+        help("BlockHit", "crab-lag-chance", "Crab：放下劍時，有這個機率把你送出的封包全部扣住一段時間。");
+        help("BlockHit", "crab-lag-max-ms", "Crab：扣住多久。");
+        help("BlockHit", "crab-prevent-delaying-attacks", "Crab：你攻擊或換目標時立刻放出扣住的封包，攻擊不會被延遲。");
+        help("BlockHit", "crab-block-again-immediately", "Crab：扣住結束後不用等 10 tick 冷卻，可以馬上再舉劍。");
+        help("BlockHit", "crab-left-mouse", "Crab：要按著左鍵才舉劍（用 Aura 不按左鍵的話請關掉）。");
+        help("BlockHit", "crab-right-mouse", "Crab：開著時要按著右鍵才舉劍，而且沒在格擋時不會送出攻擊；關著時你自己按右鍵就不插手。");
+        help("BlockHit", "crab-damaged", "Crab：要在受傷狀態（受傷時間大於 0）才舉劍。");
         help("BlockHit", "raven-block-animation", "Raven：舉劍或扣封包時，畫面上顯示舉劍動畫。");
         help("BlockHit", "full-range", "Full：敵人在這個距離內（眼睛到碰撞箱）才會舉劍。");
         help("BlockHit", "full-style", "Full：Always＝敵人在範圍內就一直舉著（最安全、最慢）；Smart＝只在快被打到時、被盯上時、在空中時舉（減速少很多）。");
@@ -491,6 +503,13 @@ public final class ModuleDocs {
         d("Piercing", "準心可以穿過方塊或隊友，直接選中後面的目標。");
         d("ClickAssits", "在你點擊時額外補點，讓 CPS 更穩定。");
         d("SprintReset", "打中時自動重置衝刺（W-tap 等），增加擊退。");
+        help("SprintReset", "Mode", "PACKET/SILENT：同一 tick 送停止和開始衝刺。LEGIT：放開前進一 tick。SOFT：蹲一下。CRAB：照 Crab 客戶端的 Sprint Reset 做，設定在 crab-…。");
+        help("SprintReset", "crab-action", "CRAB：WTap 放開前進鍵；Sneak 按住蹲下；NoStop 直接停止衝刺並放開衝刺鍵，人照樣往前走，結束時再開始衝刺。");
+        help("SprintReset", "crab-delay-ms", "CRAB：打中後等多久才開始（50 ms 一個 tick）。兩次重置至少隔 0.5 秒。");
+        help("SprintReset", "crab-stop-duration-ms", "CRAB：動作維持多久，之後按鍵恢復成你實際按著的狀態（你自己放開的鍵不會被按回去）。");
+        help("SprintReset", "crab-randomize", "CRAB：延遲多 0 到 2 個 tick、持續少 0 到 1 個 tick，數值會慢慢飄動（延遲約 5 秒、持續約 30 秒換一個目標），不是每次獨立擲骰；另外有 5% 到 10% 的機率持續多 1 到 2 個 tick。");
+        help("SprintReset", "crab-damaged", "CRAB：只在你同一個 tick 也剛被打中時才重置（換血的時候）。");
+        help("SprintReset", "crab-holding-weapon", "CRAB：手上拿劍或斧頭才重置。");
         d("Reach", "增加攻擊距離（伺服器容易偵測，慎用）。");
         d("TickBase", "操控 tick 時序，在進入攻擊範圍的瞬間先跑幾個 tick 搶先手。");
         d("TimerRange", "接近目標時短暫加速遊戲時鐘，搶先進入攻擊距離。");
@@ -880,7 +899,8 @@ public final class ModuleDocs {
                 h("Slinky 格擋", "block-range", "max-hold-ticks", "random-hold-ticks", "block-cooldown-ms", "require-*", "max-hurt-time"),
                 h("Slinky 假動畫", "fake-animation*"),
                 h("Slinky 延遲封包", "lag-*"),
-                h("Raven", "raven-*"));
+                h("Raven", "raven-*"),
+                h("Crab", "crab-*"));
         g("TargetHUD",
                 h("樣式", "style", "Anim Mode", "animations", "head", "indicator", "outline", "shadow"),
                 h("顏色", "color", "CustomColor", "Bg-Alpha", "background"),

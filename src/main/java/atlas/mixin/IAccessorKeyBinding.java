@@ -15,4 +15,8 @@ public interface IAccessorKeyBinding {
     /** Presses not yet taken by isPressed() (AutoBlock Full, 2026-10-21). */
     @Accessor("pressTime")
     int getPressTime();
+
+    /** One more press for isPressed() to take (AutoBlock Crab, 2026-11-09: a click on this key alone). */
+    @Accessor("pressTime")
+    void setPressTime(int pressTime);
 }

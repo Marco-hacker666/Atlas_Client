@@ -261,7 +261,7 @@ public class KillAuraLB extends Module {
     // ---- L3: AutoBlocking (KillAuraAutoBlock)
     public final BooleanProperty autoBlocking = new BooleanProperty("AutoBlocking", false);
     public final ModeProperty blockMode = new ModeProperty("BlockMode", 1, new String[]{"Basic", "Interact", "Fake",
-            "Helper", "Auto", "Lag", "Predict", "Manual", "Slinky", "Full", "Yuri", "Rhythm", "Raven"},
+            "Helper", "Auto", "Lag", "Predict", "Manual", "Slinky", "Full", "Yuri", "Rhythm", "Raven", "Crab"},
             this.autoBlocking::getValue)
             /* 2026-10-31: the AutoBlock modes retired there are retired here too (indices kept). */
             .retire("Full", "Auto", "Lag", "Predict");
@@ -270,7 +270,8 @@ public class KillAuraLB extends Module {
        on or not. LiquidBounce's own blocking (and the settings below) then stands aside. Appended, so saved
        BlockModes keep their index. Index in BlockHit's Mode for each (Swing, hidden there, is left out). */
     /* 2026-10-31: Raven (AutoBlock's mode 9) appended after Rhythm, which is this aura's own (-1: not AutoBlock's). */
-    private static final int[] AUTOBLOCK_MODES = {0, 1, 2, 4, 5, 6, 7, 8, -1, 9};
+    /* 2026-11-09: Crab (AutoBlock's mode 10) appended after Raven. */
+    private static final int[] AUTOBLOCK_MODES = {0, 1, 2, 4, 5, 6, 7, 8, -1, 9, 10};
     private static final int FIRST_AUTOBLOCK_MODE = 3;
     private final java.util.function.BooleanSupplier lbBlocking =
             () -> this.autoBlocking.getValue() && this.blockMode.getValue() < FIRST_AUTOBLOCK_MODE;

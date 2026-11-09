@@ -264,7 +264,9 @@ public class KillAuraLB extends Module {
             "Helper", "Auto", "Lag", "Predict", "Manual", "Slinky", "Full", "Yuri", "Rhythm", "Raven", "Crab"},
             this.autoBlocking::getValue)
             /* 2026-10-31: the AutoBlock modes retired there are retired here too (indices kept). */
-            .retire("Full", "Auto", "Lag", "Predict");
+            .retire("Full", "Auto", "Lag", "Predict")
+            /* 2026-11-09: AutoBlock's Crab merged into its Slinky. */
+            .retire("Slinky", "Crab");
     /* 2026-10-26 (owner: "my AutoBlock module's block modes in Silent Aura too"): BlockMode 3.. are the AutoBlock
        module's modes, run through that module (BlockHit.driveFromAura) with its own settings, whether it is switched
        on or not. LiquidBounce's own blocking (and the settings below) then stands aside. Appended, so saved

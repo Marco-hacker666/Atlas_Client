@@ -29,17 +29,14 @@ public class BlockHit extends Module {
             .hide("Swing")
             /* 2026-10-31 (owner's consolidation): Auto, Lag, Swing and Predict retired; a config naming one gets Full. */
             .retire("Full", "Auto", "Lag", "Swing", "Predict")
-            .alias("Rhythm", "Full");
-    /* ---- Slinky (Slinky's Auto Block, rebuilt here from what it does) ----
-       While the attack key is held and an enemy is within block-range, the
-       use key goes down; after max-hold-ticks it comes up for a tick, which
-       is the tick the next hit lands (1.8 drops attack clicks while the
-       sword is up), then it goes down again. With require-damage it only
-       goes up on the tick your hurt time reaches max-hurt-time (just before
-       the next hit can land) and comes down when you are hit again. Holding
-       right click alone blocks as usual. Optionally, on lowering, every
-       outgoing packet is held for lag-ticks (lag-chance of the time), and
-       let go the moment you attack. */
+            .alias("Rhythm", "Full")
+            /* 2026-11-09 (owner: "merge Slinky and Crab"): one engine, AutoBlockSlinky; a config naming Crab gets Slinky. */
+            .retire("Slinky", "Crab");
+    /* ---- Slinky: Slinky's Auto Block (and Crab's Block Hit, the same thing), step for step; see AutoBlockSlinky.
+       With an enemy in range and the attack key held, the sword goes up with a click, stays up max-hold-ticks,
+       and comes down; the next block waits 10 ticks, or until a hit lands on you, and only while your hurt time
+       is at most max-hurt-time. Optionally, on lowering, every outgoing packet is held for lag-ticks (lag-chance
+       of the time), let go the moment you attack. */
     private final java.util.function.BooleanSupplier slinky = () -> this.modeIndex() == 6;
     /* ---- Yuri (2026-10-24, BlockHitYuri): after your hit, the use key down
        combo-delay ms later (forward held), up block-delay ms after that. */
@@ -49,27 +46,25 @@ public class BlockHit extends Module {
     private final IntProperty yBlockDelay = new IntProperty("yuri-block-delay", 30, 1, 300, yuriMode);
     private final IntProperty yComboDelay = new IntProperty("yuri-combo-delay", 30, 1, 300, yuriMode);
     private final BlockHitYuri yuri = new BlockHitYuri();
-    private final FloatProperty sRange = new FloatProperty("block-range", 3.1F, 2.0F, 6.0F, slinky);
-    private final IntProperty sHold = new IntProperty("max-hold-ticks", 5, 1, 10, slinky);
-    private final BooleanProperty sRequireLeft = new BooleanProperty("require-left-click", true, slinky);
-    private final BooleanProperty sRequireRight = new BooleanProperty("require-right-click", false, slinky);
-    private final BooleanProperty sRequireDamage = new BooleanProperty("require-damage", false, slinky);
+    final FloatProperty sRange = new FloatProperty("block-range", 3.1F, 2.0F, 6.0F, slinky);
+    final IntProperty sHold = new IntProperty("max-hold-ticks", 5, 1, 10, slinky);
+    final BooleanProperty sRequireLeft = new BooleanProperty("require-left-click", true, slinky);
+    final BooleanProperty sRequireRight = new BooleanProperty("require-right-click", false, slinky);
+    final BooleanProperty sRequireDamage = new BooleanProperty("require-damage", false, slinky);
     /* 2026-11-05 (OpenB4): a hold of a fixed length is a rhythm; and a pause after lowering spaces the block out. */
-    private final IntProperty sRandomHold = new IntProperty("random-hold-ticks", 0, 0, 5, slinky);
-    private final IntProperty sCooldown = new IntProperty("block-cooldown-ms", 0, 0, 500, slinky);
-    private int sExtraHold;
-    private long sBlockEndedAt = -1L;
-    private final IntProperty sHurt = new IntProperty("max-hurt-time", 6, 1, 10,
-            () -> slinky.getAsBoolean() && this.sRequireDamage.getValue());
-    private final BooleanProperty sFake = new BooleanProperty("fake-animation", false, slinky);
-    private final BooleanProperty sFakeInRange = new BooleanProperty("fake-animation-in-range", false,
+    final IntProperty sRandomHold = new IntProperty("random-hold-ticks", 0, 0, 5, slinky);
+    final IntProperty sCooldown = new IntProperty("block-cooldown-ms", 0, 0, 500, slinky);
+    /* 2026-11-09: as the original, the hurt-time limit applies always, not only with require-damage. */
+    final IntProperty sHurt = new IntProperty("max-hurt-time", 6, 1, 10, slinky);
+    final BooleanProperty sFake = new BooleanProperty("fake-animation", false, slinky);
+    final BooleanProperty sFakeInRange = new BooleanProperty("fake-animation-in-range", false,
             () -> slinky.getAsBoolean() && this.sFake.getValue());
-    private final PercentProperty sLagChance = new PercentProperty("lag-chance", 0, slinky);
-    private final IntProperty sLagTicks = new IntProperty("lag-ticks", 2, 1, 10,
+    final PercentProperty sLagChance = new PercentProperty("lag-chance", 0, slinky);
+    final IntProperty sLagTicks = new IntProperty("lag-ticks", 2, 1, 10,
             () -> slinky.getAsBoolean() && this.sLagChance.getValue() > 0);
-    private final BooleanProperty sLagFlush = new BooleanProperty("lag-flush-on-attack", true,
+    final BooleanProperty sLagFlush = new BooleanProperty("lag-flush-on-attack", true,
             () -> slinky.getAsBoolean() && this.sLagChance.getValue() > 0);
-    private final BooleanProperty sLagReblock = new BooleanProperty("lag-reblock", false,
+    final BooleanProperty sLagReblock = new BooleanProperty("lag-reblock", false,
             () -> slinky.getAsBoolean() && this.sLagChance.getValue() > 0);
     /* ---- Raven (2026-10-31, owner: "make me Raven's auto block"): Raven bS's Autoblock with its settings and
        defaults, see AutoBlockRaven. Right click held: block-hits while attacking an enemy in range, a plain block
@@ -106,27 +101,9 @@ public class BlockHit extends Module {
     final BooleanProperty ravenForceAttack = new BooleanProperty("raven-force-attack", false, ravenMode);
     final BooleanProperty ravenMobs = new BooleanProperty("raven-mobs", false, ravenMode);
     private final AutoBlockRaven raven = new AutoBlockRaven(this);
-    /* ---- Crab (2026-11-09, owner: "port Crab's Block Hit, as close as you can"): Crab client's Block Hit with its
-       settings and defaults, see AutoBlockCrab. Times are ms, 50 a tick, as Crab shows them. Its "Force block
-       animation" group is crab-animation ("Enabled") and crab-animation-in-range ("Only within range"). */
-    private final java.util.function.BooleanSupplier crabMode = () -> this.modeIndex() == 10;
-    final FloatProperty crabRange = new FloatProperty("crab-range", 3.1F, 2.0F, 6.0F, crabMode);
-    final IntProperty crabMaxHurt = new IntProperty("crab-max-hurt-time-ms", 300, 50, 500, crabMode);
-    final IntProperty crabMaxHold = new IntProperty("crab-max-hold-ms", 250, 50, 500, crabMode);
-    final BooleanProperty crabAnimation = new BooleanProperty("crab-animation", false, crabMode);
-    final BooleanProperty crabAnimationInRange = new BooleanProperty("crab-animation-in-range", false,
-            () -> crabMode.getAsBoolean() && this.crabAnimation.getValue());
-    final PercentProperty crabLagChance = new PercentProperty("crab-lag-chance", 0, crabMode);
-    final IntProperty crabLagMax = new IntProperty("crab-lag-max-ms", 100, 50, 500,
-            () -> crabMode.getAsBoolean() && this.crabLagChance.getValue() > 0);
-    final BooleanProperty crabPreventDelay = new BooleanProperty("crab-prevent-delaying-attacks", true,
-            () -> crabMode.getAsBoolean() && this.crabLagChance.getValue() > 0);
-    final BooleanProperty crabBlockAgain = new BooleanProperty("crab-block-again-immediately", false,
-            () -> crabMode.getAsBoolean() && this.crabLagChance.getValue() > 0);
-    final BooleanProperty crabLeftMouse = new BooleanProperty("crab-left-mouse", true, crabMode);
-    final BooleanProperty crabRightMouse = new BooleanProperty("crab-right-mouse", false, crabMode);
-    final BooleanProperty crabDamaged = new BooleanProperty("crab-damaged", false, crabMode);
-    private final AutoBlockCrab crab = new AutoBlockCrab(this);
+    /* ---- Slinky's engine (2026-11-09, owner: "merge Slinky and Crab"): see AutoBlockSlinky. Crab is retired
+       into Slinky (a config naming Crab loads Slinky). */
+    private final AutoBlockSlinky slinkyEngine = new AutoBlockSlinky(this);
     /* ---- Full (2026-10-21): sword up whenever an enemy is in range, every hit swapped in within
        one tick (release, hit, block again), so the server has it up for every hit taken. See AutoBlockFull. */
     private final java.util.function.BooleanSupplier full = () -> this.modeIndex() == 7;
@@ -149,15 +126,6 @@ public class BlockHit extends Module {
     final BooleanProperty fullLog = new BooleanProperty("full-log", true, full);
     private final AutoBlockFull fullBlock = new AutoBlockFull(this);
     private static AutoBlockFull fullInstance;
-    private boolean sBlocking;
-    private boolean sManual;
-    private boolean sAnimation;
-    private boolean sLagging;
-    private boolean sActive;
-    private int sTick;
-    private int sBlockStart = -1;
-    private int sLagStart = -1;
-    private int sLastHurt;
     /* ---- Manual (Vape's Manual) ------------------------------------------
        Block hits paced by this player's own clicks: after a hit with a sword,
        ManualChance of the time the use key goes down for one tick (Vape: 50
@@ -388,9 +356,8 @@ public class BlockHit extends Module {
         }
         this.intervalCount = 0;
         this.lastDamageAt = 0L;
-        slinkyReset(true);
+        this.slinkyEngine.reset(true);
         this.raven.reset(true);
-        this.crab.reset(true);
         this.fullBlock.reset();
     }
 
@@ -521,34 +488,20 @@ public class BlockHit extends Module {
             } else if (this.rhythmBlocking) {
                 rhythmBlock(false);
             }
-            if (this.modeIndex() == 6) {
-                slinkyTick();
-            } else if (this.sActive) {
-                slinkyReset(true);
+            if (this.modeIndex() == 6 || this.modeIndex() == 10) {
+                this.slinkyEngine.tick();
+            } else if (this.slinkyEngine.active()) {
+                this.slinkyEngine.reset(true);
             }
             if (this.modeIndex() == 9) {
                 this.raven.tick();
             } else if (this.raven.active()) {
                 this.raven.reset(true);
             }
-            if (this.modeIndex() == 10) {
-                this.crab.tick();
-            } else if (this.crab.active()) {
-                this.crab.reset(true);
-            }
         }
     }
 
     // ---- Slinky ------------------------------------------------------------
-
-    private static boolean physical(net.minecraft.client.settings.KeyBinding key) {
-        return KeyBindUtil.isKeyDown(key.getKeyCode());
-    }
-
-    /** The enemy to block against: the one under the crosshair, else the nearest in view. */
-    private net.minecraft.entity.player.EntityPlayer slinkyTarget() {
-        return blockTarget(this.sRange.getValue());
-    }
 
     /** Within this box distance an enemy counts whatever the view angle. */
     private static final double CLOSE_ANY_ANGLE = 1.5;
@@ -614,184 +567,10 @@ public class BlockHit extends Module {
         return Math.sqrt(x * x + y * y + z * z);
     }
 
-    private void slinkyTick() {
-        this.sActive = true;
-        if (mc.currentScreen != null || mc.thePlayer.isDead) {
-            slinkyReset(true);
-            return;
-        }
-        int hurt = mc.thePlayer.hurtTime;
-        boolean hurtAgain = hurt > this.sLastHurt;
-        this.sLastHurt = hurt;
-        if (!ItemUtil.isHoldingSword() || auraBlocksAlone()) {
-            /* No sword, or the aura is blocking by itself: hands off. */
-            slinkyReset(false);
-            return;
-        }
-        int tick = ++this.sTick;
-        boolean right = physical(mc.gameSettings.keyBindUseItem);
-        boolean left = physical(mc.gameSettings.keyBindAttack);
-        if (!left && this.sRequireLeft.getValue()) {
-            if (!right) {
-                slinkyReset(true);
-            } else {
-                /* Right click alone: a plain block. */
-                if (this.sLagging) {
-                    slinkyReleaseLag();
-                }
-                if (!this.sBlocking) {
-                    slinkyStart(tick);
-                    this.sManual = true;
-                }
-            }
-            slinkyAnimation();
-            return;
-        }
-        if (this.sManual) {
-            slinkyStop(true);
-            this.sManual = false;
-        }
-        boolean wanted = slinkyTarget() != null && (!this.sRequireRight.getValue() || right);
-        if (this.sLagging) {
-            int lagTicks = this.sLagTicks.getValue();
-            boolean expired = this.sLagStart >= 0 && tick - this.sLagStart >= lagTicks;
-            if (expired || !wanted) {
-                slinkyReleaseLag();
-                if (expired && this.sLagReblock.getValue() && wanted) {
-                    slinkyStart(tick);
-                }
-            }
-        }
-        if (!wanted) {
-            slinkyStop(true);
-        } else {
-            if (!this.sBlocking && !this.sLagging
-                    && (!this.sRequireDamage.getValue() || hurt == this.sHurt.getValue())) {
-                slinkyStart(tick);
-            }
-            if (this.sBlocking) {
-                int hold = this.sHold.getValue() + this.sExtraHold;
-                boolean stop = this.sBlockStart >= 0 && tick - this.sBlockStart >= hold;
-                if (this.sRequireDamage.getValue() && hurtAgain) {
-                    stop = true;
-                }
-                if (stop) {
-                    if (this.sLagChance.getValue() > 0 && Math.random() * 100.0 < this.sLagChance.getValue()) {
-                        slinkyStartLag(tick);
-                    }
-                    slinkyStop(true);
-                }
-            }
-        }
-        slinkyAnimation();
-    }
-
-    private void slinkyStart(int tick) {
-        long since = this.sBlockEndedAt < 0L ? -1L : System.currentTimeMillis() - this.sBlockEndedAt;
-        if (!ItemUtil.isHoldingSword() || AutoBlockRules.coolingDown(this.sCooldown.getValue(), since)) {
-            return;
-        }
-        this.sExtraHold = AutoBlockRules.extraHoldTicks(this.sRandomHold.getValue(), Math.random(), Math.random());
-        int key = mc.gameSettings.keyBindUseItem.getKeyCode();
-        KeyBindUtil.setKeyBindState(key, true);
-        net.minecraft.client.settings.KeyBinding.onTick(key);
-        this.sBlocking = true;
-        this.sBlockStart = tick;
-    }
-
-    private void slinkyStop(boolean force) {
-        if (this.sBlocking || force) {
-            KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), false);
-            if (this.sBlocking) {
-                this.sBlockEndedAt = System.currentTimeMillis();
-            }
-            this.sBlocking = false;
-            this.sBlockStart = -1;
-        }
-    }
-
-    private void slinkyStartLag(int tick) {
-        if (this.sLagging) {
-            return;
-        }
-        if (Atlas.blinkManager.setBlinkState(true, atlas.enums.BlinkModules.AUTO_BLOCK_LAG)) {
-            this.sLagging = true;
-            this.sLagStart = tick;
-        }
-    }
-
-    private void slinkyReleaseLag() {
-        if (this.sLagging) {
-            Atlas.blinkManager.setBlinkState(false, atlas.enums.BlinkModules.AUTO_BLOCK_LAG);
-        }
-        this.sLagging = false;
-        this.sLagStart = -1;
-    }
-
-    /** The block animation on screen while blocking or lagging, without using the item. */
-    private void slinkyAnimation() {
-        if (!this.sFake.getValue() || !ItemUtil.isHoldingSword()) {
-            slinkyAnimationOff();
-            return;
-        }
-        boolean show = this.sBlocking || this.sLagging;
-        if (show && this.sFakeInRange.getValue()) {
-            show = slinkyTarget() != null;
-        }
-        if (show) {
-            ((atlas.mixin.IAccessorEntityPlayer) mc.thePlayer).setItemInUseCount(72000);
-            this.sAnimation = true;
-        } else {
-            slinkyAnimationOff();
-        }
-    }
-
-    private void slinkyAnimationOff() {
-        if (this.sAnimation && mc.thePlayer != null) {
-            if (!mc.thePlayer.isUsingItem()) {
-                ((atlas.mixin.IAccessorEntityPlayer) mc.thePlayer).setItemInUseCount(0);
-            }
-            this.sAnimation = false;
-        }
-    }
-
-    /** Lowers the sword, lets any held packets go, and gives the use key back to the player. */
-    private void slinkyReset(boolean releaseKey) {
-        slinkyReleaseLag();
-        if (mc.gameSettings == null) {
-            this.sBlocking = this.sManual = false;
-            return;
-        }
-        slinkyStop(releaseKey);
-        this.sManual = false;
-        slinkyAnimationOff();
-        if (releaseKey && mc.currentScreen == null) {
-            KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
-        }
-        this.sLastHurt = 0;
-        this.sActive = false;
-    }
-
-    /** lag-flush-on-attack: an attack lets the held packets go first, so it is not delayed. */
-    @EventTarget(atlas.event.types.Priority.HIGHEST)
-    public void onSlinkyPacket(atlas.events.PacketEvent event) {
-        if (!this.sLagging || event.getType() != EventType.SEND || !this.sLagFlush.getValue()) {
-            return;
-        }
-        if (event.getPacket() instanceof net.minecraft.network.play.client.C02PacketUseEntity
-                && ((net.minecraft.network.play.client.C02PacketUseEntity) event.getPacket()).getAction()
-                == net.minecraft.network.play.client.C02PacketUseEntity.Action.ATTACK) {
-            slinkyReleaseLag();
-            if (this.sLagReblock.getValue() && ItemUtil.isHoldingSword()) {
-                slinkyStart(this.sTick);
-            }
-        }
-    }
-
     /** While held packets wait, a right click must not raise the sword on its own. */
     @EventTarget
     public void onSlinkyRightClick(atlas.events.RightClickMouseEvent event) {
-        if (this.isRunning() && (this.sLagging || this.raven.lagging() || this.crab.lagging() || this.modeIndex() == 9 && this.raven.cancelsUse())
+        if (this.isRunning() && (this.slinkyEngine.lagging() || this.raven.lagging() || this.modeIndex() == 9 && this.raven.cancelsUse())
                 && mc.currentScreen == null && ItemUtil.isHoldingSword()) {
             event.setCancelled(true);
         }
@@ -803,8 +582,8 @@ public class BlockHit extends Module {
         if (this.modeIndex() == 9 || this.raven.lagging()) {
             this.raven.onSend(event);
         }
-        if (this.modeIndex() == 10 || this.crab.lagging()) {
-            this.crab.onSend(event);
+        if (this.modeIndex() == 6 || this.modeIndex() == 10 || this.slinkyEngine.lagging()) {
+            this.slinkyEngine.onSend(event);
         }
     }
 
@@ -1048,8 +827,8 @@ public class BlockHit extends Module {
             if (this.modeIndex() == 5) {
                 manualBlock();
             }
-            if (this.modeIndex() == 10) {
-                this.crab.onAttack(event);
+            if (this.modeIndex() == 6 || this.modeIndex() == 10) {
+                this.slinkyEngine.onAttack(event);
             }
             if (this.modeIndex() == 8 && !auraBlocksAlone()) {
                 this.yuri.hit(true, mc.thePlayer.getDistanceToEntity(event.getTarget()), this.yRange.getValue(),

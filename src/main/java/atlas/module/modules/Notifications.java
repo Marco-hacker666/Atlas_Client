@@ -13,6 +13,8 @@ import atlas.font.CFontRenderer;
 import atlas.management.NotificationManager;
 import atlas.module.Module;
 import atlas.ui.hud.HudLayout;
+import atlas.property.properties.BooleanProperty;
+import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
 import atlas.property.properties.ModeProperty;
 import atlas.property.properties.PercentProperty;
@@ -31,6 +33,9 @@ public class Notifications extends Module {
     /* Added with the HUD editor (2026-10-05): the stack's shift from the bottom-right corner. 0 = the old place. */
     public final IntProperty offsetX = new IntProperty("offset-x", 0, -1000, 1000);
     public final IntProperty offsetY = new IntProperty("offset-y", 0, -1000, 1000);
+    /* 2026-11-09: every HUD element can be resized and have its panel switched off. */
+    public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
+    public final BooleanProperty background = new BooleanProperty("background", true);
     private CFontRenderer frameFont;
     private boolean frameFontResolved;
 
@@ -50,10 +55,12 @@ public class Notifications extends Module {
                 /* Nothing showing: a placeholder the size of one notification. */
                 ScaledResolution res = new ScaledResolution(mc);
                 float h = mc.fontRendererObj.FONT_HEIGHT + 13.0F;
-                HudLayout.report("Notifications", "Notifications (none now)",
-                        res.getScaledWidth() - 8.0F - 120.0F + this.offsetX.getValue(),
-                        res.getScaledHeight() - 8.0F - h + this.offsetY.getValue(), 120.0F, h,
-                        HudLayout.ints(this.offsetX, 1, this.offsetY, 1));
+                float cornerX = res.getScaledWidth() - 8.0F + this.offsetX.getValue();
+                float cornerY = res.getScaledHeight() - 8.0F + this.offsetY.getValue();
+                float[] area = HudLayout.scaledRect(cornerX, cornerY, this.scale.getValue(), cornerX - 120.0F,
+                        cornerY - h, 120.0F, h);
+                HudLayout.report("Notifications", "Notifications (none now)", area[0], area[1], area[2], area[3],
+                        HudLayout.ints(this.offsetX, 1, this.offsetY, 1), HudLayout.scale(this.scale));
             }
             return;
         }
@@ -70,32 +77,41 @@ public class Notifications extends Module {
         float stackLeft = Float.MAX_VALUE;
         float stackRight = 0.0F;
         int rendered = 0;
+        /* Resized about the stack's bottom-right corner, the corner it grows from. */
+        float s = this.scale.getValue();
+        float cornerX = sr.getScaledWidth() - margin + this.offsetX.getValue();
+        HudLayout.beginScaled(cornerX, stackBottom, s);
+        try {
+            for (int i = entries.size() - 1; i >= 0 && rendered < this.maxNotifications.getValue(); i--) {
+                NotificationManager.NotificationEntry entry = entries.get(i);
+                float alpha = this.notificationAlpha(entry);
+                if (alpha <= 0.01F) {
+                    continue;
+                }
 
-        for (int i = entries.size() - 1; i >= 0 && rendered < this.maxNotifications.getValue(); i--) {
-            NotificationManager.NotificationEntry entry = entries.get(i);
-            float alpha = this.notificationAlpha(entry);
-            if (alpha <= 0.01F) {
-                continue;
+                String text = this.formatNotificationText(entry.message);
+                float textHeight = this.getTextHeight();
+                float boxWidth = Math.max(86.0F, this.getTextWidth(text) + paddingX * 2.0F + 2.0F);
+                float boxHeight = textHeight + paddingY * 2.0F + 3.0F;
+                float x = sr.getScaledWidth() - margin - boxWidth + this.offsetX.getValue();
+                y -= boxHeight;
+                stackLeft = Math.min(stackLeft, x);
+                stackRight = Math.max(stackRight, x + boxWidth);
+
+                this.drawClassicNotification(entry, text, x, y, boxWidth, boxHeight, paddingX, paddingY, alpha);
+
+                y -= spacing;
+                rendered++;
             }
-
-            String text = this.formatNotificationText(entry.message);
-            float textHeight = this.getTextHeight();
-            float boxWidth = Math.max(86.0F, this.getTextWidth(text) + paddingX * 2.0F + 2.0F);
-            float boxHeight = textHeight + paddingY * 2.0F + 3.0F;
-            float x = sr.getScaledWidth() - margin - boxWidth + this.offsetX.getValue();
-            y -= boxHeight;
-            stackLeft = Math.min(stackLeft, x);
-            stackRight = Math.max(stackRight, x + boxWidth);
-
-            this.drawClassicNotification(entry, text, x, y, boxWidth, boxHeight, paddingX, paddingY, alpha);
-
-            y -= spacing;
-            rendered++;
+        } finally {
+            HudLayout.endScaled();
         }
         this.frameFontResolved = false;
         if (rendered > 0) {
-            HudLayout.report("Notifications", "Notifications", stackLeft, y + spacing, stackRight - stackLeft,
-                    stackBottom - (y + spacing), HudLayout.ints(this.offsetX, 1, this.offsetY, 1));
+            float[] area = HudLayout.scaledRect(cornerX, stackBottom, s, stackLeft, y + spacing,
+                    stackRight - stackLeft, stackBottom - (y + spacing));
+            HudLayout.report("Notifications", "Notifications", area[0], area[1], area[2], area[3],
+                    HudLayout.ints(this.offsetX, 1, this.offsetY, 1), HudLayout.scale(this.scale));
         }
     }
 
@@ -112,7 +128,9 @@ public class Notifications extends Module {
         int depth = new Color(0, 0, 0, (int) (28 * alpha)).getRGB();
         int neutralText = new Color(238, 241, 245, (int) (242 * alpha)).getRGB();
 
-        if (HudPanel.active()) {
+        if (!this.background.getValue()) {
+            /* No panel: the text and the progress line only. */
+        } else if (HudPanel.active()) {
             HudPanel.panel(renderX, y, renderX + boxWidth, y + boxHeight, true, alpha);
         } else {
             RenderUtil.drawRoundedRect(renderX + 1.0F, y + 1.5F, boxWidth, boxHeight, radius + 1.0F,

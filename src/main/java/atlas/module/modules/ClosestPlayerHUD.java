@@ -128,7 +128,7 @@ public class ClosestPlayerHUD extends Module {
                 int w = mc.fontRendererObj.getStringWidth("Closest player");
                 HudLayout.report("ClosestPlayerHUD", "ClosestPlayerHUD (nobody near)", this.offsetX.getValue() - 2.0F * s,
                         this.offsetY.getValue() - 2.0F * s, (w + 4) * s, 12 * s,
-                        HudLayout.ints(this.offsetX, 1, this.offsetY, 1));
+                        HudLayout.ints(this.offsetX, 1, this.offsetY, 1), HudLayout.scale(this.scale));
             }
             return;
         }
@@ -150,7 +150,7 @@ public class ClosestPlayerHUD extends Module {
         /* HUD editor (2026-10-05): report where this is drawn, so the editor can find and drag it. */
         HudLayout.report("ClosestPlayerHUD", "ClosestPlayerHUD", this.offsetX.getValue() - 2.0F * scaleValue,
                 this.offsetY.getValue() - 2.0F * scaleValue, (width + 4) * scaleValue, (height + 2) * scaleValue,
-                HudLayout.ints(this.offsetX, 1, this.offsetY, 1));
+                HudLayout.ints(this.offsetX, 1, this.offsetY, 1), HudLayout.scale(this.scale));
         GlStateManager.pushMatrix();
         GlStateManager.translate((float) this.offsetX.getValue(), (float) this.offsetY.getValue(), 0.0F);
         GlStateManager.scale(scaleValue, scaleValue, 1.0F);

@@ -137,7 +137,8 @@ public class PotionHUD extends Module {
 
         /* HUD editor (2026-10-05): report where this is drawn, so the editor can find and drag it. */
         HudLayout.report("PotionHUD", placeholder ? "PotionHUD (no effects)" : "PotionHUD", x, y, boxW * sc,
-                blockH * sc, HudLayout.ints(offX, posX.getValue() == 2 ? -1 : 1, offY, posY.getValue() == 2 ? -1 : 1));
+                blockH * sc, HudLayout.ints(offX, posX.getValue() == 2 ? -1 : 1, offY, posY.getValue() == 2 ? -1 : 1),
+                HudLayout.scale(this.scale));
         if (placeholder) {
             lines.clear();
             return;

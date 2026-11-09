@@ -14,8 +14,10 @@ import atlas.events.Render2DEvent;
 import atlas.events.TickEvent;
 import atlas.event.types.EventType;
 import atlas.module.Module;
+import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.ColorProperty;
 import atlas.property.properties.DragProperty;
+import atlas.property.properties.FloatProperty;
 import atlas.property.properties.ModeProperty;
 import atlas.font.CFontRenderer;
 import atlas.font.FontProcess;
@@ -45,6 +47,9 @@ public class Statistics extends Module {
     public final ColorProperty customColor =
             new ColorProperty(
                     "Custom Color", new Color(255, 105, 180).getRGB(), () -> this.colorMode.getValue() == 1);
+    /* 2026-11-09: every HUD element can be resized and have its panel switched off. */
+    public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
+    public final BooleanProperty background = new BooleanProperty("background", true);
 
     private float width, height;
     private String timeString = "0 seconds";
@@ -91,26 +96,48 @@ public class Statistics extends Module {
         width = 130;
         height = 55;
 
-        this.dragging.scale.x = width;
-        this.dragging.scale.y = height;
-        HudLayout.report("Statistics", "Session stats", x, y, width, height, HudLayout.drag(this.dragging));
+        /* Resized about its top-left corner, the point it is dragged by. */
+        float s = this.scale.getValue();
+        float[] area = HudLayout.scaledRect(x, y, s, x, y, width, height);
+        this.dragging.scale.x = area[2];
+        this.dragging.scale.y = area[3];
+        HudLayout.report("Statistics", "Session stats", area[0], area[1], area[2], area[3],
+                HudLayout.drag(this.dragging), HudLayout.scale(this.scale));
 
         HUD hud = (HUD) Atlas.moduleManager.modules.get(HUD.class);
         boolean shaders = hud != null && hud.shaders.getValue();
 
-        if (HudPanel.active()) {
-            HudPanel.panel(x, y, x + width, y + height);
+        if (!this.background.getValue()) {
+            /* No panel: the text only. */
+        } else if (HudPanel.active()) {
+            HudLayout.beginScaled(x, y, s);
+            try {
+                HudPanel.panel(x, y, x + width, y + height);
+            } finally {
+                HudLayout.endScaled();
+            }
         } else {
+            /* RoundedUtils works in screen pixels, so it gets the scaled rectangle. */
             if (shaders) {
                 BlurUtils.prepareBlur();
-                RoundedUtils.drawRound(x, y, width, height, 6, Color.BLACK);
+                RoundedUtils.drawRound(area[0], area[1], area[2], area[3], 6 * s, Color.BLACK);
                 BlurUtils.blurEnd(2, 3);
             }
 
             Color c1 = applyOpacity(getAccentColor(), 0.8f);
-            RoundedUtils.drawRoundOutline(x, y, width, height, 6, 1.0f, UiMode.adapt(new Color(0, 0, 0, 100)), c1);
+            RoundedUtils.drawRoundOutline(area[0], area[1], area[2], area[3], 6 * s, 1.0f * s,
+                    UiMode.adapt(new Color(0, 0, 0, 100)), c1);
         }
 
+        HudLayout.beginScaled(x, y, s);
+        try {
+            this.drawText(x, y);
+        } finally {
+            HudLayout.endScaled();
+        }
+    }
+
+    private void drawText(float x, float y) {
         CFontRenderer font18 = FontProcess.getFont("sans");
 
         double padding = 8;

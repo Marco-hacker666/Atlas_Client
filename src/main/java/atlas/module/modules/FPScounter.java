@@ -38,6 +38,8 @@ public class FPScounter
     public final IntProperty cornerRadius = new IntProperty("Corner Radius", 8, 5, 20);
     public final IntProperty backgroundAlpha = new IntProperty("Background Alpha", 160, 0, 255);
     public final ColorProperty textColor = new ColorProperty("Text Color", Color.WHITE.getRGB());
+    /* 2026-11-09: every HUD element's panel can be switched off. */
+    public final BooleanProperty background = new BooleanProperty("background", true);
 
     public FPScounter() {
         super("Fpscounter", false, false);
@@ -87,13 +89,16 @@ public class FPScounter
         float w = textWidth + 12;
         float h = textHeight + 6;
         HudLayout.report("FPScounter", "FPS counter", baseX - w * scaleFactor / 2.0f, baseY - h * scaleFactor / 2.0f,
-                w * scaleFactor, h * scaleFactor, HudLayout.ints(this.offsetX, 1, this.offsetY, 1));
+                w * scaleFactor, h * scaleFactor, HudLayout.ints(this.offsetX, 1, this.offsetY, 1),
+                HudLayout.scale(this.scale));
         float radius = ((Integer)this.cornerRadius.getValue()).intValue();
         GlStateManager.pushMatrix();
         GlStateManager.scale(scaleFactor, scaleFactor, 1.0f);
         float drawX = baseX / scaleFactor;
         float drawY = baseY / scaleFactor;
-        if (HudPanel.active()) {
+        if (!this.background.getValue()) {
+            /* No panel: the text only. */
+        } else if (HudPanel.active()) {
             HudPanel.panel(drawX - w / 2.0f, drawY - h / 2.0f, drawX + w / 2.0f, drawY + h / 2.0f);
         } else {
             BlurShadowRenderer.renderFrostedGlass(drawX - w / 2.0f, drawY - h / 2.0f, w, h, radius, (Integer)this.blurStrength.getValue(), (Integer)this.backgroundAlpha.getValue());

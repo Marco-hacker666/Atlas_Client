@@ -149,7 +149,7 @@ public class FKCounter extends Module {
         /* HUD editor (2026-10-05): report where this is drawn, so the editor can find and drag it. */
         HudLayout.report("FKCounter", "FKCounter", baseX - 2.0F * scaleValue, baseY - 2.0F * scaleValue,
                 (boxWidth + 4) * scaleValue, (mc.fontRendererObj.FONT_HEIGHT + 3) * scaleValue,
-                HudLayout.ints(this.offsetX, 1, this.offsetY, 1));
+                HudLayout.ints(this.offsetX, 1, this.offsetY, 1), HudLayout.scale(this.scale));
         GlStateManager.pushMatrix();
         GlStateManager.translate(baseX, baseY, 0.0F);
         GlStateManager.scale(scaleValue, scaleValue, 1.0F);

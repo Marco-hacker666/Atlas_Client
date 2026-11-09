@@ -3,6 +3,7 @@ package atlas.module.modules;
 import atlas.ui.impl.clickgui.atlas.HudPanel;
 import atlas.ui.UiMode;
 import atlas.ui.hud.HudLayout;
+import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
 
 import atlas.event.EventTarget;
@@ -25,6 +26,8 @@ public class ArmorHUD extends Module {
     /* Added with the HUD editor (2026-10-05): drag it there, or set it here. 0 keeps the original place. */
     public final IntProperty offsetX = new IntProperty("offset-x", 0, -1000, 1000);
     public final IntProperty offsetY = new IntProperty("offset-y", 0, -1000, 1000);
+    /* 2026-11-09: every HUD element can be resized (here, or with the wheel in the HUD editor). */
+    public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
 
     public ArmorHUD() {
         super("ArmorHUD", false, false, "Shows equipped armor and remaining durability.");
@@ -43,10 +46,24 @@ public class ArmorHUD extends Module {
                 wearing = true;
             }
         }
+        float s = this.scale.getValue();
+        /* Resized about its bottom centre, so it stays just above the hotbar. */
+        float pivotX = left - 2 + 41.5F;
+        float pivotY = top - 2 + 33;
         if (wearing || HudLayout.isEditing()) {
-            HudLayout.report("ArmorHUD", "ArmorHUD", left - 2, top - 2, 83, 33,
-                    HudLayout.ints(this.offsetX, 1, this.offsetY, 1));
+            float[] area = HudLayout.scaledRect(pivotX, pivotY, s, left - 2, top - 2, 83, 33);
+            HudLayout.report("ArmorHUD", "ArmorHUD", area[0], area[1], area[2], area[3],
+                    HudLayout.ints(this.offsetX, 1, this.offsetY, 1), HudLayout.scale(this.scale));
         }
+        HudLayout.beginScaled(pivotX, pivotY, s);
+        try {
+            this.draw(left, top);
+        } finally {
+            HudLayout.endScaled();
+        }
+    }
+
+    private void draw(int left, int top) {
         /* Backgrounds, then items, then text -- not all three per slot. The
            item overlay switches lighting on again after its durability bar,
            so drawing a damaged piece last left the GL lighting on: everything

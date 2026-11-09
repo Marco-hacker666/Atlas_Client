@@ -109,7 +109,7 @@ public class PlayerList extends Module {
         /* HUD editor (2026-10-05): report where this is drawn, so the editor can find and drag it. */
         HudLayout.report("PlayerList", placeholder ? "PlayerList (empty)" : "PlayerList", baseX - 2.0F * scaleValue,
                 baseY - 2.0F * scaleValue, (width + 4) * scaleValue, (shown.size() * lineHeight + 2) * scaleValue,
-                HudLayout.ints(this.offsetX, 1, this.offsetY, 1));
+                HudLayout.ints(this.offsetX, 1, this.offsetY, 1), HudLayout.scale(this.scale));
         if (placeholder) {
             return;
         }

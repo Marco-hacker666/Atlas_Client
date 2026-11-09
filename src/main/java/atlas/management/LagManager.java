@@ -244,14 +244,39 @@ public class LagManager {
         dropForWorldChange(event.getWorld() != null);
     }
 
-    /** See onWorldLoad. sendReplies false (leaving) drops everything. */
+    /**
+     * See onWorldLoad. sendReplies false (leaving) drops everything.
+     *
+     * 2026-11-10 (game froze on a server teleport): the replies used to be
+     * sent from inside the poll loop without marking this thread as the
+     * flushing one. Each send went back through the mixin, which offered the
+     * reply to handlePacket; with a delay still set (LagGuard ends the holds
+     * before it sets the delay to 0, and a world change keeps the holder's
+     * delay) the reply was queued again, polled again, sent again -- forever,
+     * on the network thread for a teleport, holding this lock, so the next
+     * packet the game sent waited on it and the whole game hung. The queue is
+     * now emptied first, and the replies sent afterwards as this thread's own
+     * flush, which the mixin lets straight through.
+     */
     public synchronized void dropForWorldChange(boolean sendReplies) {
+        java.util.List<Packet<?>> replies = new java.util.ArrayList<Packet<?>>();
         LagPacket lagPacket;
         while ((lagPacket = this.packetQueue.poll()) != null) {
-            if (sendReplies && lagPacket.packet instanceof net.minecraft.network.play.client.C0FPacketConfirmTransaction
-                    && connected()) {
-                send(lagPacket.packet);
+            if (sendReplies && lagPacket.packet instanceof net.minecraft.network.play.client.C0FPacketConfirmTransaction) {
+                replies.add(lagPacket.packet);
             }
+        }
+        if (replies.isEmpty() || !connected()) {
+            return;
+        }
+        Thread before = this.flushingThread;
+        this.flushingThread = Thread.currentThread();
+        try {
+            for (Packet<?> reply : replies) {
+                send(reply);
+            }
+        } finally {
+            this.flushingThread = before;
         }
     }
 

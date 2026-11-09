@@ -1281,15 +1281,18 @@ public class AtlasClickGui extends GuiScreen {
         float tabsEnd = drawPageTabs(brandEnd + 14, cy, mx, my);
 
         float right = x + width - 12;
-        float editorWidth = font(8.5F, true).width("HUD Editor") + 22;
-        float editorX = right - editorWidth;
-        drawButton("hudEditor", null, editorX, cy, editorWidth, "HUD Editor", 0, mx, my);
-        if (mx >= editorX && mx <= right && my >= cy - 10 && my <= cy + 10) {
-            this.hint = "Move the HUD elements on screen";
+        /* 2026-11-09: the Theme window takes the HUD Editor's place, so the header
+           keeps its three buttons; the HUD editor opens from inside the window. */
+        float studioWidth = font(8.5F, true).width("Theme") + 34;
+        float studioX = right - studioWidth;
+        drawButton("themeStudio", null, studioX, cy, studioWidth, "    Theme", 0, mx, my);
+        icon("palette", studioX + 13.0F, cy, TEXT);
+        if (mx >= studioX && mx <= right && my >= cy - 10 && my <= cy + 10) {
+            this.hint = "Colours, menu, HUD and world looks in one window  ·  the HUD editor is inside";
         }
         /* One-click bug report (2026-10-07): copies everything #bug-reports asks for. */
         float reportWidth = font(8.5F, true).width("Report") + 34;
-        float reportX = editorX - 8 - reportWidth;
+        float reportX = studioX - 8 - reportWidth;
         drawButton("bugReport", null, reportX, cy, reportWidth, "    Report", 0, mx, my);
         drawWarning(reportX + 13.0F, cy, 5.0F);
         if (mx >= reportX && mx <= reportX + reportWidth && my >= cy - 10 && my <= cy + 10) {
@@ -1515,6 +1518,9 @@ public class AtlasClickGui extends GuiScreen {
             boolean hovered = mx >= x + 10 && mx <= x + sidebar - 10 && my >= Math.max(rowY, top)
                     && my <= Math.min(rowY + CAT_H, listLimit);
             hit("category", name, x + 10, Math.max(rowY, top), x + sidebar - 10, Math.min(rowY + CAT_H, listLimit));
+            if (hovered && atlas.module.Category.THEME.displayName().equals(name)) {
+                this.hint = "Opens the Theme window: every colour and look in one place";
+            }
             float rowLit = ease("cat:" + name, hovered && !active, 10.0F);
             if (rowLit > 0.01F) {
                 Liquid.rect(x + 10, rowY, x + sidebar - 10, rowY + CAT_H, 11.0F,
@@ -4377,6 +4383,26 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
+    /* 2026-11-09: for the Theme window (ThemeStudio), which edits the same
+       Appearance settings and draws with the same look as this menu. */
+    AtlasTheme theme() {
+        return this.theme;
+    }
+
+    int accentColour() {
+        return accent();
+    }
+
+    /** Applies the Appearance settings to the shared drawing state (glass, font, springs, palette). */
+    void applyLook() {
+        applyTheme();
+        paintPalette();
+    }
+
+    static float textScale() {
+        return textScale;
+    }
+
     private int clickGuiAccent() {
         try {
             atlas.module.modules.ClickGUIModule gui =
@@ -4525,6 +4551,11 @@ public class AtlasClickGui extends GuiScreen {
             openReport();
             return;
         }
+        if ("themeStudio".equals(target.kind)) {
+            pulse("btn:themeStudio");
+            this.mc.displayGuiScreen(new ThemeStudio(this));
+            return;
+        }
         if ("hudEditor".equals(target.kind)) {
             pulse("btn:hudEditor");
             this.mc.displayGuiScreen(new atlas.ui.hud.HudEditorScreen(this));
@@ -4562,12 +4593,8 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
         if ("appearance".equals(target.kind)) {
-            this.appearanceView = true;
-            this.profilesView = false;
-            this.serversView = false;
-            this.page = "Client Settings";
-            this.searchInput.clear();
-            this.detailScroll = 0;
+            /* 2026-11-09: every Appearance setting is in the Theme window, with a preview. */
+            this.mc.displayGuiScreen(new ThemeStudio(this));
             return;
         }
         if ("servers".equals(target.kind)) {
@@ -4627,6 +4654,11 @@ public class AtlasClickGui extends GuiScreen {
             this.theme.reset();
             this.toasts.add("Appearance reset  ·  click to undo", Toasts.Kind.OK, System.currentTimeMillis(),
                     () -> this.theme.restore(before));
+            return;
+        }
+        if ("category".equals(target.kind) && atlas.module.Category.THEME.displayName().equals(target.payload)) {
+            /* 2026-11-09: the Theme tab's modules are all in the Theme window, laid out by what they colour. */
+            this.mc.displayGuiScreen(new ThemeStudio(this));
             return;
         }
         if ("category".equals(target.kind)) {

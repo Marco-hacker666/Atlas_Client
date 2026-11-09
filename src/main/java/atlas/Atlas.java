@@ -142,6 +142,7 @@ public class Atlas {
         moduleManager.modules.put(Chams.class, new Chams());
         moduleManager.modules.put(WaterMark.class, new WaterMark());
         moduleManager.modules.put(ClickGUIModule.class, new ClickGUIModule());
+        moduleManager.modules.put(ThemeGUI.class, new ThemeGUI());
         moduleManager.modules.put(ChestStealer.class, new ChestStealer());
         moduleManager.modules.put(Eagle.class, new Eagle());
         moduleManager.modules.put(ESP.class, new ESP());

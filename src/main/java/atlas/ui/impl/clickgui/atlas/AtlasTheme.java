@@ -194,6 +194,11 @@ final class AtlasTheme {
         return all().contains(property);
     }
 
+    /** Whether a setting is about looks, so a saved theme carries it: not the privacy or performance choices. */
+    boolean isLook(Property<?> property) {
+        return property != this.autoSendLogs && property != this.shareRunData && property != this.mobileSafe;
+    }
+
     // ---- derived values -----------------------------------------------
 
     int accent(int clickGui) {

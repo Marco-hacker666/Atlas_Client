@@ -54,10 +54,17 @@ import java.util.Random;
 public class NoSlow extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "NG-Reuse", "NG-Switch", "NG-Interact", "NG-Blink", "NG-Grim2364", "NG-Grim2371", "Grim-Alternate", "Hit-Window"})
+    public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "Reuse", "Switch", "Interact", "Blink", "Grim2364", "Grim2371", "Grim-Alternate", "Hit-Window"})
             /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
                Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
-            .hide("Hypixel", "NCP", "NewNCP", "Watchdog", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "HypixelNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "NG-Reuse", "NG-Switch", "NG-Interact", "NG-Grim2364", "NG-Grim2371");
+            .hide("Hypixel", "NCP", "NewNCP", "Watchdog", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "HypixelNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19")
+            /* 2026-11-09 (owner): the NG- prefix dropped; configs saying the old names load the new ones. */
+            .alias("NG-Reuse", "Reuse")
+            .alias("NG-Switch", "Switch")
+            .alias("NG-Interact", "Interact")
+            .alias("NG-Blink", "Blink")
+            .alias("NG-Grim2364", "Grim2364")
+            .alias("NG-Grim2371", "Grim2371");
     /* Hit-Window (2026-10-20): the sword up on the server only around the next hit, see NoSlowHitWindow. */
     private final java.util.function.BooleanSupplier hwShown = () -> NoSlowHitWindow.MODE.equals(this.swordMode.getModeString());
     public final IntProperty hwOpenHurt = new IntProperty("HW Open Hurt", 2, 0, 8, hwShown);
@@ -144,6 +151,11 @@ public class NoSlow extends Module {
             () -> this.ngIdx(this.swordMode) == NG_REUSE || this.ngIdx(this.swordMode) == NG_SWITCH);
     public final IntProperty ngBlinkMaxTicks = new IntProperty("NG Blink MaxTicks", 10, 1, 20,
             () -> this.ngIdx(this.swordMode) == NG_BLINK);
+    {
+        /* 2026-11-09 (owner): no "NG" in what the menu shows; the config keys stay, so saved values load. */
+        this.ngTiming.setLabel("Timing");
+        this.ngBlinkMaxTicks.setLabel("Blink MaxTicks");
+    }
 
     private final List<Packet<?>> ngBlinkPackets = new ArrayList<Packet<?>>();
     private int ngBlinkTicks;

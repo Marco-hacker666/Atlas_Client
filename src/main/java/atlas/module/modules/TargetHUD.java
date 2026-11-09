@@ -1,6 +1,7 @@
 package atlas.module.modules;
 
 import atlas.ui.impl.clickgui.atlas.HudPanel;
+import atlas.ui.hud.HudLayout;
 import atlas.Atlas;
 import atlas.enums.ChatColors;
 import atlas.event.EventTarget;
@@ -117,6 +118,11 @@ public class TargetHUD extends Module {
     private long damageFlashTime;
     private float lastHealthVal;
     private EntityLivingBase renderTarget;
+    /* 2026-11-09: where this frame's style drew, in screen pixels, for the HUD
+       editor; and whether that style hangs from the screen centre (RavenBS)
+       rather than from the corner position-x/-y name. */
+    private float[] drawnArea;
+    private boolean drawnFromCentre;
 
     public TargetHUD() {
         super("TargetHUD", false, true, "Target HUD");
@@ -142,6 +148,9 @@ public class TargetHUD extends Module {
                 && !this.lastAttackTimer.hasTimeElapsed(1500L)
                 && TeamUtil.isEntityLoaded(this.lastTarget)) {
             return this.lastTarget;
+        } else if (HudLayout.isEditing()) {
+            /* In the HUD editor: yourself, so there is something to place. */
+            return mc.thePlayer;
         } else {
             return this.chatPreview.getValue() && mc.currentScreen instanceof GuiChat ? mc.thePlayer : null;
         }
@@ -197,11 +206,36 @@ public class TargetHUD extends Module {
             return;
         }
 
+        this.drawnArea = null;
+        this.drawnFromCentre = false;
         if (isAtlasPlusStyle()) {
             renderAtlasPlusTargetHud();
         } else {
             renderAtlasTargetHud();
         }
+        if (this.drawnArea != null) {
+            HudLayout.report("TargetHUD", "TargetHUD", this.drawnArea[0], this.drawnArea[1], this.drawnArea[2],
+                    this.drawnArea[3], this.drawnFromCentre ? HudLayout.ints(this.offX, 1, this.offY, 1)
+                            : HudLayout.ints(this.offX, this.posX.getValue() == 2 ? -1 : 1,
+                            this.offY, this.posY.getValue() == 2 ? -1 : 1),
+                    HudLayout.scale(this.scale));
+        }
+    }
+
+    /** Records where a style drew this frame, already in screen pixels. */
+    private void drawn(float x, float y, float width, float height) {
+        this.drawnArea = new float[]{x, y, width, height};
+    }
+
+    /**
+     * Where the older styles (FACE, THREED, SIMPLE, CIRCLE, BlueDEV) put their
+     * top-left corner. They used to sit at a fixed (100, 100) that nothing
+     * could change; now they follow position-x, position-y and the offsets
+     * like every other style (2026-11-09).
+     */
+    private int[] classicOrigin(float width, float height) {
+        float[] at = getAtlasPlusPosition(width, height);
+        return new int[]{Math.round(at[0]), Math.round(at[1])};
     }
 
     private void renderAtlasTargetHud() {
@@ -363,6 +397,7 @@ public class TargetHUD extends Module {
         /* Scaled in and faded together (the theme's transition:scale). */
         int textAlpha = Math.max(4, Math.round(Math.min(1.0F, eased) * 255.0F)) << 24;
 
+        this.drawn(posX * s, posY * s, w * s, h * s);
         GlStateManager.pushMatrix();
         GlStateManager.scale(s, s, 1.0F);
         GlStateManager.translate(posX + w / 2.0F, posY + h / 2.0F, 0.0F);
@@ -371,7 +406,7 @@ public class TargetHUD extends Module {
         GlStateManager.disableDepth();
         GlStateManager.enableBlend();
 
-        HudPanel.rounded(0.0F, 0.0F, w, h, HudPanel.CARD_RADIUS, Math.min(1.0F, eased), true);
+        HudPanel.rounded(0.0F, 0.0F, w, h, HudPanel.cardRadius(), Math.min(1.0F, eased), true);
 
         float head = 30.5F;
         float hx = 4.5F;
@@ -488,6 +523,8 @@ public class TargetHUD extends Module {
             default:
                 break;
         }
+        this.drawn(posX * this.scale.getValue(), posY * this.scale.getValue(), barTotalWidth * this.scale.getValue(),
+                27.0F * this.scale.getValue());
         GlStateManager.pushMatrix();
         GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 0.0F);
         GlStateManager.translate(posX, posY, -450.0F);
@@ -556,6 +593,8 @@ public class TargetHUD extends Module {
         int n7 = y - padding;
         int n8 = x + targetStrWithPadding;
         int n9 = y + (mc.fontRendererObj.FONT_HEIGHT + 5) - 6 + padding;
+        this.drawn(n6, n7, n8 - n6, n9 + 13 - n7);
+        this.drawnFromCentre = true;
 
         int maxAlphaOutline = Math.min(alpha, 110);
         int maxAlphaBackground = Math.min(alpha, 210);
@@ -671,10 +710,13 @@ public class TargetHUD extends Module {
 
     private void drawClassicPanelStyle(EntityLivingBase entity, boolean forceHead, boolean prefer3d, int hudWidth, int hudHeight) {
         float alpha = Math.min(1.0F, this.animatedScale);
-        int baseX = HUD.targetHUDX;
-        int baseY = HUD.targetHUDY;
+        int[] origin = this.classicOrigin(hudWidth, hudHeight);
+        int baseX = origin[0];
+        int baseY = origin[1];
 
         float sc = this.scale.getValue();
+        this.drawn(baseX + hudWidth / 2.0F * (1.0F - sc), baseY + hudHeight / 2.0F * (1.0F - sc), hudWidth * sc,
+                hudHeight * sc);
         GL11.glPushMatrix();
         GL11.glTranslated(baseX + hudWidth / 2.0, baseY + hudHeight / 2.0, 0);
         GL11.glScalef(sc, sc, 1.0F);
@@ -749,12 +791,15 @@ public class TargetHUD extends Module {
 
     private void drawSimpleStyle(EntityLivingBase entity) {
         float alpha = Math.min(1.0F, this.animatedScale);
-        int baseX = HUD.targetHUDX;
-        int baseY = HUD.targetHUDY;
         int hudWidth = 130;
         int hudHeight = 32;
+        int[] origin = this.classicOrigin(hudWidth, hudHeight);
+        int baseX = origin[0];
+        int baseY = origin[1];
 
         float sc = this.scale.getValue();
+        this.drawn(baseX + hudWidth / 2.0F * (1.0F - sc), baseY + hudHeight / 2.0F * (1.0F - sc), hudWidth * sc,
+                hudHeight * sc);
         GL11.glPushMatrix();
         GL11.glTranslated(baseX + hudWidth / 2.0, baseY + hudHeight / 2.0, 0);
         GL11.glScalef(sc, sc, 1.0F);
@@ -811,10 +856,13 @@ public class TargetHUD extends Module {
 
     private void drawCircleStyle(EntityLivingBase entity) {
         float alpha = Math.min(1.0F, this.animatedScale);
-        int baseX = HUD.targetHUDX;
-        int baseY = HUD.targetHUDY;
+        /* About 120 x 40: the ring at the left, the name and health beside it. */
+        int[] origin = this.classicOrigin(120, 40);
+        int baseX = origin[0];
+        int baseY = origin[1];
 
         float sc = this.scale.getValue();
+        this.drawn(baseX, baseY, 120 * sc, 40 * sc);
         GL11.glPushMatrix();
         GL11.glTranslated(baseX, baseY, 0);
         GL11.glScalef(sc, sc, 1.0F);
@@ -902,13 +950,14 @@ public class TargetHUD extends Module {
     private void drawBlueDevStyle(EntityLivingBase entity) {
         float alpha = Math.min(1.0F, this.animatedScale);
 
-        int x = HUD.targetHUDX;
-        int y = HUD.targetHUDY;
-
         int width = 165;
         int height = 55;
+        int[] origin = this.classicOrigin(width, height);
+        int x = origin[0];
+        int y = origin[1];
 
         float sc = this.scale.getValue();
+        this.drawn(x + width / 2.0F * (1.0F - sc), y + height / 2.0F * (1.0F - sc), width * sc, height * sc);
 
         GL11.glPushMatrix();
         GL11.glTranslated(x + width / 2.0, y + height / 2.0, 0);
@@ -1112,6 +1161,9 @@ public class TargetHUD extends Module {
         float finalScale = Math.max(0.001F, (float) (this.scale.getValue() * animValue));
         float centerX = pos[0] + width / 2.0F;
         float centerY = pos[1] + height / 2.0F;
+        float shownScale = this.scale.getValue();
+        this.drawn(centerX - width / 2.0F * shownScale, centerY - height / 2.0F * shownScale, width * shownScale,
+                height * shownScale);
 
         GlStateManager.pushMatrix();
         GlStateManager.translate(centerX, centerY, 0.0F);

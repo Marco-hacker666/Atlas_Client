@@ -433,6 +433,7 @@ final class ModuleDocsEn {
         d("ClientSpoofer", "Changes the client brand reported to the server.");
         // ------------------------------------------------------------ CLIENT
         d("ClickGUIModule", "Click menu style: look, colours and window size.");
+        d("ThemeGUI", "Opens the Theme window (every colour and look) on its own key, without the menu. Bind it first: .bind ThemeGUI KEY.");
         help("ClickGUIModule", "glide-accent", "Glide style: the colour of enabled modules, switches and sliders.");
         help("ClickGUIModule", "glide-blur", "Glide style: blur the world behind the panels. Off is lighter on weak PCs.");
         d("GuiModule", "Opens the click menu (Right Shift by default).");

@@ -31,7 +31,10 @@ public class Tower extends Module {
             "Vanilla", "Motion", "MotionJump", "MotionTP", "ConstantMotion", "Packet", "Teleport",
             "JumpSprint", "Hypixel", "HypixelFastVertical", "HypixelJumpSprint", "BlocksMC",
             "AAC339", "AAC364", "Vulcan", "Vulcan290", "Pulldown", "Tunnel"
-    });
+    })
+            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
+               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+            .hide("MotionTP", "Packet", "Teleport", "Hypixel", "HypixelFastVertical", "HypixelJumpSprint", "BlocksMC", "AAC339", "AAC364", "Vulcan", "Vulcan290", "Tunnel");
 
     public final FloatProperty vanillaSpeed = new FloatProperty("vanilla-speed", 0.95F, 0.5F, 1.0F, () -> this.mode.getValue() == 0);
     public final FloatProperty jumpHeight = new FloatProperty("jump-height", 0.42F, 0.36F, 0.79F, () -> this.mode.getValue() == 2 || this.mode.getValue() == 6);

@@ -136,7 +136,10 @@ public class Disabler extends Module {
     private static final int PRESET_HYPIXEL_MOTION = 7;
     private static final int PRESET_KKCRAFT = 8;
     private static final int PRESET_BLOCKSMC = 9;
-    public final ModeProperty preset = new ModeProperty("preset", 0, new String[]{"Custom", "Polar", "Intave", "GrimExtreme", "GrimSpec", "Mineland", "Hypixel", "HypixelMotion", "KKCraft", "BlocksMC"});
+    public final ModeProperty preset = new ModeProperty("preset", 0, new String[]{"Custom", "Polar", "Intave", "GrimExtreme", "GrimSpec", "Mineland", "Hypixel", "HypixelMotion", "KKCraft", "BlocksMC"})
+            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
+               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+            .hide("Mineland", "Hypixel", "HypixelMotion", "KKCraft", "BlocksMC");
     public final BooleanProperty presetPolarAirline = new BooleanProperty("preset-polar-airline", false, () -> preset.getValue() == PRESET_POLAR);
     public final BooleanProperty presetIntaveCloud = new BooleanProperty("preset-intave-cloud", false, () -> preset.getValue() == PRESET_INTAVE);
     public final BooleanProperty presetIntaveResource = new BooleanProperty("preset-intave-resource", true, () -> preset.getValue() == PRESET_INTAVE);

@@ -31,7 +31,10 @@ public class Fly extends Module {
     private int boostTicks = -1;
     private boolean boostActive = false;
     private boolean timerActive = false;
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"VANILLA", "VANILLA2", "AIR_WALK", "AIR_PLACE", "VULCAN", "MATRIX", "MATRIX_BOW", "MATRIX_TNT", "FAKE", "TEST", "CUSTOM"});
+    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"VANILLA", "VANILLA2", "AIR_WALK", "AIR_PLACE", "VULCAN", "MATRIX", "MATRIX_BOW", "MATRIX_TNT", "FAKE", "TEST", "CUSTOM"})
+            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
+               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+            .hide("VANILLA2", "VULCAN", "MATRIX", "MATRIX_BOW", "MATRIX_TNT", "TEST");
     public final FloatProperty hSpeed = new FloatProperty("horizontal-speed", 1.0F, 0.0F, 100.0F);
     public final FloatProperty vSpeed = new FloatProperty("vertical-speed", 1.0F, 0.0F, 100.0F);
     public final BooleanProperty groundSpoof = new BooleanProperty("ground-spoof", false, () -> mode.getValue() == 1);

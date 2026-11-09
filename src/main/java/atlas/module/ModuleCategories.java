@@ -88,7 +88,7 @@ public final class ModuleCategories {
                 Theme.class, PlayerColors.class, TracerColors.class, TargetColors.class, BacktrackColors.class,
                 BedColors.class, ChestColors.class, ItemColors.class, BlockColors.class, ProjectileColors.class,
                 InterfaceColors.class, ChamsColors.class, NameTagColors.class, WidgetColors.class,
-                EffectColors.class);
+                EffectColors.class, HUDStyle.class);
     }
 
     /* Modules being tested (2026-10-16): registered and categorised, so the

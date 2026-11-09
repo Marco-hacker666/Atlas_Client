@@ -777,6 +777,16 @@ public final class ModuleDocs {
         d("NameTagColors", "主題群組：名牌背景與外框的顏色。");
         d("WidgetColors", "主題群組：快捷欄、雷達等小工具的顏色。");
         d("EffectColors", "主題群組：打擊粒子的顏色。");
+        d("HUDStyle", "所有 HUD 面板共用的樣子：顏色、透明度、圓角、陰影、外框。模組清單、TargetHUD、通知、按鍵顯示等一起變。關掉就回到預設樣子。");
+        help("HUDStyle", "panel-color", "面板的底色。");
+        help("HUDStyle", "panel-opacity", "面板有多不透明；0 就沒有底。");
+        help("HUDStyle", "card-corners", "大卡片的圓角（TargetHUD、通知、藥水效果）。");
+        help("HUDStyle", "small-corners", "小方塊的圓角（模組清單每一行、按鍵、護甲格）。");
+        help("HUDStyle", "shadow", "面板外圍陰影的深淺；0 就沒有陰影。");
+        help("HUDStyle", "shadow-size", "陰影往外擴散多遠。");
+        help("HUDStyle", "outline", "面板加一圈細外框。");
+        help("HUDStyle", "outline-color", "外框的顏色。");
+        help("HUDStyle", "outline-opacity", "外框有多明顯。");
 
         // ============================================================ GROUPS
         g("KillAura2",

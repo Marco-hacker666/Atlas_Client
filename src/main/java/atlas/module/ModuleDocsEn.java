@@ -526,6 +526,16 @@ final class ModuleDocsEn {
         d("NameTagColors", "Theme group: name tag background and border colours.");
         d("WidgetColors", "Theme group: hotbar, radar and other widget colours.");
         d("EffectColors", "Theme group: hit particle colours.");
+        d("HUDStyle", "One look for every HUD panel: colour, opacity, corners, shadow and outline. The module list, TargetHUD, notifications, keystrokes and the rest change together. Off puts the default look back.");
+        help("HUDStyle", "panel-color", "The panels' fill colour.");
+        help("HUDStyle", "panel-opacity", "How opaque the panels are; 0 leaves no fill.");
+        help("HUDStyle", "card-corners", "Corner radius of the big cards (TargetHUD, notifications, effects).");
+        help("HUDStyle", "small-corners", "Corner radius of the small boxes (module-list rows, keys, armour slots).");
+        help("HUDStyle", "shadow", "How dark the shadow around panels is; 0 for none.");
+        help("HUDStyle", "shadow-size", "How far the shadow spreads.");
+        help("HUDStyle", "outline", "A thin outline around each panel.");
+        help("HUDStyle", "outline-color", "The outline's colour.");
+        help("HUDStyle", "outline-opacity", "How strong the outline is.");
 
         // ========================================================== HEADINGS
         heading("一般", "General");

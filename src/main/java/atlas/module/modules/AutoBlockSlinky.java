@@ -18,32 +18,32 @@ import net.minecraft.network.play.client.C02PacketUseEntity;
 import java.util.Random;
 
 /**
- * AutoBlock's Crab mode (2026-11-09, owner: "port Crab's Block Hit, as close as you can"). Crab client's Block Hit,
- * read from its DLL with Ghidra, turned out to be Slinky's Auto Block step for step (same settings, defaults and
- * order); this follows that, checked against OpenSlinky's readable reconstruction (logic/combat/auto_block.cpp).
- * No code of either is used.
+ * AutoBlock's Slinky mode (2026-11-09, owner: "merge Slinky and Crab"). Crab client's Block Hit, read from its DLL
+ * with Ghidra, turned out to be Slinky's Auto Block step for step; this follows that, checked against OpenSlinky's
+ * readable reconstruction (logic/combat/auto_block.cpp). No code of either is used. It replaces the earlier
+ * Slinky mode (ported 2026-10-19 from the leaked source) and the Crab mode, keeping the Slinky settings' keys.
  *
  * Each tick:
- * - Whether the use key is ours: with a sword in hand, left mouse held (left-mouse), right mouse held exactly when
- *   right-mouse is on, hurt at all (damaged), and hurt time no higher than max-hurt-time. While it is, the key is
- *   held down exactly while blocking (one more click each tick of it); when it stops being ours it goes back to
- *   what the player holds (up, while right-mouse is on).
+ * - Whether the use key is ours: with a sword in hand, left mouse held (require-left-click), right mouse held
+ *   exactly when require-right-click is on, hurt at all (require-damage), and hurt time no higher than
+ *   max-hurt-time. While it is, the key is held down exactly while blocking (one more click each tick of it); when
+ *   it stops being ours it goes back to what the player holds (up, while require-right-click is on).
  * - A hit landing on the player (hurt time 10) ends the re-block cooldown.
  * - An attack (the last-attacker time moving, looked at once 10 ticks have passed) or a new target ends a lag with
- *   prevent-delaying-attacks; otherwise the lag counts down. block-again-immediately: a lag ending ends the cooldown.
- * - Blocking: held for max-hold (or until the key is not ours), then let go; lag-chance of the time every outgoing
- *   packet is then held for lag-max (AutoBlock's blink).
- * - Not blocking: the key ours, the cooldown over and the target (under the crosshair, else the nearest) within
- *   range: press, a 10-tick cooldown, hold.
- * - right-mouse: no attack goes out while not blocking.
- * - animation: the sword drawn blocking while the key may be ours (only with the target in range, with
- *   animation-in-range).
- * Times are ticks (the settings are in ms, 50 a tick) and a fraction is a chance of one more tick.
+ *   lag-flush-on-attack; otherwise the lag counts down. lag-reblock: a lag ending ends the cooldown.
+ * - Blocking: held for max-hold-ticks (plus 0 to random-hold-ticks, drawn per block), or until the key is not
+ *   ours, then let go; lag-chance of the time every outgoing packet is then held for lag-ticks (AutoBlock's blink).
+ * - Not blocking: the key ours, the cooldown over (and block-cooldown-ms since the last block ended) and the target
+ *   (under the crosshair, else the nearest) within block-range: press, a 10-tick cooldown, hold.
+ * - require-right-click: no attack goes out while not blocking.
+ * - fake-animation: the sword drawn blocking while the key may be ours (only with the target in range, with
+ *   fake-animation-in-range).
  *
- * Different here: an attack packet during a lag lets the held packets go before it (with prevent-delaying-attacks;
- * the original notices the attack a tick later), and hands off while Silent Aura blocks by itself.
+ * Kept from the earlier Slinky mode (not in the original): random-hold-ticks and block-cooldown-ms (both 0, off, by
+ * default). Different here: an attack packet during a lag lets the held packets go before it (the original
+ * notices the attack a tick later), and hands off while Silent Aura blocks by itself.
  */
-final class AutoBlockCrab {
+final class AutoBlockSlinky {
     private static final Minecraft mc = Minecraft.getMinecraft();
     /** Ticks between two blocks starting, unless a hit on the player or block-again ends it sooner. */
     static final int COOLDOWN_TICKS = 10;
@@ -73,7 +73,7 @@ final class AutoBlockCrab {
     private boolean animationShown;
     private int animationCount = USE_DURATION;
 
-    AutoBlockCrab(BlockHit module) {
+    AutoBlockSlinky(BlockHit module) {
         this.module = module;
     }
 
@@ -94,9 +94,9 @@ final class AutoBlockCrab {
         return whole + (roll < value - whole ? 1 : 0);
     }
 
-    private int ticksOfMs(int ms) {
-        return ticks(ms / 50.0F, this.random.nextFloat());
-    }
+    /** Extra hold ticks drawn for the block running now (random-hold-ticks). */
+    private int extraHold;
+    private long blockEndedAt = -1L;
 
     void tick() {
         this.active = true;
@@ -128,17 +128,17 @@ final class AutoBlockCrab {
         if (!sword) {
             giveBack = this.keyOwned;
             skipKey = !giveBack;
-        } else if (this.module.crabLeftMouse.getValue() && !KeyBindUtil.isKeyDown(mc.gameSettings.keyBindAttack.getKeyCode())) {
+        } else if (this.module.sRequireLeft.getValue() && !KeyBindUtil.isKeyDown(mc.gameSettings.keyBindAttack.getKeyCode())) {
             giveBack = true;
         } else {
-            boolean needRight = this.module.crabRightMouse.getValue();
+            boolean needRight = this.module.sRequireRight.getValue();
             this.rightRequired = needRight;
             if (needRight != physicalUse()) {
                 giveBack = true;
             } else {
                 conditionsOk = true;
-                giveBack = hurt == 0 && this.module.crabDamaged.getValue()
-                        || hurt > ticksOfMs(this.module.crabMaxHurt.getValue());
+                giveBack = hurt == 0 && this.module.sRequireDamage.getValue()
+                        || hurt > this.module.sHurt.getValue();
             }
         }
         if (!skipKey) {
@@ -155,10 +155,10 @@ final class AutoBlockCrab {
         }
 
         EntityPlayer target = CombatTargeting.findTarget(TARGET_SEARCH * TARGET_SEARCH, true);
-        float range = this.module.crabRange.getValue();
+        float range = this.module.sRange.getValue();
         boolean inRange = target != null && mc.thePlayer.getDistanceSqToEntity(target) < range * range;
-        boolean animation = conditionsOk && this.module.crabAnimation.getValue()
-                && (!this.module.crabAnimationInRange.getValue() || inRange);
+        boolean animation = conditionsOk && this.module.sFake.getValue()
+                && (!this.module.sFakeInRange.getValue() || inRange);
         if (hurt == 10) {
             this.cooldown = 0;
         }
@@ -186,14 +186,14 @@ final class AutoBlockCrab {
         }
 
         if (this.lagTicks != 0) {
-            if (hit && this.module.crabPreventDelay.getValue()) {
+            if (hit && this.module.sLagFlush.getValue()) {
                 this.lagTicks = 0;
             } else {
                 this.lagTicks--;
             }
             if (this.lagTicks == 0) {
                 stopLag();
-                if (this.module.crabBlockAgain.getValue()) {
+                if (this.module.sLagReblock.getValue()) {
                     this.cooldown = 0;
                 }
             }
@@ -201,15 +201,16 @@ final class AutoBlockCrab {
 
         if (this.blocking) {
             this.heldTicks++;
-            if (keyOurs && this.heldTicks < ticksOfMs(this.module.crabMaxHold.getValue())) {
+            if (keyOurs && this.heldTicks < this.module.sHold.getValue() + this.extraHold) {
                 showAnimation(animation);
                 return;
             }
             setUseKey(false);
             this.keyOwned = true;
-            int chance = this.module.crabLagChance.getValue();
+            this.blockEndedAt = System.currentTimeMillis();
+            int chance = this.module.sLagChance.getValue();
             if (chance > 0 && this.random.nextFloat() * 100.0F < chance) {
-                this.lagTicks = ticksOfMs(this.module.crabLagMax.getValue());
+                this.lagTicks = this.module.sLagTicks.getValue();
                 if (this.lagTicks > 0) {
                     startLag();
                 }
@@ -219,7 +220,10 @@ final class AutoBlockCrab {
             return;
         }
 
-        if (keyOurs && this.cooldown == 0 && inRange) {
+        long since = this.blockEndedAt < 0L ? -1L : System.currentTimeMillis() - this.blockEndedAt;
+        if (keyOurs && this.cooldown == 0 && inRange
+                && !AutoBlockRules.coolingDown(this.module.sCooldown.getValue(), since)) {
+            this.extraHold = AutoBlockRules.extraHoldTicks(this.module.sRandomHold.getValue(), Math.random(), Math.random());
             setUseKey(true);
             click();
             this.keyOwned = true;
@@ -257,13 +261,13 @@ final class AutoBlockCrab {
 
     /** prevent-delaying-attacks: an attack lets the held packets go before it. */
     void onSend(PacketEvent event) {
-        if (!this.lagging || event.getType() != EventType.SEND || !this.module.crabPreventDelay.getValue()) {
+        if (!this.lagging || event.getType() != EventType.SEND || !this.module.sLagFlush.getValue()) {
             return;
         }
         if (event.getPacket() instanceof C02PacketUseEntity
                 && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK) {
             stopLag();
-            if (this.module.crabBlockAgain.getValue()) {
+            if (this.module.sLagReblock.getValue()) {
                 this.cooldown = 0;
             }
         }

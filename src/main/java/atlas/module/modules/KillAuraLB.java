@@ -6,7 +6,12 @@ import atlas.event.types.Priority;
 import atlas.events.MoveInputEvent;
 import atlas.events.TickEvent;
 import atlas.events.UpdateEvent;
+import atlas.lb.aiming.AimFeed;
+import atlas.lb.aiming.AimLibrary;
 import atlas.lb.aiming.AngleSmooth;
+import atlas.lb.aiming.NoiseAim;
+import atlas.lb.aiming.ReactionAim;
+import atlas.lb.aiming.RecordedAim;
 import atlas.lb.aiming.AuraRotations;
 import atlas.lb.aiming.PointTracker;
 import atlas.lb.aiming.Rotation;
@@ -131,31 +136,76 @@ public class KillAuraLB extends Module {
     public final BooleanProperty botCheck = new BooleanProperty("BotCheck", true);
     // ---- rotations
     public final ModeProperty angleSmooth = new ModeProperty("AngleSmooth", 0,
-            new String[]{"Linear", "Sigmoid", "Interpolation", "Acceleration", "AimAssist", "Tracking"});
+            new String[]{"Linear", "Sigmoid", "Interpolation", "Acceleration", "AimAssist", "Tracking", "Noise",
+                    "Noise-React", "Recorded"});
     /* AngleSmooth AimAssist (2026-10-25): Atlas's AimAssist "Smooth" turn and aim point, read every tick from
        the AimAssist module's own settings (horizontal-speed, vertical-speed, smoothing, lead, multipoint,
        strafe-increase), so it is tuned in one place; AimAssist itself may stay off. */
     private static final int SMOOTH_AIMASSIST = 4;
     /* AngleSmooth Tracking (2026-10-26): Atlas's PI turn with the target's speed fed forward (AngleSmooth.Tracking). */
     private static final int SMOOTH_TRACKING = 5;
+    /* 2026-11-10 (owner: "the Noise modes and AI rotations, for Polar"): Atlas's own versions of the ideas behind
+       Augustus's Noise rotations and its recorded "AI" rotations. NoiseAim: the speed and aim point drift with a
+       smooth noise, the turn accelerates and slows. ReactionAim: the hand reacts late, swings like a spring, never
+       holds still. RecordedAim: your own aim from the Recorder's aim files, played back by error. */
+    private static final int SMOOTH_NOISE = 6;
+    private static final int SMOOTH_REACT = 7;
+    private static final int SMOOTH_RECORDED = 8;
+    public final FloatRange noiseSpeed = new FloatRange("Noise-AimSpeed", 18.0F, 26.0F, 1.0F, 90.0F,
+            () -> this.angleSmooth.getValue() == SMOOTH_NOISE);
+    public final FloatProperty noiseAcceleration = new FloatProperty("Noise-Acceleration", 6.0F, 0.5F, 40.0F,
+            () -> this.angleSmooth.getValue() == SMOOTH_NOISE);
+    public final PercentProperty noiseResponse = new PercentProperty("Noise-Response", 45, 5, 100,
+            () -> this.angleSmooth.getValue() == SMOOTH_NOISE);
+    public final FloatProperty noiseSpreadYaw = new FloatProperty("Noise-SpreadYaw", 2.0F, 0.0F, 10.0F,
+            () -> this.angleSmooth.getValue() == SMOOTH_NOISE);
+    public final FloatProperty noiseSpreadPitch = new FloatProperty("Noise-SpreadPitch", 1.2F, 0.0F, 10.0F,
+            () -> this.angleSmooth.getValue() == SMOOTH_NOISE);
+    public final FloatProperty noiseScale = new FloatProperty("Noise-Scale", 0.08F, 0.01F, 0.5F,
+            () -> this.angleSmooth.getValue() == SMOOTH_NOISE);
+    public final PercentProperty noiseSway = new PercentProperty("Noise-SpeedSway", 25, 0, 100,
+            () -> this.angleSmooth.getValue() == SMOOTH_NOISE);
+    public final IntRange reactDelay = new IntRange("React-DelayTicks", 2, 4, 0, 10,
+            () -> this.angleSmooth.getValue() == SMOOTH_REACT);
+    public final FloatProperty reactStiffness = new FloatProperty("React-Stiffness", 0.22F, 0.02F, 1.0F,
+            () -> this.angleSmooth.getValue() == SMOOTH_REACT);
+    public final FloatProperty reactDamping = new FloatProperty("React-Damping", 0.72F, 0.05F, 1.0F,
+            () -> this.angleSmooth.getValue() == SMOOTH_REACT);
+    public final PercentProperty reactPrediction = new PercentProperty("React-Prediction", 60, 0, 100,
+            () -> this.angleSmooth.getValue() == SMOOTH_REACT);
+    public final FloatProperty reactTremor = new FloatProperty("React-Tremor", 0.12F, 0.0F, 1.0F,
+            () -> this.angleSmooth.getValue() == SMOOTH_REACT);
+    public final FloatRange reactMaxTurn = new FloatRange("React-MaxTurn", 25.0F, 40.0F, 1.0F, 180.0F,
+            () -> this.angleSmooth.getValue() == SMOOTH_REACT);
+    public final FloatProperty recordedFollow = new FloatProperty("Recorded-Follow", 4.0F, 0.5F, 15.0F,
+            () -> this.angleSmooth.getValue() == SMOOTH_RECORDED);
+    public final PercentProperty recordedStrength = new PercentProperty("Recorded-Strength", 100, 10, 100,
+            () -> this.angleSmooth.getValue() == SMOOTH_RECORDED);
+    /* Ticks the Recorder took while this aura was on (record-with-aura): your camera, but a lazier hand. */
+    public final BooleanProperty recordedUseAuraData = new BooleanProperty("Recorded-UseAuraData", true,
+            () -> this.angleSmooth.getValue() == SMOOTH_RECORDED);
+    /* 2026-11-10 (owner: "most people never open the Recorder"): Recorded records your aim by itself, nothing
+       switched off (TellyRecorder.startForAura). */
+    public final BooleanProperty recordedAutoRecord = new BooleanProperty("Recorded-AutoRecord", true,
+            () -> this.angleSmooth.getValue() == SMOOTH_RECORDED);
     public final FloatProperty trackingYawP = new FloatProperty("Tracking-YawP", 0.35F, 0.05F, 1.0F,
-            () -> this.angleSmooth.getValue() == SMOOTH_TRACKING);
+            () -> this.usesTracking());
     public final FloatProperty trackingPitchP = new FloatProperty("Tracking-PitchP", 0.25F, 0.05F, 1.0F,
-            () -> this.angleSmooth.getValue() == SMOOTH_TRACKING);
+            () -> this.usesTracking());
     public final FloatProperty trackingIntegral = new FloatProperty("Tracking-Integral", 0.04F, 0.0F, 0.3F,
-            () -> this.angleSmooth.getValue() == SMOOTH_TRACKING);
+            () -> this.usesTracking());
     public final FloatProperty trackingLeak = new FloatProperty("Tracking-IntegralLeak", 0.8F, 0.0F, 0.98F,
-            () -> this.angleSmooth.getValue() == SMOOTH_TRACKING);
+            () -> this.usesTracking());
     public final FloatProperty trackingFeedForward = new FloatProperty("Tracking-FeedForward", 0.9F, 0.0F, 1.5F,
-            () -> this.angleSmooth.getValue() == SMOOTH_TRACKING);
+            () -> this.usesTracking());
     public final PercentProperty trackingGainVariance = new PercentProperty("Tracking-GainVariance", 20, 0, 50,
-            () -> this.angleSmooth.getValue() == SMOOTH_TRACKING);
+            () -> this.usesTracking());
     public final FloatProperty trackingOnTarget = new FloatProperty("Tracking-OnTargetZone", 1.5F, 0.0F, 10.0F,
-            () -> this.angleSmooth.getValue() == SMOOTH_TRACKING);
+            () -> this.usesTracking());
     public final FloatRange trackingMaxYaw = new FloatRange("Tracking-MaxYawTurn", 30.0F, 45.0F, 1.0F, 180.0F,
-            () -> this.angleSmooth.getValue() == SMOOTH_TRACKING);
+            () -> this.usesTracking());
     public final FloatRange trackingMaxPitch = new FloatRange("Tracking-MaxPitchTurn", 15.0F, 25.0F, 1.0F, 90.0F,
-            () -> this.angleSmooth.getValue() == SMOOTH_TRACKING);
+            () -> this.usesTracking());
     public final FloatRange linearHorizontal = new FloatRange("HorizontalTurnSpeed", 180.0F, 180.0F, 0.0F, 180.0F,
             () -> this.angleSmooth.getValue() == 0);
     public final FloatRange linearVertical = new FloatRange("VerticalTurnSpeed", 180.0F, 180.0F, 0.0F, 180.0F,
@@ -436,6 +486,13 @@ public class KillAuraLB extends Module {
     private final AngleSmooth.Acceleration acceleration = new AngleSmooth.Acceleration();
     private final AngleSmooth.AimAssist aimAssistSmooth = new AngleSmooth.AimAssist();
     private final AngleSmooth.Tracking tracking = new AngleSmooth.Tracking();
+    private final NoiseAim noiseAim = new NoiseAim();
+    private final ReactionAim reactionAim = new ReactionAim();
+    private final RecordedAim recordedAim = new RecordedAim();
+    /** The aim files are read once per switch-on, off the client thread (0 not yet, 1 reading, 2 read). */
+    private volatile int recordingsRead;
+    /** This switch-on already asked the Recorder for a session (once: switching it off by hand is respected). */
+    private boolean autoRecordAsked;
     /** The target Tracking last drew its gains for. */
     private EntityLivingBase trackedTarget;
     private float scanAddition = -1.0F;
@@ -472,6 +529,8 @@ public class KillAuraLB extends Module {
 
     public KillAuraLB() {
         super("LiquidAura", false, false, "LiquidBounce's KillAura");
+        /* Rows the Recorder writes reach Recorded at once, so a recording made while playing counts straight away. */
+        AimFeed.listen(this.recordedAim::addLive);
         this.clicker.setEnforced(tick -> tick == 0 && damageHitDue());
     }
 
@@ -579,8 +638,61 @@ public class KillAuraLB extends Module {
         return this.blockVisual && this.autoBlocking.getValue() && ItemUtil.isHoldingSword();
     }
 
+    /** Ends the aim-only Recorder session this aura started, if it is still running. */
+    private void stopAutoRecord() {
+        this.autoRecordAsked = false;
+        TellyRecorder recorder = atlas.Atlas.moduleManager == null ? null
+                : (TellyRecorder) atlas.Atlas.moduleManager.modules.get(TellyRecorder.class);
+        if (recorder != null) {
+            recorder.stopForAura();
+        }
+    }
+
+    /** Tracking's settings: picked as the turn, or as Recorded's fallback. */
+    private boolean usesTracking() {
+        return this.angleSmooth.getValue() == SMOOTH_TRACKING || this.angleSmooth.getValue() == SMOOTH_RECORDED;
+    }
+
+    private void applyTracking() {
+        this.tracking.yawP = this.trackingYawP.getValue();
+        this.tracking.pitchP = this.trackingPitchP.getValue();
+        this.tracking.integral = this.trackingIntegral.getValue();
+        this.tracking.leak = this.trackingLeak.getValue();
+        this.tracking.feedForward = this.trackingFeedForward.getValue();
+        this.tracking.gainVariance = this.trackingGainVariance.getValue() / 100.0F;
+        this.tracking.onTargetZone = this.trackingOnTarget.getValue();
+        this.tracking.maxYawMin = this.trackingMaxYaw.low();
+        this.tracking.maxYawMax = this.trackingMaxYaw.high();
+        this.tracking.maxPitchMin = this.trackingMaxPitch.low();
+        this.tracking.maxPitchMax = this.trackingMaxPitch.high();
+    }
+
+    /** Reads the Recorder's aim files once per switch-on, on a thread of its own, and says what it found. */
+    private void readRecordings() {
+        if (this.recordingsRead != 0) {
+            return;
+        }
+        this.recordingsRead = 1;
+        Thread reader = new Thread(() -> {
+            AimLibrary library = AimLibrary.load(new java.io.File("./config/Atlas/recordings/"));
+            this.recordedAim.setLibrary(library);
+            this.recordingsRead = 2;
+            final String text = library.size() == 0
+                    ? "Recorded: no aim recordings yet (Recorder, record-combat). Using Tracking until there are."
+                    : "Recorded: " + library.size() + " ticks of your aim loaded.";
+            mc.addScheduledTask(() -> atlas.util.ChatUtil.sendFormatted(atlas.Atlas.clientName + "&7" + text));
+        }, "Atlas-AimLibrary");
+        reader.setDaemon(true);
+        reader.start();
+    }
+
     @Override
     public void onDisabled() {
+        /* The next switch-on reads the aim files again, so new recordings count. */
+        if (this.recordingsRead == 2) {
+            this.recordingsRead = 0;
+        }
+        stopAutoRecord();
         this.damageHits.clear();
         if (mc.thePlayer != null) {
             stopBlocking(false);
@@ -731,21 +843,54 @@ public class KillAuraLB extends Module {
                 break;
             }
             case SMOOTH_TRACKING:
-                this.tracking.yawP = this.trackingYawP.getValue();
-                this.tracking.pitchP = this.trackingPitchP.getValue();
-                this.tracking.integral = this.trackingIntegral.getValue();
-                this.tracking.leak = this.trackingLeak.getValue();
-                this.tracking.feedForward = this.trackingFeedForward.getValue();
-                this.tracking.gainVariance = this.trackingGainVariance.getValue() / 100.0F;
-                this.tracking.onTargetZone = this.trackingOnTarget.getValue();
-                this.tracking.maxYawMin = this.trackingMaxYaw.low();
-                this.tracking.maxYawMax = this.trackingMaxYaw.high();
-                this.tracking.maxPitchMin = this.trackingMaxPitch.low();
-                this.tracking.maxPitchMax = this.trackingMaxPitch.high();
+                applyTracking();
                 this.rotations.smooth = this.tracking;
+                break;
+            case SMOOTH_NOISE:
+                this.noiseAim.speedMin = this.noiseSpeed.low();
+                this.noiseAim.speedMax = this.noiseSpeed.high();
+                this.noiseAim.acceleration = this.noiseAcceleration.getValue();
+                this.noiseAim.response = this.noiseResponse.getValue() / 100.0F;
+                this.noiseAim.spreadYaw = this.noiseSpreadYaw.getValue();
+                this.noiseAim.spreadPitch = this.noiseSpreadPitch.getValue();
+                this.noiseAim.scale = this.noiseScale.getValue();
+                this.noiseAim.sway = this.noiseSway.getValue() / 100.0F;
+                this.rotations.smooth = this.noiseAim;
+                break;
+            case SMOOTH_REACT:
+                this.reactionAim.delayMin = this.reactDelay.low();
+                this.reactionAim.delayMax = this.reactDelay.high();
+                this.reactionAim.stiffness = this.reactStiffness.getValue();
+                this.reactionAim.damping = this.reactDamping.getValue();
+                this.reactionAim.prediction = this.reactPrediction.getValue() / 100.0F;
+                this.reactionAim.tremor = this.reactTremor.getValue();
+                this.reactionAim.maxTurnYaw = this.reactMaxTurn.high();
+                this.reactionAim.maxTurnPitch = Math.min(this.reactMaxTurn.low(), 90.0F);
+                this.rotations.smooth = this.reactionAim;
+                break;
+            case SMOOTH_RECORDED:
+                readRecordings();
+                this.recordedAim.follow = this.recordedFollow.getValue();
+                this.recordedAim.strength = this.recordedStrength.getValue() / 100.0F;
+                this.recordedAim.useAuraData = this.recordedUseAuraData.getValue();
+                /* No recording near this error (every first big turn to a new target, too): the Tracking turn, with
+                   the Tracking settings, which show under Recorded for that reason. */
+                applyTracking();
+                this.recordedAim.fallback = this.tracking;
+                this.rotations.smooth = this.recordedAim;
+                if (this.recordedAutoRecord.getValue() && !this.autoRecordAsked) {
+                    this.autoRecordAsked = true;
+                    TellyRecorder recorder = (TellyRecorder) atlas.Atlas.moduleManager.modules.get(TellyRecorder.class);
+                    if (recorder != null) {
+                        recorder.startForAura();
+                    }
+                }
                 break;
             default:
                 this.rotations.smooth = this.linear;
+        }
+        if (this.autoRecordAsked && (this.angleSmooth.getValue() != SMOOTH_RECORDED || !this.recordedAutoRecord.getValue())) {
+            stopAutoRecord();
         }
         this.rotations.movementCorrection = this.movementCorrection.getValue();
         this.rotations.resetThreshold = this.resetThreshold.getValue();

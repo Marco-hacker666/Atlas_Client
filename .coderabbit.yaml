@@ -1,0 +1,64 @@
+# CodeRabbit settings for Atlas Client.
+# Tuned for a solo project where most code is AI-written: catch real bugs, skip style nitpicks.
+# Reference: https://docs.coderabbit.ai/reference/configuration
+language: en-US
+tone_instructions: "Be brief and concrete. Lead with what breaks in game and how to fix it. No praise, no filler."
+reviews:
+  # chill = fewer nitpicks; real bugs are still reported.
+  profile: chill
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  suggested_labels: false
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+  path_filters:
+    - "!src/main/resources/assets/**/*.ttf"
+    - "!src/main/resources/assets/**/*.png"
+    - "!src/main/resources/assets/**/*.ogg"
+    - "!**/*.jar"
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        Only comment on problems that would break behaviour, crash, leak, or be unsafe. Skip naming, formatting and
+        refactoring suggestions. At most 5 comments per review unless there are more real blockers.
+    - path: "src/main/java/**/*.java"
+      instructions: |
+        This is a Minecraft Forge 1.8.9 client. Check especially:
+        - Thread safety: packet events (PacketEvent RECEIVE) run on the network thread; game state and key
+          bindings must only be touched on the client thread.
+        - Null safety: mc.thePlayer, mc.theWorld and mc.getNetHandler() can be null (menus, world changes).
+        - State left behind: a key binding pressed, a packet holder (blink/lag) or a timer left on when a module
+          is disabled, a mode is switched, the world changes or the player dies.
+        - Packet order: packets sent, held or cancelled must stay in the order vanilla would send them.
+        - Saved configs: renaming a module, a setting key or a mode must keep old configs loading
+          (ModeProperty.alias/retire, Config fallbacks).
+        - Settings shown in the menu need docs in both ModuleDocs and ModuleDocsEn.
+    - path: "src/main/java/**/mixin/**/*.java"
+      instructions: |
+        Mixins: check injection targets exist in 1.8.9 (MCP names), that a cancelled callback cannot skip
+        required vanilla work, and that @Inject/@Redirect conflicts with other mixins are unlikely.
+    - path: "src/test/**/*.java"
+      instructions: "Tests: only flag tests that cannot fail or that test the wrong thing."
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+    title:
+      mode: warning
+    description:
+      mode: warning
+chat:
+  auto_reply: true
+knowledge_base:
+  learnings:
+    scope: local

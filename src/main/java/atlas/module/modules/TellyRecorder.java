@@ -51,6 +51,15 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   tick. With only-bridging on, a player is recorded from PRE_ROLL ticks before a block appears under them until
  *   ACTIVE_TICKS after the last one, so the jump before the first block is in too.
  *
+ * Aim (2026-11-09, owner: "an ML rotation mode"): with record-combat, a second CSV (aim-<time>.csv) gets one row a
+ * tick while an enemy is within combat-range: your camera look, the enemy you are looking closest to, how far off
+ * your look is from the middle of its box (degrees), both positions, ground and hurt time, and the swings and
+ * attacks you sent that tick. That is what a model needs to learn how your hand follows a target.
+ *
+ * clean-recording switches off, for the recording, every module that would make the data not your own (anything
+ * that turns the look, clicks, holds or delays packets, changes your fight movement, or shows players through
+ * walls) and switches them back on after. Assist bit 8 marks a tick where one of them was on anyway.
+ *
  * Nothing leaves the computer. Other players are "e" plus the entity id and the world number, which means nothing
  * outside the recording: no names, no UUIDs, no server address.
  */
@@ -68,6 +77,29 @@ public class TellyRecorder extends Module {
     public final IntProperty range = new IntProperty("range", 24, 4, 64, this.recordOthers::getValue);
     public final BooleanProperty onlyBridging = new BooleanProperty("only-bridging", true, this.recordOthers::getValue);
     public final IntProperty maxFileMb = new IntProperty("max-file-mb", 100, 5, 1000);
+    public final BooleanProperty recordCombat = new BooleanProperty("record-combat", true);
+    public final IntProperty combatRange = new IntProperty("combat-range", 8, 3, 16, this.recordCombat::getValue);
+    public final BooleanProperty cleanRecording = new BooleanProperty("clean-recording", true);
+
+    static final String AIM_HEADER = "tick,target,yaw,pitch,err_yaw,err_pitch,dist,tx,ty,tz,px,py,pz,"
+            + "t_ground,p_ground,t_hurt,p_hurt,swings,attacks,attack_key,ping,assist";
+    /**
+     * Modules that would make a recording not the player's own: they turn the look, click or change hits, hold or
+     * delay packets, change fight movement, or show players through walls. clean-recording switches them off.
+     */
+    static final String[] NOT_OWN = {"KillAura", "AimAssist", "AutoClicker", "FreeLook", "Freecam", "Scaffold",
+            "Clutch", "Tower", "AutoRod", "ProjectileAimBot", "AutoHeadHitter", "AutoBedDef", "ThrowAura", "HitSelect",
+            "Hitflick", "NoDelay", "Piercing", "Reach", "HitBox", "BackTrack", "LagRange", "FakeLag", "ServerLag",
+            "KnockbackDelay", "Blink", "PingFix", "PingSpoof", "Timer", "TimerRange", "TickBase", "KeepRange",
+            "Velocity", "MoreKB", "SprintReset", "Wtap", "JumpReset", "Speed", "KeepSprint", "TargetStrafe",
+            "BlockHit", "ESP", "Pointers", "Indicators"};
+    static final int ASSIST_OTHER = 8;
+    private final List<Module> switchedOff = new ArrayList<Module>();
+    private File aimFile;
+    private final List<String> aimPending = new ArrayList<String>();
+    private int aimRows;
+    private final AtomicInteger swingsSent = new AtomicInteger();
+    private final AtomicInteger attacksSent = new AtomicInteger();
 
     /* Filled on the network thread, read on the client thread. */
     private final Map<Integer, float[]> looks = new ConcurrentHashMap<Integer, float[]>();
@@ -86,7 +118,8 @@ public class TellyRecorder extends Module {
     private int otherRows;
 
     public TellyRecorder() {
-        super("TellyRecorder", false);
+        /* 2026-11-09: "Recorder" now that it records fights too; old configs find it by its class name. */
+        super("Recorder", false);
     }
 
     @Override
@@ -103,6 +136,27 @@ public class TellyRecorder extends Module {
         this.pending.add(String.format(Locale.ROOT, "# atlas telly-recorder v1, sensitivity=%.4f",
                 mc.gameSettings == null ? 0.0F : mc.gameSettings.mouseSensitivity));
         this.pending.add(HEADER);
+        this.aimRows = 0;
+        this.aimFile = new File(DIR, this.file.getName().replace("telly-", "aim-"));
+        this.aimPending.add(this.pending.get(0).replace("telly-recorder", "aim-recorder"));
+        this.aimPending.add(AIM_HEADER);
+        this.swingsSent.set(0);
+        this.attacksSent.set(0);
+        this.switchedOff.clear();
+        if (this.cleanRecording.getValue()) {
+            StringBuilder names = new StringBuilder();
+            for (String name : NOT_OWN) {
+                Module module = atlas.Atlas.moduleManager.getModule(name);
+                if (module != null && module != this && module.isEnabled()) {
+                    module.setEnabled(false);
+                    this.switchedOff.add(module);
+                    names.append(names.length() == 0 ? "" : ", ").append(module.getName());
+                }
+            }
+            if (names.length() > 0) {
+                say("Switched off for a clean recording: &f" + names + "&7 (back on when you stop).");
+            }
+        }
         say("Recording to &f" + this.file.getPath() + "&7. Turn it off to save.");
     }
 
@@ -113,6 +167,18 @@ public class TellyRecorder extends Module {
             say(String.format("Saved &f%d&7 rows of you and &f%d&7 of others to &f%s", this.selfRows,
                     this.otherRows, this.file.getPath()));
         }
+        if (this.aimFile != null && this.aimRows > 0) {
+            say(String.format("Saved &f%d&7 aim rows to &f%s", this.aimRows, this.aimFile.getPath()));
+        }
+        for (Module module : this.switchedOff) {
+            if (!module.isEnabled()) {
+                module.setEnabled(true);
+            }
+        }
+        if (!this.switchedOff.isEmpty()) {
+            say("Switched back on: the modules turned off for the recording.");
+        }
+        this.switchedOff.clear();
         this.clearWorld();
     }
 
@@ -133,6 +199,14 @@ public class TellyRecorder extends Module {
     @EventTarget(Priority.LOWEST)
     public void onPacket(PacketEvent event) {
         if (event.getType() == EventType.SEND) {
+            if (event.getPacket() instanceof net.minecraft.network.play.client.C0APacketAnimation && !event.isCancelled()) {
+                this.swingsSent.incrementAndGet();
+            } else if (event.getPacket() instanceof net.minecraft.network.play.client.C02PacketUseEntity
+                    && !event.isCancelled()
+                    && ((net.minecraft.network.play.client.C02PacketUseEntity) event.getPacket()).getAction()
+                    == net.minecraft.network.play.client.C02PacketUseEntity.Action.ATTACK) {
+                this.attacksSent.incrementAndGet();
+            }
             if (event.getPacket() instanceof C08PacketPlayerBlockPlacement && !event.isCancelled()) {
                 BlockPos pos = ((C08PacketPlayerBlockPlacement) event.getPacket()).getPosition();
                 if (pos != null && pos.getY() >= 0) {
@@ -183,8 +257,17 @@ public class TellyRecorder extends Module {
         } else {
             this.appeared.clear();
         }
+        int swings = this.swingsSent.getAndSet(0);
+        int attacks = this.attacksSent.getAndSet(0);
+        if (this.recordCombat.getValue()) {
+            this.recordAim(swings, attacks);
+        }
         if (this.tick % 20 == 0) {
             this.flush();
+        }
+        if (this.tick % 20 == 0 && !this.aimPending.isEmpty() && this.aimFile != null) {
+            AsyncLog.append(this.aimFile, new ArrayList<String>(this.aimPending));
+            this.aimPending.clear();
         }
         if (this.bytes > this.maxFileMb.getValue() * 1024L * 1024L) {
             say("The file reached max-file-mb.");
@@ -209,16 +292,98 @@ public class TellyRecorder extends Module {
                 mc.thePlayer.movementInput.moveForward, mc.thePlayer.movementInput.moveStrafe,
                 mc.gameSettings.keyBindJump.isKeyDown(), mc.gameSettings.keyBindSneak.isKeyDown(),
                 mc.thePlayer.isSprinting(), mc.gameSettings.keyBindUseItem.isKeyDown(), places, ping,
-                assisted()), true);
+                this.assisted()), true);
     }
 
     static final int ASSIST_PLACING = 1;
     static final int ASSIST_EDGE = 2;
     static final int ASSIST_LOOK = 4;
 
-    private static int assisted() {
+    private int assisted() {
         return (on(Scaffold.class) || on(Clutch.class) ? ASSIST_PLACING : 0) | (on(Eagle.class) ? ASSIST_EDGE : 0)
-                | (lookMoved() ? ASSIST_LOOK : 0);
+                | (lookMoved() ? ASSIST_LOOK : 0) | (notOwnOn() ? ASSIST_OTHER : 0);
+    }
+
+    private boolean notOwnOn() {
+        for (String name : NOT_OWN) {
+            Module module = atlas.Atlas.moduleManager.getModule(name);
+            if (module != null && module != this && module.isEnabled()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** One aim row while an enemy is within combat-range: the one your look is closest to. */
+    private void recordAim(int swings, int attacks) {
+        double range = this.combatRange.getValue();
+        double ex = mc.thePlayer.posX;
+        double ey = mc.thePlayer.posY + mc.thePlayer.getEyeHeight();
+        double ez = mc.thePlayer.posZ;
+        float yaw = mc.thePlayer.rotationYaw;
+        float pitch = mc.thePlayer.rotationPitch;
+        EntityPlayer best = null;
+        float[] bestErr = null;
+        float bestOff = Float.MAX_VALUE;
+        for (EntityPlayer player : mc.theWorld.playerEntities) {
+            if (player == mc.thePlayer || player.isDead || player.getHealth() <= 0.0F
+                    || player.getDistanceToEntity(mc.thePlayer) > range || atlas.util.TeamUtil.isFriend(player)
+                    || atlas.util.TeamUtil.isSameTeam(player) || atlas.util.TeamUtil.isBot(player)) {
+                continue;
+            }
+            net.minecraft.util.AxisAlignedBB box = player.getEntityBoundingBox();
+            float[] err = aimError(yaw, pitch, ex, ey, ez, (box.minX + box.maxX) / 2.0, (box.minY + box.maxY) / 2.0,
+                    (box.minZ + box.maxZ) / 2.0);
+            float off = err[0] * err[0] + err[1] * err[1];
+            if (off < bestOff) {
+                bestOff = off;
+                best = player;
+                bestErr = err;
+            }
+        }
+        if (best == null) {
+            return;
+        }
+        int ping = 0;
+        if (mc.getNetHandler() != null) {
+            NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(mc.thePlayer.getUniqueID());
+            ping = info == null ? 0 : info.getResponseTime();
+        }
+        String line = String.format(Locale.ROOT,
+                "%d,e%dw%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+                this.tick, best.getEntityId(), this.world, yaw, pitch, bestErr[0], bestErr[1],
+                best.getDistanceToEntity(mc.thePlayer), best.posX, best.posY, best.posZ, mc.thePlayer.posX,
+                mc.thePlayer.posY, mc.thePlayer.posZ, best.onGround ? 1 : 0, mc.thePlayer.onGround ? 1 : 0,
+                best.hurtTime, mc.thePlayer.hurtTime, swings, attacks,
+                mc.gameSettings.keyBindAttack.isKeyDown() ? 1 : 0, ping, assisted());
+        this.aimPending.add(line);
+        this.bytes += line.length() + 1;
+        this.aimRows++;
+    }
+
+    /**
+     * How far the look is from a point, in degrees: [yaw, pitch], each from the look to the point (positive: the point
+     * is to the right of / below the look), yaw wrapped to -180..180.
+     */
+    static float[] aimError(float yaw, float pitch, double ex, double ey, double ez, double x, double y, double z) {
+        double dx = x - ex;
+        double dy = y - ey;
+        double dz = z - ez;
+        float wantYaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
+        float wantPitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
+        float yawErr = wrap(wantYaw - yaw);
+        return new float[]{yawErr, wantPitch - pitch};
+    }
+
+    static float wrap(float degrees) {
+        float d = degrees % 360.0F;
+        if (d >= 180.0F) {
+            d -= 360.0F;
+        }
+        if (d < -180.0F) {
+            d += 360.0F;
+        }
+        return d;
     }
 
     /** A module that turns the camera itself is on; Silent Aura only on the modes that turn it. */

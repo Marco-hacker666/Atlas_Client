@@ -614,12 +614,15 @@ public final class ModuleDocs {
         help("Pointers", "scale", "箭頭大小。");
         help("Pointers", "radius", "圓圈半徑。");
         help("Pointers", "distance-radius", "越遠的人箭頭離準心越遠。");
-        d("TellyRecorder", "錄下真人怎麼疊橋（Telly），之後用來讓 Speed Telly 更像真人。開著就會錄，關掉就存檔，檔案在 config/Atlas/recordings。會錄你自己（視角、位置、按鍵、放方塊；開著 Scaffold、Clutch 或 BridgeAssist 的 tick 會標記起來；BridgeAssist 只會自動蹲，不影響視角和點擊，所以開著它錄也可以用；AimAssist、Silent Aura 的 Legit／LockView 轉頭等會自己動視角的功能開著時也會標記，那些 tick 不會拿來用）和附近的其他玩家（伺服器傳來的原始視角和位置，以及他們腳下出現的方塊）。資料只存在你電腦裡；其他玩家只記成編號，不記名字、UUID 或伺服器位址。");
+        d("TellyRecorder", "錄製真人的數據（模組名稱：Recorder）：疊橋和打架。錄下真人怎麼疊橋（Telly），之後用來讓 Speed Telly 更像真人。開著就會錄，關掉就存檔，檔案在 config/Atlas/recordings。會錄你自己（視角、位置、按鍵、放方塊；開著 Scaffold、Clutch 或 BridgeAssist 的 tick 會標記起來；BridgeAssist 只會自動蹲，不影響視角和點擊，所以開著它錄也可以用；AimAssist、Silent Aura 的 Legit／LockView 轉頭等會自己動視角的功能開著時也會標記，那些 tick 不會拿來用）和附近的其他玩家（伺服器傳來的原始視角和位置，以及他們腳下出現的方塊）。資料只存在你電腦裡；其他玩家只記成編號，不記名字、UUID 或伺服器位址。");
         help("TellyRecorder", "record-self", "錄你自己。錄的時候請關掉 Scaffold 和 Clutch，自己疊；BridgeAssist 可以開。");
         help("TellyRecorder", "record-others", "錄附近的其他玩家。");
         help("TellyRecorder", "range", "多遠內的玩家才錄（格）。");
         help("TellyRecorder", "only-bridging", "只錄正在疊橋的人：他們腳下出現方塊前 2 秒到最後一個方塊後 3 秒。關掉就錄範圍內所有人。");
         help("TellyRecorder", "max-file-mb", "檔案到這個大小就自動停止。");
+        help("TellyRecorder", "record-combat", "打架時另外存一個 aim-時間.csv：敵人在 combat-range 內時，每個 tick 記錄你的視角、你看得最接近的那個敵人、你的準星離他身體中心差幾度、兩邊的位置、受傷時間，以及你這個 tick 揮了幾下、打到幾下。這是訓練 ML 轉頭用的數據。");
+        help("TellyRecorder", "combat-range", "敵人在幾格內才算在打架、開始記錄。");
+        help("TellyRecorder", "clean-recording", "開始錄的時候，自動關掉所有會讓數據不是你自己手的模組（會動視角、改點擊、扣或延遲封包、改戰鬥走位、透視玩家的），停止錄的時候再打開回來。錄的時候如果又開了其中一個，那些 tick 會被標記。");
         d("PingFix", "延遲類功能扣住封包時，Keep-Alive 封包照常立刻送出／處理，Tab 顯示的 ping 維持你的真實 ping，不會跟著暴增。會讓 PingSpoof 和 Disabler 扣不住 Keep-Alive。（來源：Slinky）");
         d("ItemUseFix", "挖方塊時也能使用物品（吃東西、舉劍、丟東西）：原版挖方塊時右鍵會被忽略。（來源：Slinky）");
         help("KeepSprint", "motion-min", "打中人時保留多少速度（%，每下從 min～max 之間隨機）。100＝完全不減速，60＝原版。參考 LiquidBounce NextGen。");

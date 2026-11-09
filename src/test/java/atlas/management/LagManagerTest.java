@@ -220,4 +220,43 @@ public class LagManagerTest {
         lag.handlePacket(new C00PacketKeepAlive());
         assertTrue(lag.packetQueue.isEmpty());
     }
+
+    /**
+     * 2026-11-10: a server teleport froze the game. Dropping the queue sent
+     * each transaction reply back through the mixin, which held it again
+     * while a delay was set -- an endless loop holding the lock. Here send()
+     * does what the mixin does: offers the packet unless this thread flushes.
+     */
+    @Test
+    public void droppingOnATeleportSendsEachReplyOnceAndEnds() throws Exception {
+        final List<Packet<?>> wire = Collections.synchronizedList(new ArrayList<Packet<?>>());
+        final LagManager lag = new LagManager() {
+            @Override
+            protected boolean connected() {
+                return true;
+            }
+
+            @Override
+            protected void send(Packet<?> packet) {
+                if (!isFlushing() && handlePacket(packet)) {
+                    return;
+                }
+                wire.add(packet);
+            }
+        };
+        lag.setDelay(3);
+        net.minecraft.network.play.client.C0FPacketConfirmTransaction reply =
+                new net.minecraft.network.play.client.C0FPacketConfirmTransaction(0, (short) -7, true);
+        assertTrue(lag.handlePacket(new Numbered(1)));
+        assertTrue(lag.handlePacket(reply));
+        assertTrue(lag.handlePacket(new Numbered(2)));
+
+        Thread worker = new Thread(() -> lag.dropForWorldChange(true));
+        worker.setDaemon(true);
+        worker.start();
+        worker.join(2000L);
+        assertFalse("dropping the queue never finished", worker.isAlive());
+        assertEquals(Collections.<Packet<?>>singletonList(reply), new ArrayList<Packet<?>>(wire));
+        assertTrue(lag.packetQueue.isEmpty());
+    }
 }

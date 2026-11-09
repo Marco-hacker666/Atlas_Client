@@ -31,7 +31,10 @@ import net.minecraft.util.AxisAlignedBB;
 public class Speed extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"default", "legit", "polar", "vulcan", "grimac", "intave", "blocksmc", "hypixel", "hypixel-low", "matrix", "strafe", "vanilla"});
+    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"default", "legit", "polar", "vulcan", "grimac", "intave", "blocksmc", "hypixel", "hypixel-low", "matrix", "strafe", "vanilla"})
+            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
+               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+            .hide("vulcan", "blocksmc", "hypixel", "hypixel-low", "matrix");
 
     public final FloatProperty multiplier = new FloatProperty("multiplier", 1.0F, 0.0F, 10.0F);
     public final FloatProperty friction = new FloatProperty("friction", 1.0F, 0.0F, 10.0F);

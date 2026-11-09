@@ -342,6 +342,9 @@ public class KillAura extends Module {
         this.sort = new ModeProperty("Sort", 1, new String[]{"Distance", "Health", "HurtTime", "FOV"});
         this.autoBlock = new ModeProperty("auto-block", 3, new String[]{"NONE", "VANILLA", "SPOOF", "HYPIXEL", "BLINK", "INTERACT", "SWAP", "LEGIT", "FAKE", "Morden", "SameTick",
                 "Yuri-Hypixel", "Yuri-Legit", "Yuri-NCP", "Yuri-Vanilla"})
+            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
+               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+            .hide("Yuri-Hypixel", "Yuri-NCP", "Yuri-Vanilla")
                 /* 2026-10-08: the menu keeps the tuned modes; the rest stay
                    in the code for old configs. */
                 .hide("VANILLA", "SPOOF", "BLINK", "INTERACT", "SWAP", "FAKE", "Morden")

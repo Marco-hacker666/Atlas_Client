@@ -54,7 +54,10 @@ import java.util.Random;
 public class NoSlow extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "NG-Reuse", "NG-Switch", "NG-Interact", "NG-Blink", "NG-Grim2364", "NG-Grim2371", "Grim-Alternate", "Hit-Window"});
+    public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "NG-Reuse", "NG-Switch", "NG-Interact", "NG-Blink", "NG-Grim2364", "NG-Grim2371", "Grim-Alternate", "Hit-Window"})
+            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
+               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+            .hide("Hypixel", "NCP", "NewNCP", "Watchdog", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "HypixelNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "NG-Reuse", "NG-Switch", "NG-Interact", "NG-Grim2364", "NG-Grim2371");
     /* Hit-Window (2026-10-20): the sword up on the server only around the next hit, see NoSlowHitWindow. */
     private final java.util.function.BooleanSupplier hwShown = () -> NoSlowHitWindow.MODE.equals(this.swordMode.getModeString());
     public final IntProperty hwOpenHurt = new IntProperty("HW Open Hurt", 2, 0, 8, hwShown);
@@ -77,10 +80,16 @@ public class NoSlow extends Module {
     public final PercentProperty swordMotion = new PercentProperty("Sword Motion", 100, () -> this.swordMode.getValue() != 0);
     public final BooleanProperty swordSprint = new BooleanProperty("Sword Sprint", true, () -> this.swordMode.getValue() != 0);
     public final BooleanProperty onlyKillAuraAutoBlock = new BooleanProperty("Only Kill Aura Auto Block", false, () -> this.swordMode.getValue() != 0);
-    public final ModeProperty foodMode = new ModeProperty("Food Mode", 0, new String[]{"None", "Vanilla", "Float", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "Grim-Alternate"});
+    public final ModeProperty foodMode = new ModeProperty("Food Mode", 0, new String[]{"None", "Vanilla", "Float", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "Grim-Alternate"})
+            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
+               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+            .hide("Float", "NCP", "NewNCP", "Watchdog", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "HypixelNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19");
     public final PercentProperty foodMotion = new PercentProperty("Food Motion", 100, () -> this.foodMode.getValue() != 0);
     public final BooleanProperty foodSprint = new BooleanProperty("Food Sprint", true, () -> this.foodMode.getValue() != 0);
-    public final ModeProperty bowMode = new ModeProperty("Bow Mode", 0, new String[]{"None", "Vanilla", "Float", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "Grim-Alternate"});
+    public final ModeProperty bowMode = new ModeProperty("Bow Mode", 0, new String[]{"None", "Vanilla", "Float", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "Grim-Alternate"})
+            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
+               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+            .hide("Float", "NCP", "NewNCP", "Watchdog", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "HypixelNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19");
     public final PercentProperty bowMotion = new PercentProperty("Bow Motion", 100, () -> this.bowMode.getValue() != 0);
     public final BooleanProperty bowSprint = new BooleanProperty("Bow Sprint", true, () -> this.bowMode.getValue() != 0);
 

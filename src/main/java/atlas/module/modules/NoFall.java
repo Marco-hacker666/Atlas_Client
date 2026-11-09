@@ -42,7 +42,10 @@ public class NoFall extends Module {
     private double timerRepdist = 0.0;
     private int voidCacheTick = -1;
     private boolean voidCacheResult = true;
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"PACKET", "BLINK", "NO_GROUND", "SPOOF", "LEGIT", "VULCAN", "TIMER", "OnGround1", "OnGround2", "MatrixSpoof", "HypixelNoGround"});
+    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"PACKET", "BLINK", "NO_GROUND", "SPOOF", "LEGIT", "VULCAN", "TIMER", "OnGround1", "OnGround2", "MatrixSpoof", "HypixelNoGround"})
+            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
+               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+            .hide("VULCAN", "OnGround1", "OnGround2", "MatrixSpoof", "HypixelNoGround");
     public final FloatProperty distance = new FloatProperty("distance", 3.0F, 0.0F, 20.0F);
     public final IntProperty delay = new IntProperty("delay", 0, 0, 10000);
     public final FloatProperty vulcanFall = new FloatProperty("vulcan-fall", 7.0F, 3.0F, 12.0F, () -> mode.getValue() == 5);

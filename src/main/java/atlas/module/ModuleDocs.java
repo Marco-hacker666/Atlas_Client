@@ -716,6 +716,7 @@ public final class ModuleDocs {
         d("ClientSpoofer", "偽裝回報給伺服器的客戶端品牌。");
         // ------------------------------------------------------------ CLIENT
         d("ClickGUIModule", "點擊選單的樣式設定：外觀、顏色、視窗大小。");
+        d("ThemeGUI", "用自己的按鍵打開 Theme 視窗（所有顏色和外觀都在裡面），不用先開選單。先用 .bind ThemeGUI 按鍵 綁定。");
         d("GuiModule", "開啟點擊選單（預設右 Shift）。");
         d("MoveCheck", "只記錄、不改任何東西：檢查你的移動跟送出的視角對不對得上，寫進 moves-*.txt。");
         help("MoveCheck", "threshold", "移動差多少格才算對不上。");

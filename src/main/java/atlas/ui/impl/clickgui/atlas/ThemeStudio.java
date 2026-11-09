@@ -112,6 +112,8 @@ public final class ThemeStudio extends GuiScreen {
     }
 
     private final AtlasClickGui gui;
+    /** Where Esc goes: the menu that opened the window, or null for the game (ThemeGUI's key). */
+    private final GuiScreen back;
     private final AtlasTheme theme;
     private final UiContext ui = new UiContext();
     /* The window pops from 94% on a spring that overshoots a little, fading in over its first fifth of a second. */
@@ -177,7 +179,13 @@ public final class ThemeStudio extends GuiScreen {
     private long savedReadAt;
 
     public ThemeStudio(AtlasClickGui gui) {
+        this(gui, gui);
+    }
+
+    /** Opened on its own (ThemeGUI): {@code back} is the screen to return to, null for the game. */
+    public ThemeStudio(AtlasClickGui gui, GuiScreen back) {
         this.gui = gui;
+        this.back = back;
         this.theme = gui.theme();
     }
 
@@ -457,7 +465,7 @@ public final class ThemeStudio extends GuiScreen {
         float fade = this.closing ? clamp01(1.0F - this.openedFor / 0.14F)
                 : this.ui.animations ? clamp01(this.openedFor / 0.18F) : 1.0F;
         if (this.closing && fade <= 0.0F) {
-            this.mc.displayGuiScreen(this.gui);
+            this.mc.displayGuiScreen(this.back);
             return;
         }
         fade = fade * fade * (3.0F - 2.0F * fade);
@@ -538,7 +546,7 @@ public final class ThemeStudio extends GuiScreen {
         Liquid.line(closeX + 13.5F, cy - 3.5F, closeX + 6.5F, cy + 3.5F, 1.3F, AtlasStyle.text);
         hit("close", null, closeX, cy - 10, closeX + 20, cy + 10);
         if (overClose) {
-            this.hint = "Back to the menu  ·  Esc";
+            this.hint = (this.back == null ? "Back to the game" : "Back to the menu") + "  ·  Esc";
         }
 
         float edge = closeX - 8;

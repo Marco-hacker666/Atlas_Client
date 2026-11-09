@@ -184,4 +184,44 @@ public class NoiseAndRecordedAimTest {
         AimFeed.publish("x");
         assertEquals(java.util.Collections.singletonList("x"), got);
     }
+
+    @Test
+    public void aNewTargetIsNoticedLateToo() {
+        ReactionAim aim = new ReactionAim();
+        aim.delayMin = 3;
+        aim.delayMax = 3;
+        aim.tremor = 0.0F;
+        Rotation look = new Rotation(0.0F, 0.0F);
+        Rotation target = new Rotation(15.0F, 0.0F);
+        float[] yaws = new float[6];
+        for (int i = 0; i < yaws.length; i++) {
+            look = aim.process(live(target), look, target);
+            yaws[i] = look.yaw;
+        }
+        assertEquals(0.0F, yaws[0], 1e-3F);
+        assertEquals(0.0F, yaws[2], 1e-3F);
+        assertTrue(yaws[3] > 0.0F);
+    }
+
+    @Test
+    public void tremorStaysWithinItsSize() {
+        ReactionAim aim = new ReactionAim();
+        aim.delayMin = 0;
+        aim.delayMax = 0;
+        aim.tremor = 0.5F;
+        Rotation target = new Rotation(0.0F, 0.0F);
+        Rotation look = target;
+        for (int i = 0; i < 2000; i++) {
+            look = aim.process(live(target), look, target);
+            assertTrue("drifted to " + look.yaw, Math.abs(look.yaw) < 1.5F);
+        }
+    }
+
+    @Test
+    public void liveRowsWithoutAHeaderUseTheRecorderColumns() {
+        AimLibrary library = new AimLibrary();
+        library.addLive(row(1, "a", 0.0F, 0.0F, 10.0F, 0.0F, 0));
+        library.addLive(row(2, "a", 4.0F, 0.0F, 6.0F, 0.0F, 0));
+        assertEquals(1, library.size());
+    }
 }

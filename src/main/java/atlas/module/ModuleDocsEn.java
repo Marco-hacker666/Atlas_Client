@@ -783,6 +783,7 @@ final class ModuleDocsEn {
         help("LiquidAura", "Recorded-Follow", "Recorded: how far a recorded turn may drift from what is happening now before another one is picked. Higher keeps your turns whole.");
         help("LiquidAura", "Recorded-Strength", "Recorded: how much of each recorded turn is used.");
         help("LiquidAura", "Recorded-UseAuraData", "Recorded: also use what the Recorder took while this aura was on (record-with-aura). That is still your camera, but a hand that knows the aura is hitting often aims less carefully.");
+        help("LiquidAura", "Recorded-AutoRecord", "Recorded: record your aim by itself while the aura is on, so Recorded keeps learning. Nothing is switched off and no bridging file is made; it uses the Recorder's aim-fov and only-when-clicking. A Recorder you started yourself is left alone, and switching the Recorder off stops it until the aura is switched on again.");
         help("TellyRecorder", "record-with-aura", "Keep Silent Aura on while recording aim. Its turns are silent, so the camera is still your hand. Not recorded while MovementCorrection is ChangeLook (the aura moves the camera then). Those ticks are marked so Recorded can leave them out.");
         help("TellyRecorder", "aura-target", "With record-with-aura: record against the enemy the aura is fighting, not the one nearest your look.");
         help("TellyRecorder", "aim-fov", "Only record ticks where your look is within this many degrees of the target, so looking away teaches nothing.");

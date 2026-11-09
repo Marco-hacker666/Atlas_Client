@@ -71,6 +71,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  * the last second) and aura-target (the enemy the aura is fighting, rather than the one nearest your look). Every row
  * also goes straight to Silent Aura's Recorded turn (AimFeed), so it learns while you play.
  *
+ * Started by Silent Aura (2026-11-10, owner: "most people never open the Recorder"): with AngleSmooth Recorded and
+ * Recorded-AutoRecord on, Silent Aura switches this module on for an aim-only session (startForAura): no bridging
+ * file, nothing switched off, the aura's ticks kept as with record-with-aura, and the aim-fov / only-when-clicking
+ * filters as set here. It ends with the aura (stopForAura). A Recorder you switched on yourself is left alone.
+ *
  * Nothing leaves the computer. Other players are "e" plus the entity id and the world number, which means nothing
  * outside the recording: no names, no UUIDs, no server address.
  */
@@ -99,23 +104,24 @@ public class TellyRecorder extends Module {
     public final BooleanProperty onlyWhenClicking = new BooleanProperty("only-when-clicking", true,
             this.recordCombat::getValue);
 
-    static final String AIM_HEADER = "tick,target,yaw,pitch,err_yaw,err_pitch,dist,tx,ty,tz,px,py,pz,"
-            + "t_ground,p_ground,t_hurt,p_hurt,swings,attacks,attack_key,ping,assist";
+    static final String AIM_HEADER = AimLibrary.AIM_HEADER;
     /**
      * Modules that would make a recording not the player's own: they turn the look, click or change hits, hold or
      * delay packets, change fight movement, or show players through walls. clean-recording switches them off.
      */
-    static final String[] NOT_OWN = {"KillAura", "AimAssist", "AutoClicker", "FreeLook", "Freecam", "Scaffold",
+    static final String[] NOT_OWN = {"Silent Aura", "AimAssist", "AutoClicker", "FreeLook", "Freecam", "Scaffold",
             "Clutch", "Tower", "AutoRod", "ProjectileAimBot", "AutoHeadHitter", "AutoBedDef", "ThrowAura", "HitSelect",
             "Hitflick", "NoDelay", "Piercing", "Reach", "HitBox", "BackTrack", "LagRange", "FakeLag", "ServerLag",
             "KnockbackDelay", "Blink", "PingFix", "PingSpoof", "Timer", "TimerRange", "TickBase", "KeepRange",
             "Velocity", "MoreKB", "SprintReset", "Wtap", "JumpReset", "Speed", "KeepSprint", "TargetStrafe",
-            "BlockHit", "ESP", "Pointers", "Indicators"};
+            "AutoBlock", "ESP", "Pointers", "Indicators"};
     static final int ASSIST_OTHER = 8;
     static final int ASSIST_AURA = AimLibrary.ASSIST_AURA;
     /** How recent a swing or the attack key must be for only-when-clicking. */
     static final long CLICK_WINDOW_MS = 1000L;
     private long lastClickAt;
+    /** Switched on by Silent Aura for Recorded: aim only, nothing switched off. */
+    private boolean auraSession;
     private final List<Module> switchedOff = new ArrayList<Module>();
     private File aimFile;
     private final List<String> aimPending = new ArrayList<String>();
@@ -155,17 +161,24 @@ public class TellyRecorder extends Module {
         this.otherRows = 0;
         this.clearWorld();
         this.placesSent.set(0);
-        this.pending.add(String.format(Locale.ROOT, "# atlas telly-recorder v1, sensitivity=%.4f",
-                mc.gameSettings == null ? 0.0F : mc.gameSettings.mouseSensitivity));
-        this.pending.add(HEADER);
+        String version = String.format(Locale.ROOT, "# atlas telly-recorder v1, sensitivity=%.4f",
+                mc.gameSettings == null ? 0.0F : mc.gameSettings.mouseSensitivity);
+        if (!this.auraSession) {
+            this.pending.add(version);
+            this.pending.add(HEADER);
+        }
         this.aimRows = 0;
         this.aimFile = new File(DIR, this.file.getName().replace("telly-", "aim-"));
-        this.aimPending.add(this.pending.get(0).replace("telly-recorder", "aim-recorder"));
+        this.aimPending.add(version.replace("telly-recorder", "aim-recorder"));
         this.aimPending.add(AIM_HEADER);
         AimFeed.publish(AIM_HEADER);
         this.swingsSent.set(0);
         this.attacksSent.set(0);
         this.switchedOff.clear();
+        if (this.auraSession) {
+            say("Recording your aim for Silent Aura's Recorded turn; nothing is switched off. It stops with the aura.");
+            return;
+        }
         if (this.cleanRecording.getValue()) {
             StringBuilder names = new StringBuilder();
             for (String name : NOT_OWN) {
@@ -186,6 +199,20 @@ public class TellyRecorder extends Module {
     @Override
     public void onDisabled() {
         this.flush();
+        /* The last second of aim rows too: they were only written every 20 ticks. */
+        if (!this.aimPending.isEmpty() && this.aimFile != null) {
+            AsyncLog.append(this.aimFile, new ArrayList<String>(this.aimPending));
+            this.aimPending.clear();
+        }
+        boolean session = this.auraSession;
+        this.auraSession = false;
+        if (session) {
+            if (this.aimRows > 0) {
+                say(String.format("Saved &f%d&7 aim rows to &f%s", this.aimRows, this.aimFile.getPath()));
+            }
+            this.clearWorld();
+            return;
+        }
         if (this.file != null) {
             say(String.format("Saved &f%d&7 rows of you and &f%d&7 of others to &f%s", this.selfRows,
                     this.otherRows, this.file.getPath()));
@@ -272,17 +299,17 @@ public class TellyRecorder extends Module {
         }
         this.tick++;
         int places = this.placesSent.getAndSet(0);
-        if (this.recordSelf.getValue()) {
+        if (this.recordSelf.getValue() && !this.auraSession) {
             this.recordSelf(places);
         }
-        if (this.recordOthers.getValue()) {
+        if (this.recordOthers.getValue() && !this.auraSession) {
             this.recordOthers();
         } else {
             this.appeared.clear();
         }
         int swings = this.swingsSent.getAndSet(0);
         int attacks = this.attacksSent.getAndSet(0);
-        if (this.recordCombat.getValue()) {
+        if (this.recordCombat.getValue() || this.auraSession) {
             this.recordAim(swings, attacks);
         }
         if (this.tick % 20 == 0) {
@@ -339,7 +366,40 @@ public class TellyRecorder extends Module {
 
     /** Silent Aura (either engine), which record-with-aura leaves on: its silent turns do not move the camera. */
     private boolean keptForAura(Module module) {
-        return this.recordWithAura.getValue() && (module instanceof KillAura || module instanceof KillAuraLB);
+        return withAuraAllowed() && (module instanceof KillAura || module instanceof KillAuraLB);
+    }
+
+    /** record-with-aura, or a session Silent Aura started. */
+    private boolean withAuraAllowed() {
+        return this.auraSession || this.recordWithAura.getValue();
+    }
+
+    /**
+     * Silent Aura (Recorded, Recorded-AutoRecord) starts an aim-only session. False when this module was already
+     * on: a recording the player started is theirs, and is left as it is.
+     */
+    public boolean startForAura() {
+        if (this.isEnabled()) {
+            return false;
+        }
+        this.auraSession = true;
+        this.setEnabled(true);
+        if (!this.isEnabled()) {
+            this.auraSession = false;
+            return false;
+        }
+        return true;
+    }
+
+    /** Ends a session Silent Aura started; a recording the player started is not touched. */
+    public void stopForAura() {
+        if (this.auraSession && this.isEnabled()) {
+            this.setEnabled(false);
+        }
+    }
+
+    public boolean inAuraSession() {
+        return this.auraSession && this.isEnabled();
     }
 
     /** Silent Aura, when on. */
@@ -374,7 +434,7 @@ public class TellyRecorder extends Module {
             return;
         }
         KillAura aura = aura();
-        boolean withAura = aura != null && this.recordWithAura.getValue();
+        boolean withAura = aura != null && withAuraAllowed();
         if (withAura && auraMovesCamera(aura)) {
             /* The aura steers the camera itself: this tick is not your hand. */
             return;
@@ -473,8 +533,9 @@ public class TellyRecorder extends Module {
         if (aura == null || !aura.isEnabled()) {
             return false;
         }
+        /* Those rotations belong to the Atlas engine; under the LiquidBounce engine they do nothing. */
         String rotations = ((KillAura) aura).rotations.getModeString();
-        return "Legit".equals(rotations) || "LockView".equals(rotations);
+        return ((KillAura) aura).atlasEngine() && ("Legit".equals(rotations) || "LockView".equals(rotations));
     }
 
     private static boolean on(Class<?> type) {

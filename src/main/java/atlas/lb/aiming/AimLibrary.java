@@ -70,7 +70,11 @@ public final class AimLibrary {
     static final float SNAP = 60.0F;
     /** Bucket size of the lookup grid, degrees. */
     static final float CELL = 2.0F;
-    public static final int MAX_SAMPLES = 400000;
+    /* About 2.7 hours of fighting, some 15 MB. */
+    public static final int MAX_SAMPLES = 200000;
+    /** The Recorder's aim columns, for live rows that arrive without their file's header. */
+    public static final String AIM_HEADER = "tick,target,yaw,pitch,err_yaw,err_pitch,dist,tx,ty,tz,px,py,pz,"
+            + "t_ground,p_ground,t_hurt,p_hurt,swings,attacks,attack_key,ping,assist";
 
     private final List<Sample> samples = new ArrayList<Sample>();
     /** Samples by grid cell of (|err_yaw|, err_pitch); yaw is mirrored so left and right share data. */
@@ -84,14 +88,15 @@ public final class AimLibrary {
         return this.samples.get(index);
     }
 
-    /** Every aim-*.csv in {@code dir}, newest last, up to MAX_SAMPLES samples. */
+    /** The aim-*.csv files in {@code dir}, newest first, up to MAX_SAMPLES samples (so the newest are kept). */
     public static AimLibrary load(File dir) {
         AimLibrary library = new AimLibrary();
         File[] files = dir == null ? null : dir.listFiles();
         if (files == null) {
             return library;
         }
-        Arrays.sort(files);
+        /* Names carry the start time (aim-yyyyMMdd-HHmmss.csv), so reverse name order is newest first. */
+        Arrays.sort(files, java.util.Collections.reverseOrder());
         for (File file : files) {
             String name = file.getName();
             if (!file.isFile() || !name.startsWith("aim-") || !name.endsWith(".csv")) {
@@ -130,7 +135,10 @@ public final class AimLibrary {
      */
     public void addLive(String line) {
         if (this.live == null) {
+            /* The Recorder may have started before this library existed (Recorded was picked, or the files were
+               read, after it wrote its header): its rows have the standard columns. */
             this.live = new Reader();
+            this.live.line(AIM_HEADER);
         }
         this.live.line(line);
     }

@@ -1095,6 +1095,7 @@ public final class ModuleDocs {
         help("LiquidAura", "Recorded-Follow", "Recorded：錄到的那段轉頭跟現在差多遠就換一段。越高越能保持你整段轉頭的樣子。");
         help("LiquidAura", "Recorded-Strength", "Recorded：每段錄到的轉頭用幾成。");
         help("LiquidAura", "Recorded-UseAuraData", "Recorded：也用 Recorder 在這個 aura 開著時錄的資料（record-with-aura）。那還是你的視角，但知道 aura 在幫你打時，手常常瞄得比較隨便。");
+        help("LiquidAura", "Recorded-AutoRecord", "Recorded：aura 開著時自己錄你的瞄準，讓 Recorded 一直學。不會關掉任何模組，也不會錄搭橋檔案；會用 Recorder 的 aim-fov 和 only-when-clicking。你自己開的 Recorder 不會被動到；手動關掉 Recorder 的話，要等 aura 下次打開才會再錄。");
         help("TellyRecorder", "record-with-aura", "錄瞄準時不關 Silent Aura。它是靜默轉頭，視角還是你的手。MovementCorrection 是 ChangeLook 時不錄（那時 aura 會動視角）。這些資料會做記號，Recorded 可以選擇不用。");
         help("TellyRecorder", "aura-target", "開 record-with-aura 時：錄 aura 正在打的那個人，不是離你準心最近的人。");
         help("TellyRecorder", "aim-fov", "只錄準心在目標附近幾度內的 tick，看別的地方不算。");

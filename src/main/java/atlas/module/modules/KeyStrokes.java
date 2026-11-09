@@ -111,7 +111,8 @@ public class KeyStrokes extends Module {
         }
         /* HUD editor (2026-10-05): report where this is drawn, so the editor can find and drag it. */
         HudLayout.report("KeyStrokes", "KeyStrokes", x, y, BOX_W * sc, boxH * sc,
-                HudLayout.ints(offX, posX.getValue() == 2 ? -1 : 1, offY, posY.getValue() == 2 ? -1 : 1));
+                HudLayout.ints(offX, posX.getValue() == 2 ? -1 : 1, offY, posY.getValue() == 2 ? -1 : 1),
+                HudLayout.scale(this.scale));
         long now = System.currentTimeMillis();
         boolean wDown = Keyboard.isKeyDown(mc.gameSettings.keyBindForward.getKeyCode());
         boolean aDown = Keyboard.isKeyDown(mc.gameSettings.keyBindLeft.getKeyCode());
@@ -176,10 +177,10 @@ public class KeyStrokes extends Module {
         if (down) {
             float dx = w * 0.025F;
             float dy = h * 0.025F;
-            HudPanel.rounded(x + dx, y + dy, x + w - dx, y + h - dy, HudPanel.SMALL_RADIUS, 1.0F, true);
-            HudPanel.fill(x + dx, y + dy, x + w - dx, y + h - dy, HudPanel.SMALL_RADIUS, 0xB32E2E2E);
+            HudPanel.rounded(x + dx, y + dy, x + w - dx, y + h - dy, HudPanel.smallRadius(), 1.0F, true);
+            HudPanel.fill(x + dx, y + dy, x + w - dx, y + h - dy, HudPanel.smallRadius(), 0xB32E2E2E);
         } else {
-            HudPanel.rounded(x, y, x + w, y + h, HudPanel.SMALL_RADIUS, 1.0F, true);
+            HudPanel.rounded(x, y, x + w, y + h, HudPanel.smallRadius(), 1.0F, true);
         }
     }
 

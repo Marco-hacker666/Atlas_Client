@@ -2,6 +2,7 @@ package atlas.ui.impl.clickgui.atlas;
 
 import atlas.Atlas;
 import atlas.module.modules.HUD;
+import atlas.module.modules.HUDStyle;
 import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
@@ -23,6 +24,11 @@ import java.nio.FloatBuffer;
  * drawing. HUDs draw inside their own translate/scale, which the shaders have
  * to know: the modelview is read once per shape, a handful of reads a frame.
  * The GL state each HUD had set up is put back exactly afterwards.
+ *
+ * Since 2026-11-09 the colour, opacity, corners, shadow and an optional
+ * outline come from the HUDStyle module, so every HUD element follows one
+ * look; the constants below are its defaults and what applies while HUDStyle
+ * is off.
  */
 public final class HudPanel {
 
@@ -40,6 +46,33 @@ public final class HudPanel {
     private HudPanel() {
     }
 
+    /** The shared HUD look, or null when it is off (the designed defaults then apply). */
+    private static HUDStyle style() {
+        if (Atlas.moduleManager == null) {
+            return null;
+        }
+        HUDStyle style = (HUDStyle) Atlas.moduleManager.modules.get(HUDStyle.class);
+        return style != null && style.isEnabled() ? style : null;
+    }
+
+    /** Corners of a card, as the HUD style has them. */
+    public static float cardRadius() {
+        HUDStyle style = style();
+        return style == null ? CARD_RADIUS : style.cardCorners.getValue();
+    }
+
+    /** Corners of the small boxes, as the HUD style has them. */
+    public static float smallRadius() {
+        HUDStyle style = style();
+        return style == null ? SMALL_RADIUS : style.smallCorners.getValue();
+    }
+
+    /** The panel fill, as the HUD style has it. */
+    public static int background() {
+        HUDStyle style = style();
+        return style == null ? BACKGROUND : style.panelArgb();
+    }
+
     /** True while the HUD's theme is JELLO (the default). */
     public static boolean active() {
         if (Atlas.moduleManager == null) {
@@ -51,16 +84,16 @@ public final class HudPanel {
 
     /** A box with the small corners, shadowed. */
     public static void panel(float x, float y, float x2, float y2) {
-        rounded(x, y, x2, y2, SMALL_RADIUS, 1.0F, true);
+        rounded(x, y, x2, y2, smallRadius(), 1.0F, true);
     }
 
     public static void panel(float x, float y, float x2, float y2, boolean shadow) {
-        rounded(x, y, x2, y2, SMALL_RADIUS, 1.0F, shadow);
+        rounded(x, y, x2, y2, smallRadius(), 1.0F, shadow);
     }
 
     /** A card (the bigger corners), faded by {@code fade} (0..1). */
     public static void panel(float x, float y, float x2, float y2, boolean shadow, float fade) {
-        rounded(x, y, x2, y2, CARD_RADIUS, fade, shadow);
+        rounded(x, y, x2, y2, cardRadius(), fade, shadow);
     }
 
     /**
@@ -69,12 +102,12 @@ public final class HudPanel {
      * wish; the theme itself draws them square).
      */
     public static void row(float x, float y, float x2, float y2) {
-        rounded(x, y, x2, y2, SMALL_RADIUS, 1.0F, true);
+        rounded(x, y, x2, y2, smallRadius(), 1.0F, true);
     }
 
     /** A row sliding in or out, faded by {@code fade} (0..1). */
     public static void row(float x, float y, float x2, float y2, float fade) {
-        rounded(x, y, x2, y2, SMALL_RADIUS, fade, true);
+        rounded(x, y, x2, y2, smallRadius(), fade, true);
     }
 
     /** The theme's panel at any radius, faded by {@code fade} (0..1). */
@@ -83,16 +116,26 @@ public final class HudPanel {
             return;
         }
         float r = Math.max(0.0F, Math.min(radius, Math.min(x2 - x, y2 - y) / 2.0F));
+        HUDStyle style = style();
+        int fill = style == null ? BACKGROUND : style.panelArgb();
+        int shade = style == null ? SHADOW : style.shadowArgb();
+        float spread = style == null ? SHADOW_SPREAD : style.shadowSize.getValue();
+        int edge = style == null ? 0 : style.outlineArgb();
         int state = saveState();
         float savedAlpha = Liquid.alpha;
         try {
             Liquid.ensureCompiled();
             view();
             Liquid.alpha = Math.max(0.0F, Math.min(1.0F, fade));
-            if (shadow) {
-                Liquid.shadow(x, y, x2, y2, Math.max(r, 2.0F), SHADOW_SPREAD, SHADOW, 0.0F);
+            if (shadow && (shade >>> 24) != 0 && spread > 0.0F) {
+                Liquid.shadow(x, y, x2, y2, Math.max(r, 2.0F), spread, shade, 0.0F);
             }
-            Liquid.rect(x, y, x2, y2, r, BACKGROUND);
+            if ((fill >>> 24) != 0) {
+                Liquid.rect(x, y, x2, y2, r, fill);
+            }
+            if ((edge >>> 24) != 0) {
+                Liquid.rim(x, y, x2, y2, r, 1.0F, edge, edge);
+            }
         } catch (Throwable ignored) {
             /* A HUD is never worth a crash: the text still draws. */
         } finally {
@@ -103,7 +146,7 @@ public final class HudPanel {
 
     /** A plain rounded fill (a pressed key, a slot, a health bar). */
     public static void fill(float x, float y, float x2, float y2, int argb) {
-        fill(x, y, x2, y2, SMALL_RADIUS, argb);
+        fill(x, y, x2, y2, smallRadius(), argb);
     }
 
     public static void fill(float x, float y, float x2, float y2, float radius, int argb) {

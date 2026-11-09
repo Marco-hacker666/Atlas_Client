@@ -7,6 +7,7 @@ import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
 import org.lwjgl.input.Keyboard;
+import org.lwjgl.input.Mouse;
 
 import java.util.List;
 
@@ -17,10 +18,17 @@ import java.util.List;
  * as it does behind any menu; this screen only draws a frame around each
  * element that reported where it is (see {@link HudLayout}), and moves the one
  * being dragged. Escape goes back to the menu that opened it.
+ *
+ * The mouse wheel over an element resizes it (Shift for fine steps), R puts
+ * the selected one back to 100% -- every element, through its own scale
+ * setting (2026-11-09).
  */
 public class HudEditorScreen extends GuiScreen {
     /** How close, in pixels, an edge or centre has to come to a guide to snap to it. */
     private static final int SNAP = 4;
+    /** One wheel notch, and one with Shift held. */
+    private static final float SCALE_STEP = 0.05F;
+    private static final float FINE_SCALE_STEP = 0.01F;
 
     private final GuiScreen parent;
     private HudLayout.Element dragging;
@@ -85,7 +93,11 @@ public class HudEditorScreen extends GuiScreen {
             }
             int edge = active || hover ? withAlpha(accent, 0xE6) : withAlpha(neutral, 0x80);
             frame(left, top, right, bottom, edge);
-            drawLabel(element.label, left, top, bottom, sh, active || hover ? accent : neutral, light);
+            String label = element.label;
+            if (element.scaler != null && (active || hover)) {
+                label += "  " + Math.round(element.scaler.get() * 100.0F) + "%";
+            }
+            drawLabel(label, left, top, bottom, sh, active || hover ? accent : neutral, light);
         }
 
         /* The anchor the dragged or selected element hangs from (2026-10-18). */
@@ -118,13 +130,34 @@ public class HudEditorScreen extends GuiScreen {
 
         String help = elements.isEmpty()
                 ? "Turn on a HUD module to place it here  |  Esc to go back"
-                : "Drag to move  |  Arrow keys nudge, Shift x10  |  Esc to go back";
+                : "Drag to move  |  Wheel to resize, R resets  |  Arrow keys nudge, Shift x10  |  Esc to go back";
         int helpWidth = this.fontRendererObj.getStringWidth(help);
         int helpX = (sw - helpWidth) / 2;
         int helpY = sh - 34;
         Gui.drawRect(helpX - 8, helpY - 5, helpX + helpWidth + 8, helpY + 13, light ? 0xD0F3F5F9 : 0xB0101318);
         this.fontRendererObj.drawStringWithShadow(help, helpX, helpY, light ? 0xFF1A1F28 : 0xFFE6EBF2);
         super.drawScreen(mouseX, mouseY, partialTicks);
+    }
+
+    @Override
+    public void handleMouseInput() throws java.io.IOException {
+        super.handleMouseInput();
+        int wheel = Mouse.getEventDWheel();
+        if (wheel == 0 || this.dragging != null) {
+            return;
+        }
+        int mouseX = Mouse.getEventX() * this.width / this.mc.displayWidth;
+        int mouseY = this.height - Mouse.getEventY() * this.height / this.mc.displayHeight - 1;
+        HudLayout.Element element = topAt(HudLayout.visible(), mouseX, mouseY);
+        if (element == null) {
+            element = this.selected;
+        }
+        if (element == null || element.scaler == null) {
+            return;
+        }
+        this.selected = element;
+        float step = isShiftKeyDown() ? FINE_SCALE_STEP : SCALE_STEP;
+        element.scaler.set(element.scaler.get() + (wheel > 0 ? step : -step));
     }
 
     @Override
@@ -191,6 +224,12 @@ public class HudEditorScreen extends GuiScreen {
             return;
         }
         if (this.selected == null || this.selected.mover == null || this.dragging != null) {
+            return;
+        }
+        if (keyCode == Keyboard.KEY_R) {
+            if (this.selected.scaler != null) {
+                this.selected.scaler.set(1.0F);
+            }
             return;
         }
         int step = Keyboard.isKeyDown(Keyboard.KEY_LSHIFT) || Keyboard.isKeyDown(Keyboard.KEY_RSHIFT) ? 10 : 1;

@@ -11,6 +11,7 @@ import atlas.events.RightClickMouseEvent;
 import atlas.module.Module;
 import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.ColorProperty;
+import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
 import atlas.util.Ping;
 import net.minecraft.client.Minecraft;
@@ -41,6 +42,8 @@ public class LegitHUD extends Module {
     public final IntProperty y = new IntProperty("y", 6, 0, 300);
     public final IntProperty keysX = new IntProperty("keys-x", 6, 0, 500);
     public final IntProperty keysY = new IntProperty("keys-y", 86, 0, 400);
+    /* 2026-11-09: every HUD element can be resized (both of this module's, about their top-left corners). */
+    public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
 
     public LegitHUD() {
         super("LegitHUD", false, false, "Coordinates, FPS, ping, CPS and keystrokes.");
@@ -74,32 +77,40 @@ public class LegitHUD extends Module {
         int lineHeight = mc.fontRendererObj.FONT_HEIGHT + 3;
         int row = 0;
         int widest = 0;
+        float s = this.scale.getValue();
 
-        if (this.showCoordinates.getValue()) {
-            String coordinates = String.format("XYZ: %d %d %d",
-                    MathHelper.floor_double(mc.thePlayer.posX),
-                    MathHelper.floor_double(mc.thePlayer.getEntityBoundingBox().minY),
-                    MathHelper.floor_double(mc.thePlayer.posZ));
-            widest = Math.max(widest, drawRow(coordinates, textX, textY + row++ * lineHeight, color));
-        }
-        if (this.showFps.getValue()) {
-            widest = Math.max(widest, drawRow("FPS: " + Minecraft.getDebugFPS(), textX, textY + row++ * lineHeight, color));
-        }
-        if (this.showPing.getValue()) {
-            int ping = Ping.own();
-            widest = Math.max(widest, drawRow("Ping: " + (ping < 0 ? "--" : ping + " ms"), textX, textY + row++ * lineHeight, color));
-        }
-        if (this.showCps.getValue()) {
-            long now = System.currentTimeMillis();
-            prune(this.leftClicks, now);
-            prune(this.rightClicks, now);
-            widest = Math.max(widest, drawRow("CPS: L " + this.leftClicks.size() + "  R " + this.rightClicks.size(),
-                    textX, textY + row++ * lineHeight, color));
+        HudLayout.beginScaled(textX, textY, s);
+        try {
+            if (this.showCoordinates.getValue()) {
+                String coordinates = String.format("XYZ: %d %d %d",
+                        MathHelper.floor_double(mc.thePlayer.posX),
+                        MathHelper.floor_double(mc.thePlayer.getEntityBoundingBox().minY),
+                        MathHelper.floor_double(mc.thePlayer.posZ));
+                widest = Math.max(widest, drawRow(coordinates, textX, textY + row++ * lineHeight, color));
+            }
+            if (this.showFps.getValue()) {
+                widest = Math.max(widest, drawRow("FPS: " + Minecraft.getDebugFPS(), textX, textY + row++ * lineHeight, color));
+            }
+            if (this.showPing.getValue()) {
+                int ping = Ping.own();
+                widest = Math.max(widest, drawRow("Ping: " + (ping < 0 ? "--" : ping + " ms"), textX, textY + row++ * lineHeight, color));
+            }
+            if (this.showCps.getValue()) {
+                long now = System.currentTimeMillis();
+                prune(this.leftClicks, now);
+                prune(this.rightClicks, now);
+                widest = Math.max(widest, drawRow("CPS: L " + this.leftClicks.size() + "  R " + this.rightClicks.size(),
+                        textX, textY + row++ * lineHeight, color));
+            }
+        } finally {
+            HudLayout.endScaled();
         }
 
         if (row > 0) {
-            HudLayout.report("LegitHUD.info", "LegitHUD", textX - 3, textY - 2, widest + 6,
-                    row * lineHeight + 1, HudLayout.ints(this.x, 1, this.y, 1));
+            float[] area = HudLayout.scaledRect(textX, textY, s, textX - 3, textY - 2, widest + 6,
+                    row * lineHeight + 1);
+            HudLayout.report("LegitHUD.info", "LegitHUD", area[0], area[1], area[2], area[3],
+                    HudLayout.ints(this.x, 1, this.y, 1), HudLayout.scale(this.scale));
         }
         if (this.showKeystrokes.getValue()) {
             drawKeystrokes(this.keysX.getValue(), this.keysY.getValue(), screenWidth, screenHeight, color);
@@ -131,8 +142,19 @@ public class LegitHUD extends Module {
         int gap = 2;
         int left = Math.min(x, Math.max(0, screenWidth - box * 3 - gap * 2));
         int top = Math.min(y, Math.max(0, screenHeight - box * 4 - gap * 3));
-        HudLayout.report("LegitHUD.keys", "Keystrokes", left, top, box * 3 + gap * 2, box * 4 + gap * 3,
-                HudLayout.ints(this.keysX, 1, this.keysY, 1));
+        float s = this.scale.getValue();
+        float[] area = HudLayout.scaledRect(left, top, s, left, top, box * 3 + gap * 2, box * 4 + gap * 3);
+        HudLayout.report("LegitHUD.keys", "Keystrokes", area[0], area[1], area[2], area[3],
+                HudLayout.ints(this.keysX, 1, this.keysY, 1), HudLayout.scale(this.scale));
+        HudLayout.beginScaled(left, top, s);
+        try {
+            this.drawKeys(left, top, box, gap, color);
+        } finally {
+            HudLayout.endScaled();
+        }
+    }
+
+    private void drawKeys(int left, int top, int box, int gap, int color) {
         drawKey("W", left + box + gap, top, mc.gameSettings.keyBindForward.isKeyDown(), color);
         drawKey("A", left, top + box + gap, mc.gameSettings.keyBindLeft.isKeyDown(), color);
         drawKey("S", left + box + gap, top + box + gap, mc.gameSettings.keyBindBack.isKeyDown(), color);
@@ -153,8 +175,8 @@ public class LegitHUD extends Module {
         if (HudPanel.active()) {
             if (down) {
                 float dx = width * 0.025F;
-                HudPanel.rounded(x + dx, y + 0.5F, x + width - dx, y + 19.5F, HudPanel.SMALL_RADIUS, 1.0F, true);
-                HudPanel.fill(x + dx, y + 0.5F, x + width - dx, y + 19.5F, HudPanel.SMALL_RADIUS, 0xB32E2E2E);
+                HudPanel.rounded(x + dx, y + 0.5F, x + width - dx, y + 19.5F, HudPanel.smallRadius(), 1.0F, true);
+                HudPanel.fill(x + dx, y + 0.5F, x + width - dx, y + 19.5F, HudPanel.smallRadius(), 0xB32E2E2E);
             } else {
                 HudPanel.panel(x, y, x + width, y + 20);
             }

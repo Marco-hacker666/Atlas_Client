@@ -3,6 +3,7 @@ package atlas.module.modules;
 import atlas.ui.impl.clickgui.atlas.HudPanel;
 import atlas.ui.UiMode;
 import atlas.ui.hud.HudLayout;
+import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
 
 import atlas.Atlas;
@@ -39,6 +40,9 @@ public class WaterMark extends Module {
     /* Added with the HUD editor (2026-10-05): drag it there, or set it here. 0 keeps the original place. */
     public final IntProperty offsetX = new IntProperty("offset-x", 0, -1000, 1000);
     public final IntProperty offsetY = new IntProperty("offset-y", 0, -1000, 1000);
+    /* 2026-11-09: every HUD element can be resized and given the shared panel behind it. */
+    public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 3.0F);
+    public final BooleanProperty background = new BooleanProperty("background", false);
 
     public WaterMark() {
         super("WaterMark", false, false);
@@ -100,14 +104,28 @@ public class WaterMark extends Module {
             return;
 
         float[] area = watermarkArea();
+        float s = this.scale.getValue();
+        /* Resized about its top-left corner. */
+        float pivotX = (area != null ? area[0] : 0.0F) + this.offsetX.getValue();
+        float pivotY = (area != null ? area[1] : 0.0F) + this.offsetY.getValue();
         if (area != null) {
-            HudLayout.report("WaterMark", "WaterMark", area[0] + this.offsetX.getValue(),
-                    area[1] + this.offsetY.getValue(), area[2], area[3],
-                    HudLayout.ints(this.offsetX, 1, this.offsetY, 1));
+            float[] shown = HudLayout.scaledRect(pivotX, pivotY, s, pivotX, pivotY, area[2], area[3]);
+            HudLayout.report("WaterMark", "WaterMark", shown[0], shown[1], shown[2], shown[3],
+                    HudLayout.ints(this.offsetX, 1, this.offsetY, 1), HudLayout.scale(this.scale));
         }
+        HudLayout.beginScaled(pivotX, pivotY, s);
         GlStateManager.pushMatrix();
         GlStateManager.translate((float) this.offsetX.getValue(), (float) this.offsetY.getValue(), 0.0F);
         try {
+        if (area != null && this.background.getValue()) {
+            float pad = 3.0F;
+            if (HudPanel.active()) {
+                HudPanel.panel(area[0] - pad, area[1] - pad, area[0] + area[2] + pad, area[1] + area[3] + pad);
+            } else {
+                net.minecraft.client.gui.Gui.drawRect((int) (area[0] - pad), (int) (area[1] - pad),
+                        (int) (area[0] + area[2] + pad), (int) (area[1] + area[3] + pad), UiMode.adapt(0x70000000));
+            }
+        }
         switch (mode.getValue()) {
             case 0:
                 renderExhibition();
@@ -124,6 +142,7 @@ public class WaterMark extends Module {
         }
         } finally {
             GlStateManager.popMatrix();
+            HudLayout.endScaled();
         }
     }
 

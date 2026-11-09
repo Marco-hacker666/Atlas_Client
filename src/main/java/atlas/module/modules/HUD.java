@@ -404,7 +404,7 @@ public class HUD extends Module {
         float top = bottom ? y - (count - 1) * step - (pad + 1.0F) * s : y - (pad + 1.0F) * s;
         float total = (count - 1) * step + (height + pad * 2.0F + 2.0F) * s;
         HudLayout.report("HUD.list", "Module list", left, top, width, total,
-                HudLayout.ints(this.offsetX, right ? -1 : 1, this.offsetY, bottom ? -1 : 1));
+                HudLayout.ints(this.offsetX, right ? -1 : 1, this.offsetY, bottom ? -1 : 1), HudLayout.scale(this.scale));
     }
 
     private boolean hasSidebar() {

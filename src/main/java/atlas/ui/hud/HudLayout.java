@@ -1,6 +1,7 @@
 package atlas.ui.hud;
 
 import atlas.property.properties.DragProperty;
+import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
 
 import java.util.ArrayList;
@@ -19,11 +20,22 @@ import java.util.Map;
  * and an offset, a right-hand margin, a free position), as long as the setting
  * moves the element one pixel per unit -- which is true of every element that
  * reports here.
+ *
+ * One set of rules for every element (2026-11-09): each can be dragged, and
+ * each can be scaled -- an element that reports a {@link Scaler} is resized in
+ * the editor with the mouse wheel, through the same setting its menu shows.
  */
 public final class HudLayout {
     /** Moves an element; returns how far it really moved, since a setting may be at its limit. */
     public interface Mover {
         int[] moveBy(int dx, int dy);
+    }
+
+    /** Reads and changes an element's size; set keeps the value inside the setting's range. */
+    public interface Scaler {
+        float get();
+
+        void set(float value);
     }
 
     public static final class Element {
@@ -34,6 +46,8 @@ public final class HudLayout {
         public float width;
         public float height;
         public Mover mover;
+        /** Null for an element that cannot be resized. */
+        public Scaler scaler;
         long seenAt;
 
         Element(String id) {
@@ -63,6 +77,12 @@ public final class HudLayout {
     }
 
     public static void report(String id, String label, float x, float y, float width, float height, Mover mover) {
+        report(id, label, x, y, width, height, mover, null);
+    }
+
+    /** As {@link #report(String, String, float, float, float, float, Mover)}, for an element that can be resized. */
+    public static void report(String id, String label, float x, float y, float width, float height, Mover mover,
+                              Scaler scaler) {
         if (width <= 0.0F || height <= 0.0F || mover == null) {
             return;
         }
@@ -77,6 +97,7 @@ public final class HudLayout {
         element.width = width;
         element.height = height;
         element.mover = mover;
+        element.scaler = scaler;
         element.seenAt = System.currentTimeMillis();
         /* Anchors (2026-10-18): kept in place through a screen change. */
         net.minecraft.client.gui.ScaledResolution sr =
@@ -121,6 +142,53 @@ public final class HudLayout {
                 return new int[]{dx, dy};
             }
         };
+    }
+
+    /** A scaler over a size setting. */
+    public static Scaler scale(final FloatProperty setting) {
+        if (setting == null) {
+            return null;
+        }
+        return new Scaler() {
+            @Override
+            public float get() {
+                return setting.getValue();
+            }
+
+            @Override
+            public void set(float value) {
+                setting.setValue(clampScale(value, setting.getMinimum(), setting.getMaximum()));
+            }
+        };
+    }
+
+    /**
+     * Draws what follows scaled by {@code s} about the screen point (px, py),
+     * so code written in screen pixels keeps working; pair with
+     * {@link #endScaled()}. Text, items and HudPanel shapes follow the
+     * transform; shaders placed in raw screen pixels (RoundedUtils, BlurUtils)
+     * do not, so those are given {@link #scaledRect} coordinates instead.
+     */
+    public static void beginScaled(float px, float py, float s) {
+        net.minecraft.client.renderer.GlStateManager.pushMatrix();
+        net.minecraft.client.renderer.GlStateManager.translate(px, py, 0.0F);
+        net.minecraft.client.renderer.GlStateManager.scale(s, s, 1.0F);
+        net.minecraft.client.renderer.GlStateManager.translate(-px, -py, 0.0F);
+    }
+
+    public static void endScaled() {
+        net.minecraft.client.renderer.GlStateManager.popMatrix();
+    }
+
+    /** Where the rectangle (x, y, w, h) ends up when scaled by s about (px, py): {x, y, w, h}. */
+    public static float[] scaledRect(float px, float py, float s, float x, float y, float w, float h) {
+        return new float[]{px + (x - px) * s, py + (y - py) * s, w * s, h * s};
+    }
+
+    /** A size kept inside its range and rounded to a hundredth, so the wheel lands on round numbers. */
+    static float clampScale(float value, float minimum, float maximum) {
+        float rounded = Math.round(value * 100.0F) / 100.0F;
+        return Math.max(minimum, Math.min(maximum, rounded));
     }
 
     private static int shift(IntProperty setting, int sign, int delta) {

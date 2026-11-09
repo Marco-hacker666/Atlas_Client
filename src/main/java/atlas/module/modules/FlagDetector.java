@@ -136,6 +136,10 @@ public class FlagDetector extends Module {
     public final IntProperty hudY = new IntProperty("hud-y", 60, 0, 600, () -> this.hud.getValue() != 0);
     public final IntProperty hudLines = new IntProperty("hud-lines", 5, 1, 12, () -> this.hud.getValue() == 2);
     public final IntProperty hudFade = new IntProperty("hud-fade", 20, 3, 120, () -> this.hud.getValue() == 2);
+    /* 2026-11-09: like every HUD element, resizable, draggable in the HUD
+       editor and able to sit on the shared panel (off: text only, as before). */
+    public final FloatProperty hudScale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F, () -> this.hud.getValue() != 0);
+    public final BooleanProperty hudBackground = new BooleanProperty("background", false, () -> this.hud.getValue() != 0);
 
     public final BooleanProperty logFile = new BooleanProperty("log-file", false);
     /**
@@ -1831,7 +1835,8 @@ public class FlagDetector extends Module {
     @EventTarget
     public void onRender2D(Render2DEvent event) {
         if (!this.isEnabled() || this.hud.getValue() == 0
-                || mc.fontRendererObj == null || mc.thePlayer == null || mc.currentScreen != null) {
+                || mc.fontRendererObj == null || mc.thePlayer == null
+                || (mc.currentScreen != null && !atlas.ui.hud.HudLayout.isEditing())) {
             return;
         }
         if (mc.gameSettings.showDebugInfo) {
@@ -1843,11 +1848,6 @@ public class FlagDetector extends Module {
         int margin = Math.min(this.hudX.getValue(), Math.max(0, sr.getScaledWidth() - 120));
         int y = Math.min(this.hudY.getValue(), Math.max(0, sr.getScaledHeight() - 20));
 
-        GL11.glPushMatrix();
-        GlStateManager.disableDepth();
-        GlStateManager.enableBlend();
-        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-
         String header = String.format("Flags %d  §cL%d §eV%d §6R%d §bT%d  §7%.1f/min",
                 total(), this.countLagback, this.countVertical, this.countReject,
                 this.countTeleport, perMinute());
@@ -1856,14 +1856,13 @@ public class FlagDetector extends Module {
                did before these existed. */
             header += String.format("  §dBUG%d", this.countClientFault);
         }
-        mc.fontRendererObj.drawStringWithShadow(header, lineX(sr, header, margin, right), y, 0xFFFFFFFF);
-
+        java.util.List<String> lines = new java.util.ArrayList<String>();
+        java.util.List<Integer> colours = new java.util.ArrayList<Integer>();
         if (this.hud.getValue() == 2) {
             long now = System.currentTimeMillis();
             long fade = this.hudFade.getValue() * 1000L;
-            int drawn = 0;
             Iterator<HudEntry> it = this.recent.descendingIterator();
-            while (it.hasNext() && drawn < this.hudLines.getValue()) {
+            while (it.hasNext() && lines.size() < this.hudLines.getValue()) {
                 HudEntry entry = it.next();
                 long age = now - entry.at;
                 if (age > fade) {
@@ -1876,19 +1875,57 @@ public class FlagDetector extends Module {
                 if (alpha < 60) {
                     alpha = 60;
                 }
-                String line = String.format("%s%s%s  §7%.1fs",
+                lines.add(String.format("%s%s%s  §7%.1fs",
                         sectionOf(entry.label), entry.label,
-                        entry.count > 1 ? " x" + entry.count : "", age / 1000.0);
-                mc.fontRendererObj.drawStringWithShadow(line,
-                        lineX(sr, line, margin + 2, right), y + 11 + drawn * 10,
-                        (alpha << 24) | 0xFFFFFF);
-                drawn++;
+                        entry.count > 1 ? " x" + entry.count : "", age / 1000.0));
+                colours.add((alpha << 24) | 0xFFFFFF);
             }
         }
 
-        GlStateManager.disableBlend();
-        GlStateManager.enableDepth();
-        GL11.glPopMatrix();
+        /* The panel's extent, for the HUD editor and the background. */
+        int widest = mc.fontRendererObj.getStringWidth(header);
+        for (String line : lines) {
+            widest = Math.max(widest, mc.fontRendererObj.getStringWidth(line) + 2);
+        }
+        float left = right ? sr.getScaledWidth() - margin - widest : margin;
+        float height = lines.isEmpty() ? 9.0F : 11.0F + lines.size() * 10.0F - 1.0F;
+        /* Resized about the corner it is placed from. */
+        float s = this.hudScale.getValue();
+        float pivotX = right ? sr.getScaledWidth() - margin : margin;
+        float[] area = atlas.ui.hud.HudLayout.scaledRect(pivotX, y, s, left - 2.0F, y - 2.0F, widest + 4.0F,
+                height + 4.0F);
+        atlas.ui.hud.HudLayout.report("FlagDetector", "FlagDetector", area[0], area[1], area[2], area[3],
+                atlas.ui.hud.HudLayout.ints(this.hudX, right ? -1 : 1, this.hudY, 1),
+                atlas.ui.hud.HudLayout.scale(this.hudScale));
+
+        atlas.ui.hud.HudLayout.beginScaled(pivotX, y, s);
+        GL11.glPushMatrix();
+        GlStateManager.disableDepth();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        try {
+            if (this.hudBackground.getValue()) {
+                if (atlas.ui.impl.clickgui.atlas.HudPanel.active()) {
+                    atlas.ui.impl.clickgui.atlas.HudPanel.panel(left - 3.0F, y - 3.0F, left + widest + 3.0F,
+                            y + height + 2.0F);
+                } else {
+                    net.minecraft.client.gui.Gui.drawRect((int) left - 3, y - 3, (int) (left + widest) + 3,
+                            (int) (y + height) + 2, atlas.ui.UiMode.adapt(0x70000000));
+                }
+                GlStateManager.enableBlend();
+            }
+            mc.fontRendererObj.drawStringWithShadow(header, lineX(sr, header, margin, right), y, 0xFFFFFFFF);
+            for (int i = 0; i < lines.size(); i++) {
+                String line = lines.get(i);
+                mc.fontRendererObj.drawStringWithShadow(line,
+                        lineX(sr, line, margin + 2, right), y + 11 + i * 10, colours.get(i));
+            }
+        } finally {
+            GlStateManager.disableBlend();
+            GlStateManager.enableDepth();
+            GL11.glPopMatrix();
+            atlas.ui.hud.HudLayout.endScaled();
+        }
     }
 
     /**

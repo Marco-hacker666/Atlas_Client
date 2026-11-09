@@ -3,6 +3,7 @@ package atlas.module.modules;
 import atlas.ui.impl.clickgui.atlas.HudPanel;
 import atlas.ui.UiMode;
 import atlas.ui.hud.HudLayout;
+import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
 
 import java.awt.Color;
@@ -31,6 +32,9 @@ public class DynamicIsland extends Module { // nah bro i took 2 hour just to did
     /* Added with the HUD editor (2026-10-05): drag it there, or set it here. 0 keeps the original place. */
     public final IntProperty offsetX = new IntProperty("offset-x", 0, -1000, 1000);
     public final IntProperty offsetY = new IntProperty("offset-y", 0, -1000, 1000);
+    /* 2026-11-09: every HUD element can be resized and have its panel switched off. */
+    public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
+    public final BooleanProperty background = new BooleanProperty("background", true);
 
     private final int bgAlpha = 130;
     private final float radius = 8f;
@@ -64,11 +68,28 @@ public class DynamicIsland extends Module { // nah bro i took 2 hour just to did
 
         float x = sr.getScaledWidth() / 2f - width / 2f + this.offsetX.getValue();
         float y = 8f + this.offsetY.getValue();
-        HudLayout.report("DynamicIsland", "DynamicIsland", x, y, width, height,
-                HudLayout.ints(this.offsetX, 1, this.offsetY, 1));
+        /* Resized about its top centre. Everything below is drawn through the
+           transform: the glow is a texture, the rounded fills are UV shaders
+           and the blur masks whatever is drawn, so all of it follows. */
+        float s = this.scale.getValue();
+        float pivotX = x + width / 2f;
+        float[] area = HudLayout.scaledRect(pivotX, y, s, x, y, width, height);
+        HudLayout.report("DynamicIsland", "DynamicIsland", area[0], area[1], area[2], area[3],
+                HudLayout.ints(this.offsetX, 1, this.offsetY, 1), HudLayout.scale(this.scale));
+        HudLayout.beginScaled(pivotX, y, s);
+        try {
+            this.draw(fr, x, y, width, height, username, ping, server, fps);
+        } finally {
+            HudLayout.endScaled();
+        }
+    }
 
+    private void draw(CFontRenderer fr, float x, float y, float width, float height, String username, int ping,
+                      String server, int fps) {
         // Glassmorphism Blur Pass
-        if (HudPanel.active()) {
+        if (!this.background.getValue()) {
+            /* No panel: the text only. */
+        } else if (HudPanel.active()) {
             HudPanel.panel(x, y, x + width, y + height);
         } else {
             atlas.util.shader.BlurUtils.prepareBlur();

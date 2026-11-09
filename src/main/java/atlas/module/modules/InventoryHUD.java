@@ -105,7 +105,8 @@ public class InventoryHUD extends Module {
         }
         /* HUD editor (2026-10-05): report where this is drawn, so the editor can find and drag it. */
         HudLayout.report("InventoryHUD", "InventoryHUD", x, y, boxW * sc, boxH * sc,
-                HudLayout.ints(offX, posX.getValue() == 2 ? -1 : 1, offY, posY.getValue() == 2 ? -1 : 1));
+                HudLayout.ints(offX, posX.getValue() == 2 ? -1 : 1, offY, posY.getValue() == 2 ? -1 : 1),
+                HudLayout.scale(this.scale));
         GlStateManager.pushMatrix();
         GlStateManager.translate(x, y, 0.0F);
         GlStateManager.scale(sc, sc, 1.0F);

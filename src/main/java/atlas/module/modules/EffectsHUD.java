@@ -8,6 +8,7 @@ import atlas.event.EventTarget;
 import atlas.events.Render2DEvent;
 import atlas.module.Module;
 import atlas.property.properties.BooleanProperty;
+import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
@@ -30,6 +31,8 @@ public class EffectsHUD extends Module {
     public final IntProperty right = new IntProperty("right", 8, 0, 500);
     public final IntProperty y = new IntProperty("y", 32, 0, 400);
     public final BooleanProperty background = new BooleanProperty("background", true);
+    /* 2026-11-09: every HUD element can be resized (here, or with the wheel in the HUD editor). */
+    public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
 
     public EffectsHUD() {
         super("EffectsHUD", false, false, "Shows active potion effects and their remaining time.");
@@ -44,8 +47,10 @@ public class EffectsHUD extends Module {
             if (HudLayout.isEditing()) {
                 /* Nothing to show, but still somewhere to put it. */
                 int edge = new ScaledResolution(mc).getScaledWidth() - this.right.getValue();
-                HudLayout.report("EffectsHUD", "EffectsHUD (no effects)", edge - 93, this.y.getValue() - 2, 96,
-                        mc.fontRendererObj.FONT_HEIGHT + 4, HudLayout.ints(this.right, -1, this.y, 1));
+                float[] area = HudLayout.scaledRect(edge, this.y.getValue(), this.scale.getValue(), edge - 93,
+                        this.y.getValue() - 2, 96, mc.fontRendererObj.FONT_HEIGHT + 4);
+                HudLayout.report("EffectsHUD", "EffectsHUD (no effects)", area[0], area[1], area[2], area[3],
+                        HudLayout.ints(this.right, -1, this.y, 1), HudLayout.scale(this.scale));
             }
             return;
         }
@@ -56,50 +61,61 @@ public class EffectsHUD extends Module {
         int rightEdge = resolution.getScaledWidth() - this.right.getValue();
         int drawY = this.y.getValue();
         int widest = 0;
-        boolean jello = HudPanel.active() && this.background.getValue();
-        if (jello) {
-            /* JelloBounce Effects.svelte: the rows sit in one card, 12px
-               corners at the top and bottom, no gaps. */
-            int cardWidest = 0;
-            int rows = 0;
+        /* Resized about its top-right corner, the corner it hangs from. */
+        float s = this.scale.getValue();
+        HudLayout.beginScaled(rightEdge, drawY, s);
+        try {
+            boolean jello = HudPanel.active() && this.background.getValue();
+            if (jello) {
+                /* JelloBounce Effects.svelte: the rows sit in one card, 12px
+                   corners at the top and bottom, no gaps. */
+                int cardWidest = 0;
+                int rows = 0;
+                for (PotionEffect effect : effects) {
+                    int id = effect.getPotionID();
+                    if (id < 0 || id >= Potion.potionTypes.length || Potion.potionTypes[id] == null) continue;
+                    int amplifier = effect.getAmplifier();
+                    String level = amplifier >= 0 && amplifier < AMPLIFIERS.length
+                            ? AMPLIFIERS[amplifier] : " " + (amplifier + 1);
+                    cardWidest = Math.max(cardWidest, mc.fontRendererObj.getStringWidth(
+                            I18n.format(Potion.potionTypes[id].getName()) + level + "  "
+                                    + StringUtils.ticksToElapsedTime(effect.getDuration())));
+                    rows++;
+                }
+                if (rows > 0) {
+                    HudPanel.rounded(rightEdge - cardWidest - 5, drawY - 3, rightEdge + 5,
+                            drawY + rows * (mc.fontRendererObj.FONT_HEIGHT + 3) + 1, HudPanel.cardRadius(), 1.0F, true);
+                }
+            }
             for (PotionEffect effect : effects) {
                 int id = effect.getPotionID();
                 if (id < 0 || id >= Potion.potionTypes.length || Potion.potionTypes[id] == null) continue;
+
+                Potion potion = Potion.potionTypes[id];
+                String name = I18n.format(potion.getName());
                 int amplifier = effect.getAmplifier();
                 String level = amplifier >= 0 && amplifier < AMPLIFIERS.length
                         ? AMPLIFIERS[amplifier] : " " + (amplifier + 1);
-                cardWidest = Math.max(cardWidest, mc.fontRendererObj.getStringWidth(
-                        I18n.format(Potion.potionTypes[id].getName()) + level + "  "
-                                + StringUtils.ticksToElapsedTime(effect.getDuration())));
-                rows++;
+                String text = name + level + "  " + StringUtils.ticksToElapsedTime(effect.getDuration());
+                int textWidth = mc.fontRendererObj.getStringWidth(text);
+                widest = Math.max(widest, textWidth);
+                int textX = rightEdge - textWidth;
+                int color = 0xFF000000 | (potion.getLiquidColor() & 0xFFFFFF);
+                if (this.background.getValue() && !jello) {
+                    Gui.drawRect(textX - 3, drawY - 2, rightEdge + 3,
+                            drawY + mc.fontRendererObj.FONT_HEIGHT + 2, UiMode.adapt(0x70000000));
+                }
+                mc.fontRendererObj.drawStringWithShadow(text, textX, drawY, color);
+                drawY += mc.fontRendererObj.FONT_HEIGHT + 3;
             }
-            if (rows > 0) {
-                HudPanel.rounded(rightEdge - cardWidest - 5, drawY - 3, rightEdge + 5,
-                        drawY + rows * (mc.fontRendererObj.FONT_HEIGHT + 3) + 1, HudPanel.CARD_RADIUS, 1.0F, true);
-            }
+        } finally {
+            HudLayout.endScaled();
         }
-        for (PotionEffect effect : effects) {
-            int id = effect.getPotionID();
-            if (id < 0 || id >= Potion.potionTypes.length || Potion.potionTypes[id] == null) continue;
-
-            Potion potion = Potion.potionTypes[id];
-            String name = I18n.format(potion.getName());
-            int amplifier = effect.getAmplifier();
-            String level = amplifier >= 0 && amplifier < AMPLIFIERS.length
-                    ? AMPLIFIERS[amplifier] : " " + (amplifier + 1);
-            String text = name + level + "  " + StringUtils.ticksToElapsedTime(effect.getDuration());
-            int textWidth = mc.fontRendererObj.getStringWidth(text);
-            widest = Math.max(widest, textWidth);
-            int textX = rightEdge - textWidth;
-            int color = 0xFF000000 | (potion.getLiquidColor() & 0xFFFFFF);
-            if (this.background.getValue() && !jello) {
-                Gui.drawRect(textX - 3, drawY - 2, rightEdge + 3,
-                        drawY + mc.fontRendererObj.FONT_HEIGHT + 2, UiMode.adapt(0x70000000));
-            }
-            mc.fontRendererObj.drawStringWithShadow(text, textX, drawY, color);
-            drawY += mc.fontRendererObj.FONT_HEIGHT + 3;
-            HudLayout.report("EffectsHUD", "EffectsHUD", rightEdge - widest - 3, this.y.getValue() - 2, widest + 6,
-                    drawY - this.y.getValue() + 1, HudLayout.ints(this.right, -1, this.y, 1));
+        if (widest > 0) {
+            float[] area = HudLayout.scaledRect(rightEdge, this.y.getValue(), s, rightEdge - widest - 3,
+                    this.y.getValue() - 2, widest + 6, drawY - this.y.getValue() + 1);
+            HudLayout.report("EffectsHUD", "EffectsHUD", area[0], area[1], area[2], area[3],
+                    HudLayout.ints(this.right, -1, this.y, 1), HudLayout.scale(this.scale));
         }
     }
 }

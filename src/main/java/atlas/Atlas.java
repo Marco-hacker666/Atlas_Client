@@ -191,6 +191,7 @@ public class Atlas {
         moduleManager.modules.put(NameTagColors.class, new NameTagColors());
         moduleManager.modules.put(WidgetColors.class, new WidgetColors());
         moduleManager.modules.put(EffectColors.class, new EffectColors());
+        moduleManager.modules.put(HUDStyle.class, new HUDStyle());
         moduleManager.modules.put(ServerFingerprint.class, new ServerFingerprint());
         moduleManager.modules.put(AutoTune.class, new AutoTune());
         moduleManager.modules.put(Adaptive.class, new Adaptive());

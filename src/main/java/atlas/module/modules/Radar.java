@@ -7,6 +7,7 @@ import atlas.event.types.Priority;
 import atlas.events.Render2DEvent;
 import atlas.module.Module;
 import atlas.property.properties.*;
+import atlas.ui.hud.HudLayout;
 import atlas.util.RenderUtil;
 import atlas.util.TeamUtil;
 import net.minecraft.client.Minecraft;
@@ -34,6 +35,11 @@ public class Radar extends Module {
     public final ColorProperty fillColor = new ColorProperty("fill-color", Color.GRAY.getRGB());
     public final ColorProperty outlineColor = new ColorProperty("outline-color", Color.DARK_GRAY.getRGB());
     public final ColorProperty crossColor = new ColorProperty("cross-color", Color.LIGHT_GRAY.getRGB());
+    /* 2026-11-09: its own size (it used to borrow the HUD module's, which also
+       scaled its offsets), and the disc behind it can be switched off, as every
+       HUD element's background can. Dragged in the HUD editor like the others. */
+    public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
+    public final BooleanProperty background = new BooleanProperty("background", true);
     public Radar() {
         super("Radar", false);
     }
@@ -105,9 +111,15 @@ public class Radar extends Module {
             centerY = (position.getValue() & 0x2) == 0x2 ? Math.max(sr.getScaledHeight() - offsetY.getValue(), 0) : Math.min(offsetY.getValue(), sr.getScaledHeight());
         }
 
+        float s = this.scale.getValue();
+        /* The disc, plus the N/E/S/W letters just outside it. */
+        float reach = (radarRadius.getValue() + 9.0F) * s;
+        HudLayout.report("Radar", "Radar", (float) centerX - reach, (float) centerY - reach, reach * 2.0F,
+                reach * 2.0F, this.mover(sr), HudLayout.scale(this.scale));
+
         GlStateManager.pushMatrix();
-        GlStateManager.scale(hud.scale.getValue(), hud.scale.getValue(), 1.0f);
         GlStateManager.translate(centerX, centerY, 0.0f);
+        GlStateManager.scale(s, s, 1.0f);
 
         RenderUtil.enableRenderState();
 
@@ -128,6 +140,9 @@ public class Radar extends Module {
             discColor = widget.fill(fill, null, 0).getRGB();
             rimColor = widget.line(new Color(outlineColor.getValue()), null, 1).getRGB();
             crossLines = widget.line(new Color(crossColor.getValue()), null, 2).getRGB();
+        }
+        if (!this.background.getValue()) {
+            discColor = 0;
         }
         this.drawRadarCircle(0.0, 0, yaw, radarRadius.getValue(), 64, discColor, rimColor, crossLines);
         for (EntityPlayer player : TeamUtil.getLoadedEntitiesSorted().stream().filter(entity -> entity instanceof EntityPlayer && this.shouldRender((EntityPlayer) entity)).map(EntityPlayer.class::cast).collect(Collectors.toList())) {
@@ -161,7 +176,7 @@ public class Radar extends Module {
             GlStateManager.enableBlend();
             GlStateManager.enableTexture2D();
             GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-            GlStateManager.scale(hud.scale.getValue() / 2, hud.scale.getValue() / 2, 1.0f);
+            GlStateManager.scale(0.5F, 0.5F, 1.0f);
             mc.fontRendererObj.drawString("PVP",
                     (float) (px - mc.fontRendererObj.getStringWidth("PVP") / 2.0F),
                     (float) (py - mc.fontRendererObj.FONT_HEIGHT / 2.0F),
@@ -170,6 +185,24 @@ public class Radar extends Module {
         }
         RenderUtil.disableRenderState();
         GlStateManager.popMatrix();
+    }
+
+    /**
+     * Moves the radar by its offsets, which count from the corner its
+     * position names. A centred radar has no offsets: the first move turns it
+     * into a top-left one at the same place, so it can be dragged too.
+     */
+    private HudLayout.Mover mover(final ScaledResolution sr) {
+        return (dx, dy) -> {
+            if (this.position.getValue() == 4) {
+                this.position.setValue(0);
+                this.offsetX.setValue(sr.getScaledWidth() / 2);
+                this.offsetY.setValue(sr.getScaledHeight() / 2);
+            }
+            int corner = this.position.getValue();
+            return HudLayout.ints(this.offsetX, (corner & 0x1) != 0 ? -1 : 1,
+                    this.offsetY, (corner & 0x2) != 0 ? -1 : 1).moveBy(dx, dy);
+        };
     }
 
     public void drawRadarCircle(double x, double y, double angle, double radius,

@@ -180,6 +180,11 @@ public class Scaffold extends Module {
        no 1-tick crouches, no click or jump that would put the Speed or Sneak averages of Intave PlacementAnalysis under
        their limits. Off: GODBRIDGE and POLAR exactly as before. */
     public final BooleanProperty legitPace = new BooleanProperty("legit-pace", true, this::godBridgeShown);
+    /* 2026-11-11 (owner: "god bridge jumps every 6-8 blocks; it jumped, but the blocks did not go up with it"): a
+       GODBRIDGE jump takes the bridge up a block, as the technique does. Off: the 2026-11-07 behaviour, the layer
+       the jump left from is kept. */
+    public final BooleanProperty jumpBuildsUp = new BooleanProperty("jump-builds-up", true,
+            () -> this.rotationMode.getValue() == ROTATION_GODBRIDGE);
     private final PlacePace pace = new PlacePace();
     private boolean paceWasOnGround;
     private long nextSneakEvery = 3500L;
@@ -363,7 +368,20 @@ public class Scaffold extends Module {
      * rule: click what the look hits, not what was planned.
      */
     private MovingObjectPosition lookHit(BlockData plan, float yaw, float pitch) {
-        MovingObjectPosition mop = RotationUtil.rayTrace(yaw, pitch, mc.playerController.getBlockReachDistance(), 1.0F);
+        return this.lookHit(plan, yaw, pitch, 0.0, 0.0);
+    }
+
+    /** {@link #lookHit(BlockData, float, float)} from where the player would be, moved this far: the next step's. */
+    private MovingObjectPosition lookHit(BlockData plan, float yaw, float pitch, double movedX, double movedZ) {
+        MovingObjectPosition mop;
+        if (movedX == 0.0 && movedZ == 0.0) {
+            mop = RotationUtil.rayTrace(yaw, pitch, mc.playerController.getBlockReachDistance(), 1.0F);
+        } else {
+            Vec3 eye = mc.thePlayer.getPositionEyes(1.0F).addVector(movedX, 0.0, movedZ);
+            Vec3 look = ((atlas.mixin.IAccessorEntity) mc.thePlayer).callGetVectorForRotation(pitch, yaw);
+            double reach = mc.playerController.getBlockReachDistance();
+            mop = mc.theWorld.rayTraceBlocks(eye, eye.addVector(look.xCoord * reach, look.yCoord * reach, look.zCoord * reach));
+        }
         if (mop == null || mop.typeOfHit != MovingObjectType.BLOCK) {
             return null;
         }
@@ -379,7 +397,8 @@ public class Scaffold extends Module {
         if (cell.getY() != planned.getY() || !BlockUtil.isReplaceable(cell)) {
             return null;
         }
-        AxisAlignedBB box = mc.thePlayer.getEntityBoundingBox().addCoord(mc.thePlayer.motionX, 0.0, mc.thePlayer.motionZ);
+        AxisAlignedBB box = mc.thePlayer.getEntityBoundingBox().offset(movedX, 0.0, movedZ)
+                .addCoord(mc.thePlayer.motionX, 0.0, mc.thePlayer.motionZ);
         boolean under = box.minX < cell.getX() + 1 && box.maxX > cell.getX()
                 && box.minZ < cell.getZ() + 1 && box.maxZ > cell.getZ();
         return under ? mop : null;
@@ -475,6 +494,10 @@ public class Scaffold extends Module {
      * key held by hand still builds up.
      */
     private boolean godBridgeHoldsLayer() {
+        if (this.rotationMode.getValue() == ROTATION_GODBRIDGE && this.jumpBuildsUp.getValue()) {
+            /* The block goes under the feet wherever they are: a block up once the jump is a block high. */
+            return false;
+        }
         return this.lbGodBridge() && !mc.thePlayer.onGround && !mc.gameSettings.keyBindJump.isKeyDown();
     }
 
@@ -1571,7 +1594,7 @@ public class Scaffold extends Module {
                    walking and the slide after it would leave the box with no floor, and friction holds the player on the
                    block. Not at the early edge test the crouch used: the god bridge look places only with the feet well
                    over the edge, so stopping there would never place. eagle is not used here. */
-                if (this.safeWalk.getValue() && this.wouldFallOnNextStep()) {
+                if (this.safeWalk.getValue() && this.wouldFallOnNextStep() && !this.godBridgePlacesAhead()) {
                     mc.thePlayer.movementInput.moveForward = 0.0F;
                     mc.thePlayer.movementInput.moveStrafe = 0.0F;
                 }
@@ -1689,8 +1712,16 @@ public class Scaffold extends Module {
         in.edge = in.onGround && forward && target != null && this.edgeSneak();
         in.lookPlaces = target != null && this.run.running()
                 && this.lookHit(target, this.run.lookYaw(), this.run.lookPitch()) != null;
-        if ((in.edge || !in.onGround && target != null) && !in.lookPlaces && this.run.running()) {
+        if (target != null && !in.lookPlaces && this.run.running()) {
             in.placePitch = this.godBridgePlacePitch(target, this.run.lookYaw(), this.run.lookPitch());
+        }
+        if (in.onGround && forward && this.run.running() && !in.lookPlaces && Float.isNaN(in.placePitch)) {
+            /* Nothing places from here yet: the pitch that will, from the next step, so the look is on its way. */
+            double[] step = this.godBridgeNextStep();
+            BlockData ahead = this.getBlockData(step[0], step[1]);
+            if (ahead != null) {
+                in.aheadPitch = this.godBridgePlacePitch(ahead, this.run.lookYaw(), this.run.lookPitch(), step[0], step[1]);
+            }
         }
         /* No crouch in GODBRIDGE (2026-11-08): the pace is kept with jumps, the next block forecast one gap ahead. */
         in.paceJump = paced && this.pace.jumpWanted(now, this.pace.lastGap(230L), event.getYaw(), this.speedLevel());
@@ -1719,17 +1750,62 @@ public class Scaffold extends Module {
 
     /** At this yaw, the pitch nearest {@code from} (within 8, 68 to 86) whose ray places the target from here; NaN for none. */
     private float godBridgePlacePitch(BlockData target, float yaw, float from) {
+        return this.godBridgePlacePitch(target, yaw, from, 0.0, 0.0);
+    }
+
+    /** The same from where the player would be, moved this far. */
+    private float godBridgePlacePitch(BlockData target, float yaw, float from, double movedX, double movedZ) {
+        if (this.lookHit(target, yaw, from, movedX, movedZ) != null) {
+            return from;
+        }
         for (int i = 1; i <= GODBRIDGE_PITCH_STEPS; i++) {
             float away = (i + 1) / 2 * GODBRIDGE_PITCH_STEP * (i % 2 == 0 ? -1.0F : 1.0F);
             float pitch = from + away;
             if (pitch < GODBRIDGE_PITCH_MIN || pitch > GODBRIDGE_PITCH_MAX) {
                 continue;
             }
-            if (this.lookHit(target, yaw, pitch) != null) {
+            if (this.lookHit(target, yaw, pitch, movedX, movedZ) != null) {
                 return pitch;
             }
         }
         return Float.NaN;
+    }
+
+    /**
+     * Where one more tick of walking carries the player: this motion (what friction left of the last step) plus a
+     * tick of walking input along the way the keys walk. {dx, dz}.
+     */
+    private double[] godBridgeNextStep() {
+        double radians = Math.toRadians(this.getCurrentYaw());
+        return new double[]{mc.thePlayer.motionX - Math.sin(radians) * 0.1, mc.thePlayer.motionZ + Math.cos(radians) * 0.1};
+    }
+
+    /**
+     * GODBRIDGE, 2026-11-11 (owner: slow, a stop at every block): whether the walk may go on although the fall guard
+     * would stop it -- the next step still has floor under the box, and from there the run's look, with a pitch it
+     * can reach by then, places the block that step needs. Then the block goes down next tick and there is nothing to
+     * stop for. Not while the look still turns onto the run's, and not when legit-pace would hold that block: those
+     * keep the stop.
+     */
+    private boolean godBridgePlacesAhead() {
+        GodBridge.Plan plan = this.runPlan;
+        if (!this.run.running() || plan == null || !plan.look || plan.maxTurn < 180.0F) {
+            return false;
+        }
+        double[] step = this.godBridgeNextStep();
+        AxisAlignedBB next = mc.thePlayer.getEntityBoundingBox().expand(-0.02, 0.0, -0.02).offset(step[0], -1.0, step[1]);
+        if (mc.theWorld.getCollidingBoundingBoxes(mc.thePlayer, next).isEmpty()) {
+            return false;
+        }
+        BlockData target = this.getBlockData(step[0], step[1]);
+        if (target == null) {
+            return true;
+        }
+        if (this.paceOn() && this.paceHolds(target.blockPos(), target.facing(), this.run.lookYaw())) {
+            return false;
+        }
+        float pitch = this.godBridgePlacePitch(target, this.run.lookYaw(), this.run.lookPitch(), step[0], step[1]);
+        return !Float.isNaN(pitch) && Math.abs(pitch - this.run.lookPitch()) <= 2.0F * GodBridge.PITCH_FIX_MAX;
     }
 
     private static final int GODBRIDGE_PITCH_STEPS = 64;

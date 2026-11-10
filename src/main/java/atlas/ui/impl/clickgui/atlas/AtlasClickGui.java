@@ -626,9 +626,16 @@ public class AtlasClickGui extends GuiScreen {
                 }
             }
         }
-        /* A phone (2026-11-11): the first time there, the window fills the screen, whatever size it had; once
-           sized there (mobile=1 in the file), the player's own size is kept. windowWidth/Height clamp it to the
-           screen less a four-pixel margin each side. */
+        fillOnPhone();
+    }
+
+    /**
+     * A phone (2026-11-11): the first time there, the window fills the screen, whatever size it had; once
+     * sized there (mobile=1 in the file), the player's own size is kept. windowWidth/Height clamp it to the
+     * screen less a four-pixel margin each side. Also asked on every open: the menu is built at start-up,
+     * possibly before the GL strings that detection reads are there.
+     */
+    private void fillOnPhone() {
         if (!this.sizedOnPhone && atlas.util.render.DeviceProfile.isMobile()) {
             this.userWidth = FILL;
             this.userHeight = FILL;
@@ -5520,6 +5527,7 @@ public class AtlasClickGui extends GuiScreen {
     public void initGui() {
         atlas.ui.GuiPerf.step("before-init");
         loadState();
+        fillOnPhone();
         atlas.ui.GuiPerf.step("load");
         build();
         /* Names and help do not change in a session, so the index is built

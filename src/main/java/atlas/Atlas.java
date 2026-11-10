@@ -441,11 +441,11 @@ public class Atlas {
             return;
         }
 
-        EventManager.register(new atlas.anticheat.flag());
-        EventManager.register(new atlas.anticheat.AutoBlock());
-        EventManager.register(new atlas.anticheat.Noslow());
-        EventManager.register(new atlas.anticheat.KillAura());
-        EventManager.register(new atlas.anticheat.Scaffold());
+        EventManager.register(new atlas.anticheat.CheatFlags());
+        EventManager.register(new atlas.anticheat.AutoBlockCheck());
+        EventManager.register(new atlas.anticheat.NoSlowCheck());
+        EventManager.register(new atlas.anticheat.KillAuraCheck());
+        EventManager.register(new atlas.anticheat.ScaffoldCheck());
         /* Keys bound to profiles in the Slinky-style menu load them in game. */
         EventManager.register(atlas.ui.impl.clickgui.slinky.SlinkyProfiles.INSTANCE);
         anticheatRegistered = true;

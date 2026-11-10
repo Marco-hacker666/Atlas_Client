@@ -15,7 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-public class Scaffold {
+public class ScaffoldCheck {
 
     private static final Minecraft mc = Minecraft.getMinecraft();
 
@@ -143,7 +143,7 @@ public class Scaffold {
                      */
                     if (now - last > 3000L) {
 
-                        flag.receiveSignal(
+                        CheatFlags.receiveSignal(
                                 player.getName(),
                                 "Scaffold [VL=" + vl + "]"
                         );

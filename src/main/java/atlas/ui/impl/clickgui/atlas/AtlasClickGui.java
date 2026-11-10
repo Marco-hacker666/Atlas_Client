@@ -5528,6 +5528,18 @@ public class AtlasClickGui extends GuiScreen {
         atlas.ui.GuiPerf.step("before-init");
         loadState();
         fillOnPhone();
+        /* The fill is kept as the size it came to on this screen, so what is saved is a real size: a 100000 in the
+           file would fill any larger screen the same folder is opened on later. */
+        if (this.userWidth == FILL || this.userHeight == FILL) {
+            ScaledResolution fitted = new ScaledResolution(mc);
+            this.userWidth = windowWidth(fitted);
+            this.userHeight = windowHeight(fitted);
+        }
+        /* A press left waiting when the screen last closed (Escape or a disconnect with the finger down) never saw
+           its release: forgotten here, or the next drag would be taken for a scroll. */
+        this.touchPending = false;
+        this.touchScrolling = false;
+        this.touchCarry = 0.0F;
         atlas.ui.GuiPerf.step("load");
         build();
         /* Names and help do not change in a session, so the index is built

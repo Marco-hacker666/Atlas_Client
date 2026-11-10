@@ -131,6 +131,21 @@ public class AtlasClickGui extends GuiScreen {
     /** How the menu looks; edited on the Appearance page, kept in atlas-theme.json. */
     private final AtlasTheme theme = new AtlasTheme();
     private static float textScale = 1.0F;
+    /* 2026-11-11: on a phone (util.render.DeviceProfile) -- set each frame in applyTheme. */
+    private boolean mobile;
+    /* Touch: a press in the body waits for the finger to lift. Moved more than TOUCH_SLOP first, it was a
+       scroll, not a tap, and the press never clicks (see mouseClicked). */
+    private static final float TOUCH_SLOP = 6.0F;
+    private boolean touchPending;
+    private boolean touchScrolling;
+    private int touchX;
+    private int touchY;
+    private int touchLastY;
+    private float touchCarry;
+    /* On a phone the last hint stays a few seconds after the finger has gone: there is no hover to hold it. */
+    private String lastHint = "";
+    private long lastHintAt;
+    private static final long HINT_HOLD_MS = 4000L;
     private float jelly = 1.0F;
     private float springSpeed = 1.0F;
     private float slideY;
@@ -171,6 +186,9 @@ public class AtlasClickGui extends GuiScreen {
 
     /** The window's own geometry, which the user owns once they touch it. */
     private int userWidth = DEFAULT_WIDTH;
+    /** A size larger than any screen: the window fills it (phones, see loadState). */
+    private static final int FILL = 100000;
+    private boolean sizedOnPhone;
     private int userHeight = DEFAULT_HEIGHT;
     private int userX = UNSET;
     private int userY = UNSET;
@@ -576,6 +594,8 @@ public class AtlasClickGui extends GuiScreen {
                     this.userWidth = Math.max(MIN_WIDTH, Integer.parseInt(value));
                 } else if ("height".equals(key)) {
                     this.userHeight = Math.max(MIN_HEIGHT, Integer.parseInt(value));
+                } else if ("mobile".equals(key)) {
+                    this.sizedOnPhone = "1".equals(value);
                 } else if ("category".equals(key)) {
                     this.category = value;
                 } else if ("selected".equals(key)) {
@@ -606,6 +626,16 @@ public class AtlasClickGui extends GuiScreen {
                 }
             }
         }
+        /* A phone (2026-11-11): the first time there, the window fills the screen, whatever size it had; once
+           sized there (mobile=1 in the file), the player's own size is kept. windowWidth/Height clamp it to the
+           screen less a four-pixel margin each side. */
+        if (!this.sizedOnPhone && atlas.util.render.DeviceProfile.isMobile()) {
+            this.userWidth = FILL;
+            this.userHeight = FILL;
+            this.userX = UNSET;
+            this.userY = UNSET;
+            this.sizedOnPhone = true;
+        }
     }
 
     private void saveState() {
@@ -620,6 +650,9 @@ public class AtlasClickGui extends GuiScreen {
             writer.println("y=" + this.userY);
             writer.println("width=" + this.userWidth);
             writer.println("height=" + this.userHeight);
+            if (this.sizedOnPhone) {
+                writer.println("mobile=1");
+            }
             writer.println("category=" + this.category);
             writer.println("selected=" + (this.selected == null ? "" : this.selected.getName()));
             writer.println("page=" + this.page);
@@ -976,7 +1009,7 @@ public class AtlasClickGui extends GuiScreen {
                 drawList(sr, x + sidebar, bodyTop, width - sidebar - detail, bodyHeight, mx, my);
                 drawDetail(sr, x + width - detail, bodyTop, detail, bodyHeight, mx, my);
             }
-            if (this.theme.hintBar.getValue()) {
+            if (this.theme.hintBar.getValue() || this.mobile) {
                 drawHintBar(x, y + height - FOOTER, width);
             }
             drawGrip(x + width, y + height, mx, my);
@@ -2039,17 +2072,24 @@ public class AtlasClickGui extends GuiScreen {
            every distinct size is a set of glyph sheets, and dragging the
            slider would otherwise leave hundreds of them behind. */
         float scale = Math.round(this.theme.textSize.getValue() / 5.0F) * 0.05F;
+        this.mobile = atlas.util.render.DeviceProfile.isMobile();
+        if (this.mobile) {
+            /* A finger and a small screen: larger text, still in steps of five percent. */
+            scale = Math.round(scale * 1.15F * 20.0F) / 20.0F;
+        }
         if (scale != textScale) {
             textScale = scale;
             LiquidFont.clear();
         }
         boolean compact = this.theme.compact();
-        this.ROW_H = compact ? 20 : 24;
-        this.ROW = compact ? 22 : 26;
-        this.CAT_H = compact ? 22 : 26;
-        this.CAT = compact ? 24 : 28;
+        /* On a phone every row is six pixels taller: a finger needs a bigger target than a pointer. */
+        int touch = this.mobile ? 6 : 0;
+        this.ROW_H = (compact ? 20 : 24) + touch;
+        this.ROW = (compact ? 22 : 26) + touch;
+        this.CAT_H = (compact ? 22 : 26) + touch;
+        this.CAT = (compact ? 24 : 28) + touch;
         this.RADIUS = this.theme.radius.getValue();
-        this.FOOTER = this.theme.hintBar.getValue() ? 20 : 8;
+        this.FOOTER = this.mobile ? 30 : this.theme.hintBar.getValue() ? 20 : 8;
     }
 
     /**
@@ -3707,11 +3747,36 @@ public class AtlasClickGui extends GuiScreen {
      * it describes, and never has to be chased.
      */
     private void drawHintBar(int x, int y, int width) {
-        float shownHint = ease("hint", !this.hint.isEmpty(), 12.0F);
-        String text = this.hint.isEmpty()
-                ? "Click a module for its settings  ·  its switch turns it on or off  ·  type to search  ·  drag the header to move"
-                : this.hint;
+        long now = System.currentTimeMillis();
+        if (!this.hint.isEmpty()) {
+            this.lastHint = this.hint;
+            this.lastHintAt = now;
+        }
+        String hint = this.hint;
+        if (this.mobile && hint.isEmpty() && now - this.lastHintAt < HINT_HOLD_MS) {
+            hint = this.lastHint;
+        }
+        float shownHint = ease("hint", !hint.isEmpty(), 12.0F);
         LiquidFont small = font(7.5F, false);
+        if (this.mobile) {
+            /* A phone: two lines, so the help is read in full rather than cut off at the edge. */
+            String text = hint.isEmpty()
+                    ? "Tap a module for its settings  ·  tap its switch to turn it on or off  ·  drag a list to scroll"
+                    : hint;
+            List<String> lines = small.wrap(text, width - 40);
+            int count = Math.min(2, lines.size());
+            float lineHeight = FOOTER / 2.0F - 2.0F;
+            float top = y + FOOTER / 2.0F - (count - 1) * lineHeight / 2.0F - 1;
+            for (int i = 0; i < count; i++) {
+                String line = i == count - 1 && lines.size() > count
+                        ? small.trim(lines.get(i) + " " + lines.get(i + 1), width - 40) : lines.get(i);
+                small.draw(line, x + 16, top + i * lineHeight, blend(FAINT, DIM, shownHint));
+            }
+            return;
+        }
+        String text = hint.isEmpty()
+                ? "Click a module for its settings  ·  its switch turns it on or off  ·  type to search  ·  drag the header to move"
+                : hint;
         text = small.trim(text, width - 50);
         small.draw(text, x + 16, y + FOOTER / 2.0F - 1, blend(FAINT, DIM, shownHint));
     }
@@ -4444,6 +4509,89 @@ public class AtlasClickGui extends GuiScreen {
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
+        if (button == 0 && waitForTap(mouseX, mouseY)) {
+            this.touchPending = true;
+            this.touchScrolling = false;
+            this.touchX = mouseX;
+            this.touchY = mouseY;
+            this.touchLastY = mouseY;
+            this.touchCarry = 0.0F;
+            return;
+        }
+        click(mouseX, mouseY, button);
+    }
+
+    /**
+     * On a phone (2026-11-11), whether a press waits for the finger to lift
+     * before it clicks: anything in the body of the window that does not
+     * start a drag of its own (a slider, the colour picker, the header, the
+     * resize grip). If the finger moves first, the press was a scroll and
+     * clicks nothing (touchMove); lifted where it went down, it clicks then.
+     */
+    private boolean waitForTap(int mouseX, int mouseY) {
+        if (!this.mobile || this.dialog != null || this.reportConfirm || this.dropdown != null) {
+            return false;
+        }
+        ScaledResolution sr = new ScaledResolution(mc);
+        float mx = layoutX(mouseX);
+        float my = layoutY(mouseY);
+        int x = left(sr);
+        int y = top(sr);
+        if (mx < x || mx > x + windowWidth(sr) || my < y + HEADER || my > y + windowHeight(sr) - FOOTER) {
+            return false;
+        }
+        UiContext.Hit target = hitAt(mx, my);
+        if (target == null) {
+            return true;
+        }
+        String kind = target.kind;
+        return !"slide".equals(kind) && !"colorSV".equals(kind) && !"colorHue".equals(kind)
+                && !"grip".equals(kind) && !"move".equals(kind);
+    }
+
+    /** A finger moving while a tap waits: past TOUCH_SLOP it scrolls what is under where it went down. */
+    private void touchMove(int mouseY) {
+        if (!this.touchScrolling && Math.abs(mouseY - this.touchY) > TOUCH_SLOP) {
+            this.touchScrolling = true;
+        }
+        if (!this.touchScrolling) {
+            return;
+        }
+        int moved = mouseY - this.touchLastY;
+        this.touchLastY = mouseY;
+        if (moved != 0) {
+            /* The content follows the finger: dragging up shows what is further down. */
+            touchScroll(layoutX(this.touchX), -moved);
+        }
+    }
+
+    /** Scrolls the column under {@code mouseX} by {@code pixels}, as the wheel picks it (handleMouseInput). */
+    private void touchScroll(float mouseX, float pixels) {
+        ScaledResolution sr = new ScaledResolution(mc);
+        int width = windowWidth(sr);
+        if (mouseX > left(sr) + width - detailWidth(width)) {
+            this.detailScroll = Math.max(0, Math.min(this.detailMaxScroll, this.detailScroll + carried(pixels, 1.0F)));
+            this.dropdown = null;
+        } else if (mouseX < this.sidebarRight && !"Client Settings".equals(this.page)) {
+            this.sidebarScroll = Math.max(0.0F, Math.min(this.sidebarMaxScroll, this.sidebarScroll + pixels));
+        } else if (this.appearanceView) {
+            this.appearanceScroll = Math.max(0.0F, Math.min(this.appearanceMaxScroll, this.appearanceScroll + pixels));
+        } else if (this.profilesView) {
+            this.profileScroll = Math.max(0, Math.min(this.profileMaxScroll, this.profileScroll + carried(pixels, ROW)));
+        } else {
+            this.listScroll = Math.max(0, Math.min(this.listMaxScroll, this.listScroll + carried(pixels, ROW)));
+        }
+    }
+
+    /** Whole units of {@code unit} pixels in what the finger has moved, the rest kept for the next move. */
+    private int carried(float pixels, float unit) {
+        this.touchCarry += pixels / unit;
+        int whole = (int) this.touchCarry;
+        this.touchCarry -= whole;
+        return whole;
+    }
+
+    private void click(int mouseX, int mouseY, int button) {
         ScaledResolution sr = new ScaledResolution(mc);
         float mx = layoutX(mouseX);
         float my = layoutY(mouseY);
@@ -5018,6 +5166,13 @@ public class AtlasClickGui extends GuiScreen {
      * instead, and ends as soon as the button is seen to be up.
      */
     private void followDrag(ScaledResolution sr, int mouseX, int mouseY) {
+        if (this.touchPending) {
+            /* Every frame, as a drag is: the tick-paced mouseClickMove alone scrolls in jumps. */
+            if (org.lwjgl.input.Mouse.isButtonDown(0)) {
+                touchMove(mouseY);
+            }
+            return;
+        }
         if (!this.movingWindow && !this.resizingWindow && this.dragging == null && this.colorDrag == null) {
             return;
         }
@@ -5069,6 +5224,10 @@ public class AtlasClickGui extends GuiScreen {
 
     @Override
     protected void mouseClickMove(int mouseX, int mouseY, int button, long held) {
+        if (this.touchPending) {
+            touchMove(mouseY);
+            return;
+        }
         /* Still applied, so a drag works even between frames; the frame loop
            (followDrag) is what makes it smooth. */
         applyDrag(new ScaledResolution(mc), mouseX, mouseY);
@@ -5076,6 +5235,14 @@ public class AtlasClickGui extends GuiScreen {
 
     @Override
     protected void mouseReleased(int mouseX, int mouseY, int state) {
+        if (this.touchPending) {
+            this.touchPending = false;
+            if (!this.touchScrolling) {
+                /* A tap: the click it held back, where the finger went down. */
+                click(this.touchX, this.touchY, 0);
+            }
+            this.touchScrolling = false;
+        }
         this.orbitPreview.mouseReleased();
         this.dragging = null;
         this.colorDrag = null;

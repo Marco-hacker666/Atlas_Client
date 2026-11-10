@@ -65,6 +65,15 @@ public final class MobileHud {
         }
         if (!scaled.containsKey(element.id)) {
             HudLayout.Scaler scaler = element.scaler;
+            /* Customised in either way -- moved or resized -- and it is the player's: neither is changed. */
+            boolean moved = element.mover == null || !element.mover.atDefault();
+            boolean resized = scaler != null && !Float.isNaN(scaler.defaultValue())
+                    && Math.abs(scaler.get() - scaler.defaultValue()) >= 0.005F;
+            if (moved || resized) {
+                handled.add(element.id);
+                save();
+                return;
+            }
             boolean shrink = scaler != null && !Float.isNaN(scaler.defaultValue())
                     && Math.abs(scaler.get() - scaler.defaultValue()) < 0.005F;
             if (shrink) {

@@ -48,7 +48,7 @@ public final class MobileSafe {
     public static boolean active() {
         int mode = setting;
         if (mode < 0) {
-            mode = readSetting();
+            mode = readMode(SETTING, MODES);
             setting = mode;
         }
         if (mode == GlesDetect.ON) {
@@ -117,7 +117,19 @@ public final class MobileSafe {
         }
     }
 
-    private static int readSetting() {
+    /**
+     * What detection found, whatever the setting says: a translation layer or
+     * Android. DeviceProfile reads it to tell a phone from a PC. Client thread.
+     */
+    public static boolean deviceDetected() {
+        if (!detectedKnown) {
+            detect();
+        }
+        return detected;
+    }
+
+    /** A mode setting saved in atlas-theme.json by its name or index; Auto when missing. */
+    static int readMode(String key, String[] modes) {
         if (!THEME_FILE.isFile()) {
             return GlesDetect.AUTO;
         }
@@ -125,15 +137,15 @@ public final class MobileSafe {
             JsonElement parsed = new JsonParser().parse(reader);
             if (parsed != null && parsed.isJsonObject()) {
                 JsonObject object = parsed.getAsJsonObject();
-                if (object.has(SETTING)) {
-                    JsonElement value = object.get(SETTING);
+                if (object.has(key)) {
+                    JsonElement value = object.get(key);
                     /* Saved as the mode's name or its index, whichever the theme file uses. */
                     if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber()) {
-                        return Math.max(0, Math.min(MODES.length - 1, value.getAsInt()));
+                        return Math.max(0, Math.min(modes.length - 1, value.getAsInt()));
                     }
                     String name = value.getAsString();
-                    for (int i = 0; i < MODES.length; i++) {
-                        if (MODES[i].equalsIgnoreCase(name)) {
+                    for (int i = 0; i < modes.length; i++) {
+                        if (modes[i].equalsIgnoreCase(name)) {
                             return i;
                         }
                     }

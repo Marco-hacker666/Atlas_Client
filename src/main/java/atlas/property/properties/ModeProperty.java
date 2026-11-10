@@ -140,7 +140,13 @@ public class ModeProperty extends Property<Integer> {
 
     @Override
     public boolean read(JsonObject jsonObject) {
-        return this.parseString(jsonObject.get(this.getName()).getAsString());
+        com.google.gson.JsonElement value = jsonObject.get(this.getName());
+        /* Saved as the mode's name; a number is its index (a hand-edited file, or MobileSafe.readMode's form). */
+        if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber()) {
+            int index = value.getAsInt();
+            return index >= 0 && index < this.modes.length && this.setValue(index);
+        }
+        return this.parseString(value.getAsString());
     }
 
     @Override

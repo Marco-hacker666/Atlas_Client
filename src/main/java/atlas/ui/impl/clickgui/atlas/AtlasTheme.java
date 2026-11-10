@@ -128,6 +128,9 @@ final class AtlasTheme {
     // ---- Performance (2026-10-15): phones on gl4es / Krypton Wrapper (util.render.MobileSafe)
     final ModeProperty mobileSafe = new ModeProperty(atlas.util.render.MobileSafe.SETTING, 0,
             atlas.util.render.MobileSafe.MODES);
+    /* 2026-11-11: phone or PC layout (util.render.DeviceProfile); Auto asks the same detection. */
+    final ModeProperty deviceLayout = new ModeProperty(atlas.util.render.DeviceProfile.SETTING, 0,
+            atlas.util.render.DeviceProfile.MODES);
 
     /** The groups the page lists, in order, with what each is for. */
     final Map<String, List<Property<?>>> groups = new LinkedHashMap<String, List<Property<?>>>();
@@ -167,14 +170,18 @@ final class AtlasTheme {
                 this.autoSendLogs, this.shareRunData);
         group("Performance", "Mobile-safe drawing for phones (PojavLauncher and its forks on gl4es or Krypton Wrapper): "
                         + "no blur, glass shaders or glow, plain rounded shapes. Auto turns it on only when such a "
-                        + "renderer is found; it changes nothing on a PC.",
-                this.mobileSafe);
+                        + "renderer is found; it changes nothing on a PC. Device layout: on a phone the menu fills the "
+                        + "screen, scrolls with a finger drag, has bigger text and rows and keeps its hints shown, and HUD "
+                        + "elements still at their default place move away from the touch buttons. Auto finds a phone by "
+                        + "itself.",
+                this.mobileSafe, this.deviceLayout);
         load();
         this.runDataSeen = Boolean.TRUE.equals(atlas.management.RunCollector.consent());
         this.shareRunData.setValue(this.runDataSeen);
         this.saved = snapshot();
         atlas.management.LogUploader.setEnabled(this.autoSendLogs.getValue());
         atlas.util.render.MobileSafe.setSetting(this.mobileSafe.getValue());
+        atlas.util.render.DeviceProfile.setSetting(this.deviceLayout.getValue());
     }
 
     private void group(String name, String description, Property<?>... properties) {
@@ -196,7 +203,8 @@ final class AtlasTheme {
 
     /** Whether a setting is about looks, so a saved theme carries it: not the privacy or performance choices. */
     boolean isLook(Property<?> property) {
-        return property != this.autoSendLogs && property != this.shareRunData && property != this.mobileSafe;
+        return property != this.autoSendLogs && property != this.shareRunData && property != this.mobileSafe
+                && property != this.deviceLayout;
     }
 
     // ---- derived values -----------------------------------------------
@@ -322,7 +330,8 @@ final class AtlasTheme {
             return this.animations.getValue() ? this.opening.getModeString() : "off";
         }
         if ("Performance".equals(group)) {
-            return this.mobileSafe.getModeString() + "  ·  " + (atlas.util.render.MobileSafe.active() ? "on" : "off");
+            return this.mobileSafe.getModeString() + "  ·  " + (atlas.util.render.MobileSafe.active() ? "on" : "off")
+                    + "  ·  " + atlas.util.render.DeviceProfile.describe();
         }
         if ("Text".equals(group)) {
             return this.font.getModeString();
@@ -339,7 +348,7 @@ final class AtlasTheme {
         int keepMode = this.mode.getValue();
         for (Property<?> property : all()) {
             /* A look preset never changes the privacy or performance choice. */
-            if (property != this.autoSendLogs && property != this.shareRunData && property != this.mobileSafe) {
+            if (isLook(property)) {
                 resetOne(property);
             }
         }
@@ -467,6 +476,7 @@ final class AtlasTheme {
     void save() {
         atlas.management.LogUploader.setEnabled(this.autoSendLogs.getValue());
         atlas.util.render.MobileSafe.setSetting(this.mobileSafe.getValue());
+        atlas.util.render.DeviceProfile.setSetting(this.deviceLayout.getValue());
         String now = snapshot();
         if (now.equals(this.saved)) {
             return;

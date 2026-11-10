@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Locale;
 
-public class flag {
+public class CheatFlags {
     private static final String CHEAT_AUTOBLOCK = "AutoBlock";
     private static final String CHEAT_NOSLOW = "Noslow";
     private static final String CHEAT_KILLAURA = "KillAura";

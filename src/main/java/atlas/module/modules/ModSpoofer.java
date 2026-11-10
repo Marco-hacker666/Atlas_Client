@@ -18,8 +18,12 @@ import net.minecraft.network.play.client.C17PacketCustomPayload;
 public class ModSpoofer extends Module {
     private static final String BRAND_CHANNEL = "MC|Brand";
 
-    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"Forge", "Vanilla", "Custom"});
-    public final TextProperty customBrand = new TextProperty("custom-brand", "fml,forge", () -> mode.getValue() == 2);
+    /* 2026-11-10: merged into ClientSpoofer, both rewrote MC|Brand and whichever ran last won (Vanilla there, Forge
+       here: "fml,forge" could go out). ClientSpoofer owns the brand while it is on; these two only apply without it. */
+    public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"Forge", "Vanilla", "Custom"},
+            () -> !clientSpooferOn());
+    public final TextProperty customBrand = new TextProperty("custom-brand", "fml,forge",
+            () -> !clientSpooferOn() && mode.getValue() == 2);
     public final BooleanProperty hideModChannels = new BooleanProperty("hide-mod-channels", false);
 
     public ModSpoofer() {
@@ -44,10 +48,21 @@ public class ModSpoofer extends Module {
         if (channel == null) return;
 
         if (BRAND_CHANNEL.equals(channel)) {
+            if (clientSpooferOn()) {
+                return;
+            }
             ((IAccessorC17PacketCustomPayload) packet).setData(createBrandBuffer(getBrand()));
         } else if (hideModChannels.getValue() && isModChannel(channel)) {
             event.setCancelled(true);
         }
+    }
+
+    private static boolean clientSpooferOn() {
+        if (atlas.Atlas.moduleManager == null) {
+            return false;
+        }
+        atlas.module.Module host = atlas.Atlas.moduleManager.modules.get(ClientSpoofer.class);
+        return host != null && host.isEnabled();
     }
 
     private boolean isModChannel(String channel) {

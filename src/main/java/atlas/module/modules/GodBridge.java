@@ -53,6 +53,10 @@ final class GodBridge {
     static final int MAX_CPS = 19;
     /** Most the pitch moves a tick to reach a pitch that places; the rest follows next tick. */
     static final float PITCH_FIX_MAX = 6.0F;
+    /** In the air the eyes rise 1.25 in six ticks, so the pitch that places moves faster than at an edge. */
+    static final float AIR_PITCH_FIX_MAX = 12.0F;
+    /** After a jump, the pitch eases back to the ground one this much a tick: under SETTLED, so the walk never stops for it. */
+    static final float AIR_RETURN_STEP = 1.2F;
 
     /** What Scaffold read this tick. */
     static final class Input {
@@ -114,6 +118,8 @@ final class GodBridge {
     private float lookPitch;
     /** The pitch that last placed, kept for the next run; NaN until one has. */
     private float learnedPitch = Float.NaN;
+    /** The run's pitch before the air fix moved it; NaN when the air fix has not. */
+    private float groundPitch = Float.NaN;
 
     GodBridge() {
         this(new Random());
@@ -176,6 +182,13 @@ final class GodBridge {
             start(in, back);
         }
         drift();
+        if (in.onGround && !Float.isNaN(this.groundPitch)) {
+            float toGround = clamp(this.groundPitch - this.pitchBase, AIR_RETURN_STEP);
+            this.pitchBase += toGround;
+            if (Math.abs(this.groundPitch - this.pitchBase) < 0.01F) {
+                this.groundPitch = Float.NaN;
+            }
+        }
         boolean diagonal = diagonal(this.backYaw);
         float yaw = this.backYaw + (diagonal ? 0.0F : this.side * 45.0F) + this.offset + this.driftYaw;
         float pitch = this.pitchBase + this.driftPitch;
@@ -187,13 +200,20 @@ final class GodBridge {
         /* The fixed LB pitch meets the side only with the feet past the edge on this target: at the edge, the pitch
            goes to the one that places from where the player is, and the run keeps it. */
         boolean fixed = false;
-        if (in.edge && !in.lookPlaces && settled && !Float.isNaN(in.placePitch)) {
-            float step = clamp(in.placePitch - pitch, PITCH_FIX_MAX);
+        /* In the air (a jump) the eyes are up to 1.25 higher, so the run's pitch meets the side only far past the edge:
+           the pitch that places from here is taken too, faster, not learned, and eased back after the landing. */
+        boolean air = !in.onGround && in.hasTarget;
+        if ((in.edge || air) && !in.lookPlaces && settled && !Float.isNaN(in.placePitch)) {
+            if (air && Float.isNaN(this.groundPitch)) {
+                this.groundPitch = this.pitchBase;
+            }
+            float step = clamp(in.placePitch - pitch, air ? AIR_PITCH_FIX_MAX : PITCH_FIX_MAX);
             this.pitchBase += step;
             pitch += step;
             fixed = Math.abs(in.placePitch - pitch) < 0.01F;
-            if (fixed) {
+            if (fixed && !air) {
                 this.learnedPitch = this.pitchBase;
+                this.groundPitch = Float.NaN;
             }
         }
         if (in.lookPlaces && in.edge) {
@@ -228,7 +248,7 @@ final class GodBridge {
             this.blocks = 0;
             this.jumpAt = drawJump(in.jumpEvery);
         }
-        plan.click = clickDue(in.now) || (in.lookPlaces || fixed) && in.edge;
+        plan.click = clickDue(in.now) || (in.lookPlaces || fixed) && (in.edge || air);
         return plan;
     }
 

@@ -1689,7 +1689,7 @@ public class Scaffold extends Module {
         in.edge = in.onGround && forward && target != null && this.edgeSneak();
         in.lookPlaces = target != null && this.run.running()
                 && this.lookHit(target, this.run.lookYaw(), this.run.lookPitch()) != null;
-        if (in.edge && !in.lookPlaces && this.run.running()) {
+        if ((in.edge || !in.onGround && target != null) && !in.lookPlaces && this.run.running()) {
             in.placePitch = this.godBridgePlacePitch(target, this.run.lookYaw(), this.run.lookPitch());
         }
         /* No crouch in GODBRIDGE (2026-11-08): the pace is kept with jumps, the next block forecast one gap ahead. */

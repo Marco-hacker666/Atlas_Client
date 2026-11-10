@@ -21,9 +21,10 @@ public class SprintReset extends Module {
        one STOP, then one START the tick after, exactly a w-tap. PACKET and
        SILENT send STOP and START in the same tick, two sprint changes in one
        tick, which no keyboard produces and which bad-packet checks count. */
-    public final ModeProperty mode = new ModeProperty("Mode", 1, new String[]{"PACKET", "LEGIT", "SILENT", "SOFT", "CRAB"});
+    public final ModeProperty mode = new ModeProperty("Mode", 1, new String[]{"PACKET", "LEGIT", "SILENT", "SOFT", "CRAB", "ZEST"});
     /** Every mode but CRAB uses the settings below; CRAB has its own (crab-...). */
-    private final java.util.function.BooleanSupplier notCrab = () -> this.mode.getValue() != CRAB;
+    private final java.util.function.BooleanSupplier notCrab = () -> this.mode.getValue() != CRAB
+            && this.mode.getValue() != ZEST;
     private final BooleanProperty onlyWhileSprinting = new BooleanProperty("Only While Sprinting", true, notCrab);
     private final BooleanProperty onlyWhileMoving = new BooleanProperty("Only While Moving", true, notCrab);
     /* Sends four made-up positions (a packet critical) with the reset. That
@@ -92,6 +93,49 @@ public class SprintReset extends Module {
     private Object crabAttackerOf;
     /** The action CRAB is holding, so a change of crab-action mid-reset gives back the right key. */
     private int crabHeld = -1;
+    /* ---- ZEST (2026-11-10, owner: zest tap): see ZestTapPlan. A hit counts when it lands (the target's hurt time
+       rising after our attack on it), not on every click, or a burst would finish a sequence in a second. */
+    static final int ZEST = 5;
+    private final java.util.function.BooleanSupplier zest = () -> this.mode.getValue() == ZEST;
+    /* Default HitSelect (owner's video: "let the other player hit you first and immediately hit him back"). */
+    private final ModeProperty zestStart = new ModeProperty("zest-start", 2,
+            new String[]{"Any", "FirstHit", "HitSelect", "Trade"}, zest);
+    private final BooleanProperty zestStrafe = new BooleanProperty("zest-strafe", true, zest);
+    private final BooleanProperty zestStrafeRandom = new BooleanProperty("zest-strafe-random", true,
+            () -> this.mode.getValue() == ZEST && this.zestStrafe.getValue());
+    private final java.util.function.BooleanSupplier zestTaps = () -> this.mode.getValue() == ZEST
+            && this.zestStrafe.getValue() && this.zestStrafeRandom.getValue();
+    private final IntProperty zestStrafeTaps = new IntProperty("zest-strafe-taps", ZestTapPlan.DEFAULT_TAPS, 1,
+            ZestTapPlan.MAX_TAPS, zestTaps);
+    private final IntProperty zestTapMin = new IntProperty("zest-strafe-tap-min-ticks", ZestTapPlan.TAP_MIN_TICKS, 1, 6,
+            zestTaps);
+    private final IntProperty zestTapMax = new IntProperty("zest-strafe-tap-max-ticks", ZestTapPlan.TAP_MAX_TICKS, 1, 6,
+            zestTaps);
+    private final IntProperty zestGapMin = new IntProperty("zest-strafe-gap-min-ticks", ZestTapPlan.GAP_MIN_TICKS, 0, 10,
+            zestTaps);
+    private final IntProperty zestGapMax = new IntProperty("zest-strafe-gap-max-ticks", ZestTapPlan.GAP_MAX_TICKS, 0, 10,
+            zestTaps);
+    private final IntProperty zestDelayMax = new IntProperty("zest-strafe-delay-max-ticks", ZestTapPlan.STRAFE_DELAY_MAX,
+            0, 10, zestTaps);
+    private final PercentProperty zestSwap = new PercentProperty("zest-strafe-swap-chance", ZestTapPlan.SWAP_PERCENT,
+            zestTaps);
+    private final BooleanProperty zestCheckOpponent = new BooleanProperty("zest-check-opponent", true, zest);
+    private final ModeProperty zestReleaseAt = new ModeProperty("zest-release-at", 0, new String[]{"Hit", "Peak"}, zest);
+    private final IntProperty zestReleaseMs = new IntProperty("zest-release-ms", 150, 50, 1000, zest);
+    private final BooleanProperty zestClicks = new BooleanProperty("zest-clicks", false, zest);
+    private final ZestClickPlan zestClickPlan = new ZestClickPlan(new java.util.Random());
+    /** A click ZEST pressed this tick: its LeftClickMouseEvent is let through. */
+    private boolean zestClicking;
+    private boolean zestKeyPending;
+    private boolean zestOwnsClicks;
+    private long zestAttackHeldMs = Long.MIN_VALUE / 2;
+    private final ZestTapPlan zestPlan = new ZestTapPlan(new java.util.Random());
+    private ZestTapPlan.Keys zestKeys;
+    private EntityLivingBase zestTarget;
+    private long zestAttackMs;
+    private int zestTargetHurt;
+    private double zestLastDy;
+    private int zestLastOwnHurt;
     private static final Minecraft mc = Minecraft.getMinecraft();
     private boolean attacked = false;
     private boolean needsReset = false;
@@ -129,6 +173,7 @@ public class SprintReset extends Module {
     @Override
     public void onDisabled() {
         crabStop();
+        zestStop();
         waitingForDamage = false;
         waitTicks = 0;
         releaseWait = 0;
@@ -147,6 +192,15 @@ public class SprintReset extends Module {
         Entity target = event.getTarget();
         if (target == null) return;
         if (!(target instanceof EntityLivingBase)) return;
+        if (this.mode.getValue() == ZEST) {
+            if (target != this.zestTarget) {
+                this.zestTargetHurt = ((EntityLivingBase) target).hurtTime;
+                this.zestLastDy = 0.0;
+            }
+            this.zestTarget = (EntityLivingBase) target;
+            this.zestAttackMs = System.currentTimeMillis();
+            return;
+        }
 
         if (onlyWhileSprinting.getValue() && !mc.thePlayer.isSprinting()) return;
         if (onlyWhileMoving.getValue() && !isMoving()) return;
@@ -198,7 +252,7 @@ public class SprintReset extends Module {
 
     @EventTarget
     public void onUpdate(UpdateEvent event) {
-        if (!this.isEnabled() || this.mode.getValue() == CRAB) return;
+        if (!this.isEnabled() || this.mode.getValue() == CRAB || this.mode.getValue() == ZEST) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
         // Once per tick: this used to count PRE and POST, two a tick.
         if (event.getType() != atlas.event.types.EventType.PRE) return;
@@ -313,6 +367,12 @@ public class SprintReset extends Module {
         if (!this.isEnabled() || mc.thePlayer == null || mc.gameSettings == null) {
             return;
         }
+        if (this.mode.getValue() == ZEST) {
+            crabStop();
+            zestTick();
+            return;
+        }
+        zestStop();
         if (this.mode.getValue() != CRAB) {
             crabStop();
             return;
@@ -342,6 +402,125 @@ public class SprintReset extends Module {
             crabAct(this.crabHeld, true);
         } else if (step == CrabSprintPlan.RELEASE) {
             crabRelease();
+        }
+    }
+
+    /** ZEST: what the keys do this tick, from the hits seen since the last. Applied in onMoveInput. */
+    private void zestTick() {
+        if (mc.thePlayer.isDead || mc.theWorld == null) {
+            zestStop();
+            return;
+        }
+        long now = System.currentTimeMillis();
+        int ownHurt = mc.thePlayer.hurtTime;
+        boolean hurt = ownHurt > this.zestLastOwnHurt;
+        this.zestLastOwnHurt = ownHurt;
+        EntityLivingBase target = this.zestTarget;
+        if (target != null && (target.isDead || target.worldObj != mc.theWorld)) {
+            target = this.zestTarget = null;
+        }
+        boolean landed = false;
+        boolean peak = false;
+        boolean ok = false;
+        if (target != null) {
+            int targetHurt = target.hurtTime;
+            /* Ours if we attacked it within a round trip and a bit: the hurt shows when the server's answer is back. */
+            landed = targetHurt > this.zestTargetHurt && now - this.zestAttackMs <= 600L + atlas.util.Ping.own();
+            this.zestTargetHurt = targetHurt;
+            double dy = target.posY - target.lastTickPosY;
+            peak = this.zestLastDy > 0.0 && dy <= 0.0;
+            this.zestLastDy = dy;
+            ok = !this.zestCheckOpponent.getValue() || zestOpponentOk(target);
+        }
+        this.zestPlan.releaseAtHit(this.zestReleaseAt.getValue() == 0);
+        this.zestPlan.targetOpen(target != null && atlas.management.HitTimer.canHurt(target));
+        this.zestPlan.strafeShape(this.zestStrafeTaps.getValue(), this.zestTapMin.getValue(), this.zestTapMax.getValue(),
+                this.zestGapMin.getValue(), this.zestGapMax.getValue(), this.zestDelayMax.getValue(),
+                this.zestSwap.getValue());
+        this.zestKeys = this.zestPlan.tick(now, landed, hurt, ok, peak, this.zestStart.getValue(),
+                this.zestStrafe.getValue(), this.zestStrafeRandom.getValue(), this.zestReleaseMs.getValue());
+    }
+
+    /** Facing this player, not crouching, not blocking, not walking away (knockback aside). */
+    private static boolean zestOpponentOk(EntityLivingBase target) {
+        double dx = mc.thePlayer.posX - target.posX;
+        double dz = mc.thePlayer.posZ - target.posZ;
+        float toUs = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
+        if (Math.abs(net.minecraft.util.MathHelper.wrapAngleTo180_float(toUs - target.rotationYawHead)) > 60.0F) {
+            return false;
+        }
+        if (target.isSneaking()) {
+            return false;
+        }
+        if (target instanceof net.minecraft.entity.player.EntityPlayer
+                && ((net.minecraft.entity.player.EntityPlayer) target).isBlocking()) {
+            return false;
+        }
+        double length = Math.sqrt(dx * dx + dz * dz);
+        if (target.hurtTime == 0 && length > 0.01) {
+            double toward = ((target.posX - target.lastTickPosX) * dx + (target.posZ - target.lastTickPosZ) * dz) / length;
+            return toward >= -0.04;
+        }
+        return true;
+    }
+
+    private void zestStop() {
+        this.zestPlan.reset();
+        this.zestKeys = null;
+        this.zestClickPlan.reset();
+        this.zestOwnsClicks = false;
+    }
+
+    /**
+     * zest-clicks, at the start of the tick (as AutoClicker): while a combo runs and the attack button is held (or was
+     * within 300 ms), the clicks are ZEST's. None while the target cannot be hurt, a burst the moment it can (HitTimer:
+     * an attack sent now lands after its hurt has run out). Not with an aura on: the aura makes its own attacks.
+     */
+    @EventTarget
+    public void onZestTick(atlas.events.TickEvent event) {
+        if (event.getType() != atlas.event.types.EventType.PRE) {
+            return;
+        }
+        this.zestClicking = false;
+        int key = mc.gameSettings == null ? 0 : mc.gameSettings.keyBindAttack.getKeyCode();
+        if (this.zestKeyPending) {
+            this.zestKeyPending = false;
+            atlas.util.KeyBindUtil.updateKeyState(key);
+        }
+        if (!this.isEnabled() || this.mode.getValue() != ZEST || !this.zestClicks.getValue() || mc.thePlayer == null
+                || mc.theWorld == null) {
+            this.zestClickPlan.reset();
+            this.zestOwnsClicks = false;
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (mc.currentScreen == null && atlas.util.KeyBindUtil.isKeyDown(key)) {
+            this.zestAttackHeldMs = now;
+        }
+        boolean wanting = mc.currentScreen == null && now - this.zestAttackHeldMs <= 300L
+                && !atlas.util.Auras.anyEnabled();
+        EntityLivingBase target = this.zestTarget;
+        boolean combo = this.zestPlan.inCombo() && target != null;
+        this.zestOwnsClicks = ZestClickPlan.owns(combo, wanting);
+        boolean open = target != null && atlas.management.HitTimer.canHurt(target);
+        if (this.zestClickPlan.tick(now, combo, wanting, open) > 0 && !mc.thePlayer.isUsingItem()) {
+            this.zestClicking = true;
+            this.zestKeyPending = true;
+            atlas.util.KeyBindUtil.setKeyBindState(key, false);
+            atlas.util.KeyBindUtil.pressKeyOnce(key);
+        }
+    }
+
+    /** zest-clicks: while ZEST owns the clicks, only its own go out (AutoClicker's and the hand's are dropped). */
+    @EventTarget(atlas.event.types.Priority.HIGHEST)
+    public void onZestClick(atlas.events.LeftClickMouseEvent event) {
+        if (this.zestClicking) {
+            this.zestClicking = false;
+            return;
+        }
+        if (this.isEnabled() && this.mode.getValue() == ZEST && this.zestClicks.getValue() && this.zestOwnsClicks
+                && !event.isCancelled()) {
+            event.setCancelled(true);
         }
     }
 
@@ -378,6 +557,22 @@ public class SprintReset extends Module {
     @EventTarget
     public void onMoveInput(atlas.events.MoveInputEvent event) {
         if (!this.isEnabled() || mc.thePlayer == null || this.mode.getValue() == CRAB) {
+            return;
+        }
+        if (this.mode.getValue() == ZEST) {
+            ZestTapPlan.Keys keys = this.zestKeys;
+            net.minecraft.util.MovementInput input = mc.thePlayer.movementInput;
+            if (keys == null || mc.currentScreen != null) {
+                return;
+            }
+            boolean walking = input.moveForward > 0.0F;
+            if (keys.release && walking) {
+                input.moveForward = 0.0F;
+            }
+            /* Only when walking in and not strafing by hand; vanilla: A is +1, D is -1, a crouch scales by 0.3. */
+            if (keys.strafe != 0 && input.moveStrafe == 0.0F && walking && !keys.release) {
+                input.moveStrafe = (keys.strafe < 0 ? 1.0F : -1.0F) * (input.sneak ? 0.3F : 1.0F);
+            }
             return;
         }
         if (releaseWait > 0) {
@@ -422,5 +617,6 @@ public class SprintReset extends Module {
     @atlas.event.EventTarget(whenDisabled = true)
     public void onWorldDropEntities(atlas.events.LoadWorldEvent event) {
         this.lastTarget = null;
+        this.zestTarget = null;
     }
 }

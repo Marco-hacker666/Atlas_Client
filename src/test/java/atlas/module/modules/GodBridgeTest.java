@@ -184,6 +184,52 @@ public class GodBridgeTest {
         assertEquals(learned, plan.pitch, GodBridge.PITCH_SPREAD + GodBridge.DRIFT_MAX);
     }
 
+    /** 2026-11-10 (owner: "the jump places no block"): in the air the pitch that places is taken, faster, not learned. */
+    @Test
+    public void inTheAirThePlacingPitchIsTakenAndNotLearned() {
+        Sim sim = new Sim();
+        for (int i = 0; i < 40; i++) {
+            sim.walk();
+        }
+        float start = sim.pitch;
+        int side = sim.bridge.side();
+        GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
+        in.onGround = false;
+        in.lookPlaces = false;
+        in.placePitch = start + 9.0F;
+        GodBridge.Plan plan = sim.step(in);
+        assertEquals(start + 9.0F, plan.pitch, 0.01F);
+        assertTrue("it clicks along that pitch", plan.click);
+        assertFalse("no jump in the air", plan.jump);
+        assertEquals(side, sim.bridge.side());
+        assertTrue("an air pitch is not the ground one", Float.isNaN(sim.bridge.learnedPitch()));
+    }
+
+    @Test
+    public void afterTheLandingThePitchEasesBackWithoutAStop() {
+        Sim sim = new Sim();
+        for (int i = 0; i < 40; i++) {
+            sim.walk();
+        }
+        float start = sim.pitch;
+        GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
+        in.onGround = false;
+        in.lookPlaces = false;
+        in.placePitch = start + 10.0F;
+        sim.step(in);
+        float previous = sim.pitch;
+        for (int i = 0; i < 20; i++) {
+            GodBridge.Input landed = walking(sim.now, sim.yaw, sim.pitch);
+            landed.edge = i % 4 == 3;
+            GodBridge.Plan plan = sim.step(landed);
+            assertFalse("no stop on the way back", plan.stop);
+            assertTrue("a small step: " + (previous - plan.pitch),
+                    Math.abs(previous - plan.pitch) <= GodBridge.AIR_RETURN_STEP + GodBridge.DRIFT_STEP);
+            previous = plan.pitch;
+        }
+        assertEquals(start, sim.pitch, GodBridge.DRIFT_MAX);
+    }
+
     @Test
     public void anEdgeTheLookMissesIsTheOtherSideWithNoCrouch() {
         Sim sim = new Sim();

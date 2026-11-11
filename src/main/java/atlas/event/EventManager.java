@@ -260,6 +260,12 @@ public final class EventManager {
             /* 2026-10-11: and what a module does to the player without a
                packet -- motion, ground, look, timer (ActionWatch). */
             final boolean moved = atlas.util.ActionWatch.watches(event);
+            /* MoveCheck's start of the tick: the move is done and no module has had this PRE yet (2026-11-11). */
+            Runnable startOfTick = atlas.util.ActionWatch.beforeUpdatePre;
+            if (startOfTick != null && event instanceof atlas.events.UpdateEvent
+                    && ((atlas.events.UpdateEvent) event).getType() == atlas.event.types.EventType.PRE) {
+                startOfTick.run();
+            }
             if (event instanceof EventStoppable) {
                 EventStoppable stoppable = (EventStoppable) event;
                 for (final MethodData data : dataList) {

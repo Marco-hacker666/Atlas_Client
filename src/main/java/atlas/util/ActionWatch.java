@@ -4,7 +4,9 @@ import atlas.event.events.Event;
 import atlas.events.JumpEvent;
 import atlas.events.KnockbackEvent;
 import atlas.events.LivingUpdateEvent;
+import atlas.events.MoveInputEvent;
 import atlas.events.PlayerUpdateEvent;
+import atlas.events.PreMoveInputEvent;
 import atlas.events.StrafeEvent;
 import atlas.events.TickEvent;
 import atlas.events.UpdateEvent;
@@ -15,6 +17,8 @@ import net.minecraft.client.entity.EntityPlayerSP;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 /**
  * What a module did to the player without sending a packet (2026-10-11).
@@ -28,6 +32,10 @@ import java.util.Map;
  * module's doing, recorded as "move", "rotate" or "timer". Client thread only;
  * the same module and kind at most every 250 ms, so a module that turns every
  * tick does not push everything else out of the ledger.
+ *
+ * 2026-11-11, for MoveCheck's self check: also the keys (movementInput, and the key states at PreMoveInputEvent),
+ * the sprint and the push a StrafeEvent carries, and every change of the tick kept by module and kind, with no
+ * dedupe (tickMovers). The ledger sees only move, rotate and timer, as before.
  */
 public final class ActionWatch {
     private static final double MOTION_EPS = 1.0E-4;
@@ -39,6 +47,13 @@ public final class ActionWatch {
     private static boolean ground;
     private static float yaw, pitch, sentYaw, sentPitch, timer;
     private static boolean armed;
+    private static float inForward, inStrafe, pushStrafe, pushForward, pushFriction;
+    private static boolean inJump, inSneak, sprinting;
+    private static int keys;
+    /** Module -> kinds of change, since the last takeTickMovers. Client thread only. */
+    private static Map<String, TreeSet<String>> tickMovers = new TreeMap<String, TreeSet<String>>();
+    /** Run just before an UpdateEvent PRE goes to any listener (MoveCheck's start of the tick). */
+    public static volatile Runnable beforeUpdatePre;
 
     private ActionWatch() {
     }
@@ -47,7 +62,8 @@ public final class ActionWatch {
     public static boolean watches(Event event) {
         return event instanceof UpdateEvent || event instanceof StrafeEvent || event instanceof PlayerUpdateEvent
                 || event instanceof KnockbackEvent || event instanceof JumpEvent || event instanceof TickEvent
-                || event instanceof LivingUpdateEvent;
+                || event instanceof LivingUpdateEvent || event instanceof MoveInputEvent
+                || event instanceof PreMoveInputEvent;
     }
 
     public static void before(Event event) {
@@ -69,7 +85,33 @@ public final class ActionWatch {
             sentPitch = ((UpdateEvent) event).getNewPitch();
         }
         timer = timerSpeed();
+        sprinting = player.isSprinting();
+        if (player.movementInput != null) {
+            inForward = player.movementInput.moveForward;
+            inStrafe = player.movementInput.moveStrafe;
+            inJump = player.movementInput.jump;
+            inSneak = player.movementInput.sneak;
+        }
+        if (event instanceof PreMoveInputEvent) {
+            keys = keyStates(mc);
+        }
+        if (event instanceof StrafeEvent) {
+            StrafeEvent strafe = (StrafeEvent) event;
+            pushStrafe = strafe.getStrafe();
+            pushForward = strafe.getForward();
+            pushFriction = strafe.getFriction();
+        }
         armed = true;
+    }
+
+    private static int keyStates(Minecraft mc) {
+        if (mc.gameSettings == null) {
+            return 0;
+        }
+        return (mc.gameSettings.keyBindForward.isKeyDown() ? 1 : 0) | (mc.gameSettings.keyBindBack.isKeyDown() ? 2 : 0)
+                | (mc.gameSettings.keyBindLeft.isKeyDown() ? 4 : 0) | (mc.gameSettings.keyBindRight.isKeyDown() ? 8 : 0)
+                | (mc.gameSettings.keyBindJump.isKeyDown() ? 16 : 0) | (mc.gameSettings.keyBindSneak.isKeyDown() ? 32 : 0)
+                | (mc.gameSettings.keyBindSprint.isKeyDown() ? 64 : 0);
     }
 
     public static void after(Object source, Event event) {
@@ -86,6 +128,25 @@ public final class ActionWatch {
         if (Math.abs(player.motionX - mx) > MOTION_EPS || Math.abs(player.motionY - my) > MOTION_EPS
                 || Math.abs(player.motionZ - mz) > MOTION_EPS || player.onGround != ground) {
             note(name, "move");
+            tick(name, "move");
+        }
+        if (player.isSprinting() != sprinting) {
+            tick(name, "sprint");
+        }
+        if (player.movementInput != null && (player.movementInput.moveForward != inForward
+                || player.movementInput.moveStrafe != inStrafe || player.movementInput.jump != inJump
+                || player.movementInput.sneak != inSneak)) {
+            tick(name, "input");
+        }
+        if (event instanceof PreMoveInputEvent && keyStates(mc) != keys) {
+            tick(name, "input");
+        }
+        if (event instanceof StrafeEvent) {
+            StrafeEvent strafe = (StrafeEvent) event;
+            if (strafe.getStrafe() != pushStrafe || strafe.getForward() != pushForward
+                    || strafe.getFriction() != pushFriction) {
+                tick(name, "push");
+            }
         }
         boolean turned = Math.abs(player.rotationYaw - yaw) > ANGLE_EPS || Math.abs(player.rotationPitch - pitch) > ANGLE_EPS;
         if (event instanceof UpdateEvent) {
@@ -95,10 +156,32 @@ public final class ActionWatch {
         }
         if (turned) {
             note(name, "rotate");
+            tick(name, "rotate");
         }
         if (Math.abs(timerSpeed() - timer) > 1.0E-4F) {
             note(name, "timer");
         }
+    }
+
+    private static void tick(String module, String kind) {
+        TreeSet<String> kinds = tickMovers.get(module);
+        if (kinds == null) {
+            kinds = new TreeSet<String>();
+            tickMovers.put(module, kinds);
+        }
+        kinds.add(kind);
+    }
+
+    /** What modules changed since the last call, and starts a new count. */
+    public static Map<String, TreeSet<String>> takeTickMovers() {
+        Map<String, TreeSet<String>> out = tickMovers;
+        tickMovers = new TreeMap<String, TreeSet<String>>();
+        return out;
+    }
+
+    /** The same so far, without starting a new count. */
+    public static Map<String, TreeSet<String>> peekTickMovers() {
+        return tickMovers;
     }
 
     private static float timerSpeed() {

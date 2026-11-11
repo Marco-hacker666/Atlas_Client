@@ -404,4 +404,18 @@ public class GodBridgeTest {
         assertEquals(start + 9.0F, second.pitch, 0.02F);
         assertTrue(second.click);
     }
+
+    @Test
+    public void theLeadTurnStartsWhileTheColumnUnderTheFeetIsFilled() {
+        /* Review, PR #35: nothing to place under the feet (hasTarget false), the next step's block needs a pitch nine
+           degrees off: the turn still starts now. */
+        Sim sim = settledRun();
+        float start = sim.pitch;
+        GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
+        in.hasTarget = false;
+        in.lookPlaces = false;
+        in.aheadPitch = start + 9.0F;
+        GodBridge.Plan plan = sim.step(in);
+        assertEquals(GodBridge.PITCH_FIX_MAX, plan.pitch - start, 0.6F);
+    }
 }

@@ -220,7 +220,9 @@ final class GodBridge {
                 this.learnedPitch = this.pitchBase;
                 this.groundPitch = Float.NaN;
             }
-        } else if (in.onGround && in.hasTarget && !in.lookPlaces && settled && !Float.isNaN(in.aheadPitch)) {
+        } else if (in.onGround && !in.lookPlaces && settled && !Float.isNaN(in.aheadPitch)) {
+            /* No hasTarget here: the column under the feet may be filled while the next step's still needs a block
+               (review, PR #35). Scaffold only sets aheadPitch when that block exists. */
             /* ...and the tick before, it is already on its way to the one that places from the next step, so the
                move is spread over two ticks and the walk does not wait for it. No click: nothing places yet. */
             this.pitchBase += clamp(in.aheadPitch - pitch, PITCH_FIX_MAX);

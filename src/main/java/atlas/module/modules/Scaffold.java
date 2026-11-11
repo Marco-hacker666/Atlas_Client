@@ -585,6 +585,7 @@ public class Scaffold extends Module {
                     this.blockCount--;
                 }
                 this.placedThisTick = true;
+                this.walkOnSince = -1;
                 if (this.isThreeFmcMode()) {
                     this.threeFmcPlaceCooldown = 1;
                 }
@@ -1788,6 +1789,26 @@ public class Scaffold extends Module {
      * keep the stop.
      */
     private boolean godBridgePlacesAhead() {
+        /* A walk-on with no block down within two ticks: something the forecast cannot see refused it. No walk-on for
+           a second, so the guard keeps its full stopping distance while whatever it was lasts (review, PR #35). */
+        if (this.walkOnSince >= 0 && this.tick - this.walkOnSince > 2) {
+            this.walkOnSince = -1;
+            this.walkOnBlockedUntil = this.tick + 20;
+        }
+        if (this.tick < this.walkOnBlockedUntil) {
+            return false;
+        }
+        boolean ahead = this.godBridgeForecastPlaces();
+        if (ahead && this.walkOnSince < 0) {
+            this.walkOnSince = this.tick;
+        }
+        return ahead;
+    }
+
+    private int walkOnSince = -1;
+    private int walkOnBlockedUntil;
+
+    private boolean godBridgeForecastPlaces() {
         GodBridge.Plan plan = this.runPlan;
         if (!this.run.running() || plan == null || !plan.look || plan.maxTurn < 180.0F) {
             return false;
@@ -1806,6 +1827,12 @@ public class Scaffold extends Module {
            here, and the look must place over a spread of step lengths, not only the one forecast (review, PR #35). */
         if (!ItemUtil.isHoldingBlock() || this.blockCount <= 0 || this.pauseTicks > 0 || !this.canPlace()
                 || this.faceFailed(target.blockPos(), target.facing())) {
+            return false;
+        }
+        /* The same game check place() makes: a cell that is taken, or a block that would land in an entity. */
+        ItemStack held = mc.thePlayer.inventory.getCurrentItem();
+        if (held == null || !(held.getItem() instanceof ItemBlock) || !((ItemBlock) held.getItem())
+                .canPlaceBlockOnSide(mc.theWorld, target.blockPos(), target.facing(), mc.thePlayer, held)) {
             return false;
         }
         if (this.paceOn() && this.paceHolds(target.blockPos(), target.facing(), this.run.lookYaw())) {
@@ -2320,6 +2347,8 @@ public class Scaffold extends Module {
 
     @Override
     public void onEnabled() {
+        this.walkOnSince = -1;
+        this.walkOnBlockedUntil = 0;
         if (mc.thePlayer != null) {
             this.lastSlot = mc.thePlayer.inventory.currentItem;
         } else {

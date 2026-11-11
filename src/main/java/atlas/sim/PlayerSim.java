@@ -20,11 +20,12 @@ import java.util.List;
  * takes the state now ({@link SimPlayer#state}), copies it, and ticks the
  * copy with the keys it wants to try.
  *
- * Pure: the world is an interface (collision boxes and slipperiness), so it
- * runs in a test with no game. Not covered: water, lava, ladders, cobwebs,
- * soul sand, slime, riding and flying -- {@link SimPlayer#supported} says
- * when the player is in one of those, and the caller keeps what it did
- * before.
+ * Pure: the world is an interface (collision boxes, slipperiness, and since
+ * 2026-11-12 the liquids, ladders and the blocks that act on a touch), so it
+ * runs in a test with no game. Covered: land, ice, water (with its flow and
+ * Depth Strider), lava, ladders and vines, cobwebs, soul sand and slime. Not
+ * covered: riding and flying -- {@link SimPlayer#supported} says when the
+ * player is doing one of those, and the caller keeps what it did before.
  */
 public final class PlayerSim {
 
@@ -35,6 +36,47 @@ public final class PlayerSim {
 
         /** Block.slipperiness of the block at this cell (0.6 for most, air too; ice 0.98). */
         float slipperiness(int x, int y, int z);
+
+        /**
+         * World.handleMaterialAcceleration for water over {@code area}: whether the area is in water, with the flow
+         * of the water blocks counted (their getFlowVector summed, not normalised) added into {@code flow}.
+         */
+        default boolean water(AxisAlignedBB area, double[] flow) {
+            return false;
+        }
+
+        /** World.isMaterialInBB(area, lava). */
+        default boolean lava(AxisAlignedBB area) {
+            return false;
+        }
+
+        /** World.isAnyLiquid(area). */
+        default boolean liquid(AxisAlignedBB area) {
+            return false;
+        }
+
+        /** A ladder or a vine at this cell (EntityLivingBase.isOnLadder). */
+        default boolean climbable(int x, int y, int z) {
+            return false;
+        }
+
+        /** Slime at this cell. */
+        default boolean slime(int x, int y, int z) {
+            return false;
+        }
+
+        /** How many blocks of this kind {@code area} touches (Entity.doBlockCollisions, cell by cell). */
+        default int touching(AxisAlignedBB area, Touch kind) {
+            return 0;
+        }
+    }
+
+    /** Blocks that act on a player who touches them (onEntityCollidedWithBlock). */
+    public enum Touch {
+        /** Sets the player in the web: the next move is a quarter across and a twentieth down. */
+        WEB,
+        /** Each one touched takes the motion across to 0.4. */
+        SOUL_SAND
     }
 
     /** The keys of one tick, as the move gets them. */
@@ -81,6 +123,12 @@ public final class PlayerSim {
     public boolean onGround;
     public boolean sprinting;
     public boolean collidedHorizontally;
+    /** In water (Entity.inWater), as handleWaterMovement found it at the start of the last tick. */
+    public boolean inWater;
+    /** In a cobweb: the next move is cut (Entity.isInWeb). */
+    public boolean inWeb;
+    /** The boots' Depth Strider level (EnchantmentHelper.getDepthStriderModifier). */
+    public float depthStrider;
     /** Ticks until the next jump of a held jump key (EntityLivingBase.jumpTicks). */
     public int jumpTicks;
     /** The ground speed this tick's move uses: getAIMoveSpeed, set at the end of the tick before. */
@@ -114,6 +162,9 @@ public final class PlayerSim {
         s.stepHeight = this.stepHeight;
         s.canSprint = this.canSprint;
         s.canStartSprint = this.canStartSprint;
+        s.inWater = this.inWater;
+        s.inWeb = this.inWeb;
+        s.depthStrider = this.depthStrider;
         return s;
     }
 
@@ -157,6 +208,15 @@ public final class PlayerSim {
      * server was told) sets it and runs only this.
      */
     public void move(World world, Input in) {
+        /* Entity.handleWaterMovement, before onLivingUpdate: in water or not, and the flow's push. */
+        double[] flow = new double[3];
+        this.inWater = world.water(this.box.expand(0.0, -0.4000000059604645, 0.0).contract(0.001, 0.001, 0.001), flow);
+        double flowLength = Math.sqrt(flow[0] * flow[0] + flow[1] * flow[1] + flow[2] * flow[2]);
+        if (this.inWater && flowLength >= 1.0E-4) {
+            this.motionX += flow[0] / flowLength * 0.014;
+            this.motionY += flow[1] / flowLength * 0.014;
+            this.motionZ += flow[2] / flowLength * 0.014;
+        }
         if (this.jumpTicks > 0) {
             this.jumpTicks--;
         }
@@ -170,7 +230,10 @@ public final class PlayerSim {
             this.motionZ = 0.0;
         }
         if (in.jump) {
-            if (this.onGround && this.jumpTicks == 0) {
+            if (this.inWater || inLava(world)) {
+                /* Swimming up (updateAITick, handleJumpLava). */
+                this.motionY += 0.03999999910593033;
+            } else if (this.onGround && this.jumpTicks == 0) {
                 jump(in.yaw);
                 this.jumpTicks = 10;
             }
@@ -198,8 +261,70 @@ public final class PlayerSim {
         }
     }
 
-    /** EntityLivingBase.moveEntityWithHeading, on land. */
+    private boolean inLava(World world) {
+        return world.lava(this.box.expand(-0.10000000149011612, -0.4000000059604645, -0.10000000149011612));
+    }
+
+    /** EntityLivingBase.moveEntityWithHeading. */
     private void moveWithHeading(World world, float strafe, float forward, float yaw, boolean sneak) {
+        if (this.inWater) {
+            double startY = this.box.minY;
+            float drag = 0.8F;
+            float speed = 0.02F;
+            float strider = Math.min(3.0F, this.depthStrider);
+            if (!this.onGround) {
+                strider *= 0.5F;
+            }
+            if (strider > 0.0F) {
+                drag += (0.54600006F - drag) * strider / 3.0F;
+                speed += (this.moveSpeed - speed) * strider / 3.0F;
+            }
+            double[] push = push(strafe, forward, speed, yaw);
+            this.motionX += push[0];
+            this.motionZ += push[1];
+            move(world, this.motionX, this.motionY, this.motionZ, sneak);
+            this.motionX *= (double) drag;
+            this.motionY *= 0.800000011920929;
+            this.motionZ *= (double) drag;
+            this.motionY -= 0.02;
+            climbOut(world, startY);
+            return;
+        }
+        if (inLava(world)) {
+            double startY = this.box.minY;
+            double[] push = push(strafe, forward, 0.02F, yaw);
+            this.motionX += push[0];
+            this.motionZ += push[1];
+            move(world, this.motionX, this.motionY, this.motionZ, sneak);
+            this.motionX *= 0.5;
+            this.motionY *= 0.5;
+            this.motionZ *= 0.5;
+            this.motionY -= 0.02;
+            climbOut(world, startY);
+            return;
+        }
+        landMove(world, strafe, forward, yaw, sneak);
+    }
+
+    /** Against a wall in a liquid, a hop up when the place a little higher is free (isOffsetPositionInLiquid). */
+    private void climbOut(World world, double startY) {
+        if (!this.collidedHorizontally) {
+            return;
+        }
+        AxisAlignedBB above = this.box.offset(this.motionX, this.motionY + 0.6000000238418579 - this.box.minY + startY,
+                this.motionZ);
+        if (world.boxes(above).isEmpty() && !world.liquid(above)) {
+            this.motionY = 0.30000001192092896;
+        }
+    }
+
+    private boolean onLadder(World world) {
+        return world.climbable(MathHelper.floor_double(x()), MathHelper.floor_double(this.box.minY),
+                MathHelper.floor_double(z()));
+    }
+
+    /** moveEntityWithHeading on land, ladders included. */
+    private void landMove(World world, float strafe, float forward, float yaw, boolean sneak) {
         float friction = 0.91F;
         if (this.onGround) {
             friction = world.slipperiness(MathHelper.floor_double(x()), MathHelper.floor_double(this.box.minY) - 1,
@@ -210,7 +335,20 @@ public final class PlayerSim {
         double[] push = push(strafe, forward, speed, yaw);
         this.motionX += push[0];
         this.motionZ += push[1];
+        if (onLadder(world)) {
+            this.motionX = MathHelper.clamp_double(this.motionX, (double) -0.15F, (double) 0.15F);
+            this.motionZ = MathHelper.clamp_double(this.motionZ, (double) -0.15F, (double) 0.15F);
+            if (this.motionY < -0.15) {
+                this.motionY = -0.15;
+            }
+            if (sneak && this.motionY < 0.0) {
+                this.motionY = 0.0;
+            }
+        }
         move(world, this.motionX, this.motionY, this.motionZ, sneak);
+        if (this.collidedHorizontally && onLadder(world)) {
+            this.motionY = 0.2;
+        }
         this.motionY -= 0.08;
         this.motionY *= 0.9800000190734863;
         this.motionX *= (double) friction;
@@ -240,6 +378,16 @@ public final class PlayerSim {
 
     /** Entity.moveEntity: the move against the world, with the sneak edge and the step up. */
     private void move(World world, double x, double y, double z, boolean sneak) {
+        if (this.inWeb) {
+            this.inWeb = false;
+            x *= 0.25;
+            y *= 0.05000000074505806;
+            z *= 0.25;
+            this.motionX = 0.0;
+            this.motionY = 0.0;
+            this.motionZ = 0.0;
+        }
+        boolean sneakEdge = this.onGround && sneak;
         double wantedX = x;
         double wantedY = y;
         double wantedZ = z;
@@ -352,8 +500,31 @@ public final class PlayerSim {
         if (wantedZ != z) {
             this.motionZ = 0.0;
         }
+        /* The block the feet are on (0.2 down): slime bounces a landing back and slows a walk. */
+        boolean slime = world.slime(MathHelper.floor_double(x()), MathHelper.floor_double(this.box.minY - 0.20000000298023224),
+                MathHelper.floor_double(z()));
         if (collidedVertically) {
-            this.motionY = 0.0;
+            if (slime && !sneak) {
+                if (this.motionY < 0.0) {
+                    this.motionY = -this.motionY;
+                }
+            } else {
+                this.motionY = 0.0;
+            }
+        }
+        if (!sneakEdge && this.onGround && slime && Math.abs(this.motionY) < 0.1 && !sneak) {
+            double slow = 0.4 + Math.abs(this.motionY) * 0.2;
+            this.motionX *= slow;
+            this.motionZ *= slow;
+        }
+        /* Entity.doBlockCollisions: what the box (in by 0.001) touches. */
+        AxisAlignedBB inner = this.box.contract(0.001, 0.001, 0.001);
+        if (world.touching(inner, Touch.WEB) > 0) {
+            this.inWeb = true;
+        }
+        for (int i = world.touching(inner, Touch.SOUL_SAND); i > 0; i--) {
+            this.motionX *= 0.4;
+            this.motionZ *= 0.4;
         }
     }
 

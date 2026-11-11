@@ -110,6 +110,9 @@ public class MoveCheck extends Module {
     private int selfPlainOff;
     private double selfWorst;
     private long selfLineSecond;
+    /** This tick's move as the client made it, for the SELF line: its yaw and sprint once the keys were final. */
+    private float moveYaw = Float.NaN;
+    private boolean moveSprinting;
     private int selfLinesThisSecond;
     /** Ticks and misses by what was running. */
     private final Map<String, int[]> byTag = new TreeMap<String, int[]>();
@@ -254,10 +257,15 @@ public class MoveCheck extends Module {
             this.selfLinesThisSecond = 0;
         }
         if (this.selfLinesThisSecond++ < MISS_LINES_A_SECOND) {
-            write(String.format("SELF off %.4f (x %.4f y %.4f z %.4f) keys %s | yaw %.1f %s%s%s| %s", result.offset,
+            /* What tells a cause apart: the move's own yaw against the packet's, the client's sprint against the
+               server's, and the ground speed the last tick left for this move. */
+            write(String.format("SELF off %.4f (x %.4f y %.4f z %.4f) keys %s | yaw %.1f move-yaw %.1f %s%s%s| client %s"
+                            + "| speed %.4f air %.4f | %s", result.offset,
                     mc.thePlayer.posX - result.end.x(), mc.thePlayer.getEntityBoundingBox().minY - result.end.y(),
                     mc.thePlayer.posZ - result.end.z(), result.keys(), MathHelper.wrapAngleTo180_float(sentYaw),
-                    mc.thePlayer.onGround ? "ground " : "air ", sprint ? "sprint " : "", sneak ? "sneak " : "", tag));
+                    Float.isNaN(this.moveYaw) ? Float.NaN : MathHelper.wrapAngleTo180_float(this.moveYaw),
+                    mc.thePlayer.onGround ? "ground " : "air ", sprint ? "sprint " : "", sneak ? "sneak " : "",
+                    this.moveSprinting ? "sprint " : "walk ", before.moveSpeed, before.airSpeed, tag));
         }
     }
 
@@ -265,7 +273,12 @@ public class MoveCheck extends Module {
     @EventTarget(Priority.LOWEST)
     public void onLivingUpdate(LivingUpdateEvent event) {
         this.simPredicted = null;
-        if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null || !SimPlayer.supported(mc.thePlayer)) {
+        if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null) {
+            return;
+        }
+        this.moveYaw = SimPlayer.inputAsMoved(mc.thePlayer).yaw;
+        this.moveSprinting = mc.thePlayer.isSprinting();
+        if (!SimPlayer.supported(mc.thePlayer)) {
             return;
         }
         PlayerSim sim = SimPlayer.state(mc.thePlayer);

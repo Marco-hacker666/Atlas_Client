@@ -2069,7 +2069,7 @@ public class Scaffold extends Module {
             return false;
         }
         if (SimPlayer.supported(mc.thePlayer)) {
-            PlayerSim sim = SimPlayer.state(mc.thePlayer);
+            PlayerSim sim = SimPlayer.stateInMove(mc.thePlayer);
             PlayerSim.World world = SimPlayer.world(mc.theWorld, mc.thePlayer);
             PlayerSim.Input in = SimPlayer.inputBeforeMove(mc.thePlayer);
             in.jump = false;

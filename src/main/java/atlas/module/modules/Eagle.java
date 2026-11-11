@@ -38,7 +38,7 @@ public class Eagle extends Module {
      */
     private boolean canMoveSafely(boolean atMoveInput) {
         if (SimPlayer.supported(mc.thePlayer)) {
-            PlayerSim sim = SimPlayer.state(mc.thePlayer);
+            PlayerSim sim = atMoveInput ? SimPlayer.stateInMove(mc.thePlayer) : SimPlayer.state(mc.thePlayer);
             PlayerSim.World world = SimPlayer.world(mc.theWorld, mc.thePlayer);
             PlayerSim.Input in = atMoveInput ? SimPlayer.inputBeforeMove(mc.thePlayer) : SimPlayer.inputAhead(mc.thePlayer);
             in.jump = false;

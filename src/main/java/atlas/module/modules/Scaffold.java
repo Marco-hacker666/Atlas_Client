@@ -1849,7 +1849,7 @@ public class Scaffold extends Module {
                potion, ice and whatever is in the way. Asked at the run tick the keys are the ones held; asked at the
                input stage they are this tick's, as the modules before left them. No jump: the forecast is of the
                walk. */
-            PlayerSim sim = SimPlayer.state(mc.thePlayer);
+            PlayerSim sim = atMoveInput ? SimPlayer.stateInMove(mc.thePlayer) : SimPlayer.state(mc.thePlayer);
             PlayerSim.Input in = atMoveInput ? SimPlayer.inputBeforeMove(mc.thePlayer) : SimPlayer.inputAhead(mc.thePlayer);
             in.jump = false;
             double x = sim.x();
@@ -1876,7 +1876,7 @@ public class Scaffold extends Module {
         if (!mc.thePlayer.onGround) {
             return false;
         }
-        return !PlayerSim.stopsOnFloor(SimPlayer.state(mc.thePlayer), SimPlayer.world(mc.theWorld, mc.thePlayer),
+        return !PlayerSim.stopsOnFloor(SimPlayer.stateInMove(mc.thePlayer), SimPlayer.world(mc.theWorld, mc.thePlayer),
                 SimPlayer.inputBeforeMove(mc.thePlayer), 0.02, 0.99);
     }
 

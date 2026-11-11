@@ -129,6 +129,12 @@ public final class PlayerSim {
     public boolean inWeb;
     /** The boots' Depth Strider level (EnchantmentHelper.getDepthStriderModifier). */
     public float depthStrider;
+    /**
+     * The state was taken inside the player's tick, after handleWaterMovement (at LivingUpdateEvent or
+     * MoveInputEvent): this tick's flow push is already in the motion, so the first move does not add it again.
+     * Cleared by that move (review, PR #37).
+     */
+    public boolean waterPushed;
     /** Ticks until the next jump of a held jump key (EntityLivingBase.jumpTicks). */
     public int jumpTicks;
     /** The ground speed this tick's move uses: getAIMoveSpeed, set at the end of the tick before. */
@@ -165,6 +171,7 @@ public final class PlayerSim {
         s.inWater = this.inWater;
         s.inWeb = this.inWeb;
         s.depthStrider = this.depthStrider;
+        s.waterPushed = this.waterPushed;
         return s;
     }
 
@@ -212,7 +219,9 @@ public final class PlayerSim {
         double[] flow = new double[3];
         this.inWater = world.water(this.box.expand(0.0, -0.4000000059604645, 0.0).contract(0.001, 0.001, 0.001), flow);
         double flowLength = Math.sqrt(flow[0] * flow[0] + flow[1] * flow[1] + flow[2] * flow[2]);
-        if (this.inWater && flowLength >= 1.0E-4) {
+        boolean pushed = this.waterPushed;
+        this.waterPushed = false;
+        if (this.inWater && flowLength >= 1.0E-4 && !pushed) {
             this.motionX += flow[0] / flowLength * 0.014;
             this.motionY += flow[1] / flowLength * 0.014;
             this.motionZ += flow[2] / flowLength * 0.014;

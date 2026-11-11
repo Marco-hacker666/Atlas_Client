@@ -368,4 +368,26 @@ public class PlayerSimTerrainTest {
         assertTrue(onSlime + " against " + onStone, onSlime < onStone * 0.5);
         assertFalse(Double.isNaN(onSlime));
     }
+
+    @Test
+    public void aStateTakenAfterTheFlowPushIsNotPushedAgain() {
+        /* Review, PR #37: taken inside the tick (handleWaterMovement done), the first move carries no second push. */
+        Terrain t = pool();
+        for (String cell : t.water) {
+            t.flow.put(cell, new double[]{2.0, 0.0, 0.0});
+        }
+        PlayerSim between = at(0, -20, 0, false);
+        PlayerSim inside = between.copy();
+        inside.waterPushed = true;
+        between.tick(t, keys(0, false, false));
+        inside.tick(t, keys(0, false, false));
+        assertEquals(0.014, between.x() - inside.x(), 1.0E-9);
+        assertFalse(inside.waterPushed);
+        /* From the second tick on, both are pushed. */
+        double a = between.x();
+        double b = inside.x();
+        between.tick(t, keys(0, false, false));
+        inside.tick(t, keys(0, false, false));
+        assertEquals(between.x() - a, inside.x() - b + 0.014 * 0.8, 1.0E-9);
+    }
 }

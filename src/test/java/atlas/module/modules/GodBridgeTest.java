@@ -364,4 +364,58 @@ public class GodBridgeTest {
         assertTrue(GodBridge.diagonal(-135.0F));
         assertFalse(GodBridge.diagonal(180.0F));
     }
+
+    private static Sim settledRun() {
+        Sim sim = new Sim();
+        for (int i = 0; i < 30; i++) {
+            sim.walk();
+        }
+        return sim;
+    }
+
+    @Test
+    public void aBlockThatCanGoBeforeTheEdgeTakesItsPitchAndIsClicked() {
+        /* 2026-11-11: not at the edge (edge false), the look misses, a pitch three degrees off places: taken, clicked. */
+        Sim sim = settledRun();
+        GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
+        in.lookPlaces = false;
+        in.placePitch = sim.pitch + 3.0F;
+        GodBridge.Plan plan = sim.step(in);
+        assertEquals(in.placePitch, plan.pitch, 0.02F);
+        assertTrue(plan.click);
+        assertFalse(plan.stop);
+    }
+
+    @Test
+    public void thePitchIsOnItsWayATickBeforeTheBlockCanGo() {
+        /* Nothing places from here; from the next step a pitch nine degrees off will. Six now, the rest then. */
+        Sim sim = settledRun();
+        float start = sim.pitch;
+        GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
+        in.lookPlaces = false;
+        in.aheadPitch = start + 9.0F;
+        GodBridge.Plan first = sim.step(in);
+        assertEquals(GodBridge.PITCH_FIX_MAX, first.pitch - start, 0.6F);
+        assertFalse("the walk does not wait for it", first.stop);
+        GodBridge.Input next = walking(sim.now, sim.yaw, sim.pitch);
+        next.lookPlaces = false;
+        next.placePitch = start + 9.0F;
+        GodBridge.Plan second = sim.step(next);
+        assertEquals(start + 9.0F, second.pitch, 0.02F);
+        assertTrue(second.click);
+    }
+
+    @Test
+    public void theLeadTurnStartsWhileTheColumnUnderTheFeetIsFilled() {
+        /* Review, PR #35: nothing to place under the feet (hasTarget false), the next step's block needs a pitch nine
+           degrees off: the turn still starts now. */
+        Sim sim = settledRun();
+        float start = sim.pitch;
+        GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
+        in.hasTarget = false;
+        in.lookPlaces = false;
+        in.aheadPitch = start + 9.0F;
+        GodBridge.Plan plan = sim.step(in);
+        assertEquals(GodBridge.PITCH_FIX_MAX, plan.pitch - start, 0.6F);
+    }
 }

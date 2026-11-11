@@ -76,6 +76,8 @@ final class GodBridge {
         boolean lookPlaces;
         /** At the run's yaw, the pitch nearest the run's that places from here; NaN for none or not looked for. */
         float placePitch = Float.NaN;
+        /** The same, from where the player will be next tick; NaN for none or not looked for. */
+        float aheadPitch = Float.NaN;
         boolean hasTarget;
         /** PlacePace: without a jump first, the next block would put the server's books under their limit. */
         boolean paceJump;
@@ -203,7 +205,10 @@ final class GodBridge {
         /* In the air (a jump) the eyes are up to 1.25 higher, so the run's pitch meets the side only far past the edge:
            the pitch that places from here is taken too, faster, not learned, and eased back after the landing. */
         boolean air = !in.onGround && in.hasTarget;
-        if ((in.edge || air) && !in.lookPlaces && settled && !Float.isNaN(in.placePitch)) {
+        /* 2026-11-11 (owner: slow, misses, a nod at every edge): not only at the edge. The fixed pitch places in a
+           strip 0.008 of a block wide and a walking tick is 0.216, so waiting for the edge meant a stop at every
+           block. Any tick the block can go from where the player is, the pitch goes to the one that places... */
+        if (in.hasTarget && !in.lookPlaces && settled && !Float.isNaN(in.placePitch)) {
             if (air && Float.isNaN(this.groundPitch)) {
                 this.groundPitch = this.pitchBase;
             }
@@ -215,12 +220,20 @@ final class GodBridge {
                 this.learnedPitch = this.pitchBase;
                 this.groundPitch = Float.NaN;
             }
+        } else if (in.onGround && !in.lookPlaces && settled && !Float.isNaN(in.aheadPitch)) {
+            /* No hasTarget here: the column under the feet may be filled while the next step's still needs a block
+               (review, PR #35). Scaffold only sets aheadPitch when that block exists. */
+            /* ...and the tick before, it is already on its way to the one that places from the next step, so the
+               move is spread over two ticks and the walk does not wait for it. No click: nothing places yet. */
+            this.pitchBase += clamp(in.aheadPitch - pitch, PITCH_FIX_MAX);
+            pitch = this.pitchBase + this.driftPitch;
         }
         if (in.lookPlaces && in.edge) {
             this.learnedPitch = this.pitchBase;
         }
 
-        if (in.edge && !in.lookPlaces && !fixed && Float.isNaN(in.placePitch) && settled && !diagonal
+        if (in.edge && !in.lookPlaces && !fixed && Float.isNaN(in.placePitch) && Float.isNaN(in.aheadPitch) && settled
+                && !diagonal
                 && this.ticks - this.lastSwap >= SWAP_TICKS) {
             /* An edge the look cannot place at: the other side (a stop meanwhile, below). */
             this.side = -this.side;
@@ -248,7 +261,7 @@ final class GodBridge {
             this.blocks = 0;
             this.jumpAt = drawJump(in.jumpEvery);
         }
-        plan.click = clickDue(in.now) || (in.lookPlaces || fixed) && (in.edge || air);
+        plan.click = clickDue(in.now) || (in.lookPlaces || fixed) && in.hasTarget;
         return plan;
     }
 

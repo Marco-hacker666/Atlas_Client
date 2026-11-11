@@ -133,13 +133,13 @@ public final class MoveCheck {
      * client cannot place in time is offered to that move and to the next one; never taken by either, it is logged as
      * a KB line -- what a server checking knockback would flag.
      */
-    private int attacksSinceStart;
+    private volatile int attacksSinceStart;
     private int attacksPending;
-    private double[] velocitySinceStart;
+    private volatile double[] velocitySinceStart;
     private double[] velocityCarry;
     private double[] velocityOffer;
     private boolean velocityOfferLast;
-    private double[] explosionSinceStart;
+    private volatile double[] explosionSinceStart;
     private double[] explosionCarry;
     private double[] explosionOffer;
     private int kbOffered;
@@ -325,8 +325,10 @@ public final class MoveCheck {
 
     /* First: Velocity cancels the packet at HIGH, and the motion it would have set still counts as a push. */
     @EventTarget(Priority.HIGHEST)
+    /* Packet handlers read the running state the client thread last set: active() may reset() the counts, which only
+       the client thread may do (review, PR #38; a RECEIVE runs on the network thread). */
     public void onPacket(PacketEvent event) {
-        if (!this.active() || mc.thePlayer == null) {
+        if (!running || mc.thePlayer == null) {
             return;
         }
         if (event.getPacket() instanceof S08PacketPlayerPosLook) {
@@ -349,7 +351,7 @@ public final class MoveCheck {
     /* Last: a sprint or sneak change another module cancels never reaches the server. */
     @EventTarget(Priority.LOWEST)
     public void onSend(PacketEvent event) {
-        if (!this.active() || event.getType() != EventType.SEND || event.isCancelled()) {
+        if (!running || event.getType() != EventType.SEND || event.isCancelled()) {
             return;
         }
         if (event.getPacket() instanceof C02PacketUseEntity

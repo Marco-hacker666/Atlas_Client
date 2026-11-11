@@ -133,13 +133,18 @@ public final class MoveCheck {
      * client cannot place in time is offered to that move and to the next one; never taken by either, it is logged as
      * a KB line -- what a server checking knockback would flag.
      */
-    private volatile int attacksSinceStart;
+    /* Written by the packet handlers, taken whole by the client thread (getAndSet), so none is lost in between. */
+    private final java.util.concurrent.atomic.AtomicInteger attacksSinceStart = new java.util.concurrent.atomic.AtomicInteger();
     private int attacksPending;
-    private volatile double[] velocitySinceStart;
+    private final java.util.concurrent.atomic.AtomicReference<double[]> velocitySinceStart =
+            new java.util.concurrent.atomic.AtomicReference<double[]>();
     private double[] velocityCarry;
     private double[] velocityOffer;
     private boolean velocityOfferLast;
-    private volatile double[] explosionSinceStart;
+    private final java.util.concurrent.atomic.AtomicReference<double[]> explosionSinceStart =
+            new java.util.concurrent.atomic.AtomicReference<double[]>();
+    /** This player's entity id as the client thread last saw it, for the network thread to compare with. */
+    private volatile int playerId = Integer.MIN_VALUE;
     private double[] explosionCarry;
     private double[] explosionOffer;
     private int kbOffered;
@@ -288,12 +293,12 @@ public final class MoveCheck {
 
     private void reset() {
         this.alerted.clear();
-        this.attacksSinceStart = 0;
+        this.attacksSinceStart.set(0);
         this.attacksPending = 0;
-        this.velocitySinceStart = null;
+        this.velocitySinceStart.set(null);
         this.velocityCarry = null;
         this.velocityOffer = null;
-        this.explosionSinceStart = null;
+        this.explosionSinceStart.set(null);
         this.explosionCarry = null;
         this.explosionOffer = null;
         this.logFile = null;
@@ -321,6 +326,17 @@ public final class MoveCheck {
         this.pendingFrom = null;
         this.serverSprint = null;
         this.serverSneak = null;
+        /* Nothing the old world sent reaches the new one's first moves (review, PR #38). */
+        this.playerId = Integer.MIN_VALUE;
+        this.attacksSinceStart.set(0);
+        this.attacksPending = 0;
+        this.velocitySinceStart.set(null);
+        this.velocityCarry = null;
+        this.velocityOffer = null;
+        this.velocityOfferLast = false;
+        this.explosionSinceStart.set(null);
+        this.explosionCarry = null;
+        this.explosionOffer = null;
     }
 
     /* First: Velocity cancels the packet at HIGH, and the motion it would have set still counts as a push. */
@@ -328,23 +344,23 @@ public final class MoveCheck {
     /* Packet handlers read the running state the client thread last set: active() may reset() the counts, which only
        the client thread may do (review, PR #38; a RECEIVE runs on the network thread). */
     public void onPacket(PacketEvent event) {
-        if (!running || mc.thePlayer == null) {
+        if (!running) {
             return;
         }
         if (event.getPacket() instanceof S08PacketPlayerPosLook) {
             this.correctedAt = System.currentTimeMillis();
         } else if (event.getPacket() instanceof S12PacketEntityVelocity
-                && ((S12PacketEntityVelocity) event.getPacket()).getEntityID() == mc.thePlayer.getEntityId()) {
+                && ((S12PacketEntityVelocity) event.getPacket()).getEntityID() == this.playerId) {
             this.knockedAt = System.currentTimeMillis();
             /* What the server applied, whatever a module does to it on the way in (the self check grades that). */
             S12PacketEntityVelocity velocity = (S12PacketEntityVelocity) event.getPacket();
-            this.velocitySinceStart = new double[]{velocity.getMotionX() / 8000.0, velocity.getMotionY() / 8000.0,
-                    velocity.getMotionZ() / 8000.0};
+            this.velocitySinceStart.set(new double[]{velocity.getMotionX() / 8000.0, velocity.getMotionY() / 8000.0,
+                    velocity.getMotionZ() / 8000.0});
         } else if (event.getPacket() instanceof S27PacketExplosion) {
             this.knockedAt = System.currentTimeMillis();
             S27PacketExplosion explosion = (S27PacketExplosion) event.getPacket();
-            this.explosionSinceStart = new double[]{explosion.func_149149_c(), explosion.func_149144_d(),
-                    explosion.func_149147_e()};
+            this.explosionSinceStart.set(new double[]{explosion.func_149149_c(), explosion.func_149144_d(),
+                    explosion.func_149147_e()});
         }
     }
 
@@ -356,7 +372,7 @@ public final class MoveCheck {
         }
         if (event.getPacket() instanceof C02PacketUseEntity
                 && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK) {
-            this.attacksSinceStart++;
+            this.attacksSinceStart.incrementAndGet();
             return;
         }
         if (!(event.getPacket() instanceof C0BPacketEntityAction)) {
@@ -420,15 +436,17 @@ public final class MoveCheck {
         }
         /* The window that just closed goes with the move just made. A knockback not taken by its own move is offered
            once more, to the next. */
-        this.attacksPending = this.attacksSinceStart;
-        this.attacksSinceStart = 0;
-        this.velocityOfferLast = this.velocitySinceStart == null && this.velocityCarry != null;
-        this.velocityOffer = this.velocitySinceStart != null ? this.velocitySinceStart : this.velocityCarry;
-        this.velocityCarry = this.velocitySinceStart;
-        this.velocitySinceStart = null;
-        this.explosionOffer = this.explosionSinceStart != null ? this.explosionSinceStart : this.explosionCarry;
-        this.explosionCarry = this.explosionSinceStart;
-        this.explosionSinceStart = null;
+        this.attacksPending = this.attacksSinceStart.getAndSet(0);
+        double[] velocity = this.velocitySinceStart.getAndSet(null);
+        this.velocityOfferLast = velocity == null && this.velocityCarry != null;
+        this.velocityOffer = velocity != null ? velocity : this.velocityCarry;
+        this.velocityCarry = velocity;
+        double[] explosion = this.explosionSinceStart.getAndSet(null);
+        this.explosionOffer = explosion != null ? explosion : this.explosionCarry;
+        this.explosionCarry = explosion;
+        if (mc.thePlayer != null) {
+            this.playerId = mc.thePlayer.getEntityId();
+        }
         int tick = mc.thePlayer.ticksExisted;
         boolean supported = SimPlayer.supported(mc.thePlayer);
         if (this.selfStart != null && supported && tick - this.selfStartTick == 1) {
@@ -503,7 +521,11 @@ public final class MoveCheck {
             if (result.velocity) {
                 this.velocityCarry = null;
                 this.kbOffered++;
-            } else if (this.velocityOfferLast) {
+            } else if (this.velocityOfferLast && !SelfCheck.fitsWithVelocity(before,
+                    SimPlayer.world(mc.theWorld, mc.thePlayer), sentYaw, sprint, sneak, this.pendingX, this.pendingY,
+                    this.pendingZ, extra)) {
+                /* The plain move fitting is not enough to call it ignored: against a wall the knockback can end in the
+                   same place (review, PR #38). Only when no input with the knockback fits. */
                 this.kbOffered++;
                 this.kbIgnored++;
                 String kbTag = movers(this.pendingMovers, atlas.util.ActionWatch.peekTickMovers());

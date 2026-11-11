@@ -185,4 +185,40 @@ public class SelfCheckTest {
         assertEquals(0.0, ignored.offset, 1.0E-9);
         assertFalse(ignored.velocity);
     }
+
+    @Test
+    public void knockbackIntoAWallStillCountsAsTaken() {
+        /* Review, PR #38: a push the wall stops ends where the plain move ends; the check must not call it ignored. */
+        PlayerSim before = standing();
+        double[] kb = {-0.4, 0.0, 0.0};
+        PlayerSim.World walled = new PlayerSim.World() {
+            @Override
+            public List<AxisAlignedBB> boxes(AxisAlignedBB area) {
+                List<AxisAlignedBB> out = WORLD.boxes(area);
+                AxisAlignedBB wall = new AxisAlignedBB(-1, 0, -100, 0.2, 3, 100);
+                if (wall.intersectsWith(area)) {
+                    out.add(wall);
+                }
+                return out;
+            }
+
+            @Override
+            public float slipperiness(int x, int y, int z) {
+                return 0.6F;
+            }
+        };
+        PlayerSim pushed = before.copy();
+        pushed.motionX = kb[0];
+        pushed.motionY = kb[1];
+        pushed.motionZ = kb[2];
+        pushed.tick(walled, keys(0.0F, 0.0F, 0.0F, false, false, false));
+        SelfCheck.Extra extra = new SelfCheck.Extra();
+        extra.velocity = kb;
+        SelfCheck.Result first = SelfCheck.check(before, walled, 0.0F, false, false, pushed.x(), pushed.y(), pushed.z(),
+                extra);
+        assertEquals(0.0, first.offset, 1.0E-9);
+        assertFalse("the plain move fits first", first.velocity);
+        assertTrue(SelfCheck.fitsWithVelocity(before, walled, 0.0F, false, false, pushed.x(), pushed.y(), pushed.z(),
+                extra));
+    }
 }

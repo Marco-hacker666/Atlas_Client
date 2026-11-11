@@ -104,6 +104,22 @@ public final class SelfCheck {
         public double[] velocity;
         /** An explosion's push received since then; null for none. */
         public double[] explosion;
+        /** Try only the starts that take the knockback. */
+        boolean velocityOnly;
+    }
+
+    /** Whether some input with the knockback taken explains the move (whatever explains it without). */
+    public static boolean fitsWithVelocity(PlayerSim before, PlayerSim.World world, float yaw, boolean sprinting,
+                                           boolean sneaking, double x, double y, double z, Extra extra) {
+        if (extra == null || extra.velocity == null) {
+            return false;
+        }
+        Extra only = new Extra();
+        only.attacks = extra.attacks;
+        only.velocity = extra.velocity;
+        only.explosion = extra.explosion;
+        only.velocityOnly = true;
+        return check(before, world, yaw, sprinting, sneaking, x, y, z, only).offset <= OFF;
     }
 
     private static final int MAX_ATTACK_SLOWS = 5;
@@ -120,7 +136,8 @@ public final class SelfCheck {
         for (int start = 0; start < 4; start++) {
             boolean useVelocity = (start & 1) != 0;
             boolean useExplosion = (start & 2) != 0;
-            if (useVelocity && velocity == null || useExplosion && explosion == null) {
+            if (useVelocity && velocity == null || useExplosion && explosion == null
+                    || extra != null && extra.velocityOnly && !useVelocity) {
                 continue;
             }
             for (int slows = 0; slows <= maxSlows; slows++) {

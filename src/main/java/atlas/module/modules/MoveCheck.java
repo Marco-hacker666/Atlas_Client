@@ -98,9 +98,23 @@ public class MoveCheck extends Module {
     private int simPlainOff;
     private double simWorst;
     private static final double SIM_OFF = 0.001;
-    /** The state at the end of the last tick, for the self check; null when there is none to start from. */
-    private PlayerSim selfBefore;
-    private int selfBeforeTick;
+    /*
+     * 2026-11-11 (second form): the start state is taken at the start of UpdateEvent PRE, before any module has that
+     * event (ActionWatch.beforeUpdatePre): the move just made, nothing changed after it. Taken at POST, a motion a
+     * module set at PRE (Speed and the like) was already in it and so never showed. The check of a move runs at its
+     * tick's POST (the yaw sent is final there), from the start one tick before to where that tick's move ended.
+     */
+    private PlayerSim selfStart;
+    private int selfStartTick;
+    /** The move to check at this tick's POST: from, to, and what modules changed between. */
+    private PlayerSim pendingFrom;
+    private double pendingX;
+    private double pendingY;
+    private double pendingZ;
+    private java.util.Map<String, java.util.TreeSet<String>> pendingMovers;
+    /** Self check ticks and offs by module that changed the movement, {ticks, off}. */
+    private final Map<String, int[]> selfBy = new TreeMap<String, int[]>();
+    private final Runnable startOfTick = this::startOfTick;
     /** The sprint and sneak state the sent packets gave the server; null until one is seen. */
     private volatile Boolean serverSprint;
     private volatile Boolean serverSneak;
@@ -119,6 +133,7 @@ public class MoveCheck extends Module {
 
     public MoveCheck() {
         super("MoveCheck", false, true, "Logs moves that do not fit the look sent. Changes nothing.");
+        atlas.util.ActionWatch.beforeUpdatePre = this.startOfTick;
     }
 
     @Override
@@ -127,7 +142,8 @@ public class MoveCheck extends Module {
         this.modulesLogged = "";
         this.sampled = false;
         this.lastSentYaw = Float.NaN;
-        this.selfBefore = null;
+        this.selfStart = null;
+        this.pendingFrom = null;
         this.serverSprint = null;
         this.serverSneak = null;
         clearCounts();
@@ -148,7 +164,8 @@ public class MoveCheck extends Module {
         }
         this.sampled = false;
         this.lastSentYaw = Float.NaN;
-        this.selfBefore = null;
+        this.selfStart = null;
+        this.pendingFrom = null;
         this.serverSprint = null;
         this.serverSneak = null;
     }
@@ -220,26 +237,83 @@ public class MoveCheck extends Module {
     }
 
     /**
-     * The self check for this tick, then this tick's end kept for the next. Only from the tick just before: a tick
-     * skipped (TickBase), a correction, knockback or a move the simulation does not cover leaves nothing to check.
+     * Before any module has this tick's UpdateEvent PRE: where the move just made ended, checked at POST from the
+     * state kept one tick ago; and that state for the next. Only from the tick just before (a tick skipped by TickBase
+     * or a move the simulation does not cover leaves nothing to check).
+     */
+    private void startOfTick() {
+        java.util.Map<String, java.util.TreeSet<String>> movers = atlas.util.ActionWatch.takeTickMovers();
+        this.pendingFrom = null;
+        if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null) {
+            this.selfStart = null;
+            return;
+        }
+        int tick = mc.thePlayer.ticksExisted;
+        boolean supported = SimPlayer.supported(mc.thePlayer);
+        if (this.selfStart != null && supported && tick - this.selfStartTick == 1) {
+            this.pendingFrom = this.selfStart;
+            this.pendingX = mc.thePlayer.posX;
+            this.pendingY = mc.thePlayer.getEntityBoundingBox().minY;
+            this.pendingZ = mc.thePlayer.posZ;
+            this.pendingMovers = movers;
+        }
+        this.selfStart = supported ? SimPlayer.state(mc.thePlayer) : null;
+        this.selfStartTick = tick;
+    }
+
+    /** The module changes of a move, as "Speed:move,sprint MoveFix:input"; "plain" for none. MoveCheck left out. */
+    private String movers(java.util.Map<String, java.util.TreeSet<String>> during,
+                          java.util.Map<String, java.util.TreeSet<String>> turning) {
+        java.util.Map<String, java.util.TreeSet<String>> all = new TreeMap<String, java.util.TreeSet<String>>();
+        for (java.util.Map<String, java.util.TreeSet<String>> part : java.util.Arrays.asList(during, turning)) {
+            for (Map.Entry<String, java.util.TreeSet<String>> entry : part.entrySet()) {
+                if (entry.getKey().equals(this.getName())) {
+                    continue;
+                }
+                java.util.TreeSet<String> kinds = all.get(entry.getKey());
+                if (kinds == null) {
+                    kinds = new java.util.TreeSet<String>();
+                    all.put(entry.getKey(), kinds);
+                }
+                kinds.addAll(entry.getValue());
+            }
+        }
+        if (all.isEmpty()) {
+            return "plain";
+        }
+        StringBuilder out = new StringBuilder();
+        for (Map.Entry<String, java.util.TreeSet<String>> entry : all.entrySet()) {
+            if (out.length() > 0) {
+                out.append(' ');
+            }
+            out.append(entry.getKey()).append(':');
+            boolean first = true;
+            for (String kind : entry.getValue()) {
+                out.append(first ? "" : ",").append(kind);
+                first = false;
+            }
+        }
+        return out.toString();
+    }
+
+    /**
+     * The self check of this tick's move, at its POST: from the start state, with the yaw sent and the sprint and
+     * sneak the server has; tagged with the modules that changed movement, input, sprint, push or look on the way
+     * (from the last start of tick, and this PRE's turns). Not after a correction or knockback.
      */
     private void selfCheck(float sentYaw) {
         long now = System.currentTimeMillis();
-        PlayerSim before = this.selfBefore;
-        int beforeTick = this.selfBeforeTick;
-        boolean supported = SimPlayer.supported(mc.thePlayer);
-        this.selfBefore = supported ? SimPlayer.state(mc.thePlayer) : null;
-        this.selfBeforeTick = mc.thePlayer.ticksExisted;
-        if (before == null || !supported || mc.thePlayer.ticksExisted - beforeTick != 1
-                || now - this.correctedAt < AFTER_CORRECTION_MS || now - this.knockedAt < AFTER_KNOCKBACK_MS) {
+        PlayerSim before = this.pendingFrom;
+        this.pendingFrom = null;
+        if (before == null || now - this.correctedAt < AFTER_CORRECTION_MS || now - this.knockedAt < AFTER_KNOCKBACK_MS) {
             return;
         }
         boolean sprint = this.serverSprint != null ? this.serverSprint : mc.thePlayer.isSprinting();
         boolean sneak = this.serverSneak != null ? this.serverSneak : mc.thePlayer.isSneaking();
         SelfCheck.Result result = SelfCheck.check(before, SimPlayer.world(mc.theWorld, mc.thePlayer), sentYaw, sprint,
-                sneak, mc.thePlayer.posX, mc.thePlayer.getEntityBoundingBox().minY, mc.thePlayer.posZ);
+                sneak, this.pendingX, this.pendingY, this.pendingZ);
         boolean off = result.offset > SelfCheck.OFF;
-        String tag = tag();
+        String tag = movers(this.pendingMovers, atlas.util.ActionWatch.peekTickMovers());
         boolean plain = tag.equals("plain");
         this.selfTicks++;
         this.selfOff += off ? 1 : 0;
@@ -247,6 +321,17 @@ public class MoveCheck extends Module {
         if (plain) {
             this.selfPlainTicks++;
             this.selfPlainOff += off ? 1 : 0;
+        } else {
+            for (String part : tag.split(" ")) {
+                String module = part.substring(0, part.indexOf(':'));
+                int[] counts = this.selfBy.get(module);
+                if (counts == null) {
+                    counts = new int[2];
+                    this.selfBy.put(module, counts);
+                }
+                counts[0]++;
+                counts[1] += off ? 1 : 0;
+            }
         }
         if (!off) {
             return;
@@ -258,11 +343,11 @@ public class MoveCheck extends Module {
         }
         if (this.selfLinesThisSecond++ < MISS_LINES_A_SECOND) {
             /* What tells a cause apart: the move's own yaw against the packet's, the client's sprint against the
-               server's, and the ground speed the last tick left for this move. */
+               server's, the ground speed the last tick left for this move, and who changed what. */
             write(String.format("SELF off %.4f (x %.4f y %.4f z %.4f) keys %s | yaw %.1f move-yaw %.1f %s%s%s| client %s"
                             + "| speed %.4f air %.4f | %s", result.offset,
-                    mc.thePlayer.posX - result.end.x(), mc.thePlayer.getEntityBoundingBox().minY - result.end.y(),
-                    mc.thePlayer.posZ - result.end.z(), result.keys(), MathHelper.wrapAngleTo180_float(sentYaw),
+                    this.pendingX - result.end.x(), this.pendingY - result.end.y(), this.pendingZ - result.end.z(),
+                    result.keys(), MathHelper.wrapAngleTo180_float(sentYaw),
                     Float.isNaN(this.moveYaw) ? Float.NaN : MathHelper.wrapAngleTo180_float(this.moveYaw),
                     mc.thePlayer.onGround ? "ground " : "air ", sprint ? "sprint " : "", sneak ? "sneak " : "",
                     this.moveSprinting ? "sprint " : "walk ", before.moveSpeed, before.airSpeed, tag));
@@ -459,12 +544,17 @@ public class MoveCheck extends Module {
             tags.append(" | ").append(entry.getKey()).append(' ').append(entry.getValue()[1]).append('/')
                     .append(entry.getValue()[0]);
         }
+        StringBuilder by = new StringBuilder();
+        for (Map.Entry<String, int[]> entry : this.selfBy.entrySet()) {
+            by.append(' ').append(entry.getKey()).append(' ').append(entry.getValue()[1]).append('/')
+                    .append(entry.getValue()[0]);
+        }
         write(String.format("SUM ticks %d skipped %d look-miss %d cam-miss %d plain-miss %d/%d big-turn %d sprint-change %d%s"
-                        + " | sim %d/%d worst %.4f plain %d/%d | self %d/%d worst %.4f plain %d/%d",
+                        + " | sim %d/%d worst %.4f plain %d/%d | self %d/%d worst %.4f plain %d/%d | by%s",
                 this.ticks, this.skipped, this.lookMisses, this.cameraMisses, this.plainMisses, this.plainTicks,
                 this.bigTurns, this.sprintChanges, tags, this.simOff, this.simTicks, this.simWorst, this.simPlainOff,
                 this.simPlainTicks, this.selfOff, this.selfTicks, this.selfWorst, this.selfPlainOff,
-                this.selfPlainTicks));
+                this.selfPlainTicks, by.length() == 0 ? " -" : by));
         clearCounts();
     }
 
@@ -487,6 +577,7 @@ public class MoveCheck extends Module {
         this.selfPlainTicks = 0;
         this.selfPlainOff = 0;
         this.selfWorst = 0.0;
+        this.selfBy.clear();
         this.byTag.clear();
     }
 

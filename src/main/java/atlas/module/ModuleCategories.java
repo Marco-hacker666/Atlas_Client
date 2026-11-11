@@ -72,7 +72,7 @@ public final class ModuleCategories {
                 Disabler.class, GhostHand.class, ClientSpoofer.class,
                 PingSpoof.class, ServerLag.class, TickBase.class, Freeze.class, ResetVL.class);
         put(Category.CLIENT,
-                ClickGUIModule.class, ThemeGUI.class, GuiModule.class, FlagDetector.class, MoveCheck.class,
+                ClickGUIModule.class, ThemeGUI.class, GuiModule.class, FlagDetector.class,
                 FlagResponder.class, HitCheck.class, FightLog.class, Debug.class, Logs.class, PacketLogger.class,
                 ServerFingerprint.class, AutoTune.class, Adaptive.class, ServerProfiles.class,
                 LatencyGovernor.class, Panic.class, Rotations.class, Notifications.class);

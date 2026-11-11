@@ -1,4 +1,4 @@
-package atlas.module.modules;
+package atlas.management;
 
 import atlas.Atlas;
 import atlas.event.EventTarget;
@@ -8,14 +8,14 @@ import atlas.events.LivingUpdateEvent;
 import atlas.events.LoadWorldEvent;
 import atlas.events.PacketEvent;
 import atlas.events.UpdateEvent;
-import atlas.management.Arbiter;
 import atlas.module.Module;
-import atlas.property.properties.FloatProperty;
-import atlas.property.properties.IntProperty;
+import atlas.module.modules.*;
 import atlas.sim.PlayerSim;
 import atlas.sim.SelfCheck;
 import atlas.sim.SimPlayer;
 import atlas.util.AsyncLog;
+import atlas.util.render.DeviceProfile;
+import atlas.util.render.MobileSafe;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.play.client.C0BPacketEntityAction;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
@@ -52,8 +52,27 @@ import java.util.TreeMap;
  * the packets told the server, does any input (every key combination, a jump, an item's slowdown) end where the player
  * is? SELF lines are ticks more than a thousandth off, with the closest keys and what was steering (tag()); each SUM
  * ends with "self off/ticks worst plain off/ticks". Plain ticks should be 0 off; off on others names the module.
+ *
+ * 2026-11-12 (owner: "make the simulation the default, not a feature"): no longer a module. It is part of the client
+ * and runs by itself, set by Client Settings > Performance > Move check (Auto / On / Off). Auto runs it except on a
+ * phone (util.render.DeviceProfile) or where the game runs under 100 fps, so a weak device does not pay for it. The
+ * lines are written only while the Logs module is on, as for every session log.
  */
-public class MoveCheck extends Module {
+public final class MoveCheck {
+    public static final String SETTING = "move-check";
+    public static final String[] MODES = {"Auto", "On", "Off"};
+    private static volatile int setting = -1;
+    private static volatile boolean running;
+    /* Auto pauses after LOW_FPS_SECONDS in a row under LOW_FPS, and resumes after HIGH_FPS_SECONDS at HIGH_FPS. */
+    private static final int LOW_FPS = 100;
+    private static final int LOW_FPS_SECONDS = 5;
+    private static final int HIGH_FPS = 115;
+    private static final int HIGH_FPS_SECONDS = 10;
+    private boolean slow;
+    private int lowSeconds;
+    private int highSeconds;
+    private long fpsSampledAt;
+    private boolean wasActive;
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File LOG_DIR = new File("./config/Atlas/");
     private static final SimpleDateFormat FILE_STAMP = new SimpleDateFormat("yyyyMMdd-HHmmss");
@@ -63,8 +82,10 @@ public class MoveCheck extends Module {
     private static final long AFTER_KNOCKBACK_MS = 100L;
     private static final float BIG_TURN = 30.0F;
 
-    public final FloatProperty threshold = new FloatProperty("threshold", 0.02F, 0.005F, 0.2F);
-    public final IntProperty logEvery = new IntProperty("log-every", 30, 5, 300);
+    /** How many blocks off a move has to be to count as not fitting (was the "threshold" setting). */
+    private static final float THRESHOLD = 0.02F;
+    /** Seconds between SUM lines (was "log-every"). */
+    private static final int LOG_EVERY = 30;
 
     private File logFile;
     private volatile long correctedAt;
@@ -132,12 +153,76 @@ public class MoveCheck extends Module {
     private final Map<String, int[]> byTag = new TreeMap<String, int[]>();
 
     public MoveCheck() {
-        super("MoveCheck", false, true, "Logs moves that do not fit the look sent. Changes nothing.");
         atlas.util.ActionWatch.beforeUpdatePre = this.startOfTick;
+        reset();
     }
 
-    @Override
-    public void onEnabled() {
+    public static void setSetting(int mode) {
+        setting = Math.max(0, Math.min(MODES.length - 1, mode));
+    }
+
+    /** Whether the checks ran on the last tick asked. */
+    public static boolean running() {
+        return running;
+    }
+
+    /** "auto · running", "off · paused": for the menu and the bug report. */
+    public static String describe() {
+        int mode = setting < 0 ? MobileSafe.readMode(SETTING, MODES) : setting;
+        return MODES[mode].toLowerCase() + (running ? " · running" : " · paused");
+    }
+
+    /**
+     * Whether the checks run now: On or Off as set; Auto, unless a phone or a game under 100 fps (5 s in a row
+     * pauses it, 10 s at 115 or more resumes it, so its own small cost does not flip it). Starting again begins from
+     * a clean count.
+     */
+    private boolean active() {
+        int mode = setting;
+        if (mode < 0) {
+            mode = MobileSafe.readMode(SETTING, MODES);
+            setting = mode;
+        }
+        boolean on;
+        if (mode == 1) {
+            on = true;
+        } else if (mode == 2) {
+            on = false;
+        } else {
+            sampleFps();
+            on = !this.slow && !DeviceProfile.isMobile();
+        }
+        if (on && !this.wasActive) {
+            reset();
+        }
+        this.wasActive = on;
+        running = on;
+        return on;
+    }
+
+    private void sampleFps() {
+        long now = System.currentTimeMillis();
+        if (now - this.fpsSampledAt < 1000L || mc.theWorld == null) {
+            return;
+        }
+        this.fpsSampledAt = now;
+        int fps = Minecraft.getDebugFPS();
+        if (!this.slow) {
+            this.lowSeconds = fps < LOW_FPS ? this.lowSeconds + 1 : 0;
+            if (this.lowSeconds >= LOW_FPS_SECONDS) {
+                this.slow = true;
+                this.highSeconds = 0;
+            }
+        } else {
+            this.highSeconds = fps >= HIGH_FPS ? this.highSeconds + 1 : 0;
+            if (this.highSeconds >= HIGH_FPS_SECONDS) {
+                this.slow = false;
+                this.lowSeconds = 0;
+            }
+        }
+    }
+
+    private void reset() {
         this.logFile = null;
         this.modulesLogged = "";
         this.sampled = false;
@@ -148,11 +233,6 @@ public class MoveCheck extends Module {
         this.serverSneak = null;
         clearCounts();
         this.summaryAt = System.currentTimeMillis();
-    }
-
-    @Override
-    public void onDisabled() {
-        this.sampled = false;
     }
 
     @EventTarget
@@ -173,7 +253,7 @@ public class MoveCheck extends Module {
     /* First: Velocity cancels the packet at HIGH, and the motion it would have set still counts as a push. */
     @EventTarget(Priority.HIGHEST)
     public void onPacket(PacketEvent event) {
-        if (!this.isEnabled() || mc.thePlayer == null) {
+        if (!this.active() || mc.thePlayer == null) {
             return;
         }
         if (event.getPacket() instanceof S08PacketPlayerPosLook) {
@@ -188,7 +268,7 @@ public class MoveCheck extends Module {
     /* Last: a sprint or sneak change another module cancels never reaches the server. */
     @EventTarget(Priority.LOWEST)
     public void onSend(PacketEvent event) {
-        if (!this.isEnabled() || event.getType() != EventType.SEND || event.isCancelled()
+        if (!this.active() || event.getType() != EventType.SEND || event.isCancelled()
                 || !(event.getPacket() instanceof C0BPacketEntityAction)) {
             return;
         }
@@ -213,7 +293,7 @@ public class MoveCheck extends Module {
     /* LOWEST: after anything that sets the motion at PRE. POST pairs with it; a tick TickBase skips has neither. */
     @EventTarget(Priority.LOWEST)
     public void onUpdate(UpdateEvent event) {
-        if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null) {
+        if (!this.active() || mc.thePlayer == null || mc.theWorld == null) {
             return;
         }
         if (event.getType() == EventType.PRE) {
@@ -244,7 +324,7 @@ public class MoveCheck extends Module {
     private void startOfTick() {
         java.util.Map<String, java.util.TreeSet<String>> movers = atlas.util.ActionWatch.takeTickMovers();
         this.pendingFrom = null;
-        if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null) {
+        if (!this.active() || mc.thePlayer == null || mc.theWorld == null) {
             this.selfStart = null;
             return;
         }
@@ -267,7 +347,7 @@ public class MoveCheck extends Module {
         java.util.Map<String, java.util.TreeSet<String>> all = new TreeMap<String, java.util.TreeSet<String>>();
         for (java.util.Map<String, java.util.TreeSet<String>> part : java.util.Arrays.asList(during, turning)) {
             for (Map.Entry<String, java.util.TreeSet<String>> entry : part.entrySet()) {
-                if (entry.getKey().equals(this.getName())) {
+                if (entry.getKey().equals("MoveCheck")) {
                     continue;
                 }
                 java.util.TreeSet<String> kinds = all.get(entry.getKey());
@@ -358,7 +438,7 @@ public class MoveCheck extends Module {
     @EventTarget(Priority.LOWEST)
     public void onLivingUpdate(LivingUpdateEvent event) {
         this.simPredicted = null;
-        if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null) {
+        if (!this.active() || mc.thePlayer == null || mc.theWorld == null) {
             return;
         }
         this.moveYaw = SimPlayer.inputAsMoved(mc.thePlayer).yaw;
@@ -438,7 +518,7 @@ public class MoveCheck extends Module {
             double cameraError = MoveModel.bestError(this.state, mc.thePlayer.rotationYaw, moveX, moveZ);
             record(now, lookError, cameraError, sentYaw, turn);
         }
-        if (now - this.summaryAt >= this.logEvery.getValue() * 1000L) {
+        if (now - this.summaryAt >= LOG_EVERY * 1000L) {
             summary();
             this.summaryAt = now;
         }
@@ -453,7 +533,7 @@ public class MoveCheck extends Module {
     }
 
     private void record(long now, double lookError, double cameraError, float sentYaw, float turn) {
-        float limit = this.threshold.getValue();
+        float limit = THRESHOLD;
         boolean lookMiss = lookError > limit;
         boolean cameraMiss = cameraError > limit;
         boolean turned = Math.abs(MathHelper.wrapAngleTo180_float(sentYaw - mc.thePlayer.rotationYaw)) >= 1.0F;
@@ -519,7 +599,7 @@ public class MoveCheck extends Module {
         }
         StringBuilder on = new StringBuilder();
         for (Module module : names().values()) {
-            if (module.isEnabled() && module != this) {
+            if (module.isEnabled()) {
                 on.append(module.getName()).append(' ');
             }
         }

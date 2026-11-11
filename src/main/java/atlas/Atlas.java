@@ -171,7 +171,8 @@ public class Atlas {
         moduleManager.modules.put(Disabler.class, new Disabler());
         moduleManager.modules.put(KeepSprint.class, new KeepSprint());
         moduleManager.modules.put(FlagDetector.class, new FlagDetector());
-        moduleManager.modules.put(MoveCheck.class, new MoveCheck());
+        /* 2026-11-12: no longer a module -- part of the client, set by Client Settings > Performance > Move check. */
+        EventManager.register(new atlas.management.MoveCheck());
         moduleManager.modules.put(AntiCheat.class, new AntiCheat());
         moduleManager.modules.put(HitCheck.class, new HitCheck());
         moduleManager.modules.put(FightLog.class, new FightLog());

@@ -319,6 +319,7 @@ public final class BugReport {
         line(sb, "GPU", safe(() -> GL11.glGetString(GL11.GL_RENDERER)) + " | GL " + safe(() -> GL11.glGetString(GL11.GL_VERSION)));
         line(sb, "Mobile-safe", safe(atlas.util.render.MobileSafe::describe));
         line(sb, "Device", safe(atlas.util.render.DeviceProfile::describe));
+        line(sb, "Move check", safe(atlas.management.MoveCheck::describe));
         line(sb, "OptiFine", optifine() ? "installed, Fast Render " + (FramebufferCompat.optifineFastRender() ? "ON" : "off") : "not installed");
         line(sb, "Framebuffers", (OpenGlHelper.isFramebufferEnabled() ? "on" : "off")
                 + ", shaders " + (OpenGlHelper.shadersSupported ? "supported" : "unsupported"));

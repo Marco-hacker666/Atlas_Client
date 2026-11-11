@@ -93,11 +93,4 @@ public class MoveModelTest {
         double[] back = MoveModel.step(s, 120.0F, -1.0F, 1.0F);
         assertEquals(0.0, MoveModel.bestError(s, 120.0F, back[0], back[1]), 1.0E-9);
     }
-
-    @Test
-    public void startsOffAndChangesNothingByDefault() {
-        MoveCheck check = new MoveCheck();
-        assertFalse(check.isEnabled());
-        assertEquals(0.02F, check.threshold.getValue(), 0.0F);
-    }
 }

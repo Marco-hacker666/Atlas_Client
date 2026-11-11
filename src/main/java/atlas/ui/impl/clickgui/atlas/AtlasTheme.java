@@ -129,6 +129,8 @@ final class AtlasTheme {
     final ModeProperty mobileSafe = new ModeProperty(atlas.util.render.MobileSafe.SETTING, 0,
             atlas.util.render.MobileSafe.MODES);
     /* 2026-11-11: phone or PC layout (util.render.DeviceProfile); Auto asks the same detection. */
+    /* 2026-11-12: the move check (management.MoveCheck), no longer a module; Auto skips phones and games under 100 fps. */
+    final ModeProperty moveCheck = new ModeProperty(atlas.management.MoveCheck.SETTING, 0, atlas.management.MoveCheck.MODES);
     final ModeProperty deviceLayout = new ModeProperty(atlas.util.render.DeviceProfile.SETTING, 0,
             atlas.util.render.DeviceProfile.MODES);
 
@@ -173,8 +175,10 @@ final class AtlasTheme {
                         + "renderer is found; it changes nothing on a PC. Device layout: on a phone the menu fills the "
                         + "screen, scrolls with a finger drag, has bigger text and rows and keeps its hints shown, and HUD "
                         + "elements still at their default place move away from the touch buttons. Auto finds a phone by "
-                        + "itself.",
-                this.mobileSafe, this.deviceLayout);
+                        + "itself. Move check: checks every move against the movement simulation, as an anticheat "
+                        + "that re-simulates moves would, and logs what does not fit (with Logs on). Auto runs it except "
+                        + "on a phone or under 100 fps.",
+                this.mobileSafe, this.deviceLayout, this.moveCheck);
         load();
         this.runDataSeen = Boolean.TRUE.equals(atlas.management.RunCollector.consent());
         this.shareRunData.setValue(this.runDataSeen);
@@ -182,6 +186,7 @@ final class AtlasTheme {
         atlas.management.LogUploader.setEnabled(this.autoSendLogs.getValue());
         atlas.util.render.MobileSafe.setSetting(this.mobileSafe.getValue());
         atlas.util.render.DeviceProfile.setSetting(this.deviceLayout.getValue());
+        atlas.management.MoveCheck.setSetting(this.moveCheck.getValue());
     }
 
     private void group(String name, String description, Property<?>... properties) {
@@ -204,7 +209,7 @@ final class AtlasTheme {
     /** Whether a setting is about looks, so a saved theme carries it: not the privacy or performance choices. */
     boolean isLook(Property<?> property) {
         return property != this.autoSendLogs && property != this.shareRunData && property != this.mobileSafe
-                && property != this.deviceLayout;
+                && property != this.deviceLayout && property != this.moveCheck;
     }
 
     // ---- derived values -----------------------------------------------
@@ -331,7 +336,8 @@ final class AtlasTheme {
         }
         if ("Performance".equals(group)) {
             return this.mobileSafe.getModeString() + "  ·  " + (atlas.util.render.MobileSafe.active() ? "on" : "off")
-                    + "  ·  " + atlas.util.render.DeviceProfile.describe();
+                    + "  ·  " + atlas.util.render.DeviceProfile.describe()
+                    + "  ·  move check " + atlas.management.MoveCheck.describe();
         }
         if ("Text".equals(group)) {
             return this.font.getModeString();
@@ -477,6 +483,7 @@ final class AtlasTheme {
         atlas.management.LogUploader.setEnabled(this.autoSendLogs.getValue());
         atlas.util.render.MobileSafe.setSetting(this.mobileSafe.getValue());
         atlas.util.render.DeviceProfile.setSetting(this.deviceLayout.getValue());
+        atlas.management.MoveCheck.setSetting(this.moveCheck.getValue());
         String now = snapshot();
         if (now.equals(this.saved)) {
             return;

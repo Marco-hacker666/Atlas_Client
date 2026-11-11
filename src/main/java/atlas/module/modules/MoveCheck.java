@@ -4,6 +4,7 @@ import atlas.Atlas;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.event.types.Priority;
+import atlas.events.LivingUpdateEvent;
 import atlas.events.LoadWorldEvent;
 import atlas.events.PacketEvent;
 import atlas.events.UpdateEvent;
@@ -11,6 +12,8 @@ import atlas.management.Arbiter;
 import atlas.module.Module;
 import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
+import atlas.sim.PlayerSim;
+import atlas.sim.SimPlayer;
 import atlas.util.AsyncLog;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
@@ -34,6 +37,12 @@ import java.util.TreeMap;
  *
  * moves-*.txt: MODULES on each change of what is on, MISS for a tick that does not fit (at most a few a second), SUM
  * every log-every seconds.
+ *
+ * 2026-11-11: it also checks the movement simulation (atlas.sim.PlayerSim) against the game. Each tick, once the keys
+ * are final, the simulation runs that tick ahead; after the move the place it gave is held against where the player
+ * really is. SIM lines are ticks more than a thousandth of a block off (at most a few a second), and each SUM ends
+ * with "sim off/ticks worst plain off/ticks": on plain ticks (no module steering the move) it should be 0 off. A
+ * module that pushes the player itself (Speed, a velocity module) is off by design -- the simulation does not see it.
  */
 public class MoveCheck extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -72,6 +81,14 @@ public class MoveCheck extends Module {
     private int sprintChanges;
     private int plainTicks;
     private int plainMisses;
+    /** Where the simulation put this tick's move; null when it was not asked (a move it does not cover). */
+    private PlayerSim simPredicted;
+    private int simTicks;
+    private int simOff;
+    private int simPlainTicks;
+    private int simPlainOff;
+    private double simWorst;
+    private static final double SIM_OFF = 0.001;
     /** Ticks and misses by what was running. */
     private final Map<String, int[]> byTag = new TreeMap<String, int[]>();
 
@@ -144,8 +161,56 @@ public class MoveCheck extends Module {
         }
     }
 
+    /* LOWEST: the keys, the sprint and whatever a module set are final; the game's own move is next. */
+    @EventTarget(Priority.LOWEST)
+    public void onLivingUpdate(LivingUpdateEvent event) {
+        this.simPredicted = null;
+        if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null || !SimPlayer.supported(mc.thePlayer)) {
+            return;
+        }
+        PlayerSim sim = SimPlayer.state(mc.thePlayer);
+        sim.tick(SimPlayer.world(mc.theWorld, mc.thePlayer), SimPlayer.inputAsMoved(mc.thePlayer));
+        this.simPredicted = sim;
+    }
+
+    /** The simulation's place for this tick against the real one. */
+    private void checkSim(long now) {
+        PlayerSim predicted = this.simPredicted;
+        this.simPredicted = null;
+        if (predicted == null || now - this.correctedAt < AFTER_CORRECTION_MS || now - this.knockedAt < AFTER_KNOCKBACK_MS) {
+            return;
+        }
+        double dx = mc.thePlayer.posX - predicted.x();
+        double dy = mc.thePlayer.getEntityBoundingBox().minY - predicted.y();
+        double dz = mc.thePlayer.posZ - predicted.z();
+        double error = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        boolean off = error > SIM_OFF;
+        boolean plain = tag().equals("plain");
+        this.simTicks++;
+        this.simOff += off ? 1 : 0;
+        this.simWorst = Math.max(this.simWorst, error);
+        if (plain) {
+            this.simPlainTicks++;
+            this.simPlainOff += off ? 1 : 0;
+        }
+        if (!off) {
+            return;
+        }
+        long second = now / 1000L;
+        if (second != this.lineSecond) {
+            this.lineSecond = second;
+            this.linesThisSecond = 0;
+        }
+        if (this.linesThisSecond++ < MISS_LINES_A_SECOND) {
+            write(String.format("SIM off %.4f (x %.4f y %.4f z %.4f) | %s%s%s| %s", error, dx, dy, dz,
+                    mc.thePlayer.onGround ? "ground " : "air ", mc.thePlayer.isSprinting() ? "sprint " : "",
+                    mc.thePlayer.isCollidedHorizontally ? "wall " : "", tag()));
+        }
+    }
+
     private void finish(float sentYaw) {
         long now = System.currentTimeMillis();
+        checkSim(now);
         if (mc.thePlayer.ticksExisted % 20 == 0) {
             logModulesIfChanged();
         }
@@ -281,9 +346,11 @@ public class MoveCheck extends Module {
             tags.append(" | ").append(entry.getKey()).append(' ').append(entry.getValue()[1]).append('/')
                     .append(entry.getValue()[0]);
         }
-        write(String.format("SUM ticks %d skipped %d look-miss %d cam-miss %d plain-miss %d/%d big-turn %d sprint-change %d%s",
+        write(String.format("SUM ticks %d skipped %d look-miss %d cam-miss %d plain-miss %d/%d big-turn %d sprint-change %d%s"
+                        + " | sim %d/%d worst %.4f plain %d/%d",
                 this.ticks, this.skipped, this.lookMisses, this.cameraMisses, this.plainMisses, this.plainTicks,
-                this.bigTurns, this.sprintChanges, tags));
+                this.bigTurns, this.sprintChanges, tags, this.simOff, this.simTicks, this.simWorst, this.simPlainOff,
+                this.simPlainTicks));
         clearCounts();
     }
 
@@ -296,6 +363,11 @@ public class MoveCheck extends Module {
         this.sprintChanges = 0;
         this.plainTicks = 0;
         this.plainMisses = 0;
+        this.simTicks = 0;
+        this.simOff = 0;
+        this.simPlainTicks = 0;
+        this.simPlainOff = 0;
+        this.simWorst = 0.0;
         this.byTag.clear();
     }
 

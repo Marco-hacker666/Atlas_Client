@@ -6,6 +6,9 @@ import net.minecraft.util.MathHelper;
  * One tick of 1.8's walking and falling, horizontally, as a server that re-runs it would work it out (2026-11-05): the
  * motion carried in, a jump's sprint boost, moveFlying's input at a yaw. No collisions, liquids or ladders: MoveCheck
  * leaves those ticks out. Pure, so it can be tested.
+ *
+ * This answers "which keys explain the move the server saw?" for MoveCheck. To run the player's own movement ahead,
+ * with collisions and the vertical, use atlas.sim.PlayerSim (2026-11-11); the keys' push here is that class's.
  */
 final class MoveModel {
 
@@ -49,15 +52,9 @@ final class MoveModel {
         float friction = s.onGround ? s.slipperiness * 0.91F : 0.91F;
         float speed = s.onGround ? s.moveSpeed * (0.16277136F / (friction * friction * friction))
                 : s.sprinting ? AIR_SPRINT_SPEED : AIR_SPEED;
-        float size = inputForward * inputForward + inputStrafe * inputStrafe;
-        if (size >= 1.0E-4F) {
-            size = speed / Math.max(1.0F, MathHelper.sqrt_float(size));
-            inputForward *= size;
-            inputStrafe *= size;
-            x += inputStrafe * cos - inputForward * sin;
-            z += inputForward * cos + inputStrafe * sin;
-        }
-        return new double[]{x, z};
+        /* The keys' push is the simulation's (atlas.sim.PlayerSim), so there is one copy of moveFlying. */
+        double[] push = atlas.sim.PlayerSim.push(inputStrafe, inputForward, speed, yaw);
+        return new double[]{x + push[0], z + push[1]};
     }
 
     /** How far the real move is from the best of the nine key combinations at this yaw. */

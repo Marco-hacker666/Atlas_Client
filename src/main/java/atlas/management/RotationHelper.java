@@ -433,6 +433,21 @@ public final class RotationHelper {
         }
     }
 
+    /**
+     * The walk keys as {@link #onMoveInput} will leave them this tick, for a
+     * forecast made before it runs (atlas.sim.SimPlayer): turned for the
+     * movement yaw when the move goes by the look with the keys turned, else
+     * as given.
+     */
+    public float[] turnedInput(float forward, float strafe) {
+        if (Float.isNaN(this.moveYaw) || mc.thePlayer == null || !RotationState.isActived()
+                || RotationState.getSmoothedYaw() != this.moveYaw || forward == 0.0F && strafe == 0.0F
+                || MoveUtil.strafeFixedThisTick(this.moveYaw)) {
+            return new float[]{forward, strafe};
+        }
+        return MoveUtil.fixedStrafe(this.moveYaw, forward, strafe);
+    }
+
     @EventTarget
     public void onWorld(LoadWorldEvent event) {
         this.pending = null;

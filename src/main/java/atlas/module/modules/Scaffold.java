@@ -13,6 +13,8 @@ import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
 import atlas.property.properties.ModeProperty;
 import atlas.property.properties.PercentProperty;
+import atlas.sim.PlayerSim;
+import atlas.sim.SimPlayer;
 import atlas.util.*;
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
@@ -1595,7 +1597,7 @@ public class Scaffold extends Module {
                    walking and the slide after it would leave the box with no floor, and friction holds the player on the
                    block. Not at the early edge test the crouch used: the god bridge look places only with the feet well
                    over the edge, so stopping there would never place. eagle is not used here. */
-                if (this.safeWalk.getValue() && this.wouldFallOnNextStep() && !this.godBridgePlacesAhead()) {
+                if (this.safeWalk.getValue() && this.godBridgeWouldFall() && !this.godBridgePlacesAhead()) {
                     mc.thePlayer.movementInput.moveForward = 0.0F;
                     mc.thePlayer.movementInput.moveStrafe = 0.0F;
                 }
@@ -1718,7 +1720,7 @@ public class Scaffold extends Module {
         }
         if (in.onGround && forward && this.run.running() && !in.lookPlaces && Float.isNaN(in.placePitch)) {
             /* Nothing places from here yet: the pitch that will, from the next step, so the look is on its way. */
-            double[] step = this.godBridgeNextStep();
+            double[] step = this.godBridgeNextStep(false);
             BlockData ahead = this.getBlockData(step[0], step[1]);
             if (ahead != null) {
                 in.aheadPitch = this.godBridgePlacePitch(ahead, this.run.lookYaw(), this.run.lookPitch(), step[0], step[1]);
@@ -1773,12 +1775,44 @@ public class Scaffold extends Module {
     }
 
     /**
-     * Where one more tick of walking carries the player: this motion (what friction left of the last step) plus a
-     * tick of walking input along the way the keys walk. {dx, dz}.
+     * Where one more tick of walking carries the player, {dx, dz}. {@code atMoveInput}: asked at the input stage
+     * (this tick's keys are in movementInput) rather than at the run tick before it (the keys held are used).
      */
-    private double[] godBridgeNextStep() {
+    private double[] godBridgeNextStep(boolean atMoveInput) {
+        if (SimPlayer.supported(mc.thePlayer)) {
+            /* 2026-11-11: by the movement simulation (atlas.sim) -- the game's own tick, with the sprint, a speed
+               potion, ice and whatever is in the way. Asked at the run tick the keys are the ones held; asked at the
+               input stage they are this tick's, as the modules before left them. No jump: the forecast is of the
+               walk. */
+            PlayerSim sim = SimPlayer.state(mc.thePlayer);
+            PlayerSim.Input in = atMoveInput ? SimPlayer.inputBeforeMove(mc.thePlayer) : SimPlayer.inputAhead(mc.thePlayer);
+            in.jump = false;
+            double x = sim.x();
+            double z = sim.z();
+            sim.tick(SimPlayer.world(mc.theWorld, mc.thePlayer), in);
+            return new double[]{sim.x() - x, sim.z() - z};
+        }
+        /* Where the simulation does not go (water, a ladder, a cobweb...): the estimate from before it. */
         double radians = Math.toRadians(this.getCurrentYaw());
         return new double[]{mc.thePlayer.motionX - Math.sin(radians) * 0.1, mc.thePlayer.motionZ + Math.cos(radians) * 0.1};
+    }
+
+    /**
+     * GODBRIDGE's fall guard (2026-11-11, by atlas.sim): walking this tick and then letting the keys go, does the
+     * player end off the floor? The same question {@link #wouldFallOnNextStep} asks, answered by running the game's
+     * move instead of a flat-ground estimate: the stride is the real one (a speed potion, ice, a block in the way),
+     * and so is the slide. The box is taken in by 0.02 a side and a floor less than a block below still counts, as
+     * before.
+     */
+    private boolean godBridgeWouldFall() {
+        if (!SimPlayer.supported(mc.thePlayer)) {
+            return this.wouldFallOnNextStep();
+        }
+        if (!mc.thePlayer.onGround) {
+            return false;
+        }
+        return !PlayerSim.stopsOnFloor(SimPlayer.state(mc.thePlayer), SimPlayer.world(mc.theWorld, mc.thePlayer),
+                SimPlayer.inputBeforeMove(mc.thePlayer), 0.02, 0.99);
     }
 
     /**
@@ -1813,37 +1847,45 @@ public class Scaffold extends Module {
         if (!this.run.running() || plan == null || !plan.look || plan.maxTurn < 180.0F) {
             return false;
         }
-        double[] step = this.godBridgeNextStep();
+        double[] step = this.godBridgeNextStep(true);
         AxisAlignedBB next = mc.thePlayer.getEntityBoundingBox().expand(-0.02, 0.0, -0.02).offset(step[0], -1.0, step[1]);
         if (mc.theWorld.getCollidingBoundingBoxes(mc.thePlayer, next).isEmpty()) {
             return false;
         }
         BlockData target = this.getBlockData(step[0], step[1]);
         if (target == null) {
-            return true;
+            /* Nothing to place there, and the guard has already said the walk and its slide end off the floor (ice,
+               a long slide): a floor under one step is no proof of stopping on it (review, PR #36). */
+            return false;
         }
         /* Walking on past the guard is only safe if the block really goes down next tick: once past it, a stop is too
            late (the guard's own test is "walk this tick, then slide"). So every reason place() would refuse is checked
            here, and the look must place over a spread of step lengths, not only the one forecast (review, PR #35). */
-        if (!ItemUtil.isHoldingBlock() || this.blockCount <= 0 || this.pauseTicks > 0 || !this.canPlace()
-                || this.faceFailed(target.blockPos(), target.facing())) {
-            return false;
-        }
-        /* The same game check place() makes: a cell that is taken, or a block that would land in an entity. */
-        ItemStack held = mc.thePlayer.inventory.getCurrentItem();
-        if (held == null || !(held.getItem() instanceof ItemBlock) || !((ItemBlock) held.getItem())
-                .canPlaceBlockOnSide(mc.theWorld, target.blockPos(), target.facing(), mc.thePlayer, held)) {
-            return false;
-        }
-        if (this.paceOn() && this.paceHolds(target.blockPos(), target.facing(), this.run.lookYaw())) {
+        if (!ItemUtil.isHoldingBlock() || this.blockCount <= 0 || this.pauseTicks > 0 || !this.canPlace()) {
             return false;
         }
         float pitch = this.godBridgePlacePitch(target, this.run.lookYaw(), this.run.lookPitch(), step[0], step[1]);
         if (Float.isNaN(pitch) || Math.abs(pitch - this.run.lookPitch()) > GodBridge.PITCH_FIX_MAX) {
             return false;
         }
+        /* The click next tick is wherever that look lands (lookHit may give another cell of the layer than the one
+           planned), so that block and face are the ones checked (review, PR #36). */
+        MovingObjectPosition hit = this.lookHit(target, this.run.lookYaw(), pitch, step[0], step[1]);
+        if (hit == null || this.faceFailed(hit.getBlockPos(), hit.sideHit)) {
+            return false;
+        }
+        /* The same game check place() makes: a cell that is taken, or a block that would land in an entity. */
+        ItemStack held = mc.thePlayer.inventory.getCurrentItem();
+        if (held == null || !(held.getItem() instanceof ItemBlock) || !((ItemBlock) held.getItem())
+                .canPlaceBlockOnSide(mc.theWorld, hit.getBlockPos(), hit.sideHit, mc.thePlayer, held)) {
+            return false;
+        }
+        if (this.paceOn() && this.paceHolds(hit.getBlockPos(), hit.sideHit, this.run.lookYaw())) {
+            return false;
+        }
         for (double k : AHEAD_SPREAD) {
-            if (this.lookHit(target, this.run.lookYaw(), pitch, step[0] * k, step[1] * k) == null) {
+            MovingObjectPosition further = this.lookHit(target, this.run.lookYaw(), pitch, step[0] * k, step[1] * k);
+            if (further == null || !further.getBlockPos().equals(hit.getBlockPos()) || further.sideHit != hit.sideHit) {
                 return false;
             }
         }

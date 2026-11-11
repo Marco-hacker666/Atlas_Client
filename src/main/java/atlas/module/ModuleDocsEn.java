@@ -455,7 +455,7 @@ final class ModuleDocsEn {
         help("ClickGUIModule", "glide-accent", "Glide style: the colour of enabled modules, switches and sliders.");
         help("ClickGUIModule", "glide-blur", "Glide style: blur the world behind the panels. Off is lighter on weak PCs.");
         d("GuiModule", "Opens the click menu (Right Shift by default).");
-        d("MoveCheck", "Log only, changes nothing: checks whether your moves fit the look you send, in moves-*.txt.");
+        d("MoveCheck", "Log only, changes nothing: checks whether your moves fit the look you send, in moves-*.txt. It also checks the movement prediction against the game: \"sim plain\" at the end of each SUM line should start with 0 (0/600, say); anything else means the prediction and the game disagree.");
         help("MoveCheck", "threshold", "How many blocks off a move has to be to count as not fitting.");
         help("MoveCheck", "log-every", "Seconds between summary lines.");
         d("FlagDetector", "Detects server corrections, refused blocks and reduced damage, and works out which module caused them.");

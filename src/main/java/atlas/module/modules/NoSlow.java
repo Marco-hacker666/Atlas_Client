@@ -310,6 +310,43 @@ public class NoSlow extends Module {
         this.hitWindow.postponed();
     }
 
+    /**
+     * Whether this tick's move is slowed by the item in use: what EntityPlayerSP.onLivingUpdate is told when it
+     * asks isUsingItem (MixinEntityPlayerSP.isUsing), and what the movement simulation asks too (atlas.sim).
+     */
+    public static boolean slowsMove(net.minecraft.client.entity.EntityPlayerSP player) {
+        return slowsMove(player, true);
+    }
+
+    /**
+     * The same answer for a forecast, changing nothing: the game's own asking counts ticks (NewGrim lets every
+     * second one through), and a forecast that asked through it would shift which real ticks are slowed
+     * (review, PR #36).
+     */
+    public static boolean wouldSlowMove(net.minecraft.client.entity.EntityPlayerSP player) {
+        return slowsMove(player, false);
+    }
+
+    private static boolean slowsMove(net.minecraft.client.entity.EntityPlayerSP player, boolean counted) {
+        if (KillAuraLB.rhythmRuns()) {
+            /* 2026-10-27: Silent Aura's Rhythm block is a real block the server sees; it moves exactly as vanilla
+               moves with the sword up (slowed, no sprint), never as NoSlow would -- except while Rhythm-Lag holds the
+               movement: the server gets that movement only after the sword is down, so it is made unslowed; and on a
+               Rhythm-FreeRaise tick (2026-10-28), one unslowed move Grim's NoSlow lets through. */
+            return !KillAuraLB.rhythmUnslowed() && player.isUsingItem();
+        }
+        NoSlow noSlow = (NoSlow) atlas.Atlas.moduleManager.modules.get(NoSlow.class);
+        if (noSlow.isEnabled()) {
+            if (noSlow.isMiauAnyActive()) {
+                return !(counted ? noSlow.shouldCancelMiauSlowdown() : noSlow.wouldCancelMiauSlowdown());
+            }
+            if (noSlow.isAnyActive()) {
+                return false;
+            }
+        }
+        return player.isUsingItem();
+    }
+
     public boolean isAnyActive() {
         if (ItemUtil.isHoldingSword() && swordYields()) {
             return false;
@@ -802,6 +839,17 @@ public class NoSlow extends Module {
                 return true;
             }
             return false;
+        }
+        return true;
+    }
+
+    /** What {@link #shouldCancelMiauSlowdown} would answer now, without counting the tick. */
+    public boolean wouldCancelMiauSlowdown() {
+        if (!this.isEnabled()) {
+            return false;
+        }
+        if (this.heldItemMiauMode() == MIAU_NEW_GRIM) {
+            return this.miauAnyActive(MIAU_NEW_GRIM) && this.newGrimTicks + 1 >= 2;
         }
         return true;
     }

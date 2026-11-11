@@ -240,7 +240,54 @@ public final class MoveCheck {
         }
     }
 
+    /*
+     * 2026-11-12 (owner: say it in chat when a move breaks the simulation): a line in the player's own chat, never
+     * sent to the server. Once per cause every ALERT_EVERY_MS at most, with how many more there were since; set by
+     * Client Settings > Performance > Move check chat.
+     */
+    public static final String CHAT_SETTING = "move-check-chat";
+    public static final String[] CHAT_MODES = {"On", "Off"};
+    private static volatile int chatSetting = -1;
+    private static final long ALERT_EVERY_MS = 3000L;
+    private final Map<String, long[]> alerted = new java.util.HashMap<String, long[]>();
+
+    public static void setChat(int mode) {
+        chatSetting = Math.max(0, Math.min(CHAT_MODES.length - 1, mode));
+    }
+
+    private static boolean chatOn() {
+        int mode = chatSetting;
+        if (mode < 0) {
+            mode = MobileSafe.readMode(CHAT_SETTING, CHAT_MODES);
+            chatSetting = mode;
+        }
+        return mode == 0;
+    }
+
+    /** {@code tag}: the modules that changed the move ("plain": none, so the prediction itself may be off). */
+    private void alert(String tag, String what) {
+        if (!chatOn() || mc.thePlayer == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long[] state = this.alerted.get(tag);
+        if (state == null) {
+            state = new long[]{0L, 0L};
+            this.alerted.put(tag, state);
+        }
+        if (now - state[0] < ALERT_EVERY_MS) {
+            state[1]++;
+            return;
+        }
+        String who = "plain".equals(tag) ? "&7no module &8(the prediction may be off)" : "&f" + tag;
+        String more = state[1] > 0 ? String.format(" &8+%d more", state[1]) : "";
+        state[0] = now;
+        state[1] = 0L;
+        atlas.util.ChatUtil.sendFormatted("&7[&cSim&7] " + who + " &7" + what + more);
+    }
+
     private void reset() {
+        this.alerted.clear();
         this.attacksSinceStart = 0;
         this.attacksPending = 0;
         this.velocitySinceStart = null;
@@ -457,9 +504,10 @@ public final class MoveCheck {
             } else if (this.velocityOfferLast) {
                 this.kbOffered++;
                 this.kbIgnored++;
+                String kbTag = movers(this.pendingMovers, atlas.util.ActionWatch.peekTickMovers());
                 write(String.format("KB not taken: %.3f %.3f %.3f over two moves | %s", this.velocityOffer[0],
-                        this.velocityOffer[1], this.velocityOffer[2],
-                        movers(this.pendingMovers, atlas.util.ActionWatch.peekTickMovers())));
+                        this.velocityOffer[1], this.velocityOffer[2], kbTag));
+                alert(kbTag, "&ckept no knockback");
             }
         }
         if (result.explosion) {
@@ -489,6 +537,7 @@ public final class MoveCheck {
         if (!off) {
             return;
         }
+        alert(tag, String.format("off &f%.4f &8(keys %s)", result.offset, result.keys()));
         long second = now / 1000L;
         if (second != this.selfLineSecond) {
             this.selfLineSecond = second;

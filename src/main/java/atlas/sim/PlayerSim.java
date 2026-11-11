@@ -137,13 +137,26 @@ public final class PlayerSim {
 
     /** One tick: EntityPlayerSP.onLivingUpdate from the sprint rule on, down to the friction. */
     public void tick(World world, Input in) {
-        /* The sprint rule, on the keys as scaled (a sneak's 0.3 and an item's 0.2 are under 0.8). */
+        sprintRule(in);
+        move(world, in);
+    }
+
+    /** The client's sprint rule, on the keys as scaled (a sneak's 0.3 and an item's 0.2 are under 0.8). */
+    public void sprintRule(Input in) {
         if (!this.sprinting && in.sprint && in.forward >= SPRINT_FORWARD && this.canSprint && this.canStartSprint) {
             this.sprinting = true;
         }
         if (this.sprinting && (in.forward < SPRINT_FORWARD || this.collidedHorizontally || !this.canSprint)) {
             this.sprinting = false;
         }
+    }
+
+    /**
+     * The tick after the sprint rule, with {@link #sprinting} as it stands: the jump, the push, the move, gravity and
+     * friction, and the speeds the next tick uses. A caller that knows the sprint state some other way (what the
+     * server was told) sets it and runs only this.
+     */
+    public void move(World world, Input in) {
         if (this.jumpTicks > 0) {
             this.jumpTicks--;
         }

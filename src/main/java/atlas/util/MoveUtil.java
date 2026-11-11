@@ -180,17 +180,29 @@ public class MoveUtil {
         }
         fixedTick = tick;
         fixedYaw = targetYaw;
-        TargetStrafe targetStrafe = (TargetStrafe) Atlas.moduleManager.modules.get(TargetStrafe.class);
-        float[] out;
-        if (targetStrafe != null && targetStrafe.isEnabled() && !Float.isNaN(targetStrafe.getTargetYaw())
-                && (input.moveForward != 0.0F || input.moveStrafe != 0.0F)) {
-            float strength = Math.max(Math.abs(input.moveForward), Math.abs(input.moveStrafe));
-            out = keysToward(targetStrafe.getTargetYaw(), targetYaw, strength);
-        } else {
-            out = turnInput(MoveUtil.mc.thePlayer.rotationYaw, targetYaw, input.moveForward, input.moveStrafe);
-        }
+        float[] out = fixedStrafe(targetYaw, input.moveForward, input.moveStrafe);
         input.moveForward = out[0];
         input.moveStrafe = out[1];
+    }
+
+    /**
+     * What {@link #fixStrafe} makes of these keys, without touching the
+     * input: for a forecast made before it runs (atlas.sim.SimPlayer).
+     */
+    public static float[] fixedStrafe(float targetYaw, float forward, float strafe) {
+        TargetStrafe targetStrafe = (TargetStrafe) Atlas.moduleManager.modules.get(TargetStrafe.class);
+        if (targetStrafe != null && targetStrafe.isEnabled() && !Float.isNaN(targetStrafe.getTargetYaw())
+                && (forward != 0.0F || strafe != 0.0F)) {
+            float strength = Math.max(Math.abs(forward), Math.abs(strafe));
+            return keysToward(targetStrafe.getTargetYaw(), targetYaw, strength);
+        }
+        return turnInput(MoveUtil.mc.thePlayer.rotationYaw, targetYaw, forward, strafe);
+    }
+
+    /** Whether this tick's keys were already turned for this yaw (a second fixStrafe does nothing). */
+    public static boolean strafeFixedThisTick(float targetYaw) {
+        return MoveUtil.mc.thePlayer != null && MoveUtil.mc.thePlayer.ticksExisted == fixedTick
+                && MathHelper.wrapAngleTo180_float(targetYaw - fixedYaw) == 0.0F;
     }
 
     /**

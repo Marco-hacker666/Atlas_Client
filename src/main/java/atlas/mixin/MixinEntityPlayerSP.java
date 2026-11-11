@@ -175,23 +175,9 @@ public abstract class MixinEntityPlayerSP extends MixinEntityPlayer {
             )
     )
     private boolean isUsing(EntityPlayerSP entityPlayerSP) {
-        if (atlas.module.modules.KillAuraLB.rhythmRuns()) {
-            /* 2026-10-27: Silent Aura's Rhythm block is a real block the server sees; it moves exactly as vanilla
-               moves with the sword up (slowed, no sprint), never as NoSlow would -- except while Rhythm-Lag holds the
-               movement: the server gets that movement only after the sword is down, so it is made unslowed; and on a
-               Rhythm-FreeRaise tick (2026-10-28), one unslowed move Grim's NoSlow lets through. */
-            return !atlas.module.modules.KillAuraLB.rhythmUnslowed() && entityPlayerSP.isUsingItem();
-        }
-        NoSlow noSlow = (NoSlow) Atlas.moduleManager.modules.get(NoSlow.class);
-        if (noSlow.isEnabled()) {
-            if (noSlow.isMiauAnyActive()) {
-                return !noSlow.shouldCancelMiauSlowdown();
-            }
-            if (noSlow.isAnyActive()) {
-                return false;
-            }
-        }
-        return entityPlayerSP.isUsingItem();
+        /* The rule is NoSlow.slowsMove (moved there unchanged, 2026-11-11), so the movement simulation asks the same
+           question this move does. */
+        return NoSlow.slowsMove(entityPlayerSP);
     }
 
     @Redirect(

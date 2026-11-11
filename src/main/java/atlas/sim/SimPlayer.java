@@ -7,16 +7,24 @@ import atlas.mixin.IAccessorEntityLivingBase;
 import atlas.module.modules.NoSlow;
 import atlas.util.MoveUtil;
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockLiquid;
 import net.minecraft.block.BlockSlime;
 import net.minecraft.block.BlockSoulSand;
+import net.minecraft.block.BlockWeb;
+import net.minecraft.block.material.Material;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
+import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.SharedMonsterAttributes;
+import net.minecraft.init.Blocks;
 import net.minecraft.potion.Potion;
 import net.minecraft.potion.PotionEffect;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.BlockPos;
+import net.minecraft.util.MathHelper;
+import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
 
 import java.util.List;
@@ -47,26 +55,28 @@ public final class SimPlayer {
     }
 
     /**
-     * False where the simulation does not cover the move: water, lava, a
-     * ladder, a cobweb, soul sand, slime, riding, flying. The caller keeps
-     * what it did before.
+     * False where the simulation does not cover the move: riding, flying,
+     * no-clip, sleeping. (Water, lava, ladders, cobwebs, soul sand and slime
+     * are covered since 2026-11-12.) The caller keeps what it did before.
      */
     public static boolean supported(EntityPlayerSP player) {
         if (player == null || player.worldObj == null || player.movementInput == null) {
             return false;
         }
-        if (player.isInWater() || player.isInLava() || player.isOnLadder() || player.isRiding()
-                || player.capabilities.isFlying || player.noClip || player.isPlayerSleeping()
-                || ((IAccessorEntity) player).getIsInWeb()) {
-            return false;
-        }
-        AxisAlignedBB box = player.getEntityBoundingBox();
-        Block under = player.worldObj.getBlockState(new BlockPos(player.posX, box.minY - 0.2, player.posZ)).getBlock();
-        Block at = player.worldObj.getBlockState(new BlockPos(player.posX, box.minY + 0.01, player.posZ)).getBlock();
-        return !(under instanceof BlockSlime) && !(under instanceof BlockSoulSand) && !(at instanceof BlockSoulSand);
+        return !player.isRiding() && !player.capabilities.isFlying && !player.noClip && !player.isPlayerSleeping();
     }
 
-    /** The player now. A new object each call: tick it freely. */
+    /**
+     * The player now, asked inside its tick (LivingUpdateEvent, MoveInputEvent): the water's flow has already pushed
+     * this tick's motion, so the simulation's first move does not push again.
+     */
+    public static PlayerSim stateInMove(EntityPlayerSP player) {
+        PlayerSim sim = state(player);
+        sim.waterPushed = true;
+        return sim;
+    }
+
+    /** The player now, asked between ticks (TickEvent, UpdateEvent). A new object each call: tick it freely. */
     public static PlayerSim state(EntityPlayerSP player) {
         PlayerSim sim = new PlayerSim();
         sim.box = player.getEntityBoundingBox();
@@ -89,6 +99,9 @@ public final class SimPlayer {
         /* The game asks isUsingItem here too, and gets NoSlow's answer (MixinEntityPlayerSP.isUsing); asked here
            without counting the tick. */
         sim.canStartSprint = !NoSlow.wouldSlowMove(player) && !player.isPotionActive(Potion.blindness);
+        sim.inWater = player.isInWater();
+        sim.inWeb = ((IAccessorEntity) player).getIsInWeb();
+        sim.depthStrider = (float) EnchantmentHelper.getDepthStriderModifier(player);
         return sim;
     }
 
@@ -103,6 +116,79 @@ public final class SimPlayer {
             @Override
             public float slipperiness(int x, int y, int z) {
                 return world.getBlockState(new BlockPos(x, y, z)).getBlock().slipperiness;
+            }
+
+            /* World.handleMaterialAcceleration for water, read only: the flow is summed here, PlayerSim pushes. */
+            @Override
+            public boolean water(AxisAlignedBB area, double[] flow) {
+                int minX = MathHelper.floor_double(area.minX);
+                int maxX = MathHelper.floor_double(area.maxX + 1.0);
+                int minY = MathHelper.floor_double(area.minY);
+                int maxY = MathHelper.floor_double(area.maxY + 1.0);
+                int minZ = MathHelper.floor_double(area.minZ);
+                int maxZ = MathHelper.floor_double(area.maxZ + 1.0);
+                boolean in = false;
+                Vec3 sum = new Vec3(0.0, 0.0, 0.0);
+                for (int x = minX; x < maxX; x++) {
+                    for (int y = minY; y < maxY; y++) {
+                        for (int z = minZ; z < maxZ; z++) {
+                            BlockPos pos = new BlockPos(x, y, z);
+                            IBlockState state = world.getBlockState(pos);
+                            Block block = state.getBlock();
+                            if (block.getMaterial() != Material.water) {
+                                continue;
+                            }
+                            double top = (double) ((float) (y + 1)
+                                    - BlockLiquid.getLiquidHeightPercent((Integer) state.getValue(BlockLiquid.LEVEL)));
+                            if ((double) maxY >= top) {
+                                in = true;
+                                sum = block.modifyAcceleration(world, pos, self, sum);
+                            }
+                        }
+                    }
+                }
+                flow[0] += sum.xCoord;
+                flow[1] += sum.yCoord;
+                flow[2] += sum.zCoord;
+                return in;
+            }
+
+            @Override
+            public boolean lava(AxisAlignedBB area) {
+                return world.isMaterialInBB(area, Material.lava);
+            }
+
+            @Override
+            public boolean liquid(AxisAlignedBB area) {
+                return world.isAnyLiquid(area);
+            }
+
+            @Override
+            public boolean climbable(int x, int y, int z) {
+                Block block = world.getBlockState(new BlockPos(x, y, z)).getBlock();
+                return block == Blocks.ladder || block == Blocks.vine;
+            }
+
+            @Override
+            public boolean slime(int x, int y, int z) {
+                return world.getBlockState(new BlockPos(x, y, z)).getBlock() instanceof BlockSlime;
+            }
+
+            /* Entity.doBlockCollisions: every cell the area (already in by 0.001) touches, ends included. */
+            @Override
+            public int touching(AxisAlignedBB area, PlayerSim.Touch kind) {
+                int count = 0;
+                for (int x = MathHelper.floor_double(area.minX); x <= MathHelper.floor_double(area.maxX); x++) {
+                    for (int y = MathHelper.floor_double(area.minY); y <= MathHelper.floor_double(area.maxY); y++) {
+                        for (int z = MathHelper.floor_double(area.minZ); z <= MathHelper.floor_double(area.maxZ); z++) {
+                            Block block = world.getBlockState(new BlockPos(x, y, z)).getBlock();
+                            if (kind == PlayerSim.Touch.WEB ? block instanceof BlockWeb : block instanceof BlockSoulSand) {
+                                count++;
+                            }
+                        }
+                    }
+                }
+                return count;
             }
         };
     }

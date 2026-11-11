@@ -66,7 +66,17 @@ public final class SimPlayer {
         return !player.isRiding() && !player.capabilities.isFlying && !player.noClip && !player.isPlayerSleeping();
     }
 
-    /** The player now. A new object each call: tick it freely. */
+    /**
+     * The player now, asked inside its tick (LivingUpdateEvent, MoveInputEvent): the water's flow has already pushed
+     * this tick's motion, so the simulation's first move does not push again.
+     */
+    public static PlayerSim stateInMove(EntityPlayerSP player) {
+        PlayerSim sim = state(player);
+        sim.waterPushed = true;
+        return sim;
+    }
+
+    /** The player now, asked between ticks (TickEvent, UpdateEvent). A new object each call: tick it freely. */
     public static PlayerSim state(EntityPlayerSP player) {
         PlayerSim sim = new PlayerSim();
         sim.box = player.getEntityBoundingBox();

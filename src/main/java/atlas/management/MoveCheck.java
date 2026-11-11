@@ -446,7 +446,7 @@ public final class MoveCheck {
         if (!SimPlayer.supported(mc.thePlayer)) {
             return;
         }
-        PlayerSim sim = SimPlayer.state(mc.thePlayer);
+        PlayerSim sim = SimPlayer.stateInMove(mc.thePlayer);
         sim.tick(SimPlayer.world(mc.theWorld, mc.thePlayer), SimPlayer.inputAsMoved(mc.thePlayer));
         this.simPredicted = sim;
     }

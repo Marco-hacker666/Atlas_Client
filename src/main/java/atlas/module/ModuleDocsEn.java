@@ -863,6 +863,7 @@ final class ModuleDocsEn {
         help("Scaffold", "humanize", "Turns use the Rotations engine's speed variation and curve.");
         help("Scaffold", "telly-auto-jump", "SPEED-TELLY and WEIRD-TELLY: jump by itself while W is held on the ground; let go to stop.");
         help("Scaffold", "jump-every-blocks", "GODBRIDGE: a jump every this many blocks (one more at random), only on a straight run with the look settled and room for it in the pace; POLAR: a jump at this count on top of its ledge jumps. 0 = none.");
+        help("Scaffold", "godbridge-trace", "GODBRIDGE: writes a line a tick while bridging to config/Atlas/godbridge-*.txt (needs Logs), to find why it falls. Log only.");
         help("Scaffold", "jump-builds-up", "GODBRIDGE: a jump takes the bridge up one block, as the technique does. Off: blocks stay on the layer the jump left from.");
         help("Scaffold", "legit-pace", "GODBRIDGE and POLAR: bridge at a pace a person can. Crouches for 3-5 ticks at an edge every 3-4.5 s, never for 1 tick, and holds a block or a jump that would place faster than Intave's placement checks allow (they flag a straight bridge with no crouch). Off: as before.");
         help("Scaffold", "pause-on-correction", "After a setback, wait a round trip before placing; a refused block pauses too. Stops strings of ghost blocks placed from the wrong position.");

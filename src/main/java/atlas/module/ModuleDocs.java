@@ -1170,6 +1170,7 @@ public final class ModuleDocs {
         help("Scaffold", "humanize", "轉頭加上 Rotations 引擎的速度隨機與弧線，比較像人手。");
         help("Scaffold", "telly-auto-jump", "SPEED-TELLY 和 WEIRD-TELLY 模式：按住 W 在地上時自動跳，放開就停。");
         help("Scaffold", "jump-every-blocks", "GODBRIDGE：每放這麼多格跳一次（隨機多一格），只在視角已固定、節奏允許時跳；POLAR：在它邊緣跳之外，到這個數也跳。0 = 不跳。");
+        help("Scaffold", "godbridge-trace", "GODBRIDGE：搭橋時每個 tick 寫一行到 config/Atlas/godbridge-*.txt（要開 Logs），用來查為什麼會掉下去。只記錄，不改任何行為。");
         help("Scaffold", "jump-builds-up", "GODBRIDGE：跳的時候橋跟著往上一格（God Bridge 本來的樣子）。關掉：跳起來還是放在起跳那一層。");
         help("Scaffold", "legit-pace", "GODBRIDGE 和 POLAR：用人做得到的速度搭橋。每 3-4.5 秒在邊緣蹲 3-5 tick，不會只蹲 1 tick；放得比 Intave 放置檢查允許的還快時，會先等方塊或不跳（直線不蹲的橋會被它標記）。關：跟以前一樣。");
         help("Scaffold", "pause-on-correction", "被伺服器拉回後，等一個來回延遲再放方塊；被退回的方塊也會暫停。避免在錯的位置連續放出 ghost block。");

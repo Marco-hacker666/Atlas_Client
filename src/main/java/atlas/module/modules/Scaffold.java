@@ -178,6 +178,12 @@ public class Scaffold extends Module {
     /* 2026-11-07 (owner: "stack seven, then jump, as LiquidBounce"): a jump every so many blocks. LiquidBounce has no
        such count: it jumps at a ledge it cannot place at, which reads as a rhythm. 0 leaves only the ledge action. */
     private final IntProperty jumpEveryBlocks = new IntProperty("jump-every-blocks", 7, 0, 20, this::godBridgeShown);
+    /* 2026-11-11 (owner: GODBRIDGE falls now and then, with or without a turn): a line a tick while a run is on, to
+       config/Atlas/godbridge-*.txt (needs Logs). Log only. */
+    private final BooleanProperty godBridgeTrace = new BooleanProperty("godbridge-trace", true,
+            () -> this.rotationMode.getValue() == ROTATION_GODBRIDGE);
+    private java.io.File godBridgeTraceFile;
+    private int lastPlacedTick = -1000;
     /* 2026-11-07: placement timing a human bridge has (PlacePace): a crouch of 3-5 ticks at an edge every 3-4.5 s,
        no 1-tick crouches, no click or jump that would put the Speed or Sneak averages of Intave PlacementAnalysis under
        their limits. Off: GODBRIDGE and POLAR exactly as before. */
@@ -587,6 +593,7 @@ public class Scaffold extends Module {
                     this.blockCount--;
                 }
                 this.placedThisTick = true;
+                this.lastPlacedTick = this.tick;
                 this.walkOnSince = -1;
                 if (this.isThreeFmcMode()) {
                     this.threeFmcPlaceCooldown = 1;
@@ -1732,6 +1739,7 @@ public class Scaffold extends Module {
         in.now = now;
         GodBridge.Plan plan = this.run.tick(in);
         this.runPlan = plan;
+        godBridgeTrace(in, plan, target, event);
         if (plan.look) {
             float[] aimed = atlas.humanize.HumanTurn.apply(this.human, event.getYaw(), event.getPitch(), plan.yaw, plan.pitch);
             float[] sent = RotationHelper.request(this, aimed[0], aimed[1], 3, this.moveMode(), false,
@@ -1749,6 +1757,33 @@ public class Scaffold extends Module {
         this.planSnapMode = false;
         this.planThreeFmc = false;
         this.planReady = true;
+    }
+
+    /**
+     * One trace line: where the player is and how it moves, the block wanted, what the look can do from here, the plan,
+     * and how long since a block went down. Only while W is held or a run is on.
+     */
+    private void godBridgeTrace(GodBridge.Input in, GodBridge.Plan plan, BlockData target, UpdateEvent event) {
+        if (!this.godBridgeTrace.getValue() || !in.forward && !this.run.running()) {
+            return;
+        }
+        if (this.godBridgeTraceFile == null) {
+            this.godBridgeTraceFile = new java.io.File("./config/Atlas/",
+                    "godbridge-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmmss").format(new java.util.Date()) + ".txt");
+        }
+        String cell = target == null ? "-" : target.blockPos().offset(target.facing()).getX() + ","
+                + target.blockPos().offset(target.facing()).getY() + "," + target.blockPos().offset(target.facing()).getZ()
+                + " " + target.facing().getName();
+        AsyncLog.append(this.godBridgeTraceFile, String.format(
+                "%s t%d pos %.3f %.3f %.3f v %.3f %.3f %.3f %s%s | tgt %s | edge %s places %s pp %.1f ap %.1f | sent %.1f/%.1f"
+                        + " plan %.1f/%.1f max %.0f%s%s%s | placed %dt ago",
+                new java.text.SimpleDateFormat("HH:mm:ss.SSS").format(new java.util.Date()), this.tick,
+                mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ, mc.thePlayer.motionX, mc.thePlayer.motionY,
+                mc.thePlayer.motionZ, mc.thePlayer.onGround ? "ground" : "air", in.forward ? "" : " no-W", cell,
+                in.edge ? "y" : "n", in.lookPlaces ? "y" : "n", in.placePitch, in.aheadPitch,
+                MathHelper.wrapAngleTo180_float(event.getYaw()), event.getPitch(),
+                MathHelper.wrapAngleTo180_float(plan.yaw), plan.pitch, plan.maxTurn, plan.stop ? " STOP" : "",
+                plan.jump ? " JUMP" : "", plan.click ? " click" : "", this.tick - this.lastPlacedTick));
     }
 
     /** At this yaw, the pitch nearest {@code from} (within 8, 68 to 86) whose ray places the target from here; NaN for none. */

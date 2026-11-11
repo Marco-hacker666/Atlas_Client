@@ -2058,10 +2058,23 @@ public class Scaffold extends Module {
         return now < this.edgeSneakUntil;
     }
 
-    /** Vape's test with no hold: the box shrunk by 0.2 a side, moved by this tick's motion and one block down, touches nothing. */
+    /**
+     * Vape's test with no hold: the box shrunk by 0.2 a side, moved by this tick's motion and one block down, touches
+     * nothing. 2026-11-12 (owner: the simulation by default): where the simulation goes, the step is the game's own
+     * (this tick's keys, sprint, speed, ice, what is in the way) instead of only the motion carried in, and the floor
+     * is looked for where that step ends, with the same 0.2 a side.
+     */
     private boolean floorlessNextStep() {
         if (!mc.thePlayer.onGround || mc.thePlayer.capabilities.isFlying) {
             return false;
+        }
+        if (SimPlayer.supported(mc.thePlayer)) {
+            PlayerSim sim = SimPlayer.state(mc.thePlayer);
+            PlayerSim.World world = SimPlayer.world(mc.theWorld, mc.thePlayer);
+            PlayerSim.Input in = SimPlayer.inputBeforeMove(mc.thePlayer);
+            in.jump = false;
+            sim.tick(world, in);
+            return !sim.hasFloor(world, 0.2);
         }
         AxisAlignedBB next = mc.thePlayer.getEntityBoundingBox().expand(-0.2, 0.0, -0.2)
                 .offset(mc.thePlayer.motionX, -1.0, mc.thePlayer.motionZ);

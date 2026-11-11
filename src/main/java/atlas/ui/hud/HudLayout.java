@@ -29,6 +29,11 @@ public final class HudLayout {
     /** Moves an element; returns how far it really moved, since a setting may be at its limit. */
     public interface Mover {
         int[] moveBy(int dx, int dy);
+
+        /** Whether the element is still where it was declared (never moved); MobileHud only moves those. */
+        default boolean atDefault() {
+            return false;
+        }
     }
 
     /** Reads and changes an element's size; set keeps the value inside the setting's range. */
@@ -36,6 +41,11 @@ public final class HudLayout {
         float get();
 
         void set(float value);
+
+        /** The size the setting was declared with; NaN when not known. */
+        default float defaultValue() {
+            return Float.NaN;
+        }
     }
 
     public static final class Element {
@@ -103,6 +113,10 @@ public final class HudLayout {
         net.minecraft.client.gui.ScaledResolution sr =
                 new net.minecraft.client.gui.ScaledResolution(net.minecraft.client.Minecraft.getMinecraft());
         HudAnchors.track(element, sr.getScaledWidth(), sr.getScaledHeight());
+        /* Phones (2026-11-11): the first time an element is seen there, out of the way of the touch buttons. */
+        if (!editing) {
+            MobileHud.consider(element, sr.getScaledWidth(), sr.getScaledHeight());
+        }
     }
 
     static List<Element> visible() {
@@ -127,6 +141,12 @@ public final class HudLayout {
             public int[] moveBy(int dx, int dy) {
                 return new int[]{shift(xSetting, xSign, dx), shift(ySetting, ySign, dy)};
             }
+
+            @Override
+            public boolean atDefault() {
+                return (xSetting == null || xSetting.getValue().equals(xSetting.getDefault()))
+                        && (ySetting == null || ySetting.getValue().equals(ySetting.getDefault()));
+            }
         };
     }
 
@@ -140,6 +160,13 @@ public final class HudLayout {
                 setting.targetPosition.x = setting.position.x;
                 setting.targetPosition.y = setting.position.y;
                 return new int[]{dx, dy};
+            }
+
+            @Override
+            public boolean atDefault() {
+                atlas.util.vector.Vector2d declared = setting.getDefault();
+                return declared != null && Math.abs(setting.position.x - declared.x) < 0.5
+                        && Math.abs(setting.position.y - declared.y) < 0.5;
             }
         };
     }
@@ -158,6 +185,12 @@ public final class HudLayout {
             @Override
             public void set(float value) {
                 setting.setValue(clampScale(value, setting.getMinimum(), setting.getMaximum()));
+            }
+
+            @Override
+            public float defaultValue() {
+                Float declared = setting.getDefault();
+                return declared == null ? Float.NaN : declared;
             }
         };
     }

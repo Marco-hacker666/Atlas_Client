@@ -1,6 +1,5 @@
 package atlas.util.shader;
 
-import atlas.util.RenderUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;

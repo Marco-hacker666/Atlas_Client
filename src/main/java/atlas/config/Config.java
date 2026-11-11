@@ -131,7 +131,11 @@ public class Config {
                     ArrayList<Property<?>> list = Atlas.propertyManager.properties.get(module.getClass());
                     if (list != null) {
                         for (Property<?> property : list) {
-                            if (object.has(property.getName())) {
+                            /* A DragProperty saves as name_x and name_y, never under its own name: without this its
+                               position (Statistics') was never read back. */
+                            if (object.has(property.getName())
+                                    || property instanceof atlas.property.properties.DragProperty
+                                    && object.has(property.getName() + "_x") && object.has(property.getName() + "_y")) {
                                 try {
                                     property.read(object);
                                 } catch (Exception e) {

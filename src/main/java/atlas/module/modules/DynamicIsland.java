@@ -17,7 +17,6 @@ import atlas.property.properties.ColorProperty;
 import atlas.property.properties.ModeProperty;
 import atlas.util.GlowUtils;
 import atlas.util.RenderUtil;
-import atlas.util.RoundedUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.network.NetworkPlayerInfo;
@@ -93,7 +92,7 @@ public class DynamicIsland extends Module { // nah bro i took 2 hour just to did
             HudPanel.panel(x, y, x + width, y + height);
         } else {
             atlas.util.shader.BlurUtils.prepareBlur();
-            RoundedUtils.drawRoundedRect(x, y, width, height, this.radius, 0xFFFFFFFF);
+            RenderUtil.drawRoundedRect(x, y, width, height, this.radius, 0xFFFFFFFF);
             atlas.util.shader.BlurUtils.blurEnd(2, 4.0f);
 
             drawBackground(x, y, width, height);
@@ -168,13 +167,13 @@ public class DynamicIsland extends Module { // nah bro i took 2 hour just to did
                     new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 110));
         }
 
-        RoundedUtils.drawRoundedRect(
+        RenderUtil.drawRoundedRect(
                 x, y,
                 w, h,
                 this.radius,
                 UiMode.adapt(new Color(0, 0, 0, this.bgAlpha).getRGB()));
 
-        RoundedUtils.drawRoundedRect(
+        RenderUtil.drawRoundedRect(
                 x + 0.5f, y + 0.5f,
                 w - 1f, h - 1f,
                 this.radius - 0.5f,

@@ -12,7 +12,7 @@ import net.minecraft.world.World;
 import java.util.HashMap;
 import java.util.Map;
 
-public class AutoBlock {
+public class NoSlowCheck {
 
     private final Map<String, Long> guardingStartTicks = new HashMap<>();
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -27,13 +27,12 @@ public class AutoBlock {
                 ItemStack heldItem = player.getHeldItem();
                 boolean isCurrentlyGuarding = false;
                 if (heldItem != null && heldItem.getItem() instanceof ItemSword && player.isBlocking()) isCurrentlyGuarding = true;
-                boolean isAttacking = (player.swingProgress > 0 && player.prevSwingProgress == 0);
                 if (isCurrentlyGuarding) {
                     guardingStartTicks.putIfAbsent(player.getName(), currentTick);
                     long startTick = guardingStartTicks.get(player.getName());
                     long ticksGuarded = currentTick - startTick;
-                    if (isAttacking && ticksGuarded > 4) {
-                        flag.receiveSignal(player.getName(), "AutoBlock");
+                    if (player.isSprinting() && ticksGuarded > 7) {
+                        CheatFlags.receiveSignal(player.getName(), "Noslow");
                     }
                 } else {
                     guardingStartTicks.remove(player.getName());

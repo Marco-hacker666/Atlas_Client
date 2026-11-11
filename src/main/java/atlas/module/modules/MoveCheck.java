@@ -13,11 +13,14 @@ import atlas.module.Module;
 import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
 import atlas.sim.PlayerSim;
+import atlas.sim.SelfCheck;
 import atlas.sim.SimPlayer;
 import atlas.util.AsyncLog;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.play.client.C0BPacketEntityAction;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.minecraft.network.play.server.S12PacketEntityVelocity;
+import net.minecraft.network.play.server.S27PacketExplosion;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.MathHelper;
 
@@ -43,6 +46,12 @@ import java.util.TreeMap;
  * really is. SIM lines are ticks more than a thousandth of a block off (at most a few a second), and each SUM ends
  * with "sim off/ticks worst plain off/ticks": on plain ticks (no module steering the move) it should be 0 off. A
  * module that pushes the player itself (Speed, a velocity module) is off by design -- the simulation does not see it.
+ *
+ * 2026-11-11, the self check (atlas.sim.SelfCheck): the question a re-simulating anticheat (GrimAC) asks, asked here.
+ * From the state at the end of the last tick, with the yaw this tick's packet carried and the sprint and sneak state
+ * the packets told the server, does any input (every key combination, a jump, an item's slowdown) end where the player
+ * is? SELF lines are ticks more than a thousandth off, with the closest keys and what was steering (tag()); each SUM
+ * ends with "self off/ticks worst plain off/ticks". Plain ticks should be 0 off; off on others names the module.
  */
 public class MoveCheck extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -89,6 +98,19 @@ public class MoveCheck extends Module {
     private int simPlainOff;
     private double simWorst;
     private static final double SIM_OFF = 0.001;
+    /** The state at the end of the last tick, for the self check; null when there is none to start from. */
+    private PlayerSim selfBefore;
+    private int selfBeforeTick;
+    /** The sprint and sneak state the sent packets gave the server; null until one is seen. */
+    private volatile Boolean serverSprint;
+    private volatile Boolean serverSneak;
+    private int selfTicks;
+    private int selfOff;
+    private int selfPlainTicks;
+    private int selfPlainOff;
+    private double selfWorst;
+    private long selfLineSecond;
+    private int selfLinesThisSecond;
     /** Ticks and misses by what was running. */
     private final Map<String, int[]> byTag = new TreeMap<String, int[]>();
 
@@ -102,6 +124,9 @@ public class MoveCheck extends Module {
         this.modulesLogged = "";
         this.sampled = false;
         this.lastSentYaw = Float.NaN;
+        this.selfBefore = null;
+        this.serverSprint = null;
+        this.serverSneak = null;
         clearCounts();
         this.summaryAt = System.currentTimeMillis();
     }
@@ -120,6 +145,9 @@ public class MoveCheck extends Module {
         }
         this.sampled = false;
         this.lastSentYaw = Float.NaN;
+        this.selfBefore = null;
+        this.serverSprint = null;
+        this.serverSneak = null;
     }
 
     /* First: Velocity cancels the packet at HIGH, and the motion it would have set still counts as a push. */
@@ -131,8 +159,34 @@ public class MoveCheck extends Module {
         if (event.getPacket() instanceof S08PacketPlayerPosLook) {
             this.correctedAt = System.currentTimeMillis();
         } else if (event.getPacket() instanceof S12PacketEntityVelocity
-                && ((S12PacketEntityVelocity) event.getPacket()).getEntityID() == mc.thePlayer.getEntityId()) {
+                && ((S12PacketEntityVelocity) event.getPacket()).getEntityID() == mc.thePlayer.getEntityId()
+                || event.getPacket() instanceof S27PacketExplosion) {
             this.knockedAt = System.currentTimeMillis();
+        }
+    }
+
+    /* Last: a sprint or sneak change another module cancels never reaches the server. */
+    @EventTarget(Priority.LOWEST)
+    public void onSend(PacketEvent event) {
+        if (!this.isEnabled() || event.getType() != EventType.SEND || event.isCancelled()
+                || !(event.getPacket() instanceof C0BPacketEntityAction)) {
+            return;
+        }
+        switch (((C0BPacketEntityAction) event.getPacket()).getAction()) {
+            case START_SPRINTING:
+                this.serverSprint = Boolean.TRUE;
+                break;
+            case STOP_SPRINTING:
+                this.serverSprint = Boolean.FALSE;
+                break;
+            case START_SNEAKING:
+                this.serverSneak = Boolean.TRUE;
+                break;
+            case STOP_SNEAKING:
+                this.serverSneak = Boolean.FALSE;
+                break;
+            default:
+                break;
         }
     }
 
@@ -158,6 +212,52 @@ public class MoveCheck extends Module {
         if (event.getType() == EventType.POST && this.sampled) {
             this.sampled = false;
             finish(event.getYaw());
+            selfCheck(event.getYaw());
+        }
+    }
+
+    /**
+     * The self check for this tick, then this tick's end kept for the next. Only from the tick just before: a tick
+     * skipped (TickBase), a correction, knockback or a move the simulation does not cover leaves nothing to check.
+     */
+    private void selfCheck(float sentYaw) {
+        long now = System.currentTimeMillis();
+        PlayerSim before = this.selfBefore;
+        int beforeTick = this.selfBeforeTick;
+        boolean supported = SimPlayer.supported(mc.thePlayer);
+        this.selfBefore = supported ? SimPlayer.state(mc.thePlayer) : null;
+        this.selfBeforeTick = mc.thePlayer.ticksExisted;
+        if (before == null || !supported || mc.thePlayer.ticksExisted - beforeTick != 1
+                || now - this.correctedAt < AFTER_CORRECTION_MS || now - this.knockedAt < AFTER_KNOCKBACK_MS) {
+            return;
+        }
+        boolean sprint = this.serverSprint != null ? this.serverSprint : mc.thePlayer.isSprinting();
+        boolean sneak = this.serverSneak != null ? this.serverSneak : mc.thePlayer.isSneaking();
+        SelfCheck.Result result = SelfCheck.check(before, SimPlayer.world(mc.theWorld, mc.thePlayer), sentYaw, sprint,
+                sneak, mc.thePlayer.posX, mc.thePlayer.getEntityBoundingBox().minY, mc.thePlayer.posZ);
+        boolean off = result.offset > SelfCheck.OFF;
+        String tag = tag();
+        boolean plain = tag.equals("plain");
+        this.selfTicks++;
+        this.selfOff += off ? 1 : 0;
+        this.selfWorst = Math.max(this.selfWorst, result.offset);
+        if (plain) {
+            this.selfPlainTicks++;
+            this.selfPlainOff += off ? 1 : 0;
+        }
+        if (!off) {
+            return;
+        }
+        long second = now / 1000L;
+        if (second != this.selfLineSecond) {
+            this.selfLineSecond = second;
+            this.selfLinesThisSecond = 0;
+        }
+        if (this.selfLinesThisSecond++ < MISS_LINES_A_SECOND) {
+            write(String.format("SELF off %.4f (x %.4f y %.4f z %.4f) keys %s | yaw %.1f %s%s%s| %s", result.offset,
+                    mc.thePlayer.posX - result.end.x(), mc.thePlayer.getEntityBoundingBox().minY - result.end.y(),
+                    mc.thePlayer.posZ - result.end.z(), result.keys(), MathHelper.wrapAngleTo180_float(sentYaw),
+                    mc.thePlayer.onGround ? "ground " : "air ", sprint ? "sprint " : "", sneak ? "sneak " : "", tag));
         }
     }
 
@@ -347,10 +447,11 @@ public class MoveCheck extends Module {
                     .append(entry.getValue()[0]);
         }
         write(String.format("SUM ticks %d skipped %d look-miss %d cam-miss %d plain-miss %d/%d big-turn %d sprint-change %d%s"
-                        + " | sim %d/%d worst %.4f plain %d/%d",
+                        + " | sim %d/%d worst %.4f plain %d/%d | self %d/%d worst %.4f plain %d/%d",
                 this.ticks, this.skipped, this.lookMisses, this.cameraMisses, this.plainMisses, this.plainTicks,
                 this.bigTurns, this.sprintChanges, tags, this.simOff, this.simTicks, this.simWorst, this.simPlainOff,
-                this.simPlainTicks));
+                this.simPlainTicks, this.selfOff, this.selfTicks, this.selfWorst, this.selfPlainOff,
+                this.selfPlainTicks));
         clearCounts();
     }
 
@@ -368,6 +469,11 @@ public class MoveCheck extends Module {
         this.simPlainTicks = 0;
         this.simPlainOff = 0;
         this.simWorst = 0.0;
+        this.selfTicks = 0;
+        this.selfOff = 0;
+        this.selfPlainTicks = 0;
+        this.selfPlainOff = 0;
+        this.selfWorst = 0.0;
         this.byTag.clear();
     }
 

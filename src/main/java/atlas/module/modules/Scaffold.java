@@ -1721,7 +1721,7 @@ public class Scaffold extends Module {
         in.hasTarget = target != null;
         in.edge = in.onGround && forward && target != null && this.edgeSneak();
         in.lookPlaces = target != null && this.run.running()
-                && this.lookHit(target, this.run.lookYaw(), this.run.lookPitch()) != null;
+                && this.godBridgeHitsFirmly(target, this.run.lookYaw(), this.run.lookPitch(), 0.0, 0.0);
         if (target != null && !in.lookPlaces && this.run.running()) {
             in.placePitch = this.godBridgePlacePitch(target, this.run.lookYaw(), this.run.lookPitch());
         }
@@ -1791,9 +1791,19 @@ public class Scaffold extends Module {
         return this.godBridgePlacePitch(target, yaw, from, 0.0, 0.0);
     }
 
-    /** The same from where the player would be, moved this far. */
+    /**
+     * The same from where the player would be, moved this far. A pitch that still hits with the look a little off
+     * (GODBRIDGE_AIM_MARGIN either way) comes first; only when the window is too narrow for that, the nearest that
+     * hits at all.
+     */
     private float godBridgePlacePitch(BlockData target, float yaw, float from, double movedX, double movedZ) {
-        if (this.lookHit(target, yaw, from, movedX, movedZ) != null) {
+        float firm = this.godBridgeScanPitch(target, yaw, from, movedX, movedZ, true);
+        return Float.isNaN(firm) ? this.godBridgeScanPitch(target, yaw, from, movedX, movedZ, false) : firm;
+    }
+
+    private float godBridgeScanPitch(BlockData target, float yaw, float from, double movedX, double movedZ,
+                                     boolean firm) {
+        if (this.godBridgeHits(target, yaw, from, movedX, movedZ, firm)) {
             return from;
         }
         for (int i = 1; i <= GODBRIDGE_PITCH_STEPS; i++) {
@@ -1802,11 +1812,31 @@ public class Scaffold extends Module {
             if (pitch < GODBRIDGE_PITCH_MIN || pitch > GODBRIDGE_PITCH_MAX) {
                 continue;
             }
-            if (this.lookHit(target, yaw, pitch, movedX, movedZ) != null) {
+            if (this.godBridgeHits(target, yaw, pitch, movedX, movedZ, firm)) {
                 return pitch;
             }
         }
         return Float.NaN;
+    }
+
+    private boolean godBridgeHits(BlockData target, float yaw, float pitch, double movedX, double movedZ, boolean firm) {
+        return firm ? this.godBridgeHitsFirmly(target, yaw, pitch, movedX, movedZ)
+                : this.lookHit(target, yaw, pitch, movedX, movedZ) != null;
+    }
+
+    /**
+     * 2026-11-11 (trace godbridge-20261111-224209: t64 and t82 clicked with "places y" and placed nothing, then fell):
+     * the pitch picked was the nearest that hits, the very edge of the window, and the look sent is the planned one
+     * snapped to whole mouse counts (-134.2 went out as -134.1). So a look counts as placing only if it still hits
+     * with the yaw and the pitch each GODBRIDGE_AIM_MARGIN off either way.
+     */
+    private boolean godBridgeHitsFirmly(BlockData target, float yaw, float pitch, double movedX, double movedZ) {
+        float m = GODBRIDGE_AIM_MARGIN;
+        return this.lookHit(target, yaw, pitch, movedX, movedZ) != null
+                && this.lookHit(target, yaw, pitch - m, movedX, movedZ) != null
+                && this.lookHit(target, yaw, pitch + m, movedX, movedZ) != null
+                && this.lookHit(target, yaw - m, pitch, movedX, movedZ) != null
+                && this.lookHit(target, yaw + m, pitch, movedX, movedZ) != null;
     }
 
     /**
@@ -1939,6 +1969,8 @@ public class Scaffold extends Module {
     private static final float GODBRIDGE_PITCH_STEP = 0.25F;
     private static final float GODBRIDGE_PITCH_MIN = 68.0F;
     private static final float GODBRIDGE_PITCH_MAX = 86.0F;
+    /** Degrees a look may be off and still place: more than a mouse count's snap at usual sensitivities. */
+    private static final float GODBRIDGE_AIM_MARGIN = 0.3F;
 
     /** GODBRIDGE's crouch and jump, at the input stage, so vanilla acts on them. */
     private void applyGodBridgeInput() {

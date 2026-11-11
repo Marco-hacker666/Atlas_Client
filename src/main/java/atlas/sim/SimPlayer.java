@@ -86,8 +86,9 @@ public final class SimPlayer {
         sim.jumpBoost = jump == null ? 0.0F : (float) (jump.getAmplifier() + 1) * 0.1F;
         sim.stepHeight = player.stepHeight;
         sim.canSprint = (float) player.getFoodStats().getFoodLevel() > 6.0F || player.capabilities.allowFlying;
-        /* The game asks isUsingItem here too, and gets NoSlow's answer (MixinEntityPlayerSP.isUsing). */
-        sim.canStartSprint = !NoSlow.slowsMove(player) && !player.isPotionActive(Potion.blindness);
+        /* The game asks isUsingItem here too, and gets NoSlow's answer (MixinEntityPlayerSP.isUsing); asked here
+           without counting the tick. */
+        sim.canStartSprint = !NoSlow.wouldSlowMove(player) && !player.isPotionActive(Potion.blindness);
         return sim;
     }
 
@@ -149,7 +150,7 @@ public final class SimPlayer {
         float[] turned = RotationHelper.get().turnedInput(in.forward, in.strafe);
         in.forward = turned[0];
         in.strafe = turned[1];
-        if (NoSlow.slowsMove(player)) {
+        if (NoSlow.wouldSlowMove(player)) {
             in.forward *= 0.2F;
             in.strafe *= 0.2F;
         }

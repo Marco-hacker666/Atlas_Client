@@ -1854,30 +1854,38 @@ public class Scaffold extends Module {
         }
         BlockData target = this.getBlockData(step[0], step[1]);
         if (target == null) {
-            return true;
+            /* Nothing to place there, and the guard has already said the walk and its slide end off the floor (ice,
+               a long slide): a floor under one step is no proof of stopping on it (review, PR #36). */
+            return false;
         }
         /* Walking on past the guard is only safe if the block really goes down next tick: once past it, a stop is too
            late (the guard's own test is "walk this tick, then slide"). So every reason place() would refuse is checked
            here, and the look must place over a spread of step lengths, not only the one forecast (review, PR #35). */
-        if (!ItemUtil.isHoldingBlock() || this.blockCount <= 0 || this.pauseTicks > 0 || !this.canPlace()
-                || this.faceFailed(target.blockPos(), target.facing())) {
-            return false;
-        }
-        /* The same game check place() makes: a cell that is taken, or a block that would land in an entity. */
-        ItemStack held = mc.thePlayer.inventory.getCurrentItem();
-        if (held == null || !(held.getItem() instanceof ItemBlock) || !((ItemBlock) held.getItem())
-                .canPlaceBlockOnSide(mc.theWorld, target.blockPos(), target.facing(), mc.thePlayer, held)) {
-            return false;
-        }
-        if (this.paceOn() && this.paceHolds(target.blockPos(), target.facing(), this.run.lookYaw())) {
+        if (!ItemUtil.isHoldingBlock() || this.blockCount <= 0 || this.pauseTicks > 0 || !this.canPlace()) {
             return false;
         }
         float pitch = this.godBridgePlacePitch(target, this.run.lookYaw(), this.run.lookPitch(), step[0], step[1]);
         if (Float.isNaN(pitch) || Math.abs(pitch - this.run.lookPitch()) > GodBridge.PITCH_FIX_MAX) {
             return false;
         }
+        /* The click next tick is wherever that look lands (lookHit may give another cell of the layer than the one
+           planned), so that block and face are the ones checked (review, PR #36). */
+        MovingObjectPosition hit = this.lookHit(target, this.run.lookYaw(), pitch, step[0], step[1]);
+        if (hit == null || this.faceFailed(hit.getBlockPos(), hit.sideHit)) {
+            return false;
+        }
+        /* The same game check place() makes: a cell that is taken, or a block that would land in an entity. */
+        ItemStack held = mc.thePlayer.inventory.getCurrentItem();
+        if (held == null || !(held.getItem() instanceof ItemBlock) || !((ItemBlock) held.getItem())
+                .canPlaceBlockOnSide(mc.theWorld, hit.getBlockPos(), hit.sideHit, mc.thePlayer, held)) {
+            return false;
+        }
+        if (this.paceOn() && this.paceHolds(hit.getBlockPos(), hit.sideHit, this.run.lookYaw())) {
+            return false;
+        }
         for (double k : AHEAD_SPREAD) {
-            if (this.lookHit(target, this.run.lookYaw(), pitch, step[0] * k, step[1] * k) == null) {
+            MovingObjectPosition further = this.lookHit(target, this.run.lookYaw(), pitch, step[0] * k, step[1] * k);
+            if (further == null || !further.getBlockPos().equals(hit.getBlockPos()) || further.sideHit != hit.sideHit) {
                 return false;
             }
         }

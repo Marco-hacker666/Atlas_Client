@@ -315,6 +315,19 @@ public class NoSlow extends Module {
      * asks isUsingItem (MixinEntityPlayerSP.isUsing), and what the movement simulation asks too (atlas.sim).
      */
     public static boolean slowsMove(net.minecraft.client.entity.EntityPlayerSP player) {
+        return slowsMove(player, true);
+    }
+
+    /**
+     * The same answer for a forecast, changing nothing: the game's own asking counts ticks (NewGrim lets every
+     * second one through), and a forecast that asked through it would shift which real ticks are slowed
+     * (review, PR #36).
+     */
+    public static boolean wouldSlowMove(net.minecraft.client.entity.EntityPlayerSP player) {
+        return slowsMove(player, false);
+    }
+
+    private static boolean slowsMove(net.minecraft.client.entity.EntityPlayerSP player, boolean counted) {
         if (KillAuraLB.rhythmRuns()) {
             /* 2026-10-27: Silent Aura's Rhythm block is a real block the server sees; it moves exactly as vanilla
                moves with the sword up (slowed, no sprint), never as NoSlow would -- except while Rhythm-Lag holds the
@@ -325,7 +338,7 @@ public class NoSlow extends Module {
         NoSlow noSlow = (NoSlow) atlas.Atlas.moduleManager.modules.get(NoSlow.class);
         if (noSlow.isEnabled()) {
             if (noSlow.isMiauAnyActive()) {
-                return !noSlow.shouldCancelMiauSlowdown();
+                return !(counted ? noSlow.shouldCancelMiauSlowdown() : noSlow.wouldCancelMiauSlowdown());
             }
             if (noSlow.isAnyActive()) {
                 return false;
@@ -826,6 +839,17 @@ public class NoSlow extends Module {
                 return true;
             }
             return false;
+        }
+        return true;
+    }
+
+    /** What {@link #shouldCancelMiauSlowdown} would answer now, without counting the tick. */
+    public boolean wouldCancelMiauSlowdown() {
+        if (!this.isEnabled()) {
+            return false;
+        }
+        if (this.heldItemMiauMode() == MIAU_NEW_GRIM) {
+            return this.miauAnyActive(MIAU_NEW_GRIM) && this.newGrimTicks + 1 >= 2;
         }
         return true;
     }

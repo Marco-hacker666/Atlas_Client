@@ -17,6 +17,7 @@ import atlas.util.AsyncLog;
 import atlas.util.render.DeviceProfile;
 import atlas.util.render.MobileSafe;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C0BPacketEntityAction;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.minecraft.network.play.server.S12PacketEntityVelocity;
@@ -126,6 +127,23 @@ public final class MoveCheck {
      * tick's POST (the yaw sent is final there), from the start one tick before to where that tick's move ended.
      */
     private PlayerSim selfStart;
+    /*
+     * 2026-11-12, after GrimAC's guesses: what acted on the motion between one start of tick and the next. Attacks
+     * sent and a knockback or explosion received in that window go with the move that follows it. A knockback the
+     * client cannot place in time is offered to that move and to the next one; never taken by either, it is logged as
+     * a KB line -- what a server checking knockback would flag.
+     */
+    private int attacksSinceStart;
+    private int attacksPending;
+    private double[] velocitySinceStart;
+    private double[] velocityCarry;
+    private double[] velocityOffer;
+    private boolean velocityOfferLast;
+    private double[] explosionSinceStart;
+    private double[] explosionCarry;
+    private double[] explosionOffer;
+    private int kbOffered;
+    private int kbIgnored;
     private int selfStartTick;
     /** The move to check at this tick's POST: from, to, and what modules changed between. */
     private PlayerSim pendingFrom;
@@ -223,6 +241,14 @@ public final class MoveCheck {
     }
 
     private void reset() {
+        this.attacksSinceStart = 0;
+        this.attacksPending = 0;
+        this.velocitySinceStart = null;
+        this.velocityCarry = null;
+        this.velocityOffer = null;
+        this.explosionSinceStart = null;
+        this.explosionCarry = null;
+        this.explosionOffer = null;
         this.logFile = null;
         this.modulesLogged = "";
         this.sampled = false;
@@ -259,17 +285,32 @@ public final class MoveCheck {
         if (event.getPacket() instanceof S08PacketPlayerPosLook) {
             this.correctedAt = System.currentTimeMillis();
         } else if (event.getPacket() instanceof S12PacketEntityVelocity
-                && ((S12PacketEntityVelocity) event.getPacket()).getEntityID() == mc.thePlayer.getEntityId()
-                || event.getPacket() instanceof S27PacketExplosion) {
+                && ((S12PacketEntityVelocity) event.getPacket()).getEntityID() == mc.thePlayer.getEntityId()) {
             this.knockedAt = System.currentTimeMillis();
+            /* What the server applied, whatever a module does to it on the way in (the self check grades that). */
+            S12PacketEntityVelocity velocity = (S12PacketEntityVelocity) event.getPacket();
+            this.velocitySinceStart = new double[]{velocity.getMotionX() / 8000.0, velocity.getMotionY() / 8000.0,
+                    velocity.getMotionZ() / 8000.0};
+        } else if (event.getPacket() instanceof S27PacketExplosion) {
+            this.knockedAt = System.currentTimeMillis();
+            S27PacketExplosion explosion = (S27PacketExplosion) event.getPacket();
+            this.explosionSinceStart = new double[]{explosion.func_149149_c(), explosion.func_149144_d(),
+                    explosion.func_149147_e()};
         }
     }
 
     /* Last: a sprint or sneak change another module cancels never reaches the server. */
     @EventTarget(Priority.LOWEST)
     public void onSend(PacketEvent event) {
-        if (!this.active() || event.getType() != EventType.SEND || event.isCancelled()
-                || !(event.getPacket() instanceof C0BPacketEntityAction)) {
+        if (!this.active() || event.getType() != EventType.SEND || event.isCancelled()) {
+            return;
+        }
+        if (event.getPacket() instanceof C02PacketUseEntity
+                && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK) {
+            this.attacksSinceStart++;
+            return;
+        }
+        if (!(event.getPacket() instanceof C0BPacketEntityAction)) {
             return;
         }
         switch (((C0BPacketEntityAction) event.getPacket()).getAction()) {
@@ -328,6 +369,17 @@ public final class MoveCheck {
             this.selfStart = null;
             return;
         }
+        /* The window that just closed goes with the move just made. A knockback not taken by its own move is offered
+           once more, to the next. */
+        this.attacksPending = this.attacksSinceStart;
+        this.attacksSinceStart = 0;
+        this.velocityOfferLast = this.velocitySinceStart == null && this.velocityCarry != null;
+        this.velocityOffer = this.velocitySinceStart != null ? this.velocitySinceStart : this.velocityCarry;
+        this.velocityCarry = this.velocitySinceStart;
+        this.velocitySinceStart = null;
+        this.explosionOffer = this.explosionSinceStart != null ? this.explosionSinceStart : this.explosionCarry;
+        this.explosionCarry = this.explosionSinceStart;
+        this.explosionSinceStart = null;
         int tick = mc.thePlayer.ticksExisted;
         boolean supported = SimPlayer.supported(mc.thePlayer);
         if (this.selfStart != null && supported && tick - this.selfStartTick == 1) {
@@ -385,13 +437,34 @@ public final class MoveCheck {
         long now = System.currentTimeMillis();
         PlayerSim before = this.pendingFrom;
         this.pendingFrom = null;
-        if (before == null || now - this.correctedAt < AFTER_CORRECTION_MS || now - this.knockedAt < AFTER_KNOCKBACK_MS) {
+        /* After a correction the start is not where the server has the player. Knockback no longer skips: it is offered
+           to the check (2026-11-12). */
+        if (before == null || now - this.correctedAt < AFTER_CORRECTION_MS) {
             return;
         }
         boolean sprint = this.serverSprint != null ? this.serverSprint : mc.thePlayer.isSprinting();
         boolean sneak = this.serverSneak != null ? this.serverSneak : mc.thePlayer.isSneaking();
+        SelfCheck.Extra extra = new SelfCheck.Extra();
+        extra.attacks = this.attacksPending;
+        extra.velocity = this.velocityOffer;
+        extra.explosion = this.explosionOffer;
         SelfCheck.Result result = SelfCheck.check(before, SimPlayer.world(mc.theWorld, mc.thePlayer), sentYaw, sprint,
-                sneak, this.pendingX, this.pendingY, this.pendingZ);
+                sneak, this.pendingX, this.pendingY, this.pendingZ, extra);
+        if (this.velocityOffer != null) {
+            if (result.velocity) {
+                this.velocityCarry = null;
+                this.kbOffered++;
+            } else if (this.velocityOfferLast) {
+                this.kbOffered++;
+                this.kbIgnored++;
+                write(String.format("KB not taken: %.3f %.3f %.3f over two moves | %s", this.velocityOffer[0],
+                        this.velocityOffer[1], this.velocityOffer[2],
+                        movers(this.pendingMovers, atlas.util.ActionWatch.peekTickMovers())));
+            }
+        }
+        if (result.explosion) {
+            this.explosionCarry = null;
+        }
         boolean off = result.offset > SelfCheck.OFF;
         String tag = movers(this.pendingMovers, atlas.util.ActionWatch.peekTickMovers());
         boolean plain = tag.equals("plain");
@@ -630,15 +703,17 @@ public final class MoveCheck {
                     .append(entry.getValue()[0]);
         }
         write(String.format("SUM ticks %d skipped %d look-miss %d cam-miss %d plain-miss %d/%d big-turn %d sprint-change %d%s"
-                        + " | sim %d/%d worst %.4f plain %d/%d | self %d/%d worst %.4f plain %d/%d | by%s",
+                        + " | sim %d/%d worst %.4f plain %d/%d | self %d/%d worst %.4f plain %d/%d | kb-missed %d/%d | by%s",
                 this.ticks, this.skipped, this.lookMisses, this.cameraMisses, this.plainMisses, this.plainTicks,
                 this.bigTurns, this.sprintChanges, tags, this.simOff, this.simTicks, this.simWorst, this.simPlainOff,
                 this.simPlainTicks, this.selfOff, this.selfTicks, this.selfWorst, this.selfPlainOff,
-                this.selfPlainTicks, by.length() == 0 ? " -" : by));
+                this.selfPlainTicks, this.kbIgnored, this.kbOffered, by.length() == 0 ? " -" : by));
         clearCounts();
     }
 
     private void clearCounts() {
+        this.kbOffered = 0;
+        this.kbIgnored = 0;
         this.ticks = 0;
         this.skipped = 0;
         this.lookMisses = 0;

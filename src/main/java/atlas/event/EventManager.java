@@ -315,6 +315,10 @@ public final class EventManager {
         if (!(source instanceof Module)) {
             return;
         }
+        if (event.getType() == EventType.RECEIVE) {
+            /* Who kept a knockback from the game, for the self check's "kept no knockback" line. */
+            atlas.management.MoveCheck.packetHeld(((Module) source).getName(), event.getPacket());
+        }
         /* Cancelling something cosmetic is not evidence of anything; counting
            it names whoever cancels most often rather than whoever caused the
            correction. */

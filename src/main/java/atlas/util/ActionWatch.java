@@ -7,6 +7,7 @@ import atlas.events.LivingUpdateEvent;
 import atlas.events.MoveInputEvent;
 import atlas.events.PlayerUpdateEvent;
 import atlas.events.PreMoveInputEvent;
+import atlas.events.SafeWalkEvent;
 import atlas.events.StrafeEvent;
 import atlas.events.TickEvent;
 import atlas.events.UpdateEvent;
@@ -36,6 +37,12 @@ import java.util.TreeSet;
  * 2026-11-11, for MoveCheck's self check: also the keys (movementInput, and the key states at PreMoveInputEvent),
  * the sprint and the push a StrafeEvent carries, and every change of the tick kept by module and kind, with no
  * dedupe (tickMovers). The ledger sees only move, rotate and timer, as before.
+ *
+ * 2026-11-12, so the self check's lines name who they should: three ways to change a move that left no trace here.
+ * A listener that changes a knockback on its way in (KnockbackEvent's values) is kept as "knockback", and one that
+ * turns the edge stop on or off (SafeWalkEvent) as "edge" -- neither touches the player itself. And a module whose
+ * change is made in a mixin, not in a listener (Jesus in water, KeepSprint's hit slowdown), says so itself through
+ * {@link #silent}.
  */
 public final class ActionWatch {
     private static final double MOTION_EPS = 1.0E-4;
@@ -50,6 +57,8 @@ public final class ActionWatch {
     private static float inForward, inStrafe, pushStrafe, pushForward, pushFriction;
     private static boolean inJump, inSneak, sprinting;
     private static int keys;
+    private static double kbX, kbY, kbZ;
+    private static boolean kbCancelled, edgeStop;
     /** Module -> kinds of change, since the last takeTickMovers. Client thread only. */
     private static Map<String, TreeSet<String>> tickMovers = new TreeMap<String, TreeSet<String>>();
     /**
@@ -66,7 +75,19 @@ public final class ActionWatch {
         return event instanceof UpdateEvent || event instanceof StrafeEvent || event instanceof PlayerUpdateEvent
                 || event instanceof KnockbackEvent || event instanceof JumpEvent || event instanceof TickEvent
                 || event instanceof LivingUpdateEvent || event instanceof MoveInputEvent
-                || event instanceof PreMoveInputEvent;
+                || event instanceof PreMoveInputEvent || event instanceof SafeWalkEvent;
+    }
+
+    /**
+     * A change to this tick's move that no listener made: a mixin applying a module's setting. Kept with the tick's
+     * other changes, under the module's name. Client thread only; from another thread it is dropped.
+     */
+    public static void silent(String module, String kind) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc == null || !mc.isCallingFromMinecraftThread()) {
+            return;
+        }
+        tick(module, kind);
     }
 
     public static void before(Event event) {
@@ -103,6 +124,16 @@ public final class ActionWatch {
             pushStrafe = strafe.getStrafe();
             pushForward = strafe.getForward();
             pushFriction = strafe.getFriction();
+        }
+        if (event instanceof KnockbackEvent) {
+            KnockbackEvent knockback = (KnockbackEvent) event;
+            kbX = knockback.getX();
+            kbY = knockback.getY();
+            kbZ = knockback.getZ();
+            kbCancelled = knockback.isCancelled();
+        }
+        if (event instanceof SafeWalkEvent) {
+            edgeStop = ((SafeWalkEvent) event).isSafeWalk();
         }
         armed = true;
     }
@@ -150,6 +181,16 @@ public final class ActionWatch {
                     || strafe.getFriction() != pushFriction) {
                 tick(name, "push");
             }
+        }
+        if (event instanceof KnockbackEvent) {
+            KnockbackEvent knockback = (KnockbackEvent) event;
+            if (knockback.getX() != kbX || knockback.getY() != kbY || knockback.getZ() != kbZ
+                    || knockback.isCancelled() != kbCancelled) {
+                tick(name, "knockback");
+            }
+        }
+        if (event instanceof SafeWalkEvent && ((SafeWalkEvent) event).isSafeWalk() != edgeStop) {
+            tick(name, "edge");
         }
         boolean turned = Math.abs(player.rotationYaw - yaw) > ANGLE_EPS || Math.abs(player.rotationPitch - pitch) > ANGLE_EPS;
         if (event instanceof UpdateEvent) {

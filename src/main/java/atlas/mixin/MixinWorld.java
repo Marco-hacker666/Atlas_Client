@@ -28,6 +28,9 @@ public abstract class MixinWorld {
         if (entity instanceof EntityPlayerSP && Atlas.moduleManager != null) {
             Jesus jesus = (Jesus) Atlas.moduleManager.modules.get(Jesus.class);
             if (jesus.isEnabled() && jesus.noPush.getValue()) {
+                if (entity.isPushedByWater()) {
+                    atlas.util.ActionWatch.silent(jesus.getName(), "water");
+                }
                 return false;
             }
         }

@@ -359,8 +359,10 @@ public final class MoveCheck {
         } else if (event.getPacket() instanceof S27PacketExplosion) {
             this.knockedAt = System.currentTimeMillis();
             S27PacketExplosion explosion = (S27PacketExplosion) event.getPacket();
-            this.explosionSinceStart.set(new double[]{explosion.func_149149_c(), explosion.func_149144_d(),
-                    explosion.func_149147_e()});
+            final double[] push = {explosion.func_149149_c(), explosion.func_149144_d(), explosion.func_149147_e()};
+            /* Two in one window both push, as the game adds each (review, PR #38). */
+            this.explosionSinceStart.getAndUpdate(old -> old == null ? push
+                    : new double[]{old[0] + push[0], old[1] + push[1], old[2] + push[2]});
         }
     }
 
@@ -518,7 +520,8 @@ public final class MoveCheck {
         SelfCheck.Result result = SelfCheck.check(before, SimPlayer.world(mc.theWorld, mc.thePlayer), sentYaw, sprint,
                 sneak, this.pendingX, this.pendingY, this.pendingZ, extra);
         if (this.velocityOffer != null) {
-            if (result.velocity) {
+            /* Taken only by a move it explains (review, PR #38): the closest guess using it but still off is not. */
+            if (result.velocity && result.offset <= SelfCheck.OFF) {
                 this.velocityCarry = null;
                 this.kbOffered++;
             } else if (this.velocityOfferLast && !SelfCheck.fitsWithVelocity(before,
@@ -534,7 +537,7 @@ public final class MoveCheck {
                 alert(kbTag, "&ckept no knockback");
             }
         }
-        if (result.explosion) {
+        if (result.explosion && result.offset <= SelfCheck.OFF) {
             this.explosionCarry = null;
         }
         boolean off = result.offset > SelfCheck.OFF;

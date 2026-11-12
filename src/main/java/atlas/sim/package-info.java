@@ -10,6 +10,8 @@
  *       explain it?</li>
  *   <li>{@link atlas.sim.Impulses}: what else may explain a move -- the attacks, knockback and explosions between two
  *       movement packets -- and which move each is offered to.</li>
+ *   <li>{@link atlas.sim.MoveAudit}: the self check tick after tick -- which state a move is checked from, when, and
+ *       with which packet's look. Its tests run the game's tick order.</li>
  *   <li>{@link atlas.sim.MoveModel}: the older, level-only model; MoveCheck's look check uses it.</li>
  *   <li>{@link atlas.sim.SimPlayer}: the game's side -- the player, its keys and the world, all of one moment of the
  *       tick. The only class here that needs the game.</li>
@@ -36,7 +38,8 @@
  *                       where a server's tick ends too -- then the modules
  * </pre>
  * UpdateEvent PRE is before the move, not after it. The self check once took it for "right after the move" and
- * checked every move against the next packet's look; see MoveCheck.
+ * checked every move against the next packet's look; see MoveCheck, and MoveAuditTest for the test that now holds
+ * the order.
  *
  * <h3>For whoever changes it</h3>
  * <ul>

@@ -164,6 +164,9 @@ public final class Impulses {
         /* Nothing fitting at all leaves nothing to ask: no input with the knockback fits either. */
         if (fits && (result.velocity || fitsWithVelocity.getAsBoolean())) {
             this.velocityCarry = null;
+            /* The knockback replaced the motion: an explosion from before it is gone with it, and must not be
+               offered to the next move. What came after it still may be (review, PR #39). */
+            this.explosionCarry = this.explosionAfterCarry;
             return Knockback.TAKEN;
         }
         return this.velocityOfferLast ? Knockback.IGNORED : Knockback.WAITING;

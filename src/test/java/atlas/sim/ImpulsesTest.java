@@ -274,6 +274,28 @@ public class ImpulsesTest {
     }
 
     @Test
+    public void anExplosionFromBeforeATakenKnockbackIsNotOfferedAgain() {
+        /* Review, PR #39: A, then V. V taken replaced A's push; A must not explain the next move. */
+        Impulses impulses = new Impulses();
+        impulses.explosion(0.3, 0.0, 0.0);
+        impulses.velocity(KB[0], KB[1], KB[2]);
+        impulses.close();
+        SelfCheck.Result tookVelocity = new SelfCheck.Result();
+        tookVelocity.offset = 0.0;
+        tookVelocity.velocity = true;
+        assertEquals(Impulses.Knockback.TAKEN, impulses.settle(tookVelocity, () -> false));
+        assertNull(impulses.close().explosion);
+
+        /* A, V, then B: B came after the knockback and is still offered once more. */
+        impulses.explosion(0.3, 0.0, 0.0);
+        impulses.velocity(KB[0], KB[1], KB[2]);
+        impulses.explosion(0.0, 0.0, 0.1);
+        impulses.close();
+        assertEquals(Impulses.Knockback.TAKEN, impulses.settle(tookVelocity, () -> false));
+        assertArrayEquals(new double[]{0.0, 0.0, 0.1}, impulses.close().explosion, 0.0);
+    }
+
+    @Test
     public void clearForgetsTheWindowAndWhatWasWaiting() {
         Impulses impulses = new Impulses();
         impulses.velocity(KB[0], KB[1], KB[2]);

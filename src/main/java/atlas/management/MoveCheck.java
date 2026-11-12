@@ -254,11 +254,13 @@ public final class MoveCheck {
      * besides ("" for nothing); with neither a module nor a cause the prediction itself may be what is off, and the
      * line says so.
      */
-    private void alert(String tag, String what, String why) {
+    private void alert(String kind, String tag, String what, String why) {
         if (!chatOn() || mc.thePlayer == null) {
             return;
         }
-        int held = this.alerts.pass(tag, System.currentTimeMillis());
+        /* Each kind of line has its own count: a knockback line must not hold back the line about the move
+           (review, PR #39). */
+        int held = this.alerts.pass(kind + "|" + tag, System.currentTimeMillis());
         if (held < 0) {
             return;
         }
@@ -456,7 +458,7 @@ public final class MoveCheck {
             String kbTag = held == null ? tag : tag.equals("plain") ? held + ":knockback" : tag + " " + held + ":knockback";
             write(String.format("KB not taken: %.3f %.3f %.3f over two moves | %s", verdict.velocity[0],
                     verdict.velocity[1], verdict.velocity[2], kbTag));
-            alert(kbTag, "&ckept no knockback", "");
+            alert("kb", kbTag, "&ckept no knockback", "");
         }
         boolean off = result.offset > SelfCheck.OFF;
         boolean plain = tag.equals("plain");
@@ -495,7 +497,7 @@ public final class MoveCheck {
         if (seen && this.moveSneaking != sneak) {
             why.append(sneak ? " &8(the server has a sneak the move did not)" : " &8(sneaked, the server not told)");
         }
-        alert(tag, String.format("off &f%.4f &8(keys %s)", result.offset, result.keys()), why.toString());
+        alert("off", tag, String.format("off &f%.4f &8(keys %s)", result.offset, result.keys()), why.toString());
         long second = now / 1000L;
         if (second != this.selfLineSecond) {
             this.selfLineSecond = second;

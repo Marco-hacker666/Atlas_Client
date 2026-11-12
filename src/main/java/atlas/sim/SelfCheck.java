@@ -18,6 +18,9 @@ package atlas.sim;
  *   - a velocity packet for this player (knockback) sets the motion, an explosion adds to it; the client cannot tell
  *     which tick the server meant, so the move is tried with and without it, and the result says which fitted;
  *   - it stops at the first input that fits to a millionth of a block.
+ *
+ * What it takes from the client and a server would not: the step height, the speeds the last tick set, and whether
+ * an item is in use (both are tried). A module that changes one of those is not seen here.
  */
 public final class SelfCheck {
 
@@ -176,6 +179,9 @@ public final class SelfCheck {
                     for (float strafe : AXIS) {
                         PlayerSim sim = before.copy();
                         sim.sprinting = sprinting;
+                        /* The ten ticks between the jumps of a held key are the client's own count: letting the key
+                           go clears it, so a jump on any tick on the ground is one a server has to allow. */
+                        sim.jumpTicks = 0;
                         if (velocity != null) {
                             sim.motionX = velocity[0];
                             sim.motionY = velocity[1];

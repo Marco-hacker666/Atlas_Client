@@ -265,7 +265,14 @@ public final class EventManager {
             java.util.function.Consumer<atlas.events.UpdateEvent> endOfTick = atlas.util.ActionWatch.beforeUpdatePost;
             if (endOfTick != null && event instanceof atlas.events.UpdateEvent
                     && ((atlas.events.UpdateEvent) event).getType() == atlas.event.types.EventType.POST) {
-                endOfTick.accept((atlas.events.UpdateEvent) event);
+                /* It is not a listener, so nothing else catches what it throws: handled as a handler's is, logged
+                   and the tick goes on -- a background check must not be able to stop the player's tick. */
+                try {
+                    endOfTick.accept((atlas.events.UpdateEvent) event);
+                } catch (RuntimeException e) {
+                    System.err.println("[Atlas] the end-of-tick hook threw:");
+                    e.printStackTrace();
+                }
             }
             if (event instanceof EventStoppable) {
                 EventStoppable stoppable = (EventStoppable) event;

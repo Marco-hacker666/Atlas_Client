@@ -73,7 +73,12 @@ public abstract class MixinEntityLivingBase extends MixinEntity {
             }
             Jesus jesus = (Jesus) Atlas.moduleManager.modules.get(Jesus.class);
             if (jesus.isEnabled() && (!jesus.groundOnly.getValue() || this.onGround)) {
-                return Math.max(float1, jesus.speed.getValue());
+                float faster = Math.max(float1, jesus.speed.getValue());
+                if (faster != float1) {
+                    /* A change no listener makes: said here, so the self check's line names it (2026-11-12). */
+                    atlas.util.ActionWatch.silent(jesus.getName(), "water");
+                }
+                return faster;
             }
         }
         return float1;

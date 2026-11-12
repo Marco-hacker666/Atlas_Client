@@ -260,11 +260,19 @@ public final class EventManager {
             /* 2026-10-11: and what a module does to the player without a
                packet -- motion, ground, look, timer (ActionWatch). */
             final boolean moved = atlas.util.ActionWatch.watches(event);
-            /* MoveCheck's start of the tick: the move is done and no module has had this PRE yet (2026-11-11). */
-            Runnable startOfTick = atlas.util.ActionWatch.beforeUpdatePre;
-            if (startOfTick != null && event instanceof atlas.events.UpdateEvent
-                    && ((atlas.events.UpdateEvent) event).getType() == atlas.event.types.EventType.PRE) {
-                startOfTick.run();
+            /* MoveCheck's end of the tick: the move is made, its packet is out, and no module has had this POST yet
+               (2026-11-12; it was "before PRE", which is before the move, not after it). */
+            java.util.function.Consumer<atlas.events.UpdateEvent> endOfTick = atlas.util.ActionWatch.beforeUpdatePost;
+            if (endOfTick != null && event instanceof atlas.events.UpdateEvent
+                    && ((atlas.events.UpdateEvent) event).getType() == atlas.event.types.EventType.POST) {
+                /* It is not a listener, so nothing else catches what it throws: handled as a handler's is, logged
+                   and the tick goes on -- a background check must not be able to stop the player's tick. */
+                try {
+                    endOfTick.accept((atlas.events.UpdateEvent) event);
+                } catch (RuntimeException e) {
+                    System.err.println("[Atlas] the end-of-tick hook threw:");
+                    e.printStackTrace();
+                }
             }
             if (event instanceof EventStoppable) {
                 EventStoppable stoppable = (EventStoppable) event;
@@ -313,6 +321,10 @@ public final class EventManager {
         Object source = data.getSource();
         if (!(source instanceof Module)) {
             return;
+        }
+        if (event.getType() == EventType.RECEIVE) {
+            /* Who kept a knockback from the game, for the self check's "kept no knockback" line. */
+            atlas.management.MoveCheck.packetHeld(((Module) source).getName(), event.getPacket());
         }
         /* Cancelling something cosmetic is not evidence of anything; counting
            it names whoever cancels most often rather than whoever caused the

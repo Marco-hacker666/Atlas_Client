@@ -223,6 +223,22 @@ public class SelfCheckTest {
     }
 
     @Test
+    public void aJumpInsideTheClientsOwnJumpDelayStillFits() {
+        /* The ten ticks between jumps are counted by the client only (letting the key go clears them): a jump on
+           any tick on the ground is one a server allows, so it must not be reported. */
+        PlayerSim before = standing();
+        before.jumpTicks = 6;
+        PlayerSim jumped = before.copy();
+        jumped.jumpTicks = 0;
+        jumped.tick(WORLD, keys(0.0F, 1.0F, 0.0F, true, false, false));
+        assertTrue(jumped.y() > 0.4);
+        SelfCheck.Result result = SelfCheck.check(before, WORLD, 0.0F, false, false, jumped.x(), jumped.y(),
+                jumped.z());
+        assertEquals(0.0, result.offset, 1.0E-9);
+        assertEquals("W jump", result.keys());
+    }
+
+    @Test
     public void anExplosionBeforeTheKnockbackIsLostWithIt() {
         /* Review, PR #38: explosion A, knockback V, explosion B in one window end as V + B, not V + A + B. */
         PlayerSim before = standing();

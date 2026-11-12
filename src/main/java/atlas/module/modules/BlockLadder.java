@@ -9,6 +9,8 @@ import atlas.events.TickEvent;
 import atlas.module.Module;
 import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
+import atlas.sim.PlayerSim;
+import atlas.sim.SimPlayer;
 import atlas.util.TimerUtil;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockAir;
@@ -92,7 +94,29 @@ public class BlockLadder extends Module {
         this.placeTimer.reset();
     }
 
+    /**
+     * The floor block the fall ends on, or null (none within 100 ticks, or water first). 2026-11-12 (owner: the
+     * simulation by default): where the simulation goes, the fall is the game's own -- the keys held, air control,
+     * what it hits on the way, water and cobwebs -- and the block is the one under the feet where it lands (0.2 down,
+     * as the game picks it). Elsewhere the straight drop from before.
+     */
     private BlockPos predictLanding() {
+        if (SimPlayer.supported(mc.thePlayer)) {
+            PlayerSim sim = SimPlayer.state(mc.thePlayer);
+            PlayerSim.World world = SimPlayer.world(mc.theWorld, mc.thePlayer);
+            PlayerSim.Input in = SimPlayer.inputAhead(mc.thePlayer);
+            for (int t = 0; t < 100; t++) {
+                sim.tick(world, in);
+                if (sim.inWater || sim.y() < 0.0) {
+                    return null;
+                }
+                if (sim.onGround) {
+                    return new BlockPos(MathHelper.floor_double(sim.x()), MathHelper.floor_double(sim.y() - 0.2),
+                            MathHelper.floor_double(sim.z()));
+                }
+            }
+            return null;
+        }
         double px = mc.thePlayer.posX;
         double py = mc.thePlayer.posY;
         double pz = mc.thePlayer.posZ;

@@ -129,7 +129,7 @@ public final class MobileSafe {
     }
 
     /** A mode setting saved in atlas-theme.json by its name or index; Auto when missing. */
-    static int readMode(String key, String[] modes) {
+    public static int readMode(String key, String[] modes) {
         if (!THEME_FILE.isFile()) {
             return GlesDetect.AUTO;
         }

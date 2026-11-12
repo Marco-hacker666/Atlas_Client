@@ -736,9 +736,6 @@ public final class ModuleDocs {
         d("ClickGUIModule", "點擊選單的樣式設定：外觀、顏色、視窗大小。");
         d("ThemeGUI", "用自己的按鍵打開 Theme 視窗（所有顏色和外觀都在裡面），不用先開選單。先用 .bind ThemeGUI 按鍵 綁定。");
         d("GuiModule", "開啟點擊選單（預設右 Shift）。");
-        d("MoveCheck", "只記錄、不改任何東西：檢查你的移動跟送出的視角對不對得上，寫進 moves-*.txt。也會檢查移動預測準不準：每行 SUM 最後的 sim plain 應該是 0 開頭（例如 0/600），不是 0 就代表預測跟遊戲對不上。");
-        help("MoveCheck", "threshold", "移動差多少格才算對不上。");
-        help("MoveCheck", "log-every", "每幾秒寫一行統計。");
         d("FlagDetector", "偵測伺服器的拉回、方塊被退回、傷害被減，並推斷是哪個模組造成的。");
         d("FlagResponder", "某個模組一直被伺服器拉回時，自動把它關掉。");
         d("HitCheck", "統計哪幾刀真的有打到，並解釋沒打到的原因。");

@@ -7,6 +7,8 @@ import atlas.events.MoveInputEvent;
 import atlas.events.TickEvent;
 import atlas.module.Module;
 import atlas.util.ItemUtil;
+import atlas.sim.PlayerSim;
+import atlas.sim.SimPlayer;
 import atlas.util.MoveUtil;
 import atlas.util.PlayerUtil;
 import atlas.property.properties.BooleanProperty;
@@ -28,7 +30,22 @@ public class Eagle extends Module {
     public final BooleanProperty blocksOnly = new BooleanProperty("blocks-only", true);
     public final BooleanProperty sneakOnly = new BooleanProperty("sneaking-only", false);
 
-    private boolean canMoveSafely() {
+    /**
+     * Despite the name: whether one more step leaves no floor under the box (true means crouch). 2026-11-12 (owner:
+     * the simulation by default): where the simulation goes, the step is the game's own -- the keys this tick will
+     * have ({@code atMoveInput}: as the modules so far left them; else the keys held), sprint, speed, ice, what is in
+     * the way -- not a flat-ground estimate at the camera's yaw.
+     */
+    private boolean canMoveSafely(boolean atMoveInput) {
+        if (SimPlayer.supported(mc.thePlayer)) {
+            PlayerSim sim = atMoveInput ? SimPlayer.stateInMove(mc.thePlayer) : SimPlayer.state(mc.thePlayer);
+            PlayerSim.World world = SimPlayer.world(mc.theWorld, mc.thePlayer);
+            PlayerSim.Input in = atMoveInput ? SimPlayer.inputBeforeMove(mc.thePlayer) : SimPlayer.inputAhead(mc.thePlayer);
+            in.jump = false;
+            in.sneak = false;
+            sim.tick(world, in);
+            return !sim.hasFloor(world, 0.0);
+        }
         double[] offset = MoveUtil.predictMovement();
         return PlayerUtil.canMove(mc.thePlayer.motionX + offset[0], mc.thePlayer.motionZ + offset[1]);
     }
@@ -73,7 +90,7 @@ public class Eagle extends Module {
             if (this.sneakDelay > 0) {
                 this.sneakDelay--;
             }
-            if (this.sneakDelay == 0 && this.canMoveSafely()) {
+            if (this.sneakDelay == 0 && this.canMoveSafely(false)) {
                 this.sneakDelay = RandomUtils.nextInt(this.minDelay.getValue(), this.maxDelay.getValue() + 1);
             }
         }
@@ -90,7 +107,7 @@ public class Eagle extends Module {
             }
 
             if (!mc.thePlayer.movementInput.sneak) {
-                if (this.shouldSneak() && (this.sneakDelay > 0 || this.canMoveSafely())) {
+                if (this.shouldSneak() && (this.sneakDelay > 0 || this.canMoveSafely(true))) {
                     mc.thePlayer.movementInput.sneak = true;
                     mc.thePlayer.movementInput.moveStrafe *= 0.3F;
                     mc.thePlayer.movementInput.moveForward *= 0.3F;

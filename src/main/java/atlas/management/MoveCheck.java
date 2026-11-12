@@ -1,4 +1,4 @@
-package atlas.module.modules;
+package atlas.management;
 
 import atlas.Atlas;
 import atlas.event.EventTarget;
@@ -8,15 +8,16 @@ import atlas.events.LivingUpdateEvent;
 import atlas.events.LoadWorldEvent;
 import atlas.events.PacketEvent;
 import atlas.events.UpdateEvent;
-import atlas.management.Arbiter;
 import atlas.module.Module;
-import atlas.property.properties.FloatProperty;
-import atlas.property.properties.IntProperty;
+import atlas.module.modules.*;
 import atlas.sim.PlayerSim;
 import atlas.sim.SelfCheck;
 import atlas.sim.SimPlayer;
 import atlas.util.AsyncLog;
+import atlas.util.render.DeviceProfile;
+import atlas.util.render.MobileSafe;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C0BPacketEntityAction;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.minecraft.network.play.server.S12PacketEntityVelocity;
@@ -52,8 +53,27 @@ import java.util.TreeMap;
  * the packets told the server, does any input (every key combination, a jump, an item's slowdown) end where the player
  * is? SELF lines are ticks more than a thousandth off, with the closest keys and what was steering (tag()); each SUM
  * ends with "self off/ticks worst plain off/ticks". Plain ticks should be 0 off; off on others names the module.
+ *
+ * 2026-11-12 (owner: "make the simulation the default, not a feature"): no longer a module. It is part of the client
+ * and runs by itself, set by Client Settings > Performance > Move check (Auto / On / Off). Auto runs it except on a
+ * phone (util.render.DeviceProfile) or where the game runs under 100 fps, so a weak device does not pay for it. The
+ * lines are written only while the Logs module is on, as for every session log.
  */
-public class MoveCheck extends Module {
+public final class MoveCheck {
+    public static final String SETTING = "move-check";
+    public static final String[] MODES = {"Auto", "On", "Off"};
+    private static volatile int setting = -1;
+    private static volatile boolean running;
+    /* Auto pauses after LOW_FPS_SECONDS in a row under LOW_FPS, and resumes after HIGH_FPS_SECONDS at HIGH_FPS. */
+    private static final int LOW_FPS = 100;
+    private static final int LOW_FPS_SECONDS = 5;
+    private static final int HIGH_FPS = 115;
+    private static final int HIGH_FPS_SECONDS = 10;
+    private boolean slow;
+    private int lowSeconds;
+    private int highSeconds;
+    private long fpsSampledAt;
+    private boolean wasActive;
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File LOG_DIR = new File("./config/Atlas/");
     private static final SimpleDateFormat FILE_STAMP = new SimpleDateFormat("yyyyMMdd-HHmmss");
@@ -63,8 +83,10 @@ public class MoveCheck extends Module {
     private static final long AFTER_KNOCKBACK_MS = 100L;
     private static final float BIG_TURN = 30.0F;
 
-    public final FloatProperty threshold = new FloatProperty("threshold", 0.02F, 0.005F, 0.2F);
-    public final IntProperty logEvery = new IntProperty("log-every", 30, 5, 300);
+    /** How many blocks off a move has to be to count as not fitting (was the "threshold" setting). */
+    private static final float THRESHOLD = 0.02F;
+    /** Seconds between SUM lines (was "log-every"). */
+    private static final int LOG_EVERY = 30;
 
     private File logFile;
     private volatile long correctedAt;
@@ -105,6 +127,34 @@ public class MoveCheck extends Module {
      * tick's POST (the yaw sent is final there), from the start one tick before to where that tick's move ended.
      */
     private PlayerSim selfStart;
+    /*
+     * 2026-11-12, after GrimAC's guesses: what acted on the motion between one start of tick and the next. Attacks
+     * sent and a knockback or explosion received in that window go with the move that follows it. A knockback the
+     * client cannot place in time is offered to that move and to the next one; never taken by either, it is logged as
+     * a KB line -- what a server checking knockback would flag.
+     */
+    /* Written by the packet handlers, taken whole by the client thread (getAndSet), so none is lost in between. */
+    private final java.util.concurrent.atomic.AtomicInteger attacksSinceStart = new java.util.concurrent.atomic.AtomicInteger();
+    private int attacksPending;
+    private final java.util.concurrent.atomic.AtomicReference<double[]> velocitySinceStart =
+            new java.util.concurrent.atomic.AtomicReference<double[]>();
+    private double[] velocityCarry;
+    private double[] velocityOffer;
+    private boolean velocityOfferLast;
+    private final java.util.concurrent.atomic.AtomicReference<double[]> explosionSinceStart =
+            new java.util.concurrent.atomic.AtomicReference<double[]>();
+    /* The explosions since the last knockback in this window: a knockback replaces the motion, so with it taken only
+       these still push (review, PR #38). Reset by each knockback. */
+    private final java.util.concurrent.atomic.AtomicReference<double[]> explosionAfterVelocity =
+            new java.util.concurrent.atomic.AtomicReference<double[]>();
+    private double[] explosionAfterCarry;
+    private double[] explosionAfterOffer;
+    /** This player's entity id as the client thread last saw it, for the network thread to compare with. */
+    private volatile int playerId = Integer.MIN_VALUE;
+    private double[] explosionCarry;
+    private double[] explosionOffer;
+    private int kbOffered;
+    private int kbIgnored;
     private int selfStartTick;
     /** The move to check at this tick's POST: from, to, and what modules changed between. */
     private PlayerSim pendingFrom;
@@ -132,12 +182,134 @@ public class MoveCheck extends Module {
     private final Map<String, int[]> byTag = new TreeMap<String, int[]>();
 
     public MoveCheck() {
-        super("MoveCheck", false, true, "Logs moves that do not fit the look sent. Changes nothing.");
         atlas.util.ActionWatch.beforeUpdatePre = this.startOfTick;
+        reset();
     }
 
-    @Override
-    public void onEnabled() {
+    public static void setSetting(int mode) {
+        setting = Math.max(0, Math.min(MODES.length - 1, mode));
+    }
+
+    /** Whether the checks ran on the last tick asked. */
+    public static boolean running() {
+        return running;
+    }
+
+    /** "auto · running", "off · paused": for the menu and the bug report. */
+    public static String describe() {
+        int mode = setting < 0 ? MobileSafe.readMode(SETTING, MODES) : setting;
+        return MODES[mode].toLowerCase() + (running ? " · running" : " · paused");
+    }
+
+    /**
+     * Whether the checks run now: On or Off as set; Auto, unless a phone or a game under 100 fps (5 s in a row
+     * pauses it, 10 s at 115 or more resumes it, so its own small cost does not flip it). Starting again begins from
+     * a clean count.
+     */
+    private boolean active() {
+        int mode = setting;
+        if (mode < 0) {
+            mode = MobileSafe.readMode(SETTING, MODES);
+            setting = mode;
+        }
+        boolean on;
+        if (mode == 1) {
+            on = true;
+        } else if (mode == 2) {
+            on = false;
+        } else {
+            sampleFps();
+            on = !this.slow && !DeviceProfile.isMobile();
+        }
+        if (on && !this.wasActive) {
+            reset();
+        }
+        this.wasActive = on;
+        running = on;
+        return on;
+    }
+
+    private void sampleFps() {
+        long now = System.currentTimeMillis();
+        if (now - this.fpsSampledAt < 1000L || mc.theWorld == null) {
+            return;
+        }
+        this.fpsSampledAt = now;
+        int fps = Minecraft.getDebugFPS();
+        if (!this.slow) {
+            this.lowSeconds = fps < LOW_FPS ? this.lowSeconds + 1 : 0;
+            if (this.lowSeconds >= LOW_FPS_SECONDS) {
+                this.slow = true;
+                this.highSeconds = 0;
+            }
+        } else {
+            this.highSeconds = fps >= HIGH_FPS ? this.highSeconds + 1 : 0;
+            if (this.highSeconds >= HIGH_FPS_SECONDS) {
+                this.slow = false;
+                this.lowSeconds = 0;
+            }
+        }
+    }
+
+    /*
+     * 2026-11-12 (owner: say it in chat when a move breaks the simulation): a line in the player's own chat, never
+     * sent to the server. Once per cause every ALERT_EVERY_MS at most, with how many more there were since; set by
+     * Client Settings > Performance > Move check chat.
+     */
+    public static final String CHAT_SETTING = "move-check-chat";
+    public static final String[] CHAT_MODES = {"On", "Off"};
+    private static volatile int chatSetting = -1;
+    private static final long ALERT_EVERY_MS = 3000L;
+    private final Map<String, long[]> alerted = new java.util.HashMap<String, long[]>();
+
+    public static void setChat(int mode) {
+        chatSetting = Math.max(0, Math.min(CHAT_MODES.length - 1, mode));
+    }
+
+    private static boolean chatOn() {
+        int mode = chatSetting;
+        if (mode < 0) {
+            mode = MobileSafe.readMode(CHAT_SETTING, CHAT_MODES);
+            chatSetting = mode;
+        }
+        return mode == 0;
+    }
+
+    /** {@code tag}: the modules that changed the move ("plain": none, so the prediction itself may be off). */
+    private void alert(String tag, String what) {
+        if (!chatOn() || mc.thePlayer == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long[] state = this.alerted.get(tag);
+        if (state == null) {
+            state = new long[]{0L, 0L};
+            this.alerted.put(tag, state);
+        }
+        if (now - state[0] < ALERT_EVERY_MS) {
+            state[1]++;
+            return;
+        }
+        String who = "plain".equals(tag) ? "&7no module &8(the prediction may be off)" : "&f" + tag;
+        String more = state[1] > 0 ? String.format(" &8+%d more", state[1]) : "";
+        state[0] = now;
+        state[1] = 0L;
+        atlas.util.ChatUtil.sendFormatted("&7[&cSim&7] " + who + " &7" + what + more);
+    }
+
+    private void reset() {
+        this.alerted.clear();
+        this.attacksSinceStart.set(0);
+        this.attacksPending = 0;
+        this.velocitySinceStart.set(null);
+        this.velocityCarry = null;
+        this.velocityOffer = null;
+        this.explosionSinceStart.set(null);
+        this.explosionCarry = null;
+        this.explosionOffer = null;
+        this.explosionAfterVelocity.set(null);
+        this.explosionAfterCarry = null;
+        this.explosionAfterOffer = null;
         this.logFile = null;
         this.modulesLogged = "";
         this.sampled = false;
@@ -148,11 +320,6 @@ public class MoveCheck extends Module {
         this.serverSneak = null;
         clearCounts();
         this.summaryAt = System.currentTimeMillis();
-    }
-
-    @Override
-    public void onDisabled() {
-        this.sampled = false;
     }
 
     @EventTarget
@@ -168,28 +335,64 @@ public class MoveCheck extends Module {
         this.pendingFrom = null;
         this.serverSprint = null;
         this.serverSneak = null;
+        /* Nothing the old world sent reaches the new one's first moves (review, PR #38). */
+        this.playerId = Integer.MIN_VALUE;
+        this.attacksSinceStart.set(0);
+        this.attacksPending = 0;
+        this.velocitySinceStart.set(null);
+        this.velocityCarry = null;
+        this.velocityOffer = null;
+        this.velocityOfferLast = false;
+        this.explosionSinceStart.set(null);
+        this.explosionCarry = null;
+        this.explosionOffer = null;
+        this.explosionAfterVelocity.set(null);
+        this.explosionAfterCarry = null;
+        this.explosionAfterOffer = null;
     }
 
     /* First: Velocity cancels the packet at HIGH, and the motion it would have set still counts as a push. */
     @EventTarget(Priority.HIGHEST)
+    /* Packet handlers read the running state the client thread last set: active() may reset() the counts, which only
+       the client thread may do (review, PR #38; a RECEIVE runs on the network thread). */
     public void onPacket(PacketEvent event) {
-        if (!this.isEnabled() || mc.thePlayer == null) {
+        if (!running) {
             return;
         }
         if (event.getPacket() instanceof S08PacketPlayerPosLook) {
             this.correctedAt = System.currentTimeMillis();
         } else if (event.getPacket() instanceof S12PacketEntityVelocity
-                && ((S12PacketEntityVelocity) event.getPacket()).getEntityID() == mc.thePlayer.getEntityId()
-                || event.getPacket() instanceof S27PacketExplosion) {
+                && ((S12PacketEntityVelocity) event.getPacket()).getEntityID() == this.playerId) {
             this.knockedAt = System.currentTimeMillis();
+            /* What the server applied, whatever a module does to it on the way in (the self check grades that). */
+            S12PacketEntityVelocity velocity = (S12PacketEntityVelocity) event.getPacket();
+            this.velocitySinceStart.set(new double[]{velocity.getMotionX() / 8000.0, velocity.getMotionY() / 8000.0,
+                    velocity.getMotionZ() / 8000.0});
+            this.explosionAfterVelocity.set(null);
+        } else if (event.getPacket() instanceof S27PacketExplosion) {
+            this.knockedAt = System.currentTimeMillis();
+            S27PacketExplosion explosion = (S27PacketExplosion) event.getPacket();
+            final double[] push = {explosion.func_149149_c(), explosion.func_149144_d(), explosion.func_149147_e()};
+            /* Two in one window both push, as the game adds each (review, PR #38). */
+            this.explosionSinceStart.getAndUpdate(old -> old == null ? push
+                    : new double[]{old[0] + push[0], old[1] + push[1], old[2] + push[2]});
+            this.explosionAfterVelocity.getAndUpdate(old -> old == null ? push
+                    : new double[]{old[0] + push[0], old[1] + push[1], old[2] + push[2]});
         }
     }
 
     /* Last: a sprint or sneak change another module cancels never reaches the server. */
     @EventTarget(Priority.LOWEST)
     public void onSend(PacketEvent event) {
-        if (!this.isEnabled() || event.getType() != EventType.SEND || event.isCancelled()
-                || !(event.getPacket() instanceof C0BPacketEntityAction)) {
+        if (!running || event.getType() != EventType.SEND || event.isCancelled()) {
+            return;
+        }
+        if (event.getPacket() instanceof C02PacketUseEntity
+                && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK) {
+            this.attacksSinceStart.incrementAndGet();
+            return;
+        }
+        if (!(event.getPacket() instanceof C0BPacketEntityAction)) {
             return;
         }
         switch (((C0BPacketEntityAction) event.getPacket()).getAction()) {
@@ -213,7 +416,7 @@ public class MoveCheck extends Module {
     /* LOWEST: after anything that sets the motion at PRE. POST pairs with it; a tick TickBase skips has neither. */
     @EventTarget(Priority.LOWEST)
     public void onUpdate(UpdateEvent event) {
-        if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null) {
+        if (!this.active() || mc.thePlayer == null || mc.theWorld == null) {
             return;
         }
         if (event.getType() == EventType.PRE) {
@@ -244,9 +447,27 @@ public class MoveCheck extends Module {
     private void startOfTick() {
         java.util.Map<String, java.util.TreeSet<String>> movers = atlas.util.ActionWatch.takeTickMovers();
         this.pendingFrom = null;
-        if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null) {
+        if (!this.active() || mc.thePlayer == null || mc.theWorld == null) {
             this.selfStart = null;
             return;
+        }
+        /* The window that just closed goes with the move just made. A knockback not taken by its own move is offered
+           once more, to the next. */
+        this.attacksPending = this.attacksSinceStart.getAndSet(0);
+        double[] velocity = this.velocitySinceStart.getAndSet(null);
+        this.velocityOfferLast = velocity == null && this.velocityCarry != null;
+        this.velocityOffer = velocity != null ? velocity : this.velocityCarry;
+        this.velocityCarry = velocity;
+        double[] explosion = this.explosionSinceStart.getAndSet(null);
+        double[] explosionAfter = this.explosionAfterVelocity.getAndSet(null);
+        /* With a knockback this window, only what came after it goes with it; without, the explosions waiting do. */
+        this.explosionAfterOffer = velocity != null ? explosionAfter
+                : explosion != null ? explosion : this.explosionAfterCarry;
+        this.explosionOffer = explosion != null ? explosion : this.explosionCarry;
+        this.explosionCarry = explosion;
+        this.explosionAfterCarry = velocity != null ? explosionAfter : explosion;
+        if (mc.thePlayer != null) {
+            this.playerId = mc.thePlayer.getEntityId();
         }
         int tick = mc.thePlayer.ticksExisted;
         boolean supported = SimPlayer.supported(mc.thePlayer);
@@ -267,7 +488,7 @@ public class MoveCheck extends Module {
         java.util.Map<String, java.util.TreeSet<String>> all = new TreeMap<String, java.util.TreeSet<String>>();
         for (java.util.Map<String, java.util.TreeSet<String>> part : java.util.Arrays.asList(during, turning)) {
             for (Map.Entry<String, java.util.TreeSet<String>> entry : part.entrySet()) {
-                if (entry.getKey().equals(this.getName())) {
+                if (entry.getKey().equals("MoveCheck")) {
                     continue;
                 }
                 java.util.TreeSet<String> kinds = all.get(entry.getKey());
@@ -305,13 +526,43 @@ public class MoveCheck extends Module {
         long now = System.currentTimeMillis();
         PlayerSim before = this.pendingFrom;
         this.pendingFrom = null;
-        if (before == null || now - this.correctedAt < AFTER_CORRECTION_MS || now - this.knockedAt < AFTER_KNOCKBACK_MS) {
+        /* After a correction the start is not where the server has the player. Knockback no longer skips: it is offered
+           to the check (2026-11-12). */
+        if (before == null || now - this.correctedAt < AFTER_CORRECTION_MS) {
             return;
         }
         boolean sprint = this.serverSprint != null ? this.serverSprint : mc.thePlayer.isSprinting();
         boolean sneak = this.serverSneak != null ? this.serverSneak : mc.thePlayer.isSneaking();
+        SelfCheck.Extra extra = new SelfCheck.Extra();
+        extra.attacks = this.attacksPending;
+        extra.velocity = this.velocityOffer;
+        extra.explosion = this.explosionOffer;
+        extra.explosionAfterVelocity = this.explosionAfterOffer;
+        extra.ordered = true;
         SelfCheck.Result result = SelfCheck.check(before, SimPlayer.world(mc.theWorld, mc.thePlayer), sentYaw, sprint,
-                sneak, this.pendingX, this.pendingY, this.pendingZ);
+                sneak, this.pendingX, this.pendingY, this.pendingZ, extra);
+        if (this.velocityOffer != null) {
+            /* Taken only by a move it explains (review, PR #38): the closest guess using it but still off is not. */
+            if (result.velocity && result.offset <= SelfCheck.OFF) {
+                this.velocityCarry = null;
+                this.kbOffered++;
+            } else if (this.velocityOfferLast && !SelfCheck.fitsWithVelocity(before,
+                    SimPlayer.world(mc.theWorld, mc.thePlayer), sentYaw, sprint, sneak, this.pendingX, this.pendingY,
+                    this.pendingZ, extra)) {
+                /* The plain move fitting is not enough to call it ignored: against a wall the knockback can end in the
+                   same place (review, PR #38). Only when no input with the knockback fits. */
+                this.kbOffered++;
+                this.kbIgnored++;
+                String kbTag = movers(this.pendingMovers, atlas.util.ActionWatch.peekTickMovers());
+                write(String.format("KB not taken: %.3f %.3f %.3f over two moves | %s", this.velocityOffer[0],
+                        this.velocityOffer[1], this.velocityOffer[2], kbTag));
+                alert(kbTag, "&ckept no knockback");
+            }
+        }
+        if (result.explosion && result.offset <= SelfCheck.OFF) {
+            this.explosionCarry = null;
+            this.explosionAfterCarry = null;
+        }
         boolean off = result.offset > SelfCheck.OFF;
         String tag = movers(this.pendingMovers, atlas.util.ActionWatch.peekTickMovers());
         boolean plain = tag.equals("plain");
@@ -336,6 +587,7 @@ public class MoveCheck extends Module {
         if (!off) {
             return;
         }
+        alert(tag, String.format("off &f%.4f &8(keys %s)", result.offset, result.keys()));
         long second = now / 1000L;
         if (second != this.selfLineSecond) {
             this.selfLineSecond = second;
@@ -358,7 +610,7 @@ public class MoveCheck extends Module {
     @EventTarget(Priority.LOWEST)
     public void onLivingUpdate(LivingUpdateEvent event) {
         this.simPredicted = null;
-        if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null) {
+        if (!this.active() || mc.thePlayer == null || mc.theWorld == null) {
             return;
         }
         this.moveYaw = SimPlayer.inputAsMoved(mc.thePlayer).yaw;
@@ -438,7 +690,7 @@ public class MoveCheck extends Module {
             double cameraError = MoveModel.bestError(this.state, mc.thePlayer.rotationYaw, moveX, moveZ);
             record(now, lookError, cameraError, sentYaw, turn);
         }
-        if (now - this.summaryAt >= this.logEvery.getValue() * 1000L) {
+        if (now - this.summaryAt >= LOG_EVERY * 1000L) {
             summary();
             this.summaryAt = now;
         }
@@ -453,7 +705,7 @@ public class MoveCheck extends Module {
     }
 
     private void record(long now, double lookError, double cameraError, float sentYaw, float turn) {
-        float limit = this.threshold.getValue();
+        float limit = THRESHOLD;
         boolean lookMiss = lookError > limit;
         boolean cameraMiss = cameraError > limit;
         boolean turned = Math.abs(MathHelper.wrapAngleTo180_float(sentYaw - mc.thePlayer.rotationYaw)) >= 1.0F;
@@ -519,7 +771,7 @@ public class MoveCheck extends Module {
         }
         StringBuilder on = new StringBuilder();
         for (Module module : names().values()) {
-            if (module.isEnabled() && module != this) {
+            if (module.isEnabled()) {
                 on.append(module.getName()).append(' ');
             }
         }
@@ -550,15 +802,17 @@ public class MoveCheck extends Module {
                     .append(entry.getValue()[0]);
         }
         write(String.format("SUM ticks %d skipped %d look-miss %d cam-miss %d plain-miss %d/%d big-turn %d sprint-change %d%s"
-                        + " | sim %d/%d worst %.4f plain %d/%d | self %d/%d worst %.4f plain %d/%d | by%s",
+                        + " | sim %d/%d worst %.4f plain %d/%d | self %d/%d worst %.4f plain %d/%d | kb-missed %d/%d | by%s",
                 this.ticks, this.skipped, this.lookMisses, this.cameraMisses, this.plainMisses, this.plainTicks,
                 this.bigTurns, this.sprintChanges, tags, this.simOff, this.simTicks, this.simWorst, this.simPlainOff,
                 this.simPlainTicks, this.selfOff, this.selfTicks, this.selfWorst, this.selfPlainOff,
-                this.selfPlainTicks, by.length() == 0 ? " -" : by));
+                this.selfPlainTicks, this.kbIgnored, this.kbOffered, by.length() == 0 ? " -" : by));
         clearCounts();
     }
 
     private void clearCounts() {
+        this.kbOffered = 0;
+        this.kbIgnored = 0;
         this.ticks = 0;
         this.skipped = 0;
         this.lookMisses = 0;

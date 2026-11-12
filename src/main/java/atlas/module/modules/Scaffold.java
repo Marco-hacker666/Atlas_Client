@@ -1610,7 +1610,7 @@ public class Scaffold extends Module {
                 }
                 return;
             }
-            if (this.safeWalk.getValue() && !mc.thePlayer.movementInput.sneak && this.edgeSneak()) {
+            if (this.safeWalk.getValue() && !mc.thePlayer.movementInput.sneak && this.edgeSneak(true)) {
                 /* S1 (2026-10-07): the edge is held by a real crouch, the way
                    Vape's Legit/EdgeSneak and LiquidBounce's Ledge do it, and
                    vanilla's own sneak rule then keeps the player on the block.
@@ -1719,7 +1719,7 @@ public class Scaffold extends Module {
         in.sentYaw = event.getYaw();
         in.sentPitch = event.getPitch();
         in.hasTarget = target != null;
-        in.edge = in.onGround && forward && target != null && this.edgeSneak();
+        in.edge = in.onGround && forward && target != null && this.edgeSneak(false);
         in.lookPlaces = target != null && this.run.running()
                 && this.godBridgeHitsFirmly(target, this.run.lookYaw(), this.run.lookPitch(), 0.0, 0.0);
         if (target != null && !in.lookPlaces && this.run.running()) {
@@ -2045,23 +2045,39 @@ public class Scaffold extends Module {
      * off the edge the crouch is kept for a random 100-200 ms, so it does not
      * flicker on and off at the rim.
      */
-    private boolean edgeSneak() {
+    /** {@code atMoveInput}: asked at MoveInputEvent (this tick's keys); else between ticks (UpdateEvent PRE). */
+    private boolean edgeSneak(boolean atMoveInput) {
         if (!mc.thePlayer.onGround || mc.thePlayer.capabilities.isFlying) {
             this.edgeSneakUntil = 0L;
             return false;
         }
         long now = System.currentTimeMillis();
-        if (this.floorlessNextStep()) {
+        if (this.floorlessNextStep(atMoveInput)) {
             this.edgeSneakUntil = now + 100L + (long) (Math.random() * 100.0);
             return true;
         }
         return now < this.edgeSneakUntil;
     }
 
-    /** Vape's test with no hold: the box shrunk by 0.2 a side, moved by this tick's motion and one block down, touches nothing. */
-    private boolean floorlessNextStep() {
+    /**
+     * Vape's test with no hold: the box shrunk by 0.2 a side, moved by this tick's motion and one block down, touches
+     * nothing. 2026-11-12 (owner: the simulation by default): where the simulation goes, the step is the game's own
+     * (this tick's keys, sprint, speed, ice, what is in the way) instead of only the motion carried in, and the floor
+     * is looked for where that step ends, with the same 0.2 a side.
+     */
+    private boolean floorlessNextStep(boolean atMoveInput) {
         if (!mc.thePlayer.onGround || mc.thePlayer.capabilities.isFlying) {
             return false;
+        }
+        if (SimPlayer.supported(mc.thePlayer)) {
+            /* By the stage asked from (review, PR #38): inside the tick the keys are movementInput's and the water's
+               push is in; between ticks (POLAR's and GODBRIDGE's run, at UpdateEvent PRE) the keys are the ones held. */
+            PlayerSim sim = atMoveInput ? SimPlayer.stateInMove(mc.thePlayer) : SimPlayer.state(mc.thePlayer);
+            PlayerSim.World world = SimPlayer.world(mc.theWorld, mc.thePlayer);
+            PlayerSim.Input in = atMoveInput ? SimPlayer.inputBeforeMove(mc.thePlayer) : SimPlayer.inputAhead(mc.thePlayer);
+            in.jump = false;
+            sim.tick(world, in);
+            return !sim.hasFloor(world, 0.2);
         }
         AxisAlignedBB next = mc.thePlayer.getEntityBoundingBox().expand(-0.2, 0.0, -0.2)
                 .offset(mc.thePlayer.motionX, -1.0, mc.thePlayer.motionZ);
@@ -2142,7 +2158,7 @@ public class Scaffold extends Module {
         boolean hasTarget = blockData != null && godBridgeLook != null;
         /* edgeSneak() moves the safe-walk timer, so it is only asked while
            actually bridging -- the same order as before. */
-        boolean onEdge = onGround && forward && hasTarget && this.edgeSneak();
+        boolean onEdge = onGround && forward && hasTarget && this.edgeSneak(false);
         boolean canPlaceFromLook = hasTarget
                 && this.lookHit(blockData, godBridgeLook[0], godBridgeLook[1]) != null;
         if (onEdge && !canPlaceFromLook) {

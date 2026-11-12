@@ -17,8 +17,8 @@ import java.util.List;
  * had its own few lines for it (Scaffold's fall guard, Eagle, BlockLadder,
  * MoveUtil.predictMovement, MoveModel), each covering a part: flat ground
  * only, no sprint, no collisions. This is the one place for it. A caller
- * takes the state now ({@link SimPlayer#state}), copies it, and ticks the
- * copy with the keys it wants to try.
+ * takes the player as it is now ({@link SimPlayer#snapshot}) and ticks that
+ * state with the keys it wants to try.
  *
  * Pure: the world is an interface (collision boxes, slipperiness, and since
  * 2026-11-12 the liquids, ladders and the blocks that act on a touch), so it

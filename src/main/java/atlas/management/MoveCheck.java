@@ -4,12 +4,14 @@ import atlas.Atlas;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.event.types.Priority;
+import atlas.events.KnockbackEvent;
 import atlas.events.LivingUpdateEvent;
 import atlas.events.LoadWorldEvent;
 import atlas.events.PacketEvent;
 import atlas.events.UpdateEvent;
 import atlas.module.Module;
 import atlas.module.modules.*;
+import atlas.sim.HeldKnockback;
 import atlas.sim.Impulses;
 import atlas.sim.MoveAudit;
 import atlas.sim.MoveModel;
@@ -147,6 +149,8 @@ public final class MoveCheck {
     private static volatile String knockbackHeldBy;
     private int kbOffered;
     private int kbIgnored;
+    /** Knockback packets a module cancelled on the way in, offered to the move when the game applies them. */
+    private final HeldKnockback heldKnockback = new HeldKnockback();
     /** Self check ticks and offs by module that changed the movement, {ticks, off}. */
     private final Map<String, int[]> selfBy = new TreeMap<String, int[]>();
     /** The sprint and sneak state the sent packets gave the server; null until one is seen. */
@@ -273,6 +277,7 @@ public final class MoveCheck {
     private void reset() {
         this.alerts.clear();
         this.audit.reset();
+        this.heldKnockback.clear();
         knockbackHeldBy = null;
         this.logFile = null;
         this.modulesLogged = "";
@@ -298,6 +303,7 @@ public final class MoveCheck {
         /* Nothing the old world sent reaches the new one's first moves (review, PR #38). */
         playerId = Integer.MIN_VALUE;
         knockbackHeldBy = null;
+        this.heldKnockback.clear();
         this.audit.reset();
     }
 
@@ -313,18 +319,58 @@ public final class MoveCheck {
             this.correctedAt = System.currentTimeMillis();
         } else if (event.getPacket() instanceof S12PacketEntityVelocity
                 && ((S12PacketEntityVelocity) event.getPacket()).getEntityID() == playerId) {
-            this.knockedAt = System.currentTimeMillis();
-            /* What the server applied, whatever a module does to it on the way in (the self check grades that). */
-            S12PacketEntityVelocity velocity = (S12PacketEntityVelocity) event.getPacket();
+            /* Who cancels it is told by packetHeld during this dispatch; what becomes of it, at onPacketLast. */
             knockbackHeldBy = null;
-            this.audit.impulses().velocity(velocity.getMotionX() / 8000.0, velocity.getMotionY() / 8000.0,
-                    velocity.getMotionZ() / 8000.0);
         } else if (event.getPacket() instanceof S27PacketExplosion) {
             this.knockedAt = System.currentTimeMillis();
             S27PacketExplosion explosion = (S27PacketExplosion) event.getPacket();
             this.audit.impulses().explosion(explosion.func_149149_c(), explosion.func_149144_d(),
                     explosion.func_149147_e());
         }
+    }
+
+    /**
+     * Last, after every module (2026-11-12): a knockback that goes on to the game is offered to the moves now, as
+     * before -- the game applies it at the start of the next frame. One a module cancelled is held (HeldKnockback):
+     * KnockbackDelay hands it to the game later itself, and only then (onKnockbackApplied) does a move take it.
+     * Offered on arrival, it was "not kept" by the two moves it was offered to and then pushed a third with nothing
+     * to explain it, while GrimAC, which times knockback by the transactions held with it, flagged nothing.
+     */
+    @EventTarget(Priority.LOWEST)
+    public void onPacketLast(PacketEvent event) {
+        if (!running || event.getType() != EventType.RECEIVE || !(event.getPacket() instanceof S12PacketEntityVelocity)
+                || ((S12PacketEntityVelocity) event.getPacket()).getEntityID() != playerId) {
+            return;
+        }
+        S12PacketEntityVelocity velocity = (S12PacketEntityVelocity) event.getPacket();
+        double x = velocity.getMotionX() / 8000.0;
+        double y = velocity.getMotionY() / 8000.0;
+        double z = velocity.getMotionZ() / 8000.0;
+        if (event.isCancelled()) {
+            this.heldKnockback.held(x, y, z, knockbackHeldBy, System.currentTimeMillis());
+            return;
+        }
+        /* What the server applied, whatever a module does to it on the way in (the self check grades that). */
+        this.knockedAt = System.currentTimeMillis();
+        this.audit.impulses().velocity(x, y, z);
+    }
+
+    /* First: the motion the game is setting, before a velocity module changes it. Client thread. */
+    @EventTarget(Priority.HIGHEST)
+    public void onKnockbackApplied(KnockbackEvent event) {
+        if (!running) {
+            return;
+        }
+        HeldKnockback.Held kb = this.heldKnockback.applied(event.getX(), event.getY(), event.getZ());
+        if (kb == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        this.knockedAt = now;
+        knockbackHeldBy = kb.by;
+        this.audit.impulses().velocity(kb.x, kb.y, kb.z);
+        write(String.format("KB applied late: %.3f %.3f %.3f after %d ms | %s:knockback", kb.x, kb.y, kb.z, now - kb.at,
+                kb.by == null ? "?" : kb.by));
     }
 
     /**
@@ -411,6 +457,15 @@ public final class MoveCheck {
         }
         playerId = mc.thePlayer.getEntityId();
         long now = System.currentTimeMillis();
+        for (HeldKnockback.Held kb : this.heldKnockback.expired(now)) {
+            /* Held and never applied: the server set this motion and the player never took it. */
+            this.kbOffered++;
+            this.kbIgnored++;
+            String by = (kb.by == null ? "?" : kb.by) + ":knockback";
+            write(String.format("KB dropped: %.3f %.3f %.3f, held %d ms and never applied | %s", kb.x, kb.y, kb.z,
+                    now - kb.at, by));
+            alert("kb", by, "&ckept no knockback", "");
+        }
         boolean sprint = this.serverSprint != null ? this.serverSprint : mc.thePlayer.isSprinting();
         boolean sneak = this.serverSneak != null ? this.serverSneak : mc.thePlayer.isSneaking();
         PlayerSim state = SimPlayer.supported(mc.thePlayer) ? SimPlayer.state(mc.thePlayer) : null;

@@ -424,6 +424,34 @@ public class PlayerSimTerrainTest {
     }
 
     @Test
+    public void aWorldWithABlockAddedKeepsTheRestOfTheTerrain() {
+        /* 2026-11-12: SimWorlds.withBlock passed on only the boxes and the slipperiness, so in it the water, the
+           ladders, the cobwebs and the slime were gone. */
+        Terrain t = pool();
+        t.ladder.add(Terrain.key(3, 0, 3));
+        t.slime.add(Terrain.key(4, 0, 4));
+        t.web.add(Terrain.key(5, 0, 5));
+        t.fill(t.lava, 20, 20, 20, 21, 21, 21);
+        PlayerSim.World with = SimWorlds.withBlock(t, 3, 5, 3);
+        AxisAlignedBB inPool = new AxisAlignedBB(0.2, -20.0, 0.2, 0.8, -19.0, 0.8);
+        assertTrue(with.water(inPool, new double[3]));
+        assertTrue(with.liquid(inPool));
+        assertTrue(with.lava(new AxisAlignedBB(20.2, 20.2, 20.2, 20.8, 20.8, 20.8)));
+        assertTrue(with.climbable(3, 0, 3));
+        assertTrue(with.slime(4, 0, 4));
+        assertEquals(1, with.touching(new AxisAlignedBB(5.2, 0.2, 5.2, 5.8, 0.8, 5.8), PlayerSim.Touch.WEB));
+        /* The added cell: a full cube, with a box, and not a ladder even where the base had one. */
+        assertTrue(with.solid(3, 5, 3));
+        assertFalse(with.solid(3, 6, 3));
+        assertFalse(with.boxes(new AxisAlignedBB(3.2, 5.2, 3.2, 3.8, 5.8, 3.8)).isEmpty());
+        assertFalse(SimWorlds.withBlock(t, 3, 0, 3).climbable(3, 0, 3));
+        assertFalse(SimWorlds.withBlock(t, 4, 0, 4).slime(4, 0, 4));
+        /* And a player in it still sinks through the water as in the base. */
+        double[] move = run(at(0, 0, 0, false), with, keys(0, false, false), 60);
+        assertEquals(-0.1, move[1], 1.0E-4);
+    }
+
+    @Test
     public void aStateTakenAfterTheFlowPushIsNotPushedAgain() {
         /* Review, PR #37: taken inside the tick (handleWaterMovement done), the first move carries no second push. */
         Terrain t = pool();

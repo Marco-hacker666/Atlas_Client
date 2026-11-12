@@ -10,6 +10,7 @@ import atlas.events.PacketEvent;
 import atlas.events.UpdateEvent;
 import atlas.module.Module;
 import atlas.module.modules.*;
+import atlas.sim.MoveModel;
 import atlas.sim.PlayerSim;
 import atlas.sim.SelfCheck;
 import atlas.sim.SimPlayer;

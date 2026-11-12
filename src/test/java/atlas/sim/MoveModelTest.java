@@ -1,4 +1,4 @@
-package atlas.module.modules;
+package atlas.sim;
 
 import org.junit.Test;
 

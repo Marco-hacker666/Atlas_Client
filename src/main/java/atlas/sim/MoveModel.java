@@ -1,4 +1,4 @@
-package atlas.module.modules;
+package atlas.sim;
 
 import net.minecraft.util.MathHelper;
 
@@ -53,7 +53,7 @@ public final class MoveModel {
         float speed = s.onGround ? s.moveSpeed * (0.16277136F / (friction * friction * friction))
                 : s.sprinting ? AIR_SPRINT_SPEED : AIR_SPEED;
         /* The keys' push is the simulation's (atlas.sim.PlayerSim), so there is one copy of moveFlying. */
-        double[] push = atlas.sim.PlayerSim.push(inputStrafe, inputForward, speed, yaw);
+        double[] push = PlayerSim.push(inputStrafe, inputForward, speed, yaw);
         return new double[]{x + push[0], z + push[1]};
     }
 

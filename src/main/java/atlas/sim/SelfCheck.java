@@ -104,6 +104,13 @@ public final class SelfCheck {
         public double[] velocity;
         /** An explosion's push received since then; null for none. */
         public double[] explosion;
+        /**
+         * The explosions that came after the knockback (a knockback replaces the motion, so an explosion before it is
+         * lost when it is taken): used with the knockback instead of {@link #explosion} when {@link #ordered}; null
+         * for none after it.
+         */
+        public double[] explosionAfterVelocity;
+        public boolean ordered;
         /** Try only the starts that take the knockback. */
         boolean velocityOnly;
     }
@@ -118,6 +125,8 @@ public final class SelfCheck {
         only.attacks = extra.attacks;
         only.velocity = extra.velocity;
         only.explosion = extra.explosion;
+        only.explosionAfterVelocity = extra.explosionAfterVelocity;
+        only.ordered = extra.ordered;
         only.velocityOnly = true;
         return check(before, world, yaw, sprinting, sneaking, x, y, z, only).offset <= OFF;
     }
@@ -140,9 +149,15 @@ public final class SelfCheck {
                     || extra != null && extra.velocityOnly && !useVelocity) {
                 continue;
             }
+            /* With the knockback, only the explosions after it count (review, PR #38). */
+            double[] push = !useExplosion ? null
+                    : useVelocity && extra.ordered ? extra.explosionAfterVelocity : explosion;
+            if (useExplosion && push == null) {
+                continue;
+            }
             for (int slows = 0; slows <= maxSlows; slows++) {
                 if (tryInputs(best, before, world, yaw, sprinting, sneaking, x, y, z, forwards, useVelocity ? velocity : null,
-                        useExplosion ? explosion : null, slows)) {
+                        push, slows)) {
                     return best;
                 }
             }

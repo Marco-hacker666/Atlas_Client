@@ -221,4 +221,27 @@ public class SelfCheckTest {
         assertTrue(SelfCheck.fitsWithVelocity(before, walled, 0.0F, false, false, pushed.x(), pushed.y(), pushed.z(),
                 extra));
     }
+
+    @Test
+    public void anExplosionBeforeTheKnockbackIsLostWithIt() {
+        /* Review, PR #38: explosion A, knockback V, explosion B in one window end as V + B, not V + A + B. */
+        PlayerSim before = standing();
+        double[] a = {0.3, 0.0, 0.0};
+        double[] v = {0.0, 0.2, 0.25};
+        double[] b = {0.0, 0.0, 0.1};
+        PlayerSim moved = before.copy();
+        moved.motionX = v[0] + b[0];
+        moved.motionY = v[1] + b[1];
+        moved.motionZ = v[2] + b[2];
+        moved.tick(WORLD, keys(0.0F, 0.0F, 0.0F, false, false, false));
+        SelfCheck.Extra extra = new SelfCheck.Extra();
+        extra.velocity = v;
+        extra.explosion = new double[]{a[0] + b[0], a[1] + b[1], a[2] + b[2]};
+        extra.explosionAfterVelocity = b;
+        extra.ordered = true;
+        SelfCheck.Result result = SelfCheck.check(before, WORLD, 0.0F, false, false, moved.x(), moved.y(), moved.z(),
+                extra);
+        assertEquals(0.0, result.offset, 1.0E-9);
+        assertTrue(result.velocity && result.explosion);
+    }
 }

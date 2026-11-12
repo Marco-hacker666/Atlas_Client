@@ -143,6 +143,12 @@ public final class MoveCheck {
     private boolean velocityOfferLast;
     private final java.util.concurrent.atomic.AtomicReference<double[]> explosionSinceStart =
             new java.util.concurrent.atomic.AtomicReference<double[]>();
+    /* The explosions since the last knockback in this window: a knockback replaces the motion, so with it taken only
+       these still push (review, PR #38). Reset by each knockback. */
+    private final java.util.concurrent.atomic.AtomicReference<double[]> explosionAfterVelocity =
+            new java.util.concurrent.atomic.AtomicReference<double[]>();
+    private double[] explosionAfterCarry;
+    private double[] explosionAfterOffer;
     /** This player's entity id as the client thread last saw it, for the network thread to compare with. */
     private volatile int playerId = Integer.MIN_VALUE;
     private double[] explosionCarry;
@@ -301,6 +307,9 @@ public final class MoveCheck {
         this.explosionSinceStart.set(null);
         this.explosionCarry = null;
         this.explosionOffer = null;
+        this.explosionAfterVelocity.set(null);
+        this.explosionAfterCarry = null;
+        this.explosionAfterOffer = null;
         this.logFile = null;
         this.modulesLogged = "";
         this.sampled = false;
@@ -337,6 +346,9 @@ public final class MoveCheck {
         this.explosionSinceStart.set(null);
         this.explosionCarry = null;
         this.explosionOffer = null;
+        this.explosionAfterVelocity.set(null);
+        this.explosionAfterCarry = null;
+        this.explosionAfterOffer = null;
     }
 
     /* First: Velocity cancels the packet at HIGH, and the motion it would have set still counts as a push. */
@@ -356,12 +368,15 @@ public final class MoveCheck {
             S12PacketEntityVelocity velocity = (S12PacketEntityVelocity) event.getPacket();
             this.velocitySinceStart.set(new double[]{velocity.getMotionX() / 8000.0, velocity.getMotionY() / 8000.0,
                     velocity.getMotionZ() / 8000.0});
+            this.explosionAfterVelocity.set(null);
         } else if (event.getPacket() instanceof S27PacketExplosion) {
             this.knockedAt = System.currentTimeMillis();
             S27PacketExplosion explosion = (S27PacketExplosion) event.getPacket();
             final double[] push = {explosion.func_149149_c(), explosion.func_149144_d(), explosion.func_149147_e()};
             /* Two in one window both push, as the game adds each (review, PR #38). */
             this.explosionSinceStart.getAndUpdate(old -> old == null ? push
+                    : new double[]{old[0] + push[0], old[1] + push[1], old[2] + push[2]});
+            this.explosionAfterVelocity.getAndUpdate(old -> old == null ? push
                     : new double[]{old[0] + push[0], old[1] + push[1], old[2] + push[2]});
         }
     }
@@ -444,8 +459,13 @@ public final class MoveCheck {
         this.velocityOffer = velocity != null ? velocity : this.velocityCarry;
         this.velocityCarry = velocity;
         double[] explosion = this.explosionSinceStart.getAndSet(null);
+        double[] explosionAfter = this.explosionAfterVelocity.getAndSet(null);
+        /* With a knockback this window, only what came after it goes with it; without, the explosions waiting do. */
+        this.explosionAfterOffer = velocity != null ? explosionAfter
+                : explosion != null ? explosion : this.explosionAfterCarry;
         this.explosionOffer = explosion != null ? explosion : this.explosionCarry;
         this.explosionCarry = explosion;
+        this.explosionAfterCarry = velocity != null ? explosionAfter : explosion;
         if (mc.thePlayer != null) {
             this.playerId = mc.thePlayer.getEntityId();
         }
@@ -517,6 +537,8 @@ public final class MoveCheck {
         extra.attacks = this.attacksPending;
         extra.velocity = this.velocityOffer;
         extra.explosion = this.explosionOffer;
+        extra.explosionAfterVelocity = this.explosionAfterOffer;
+        extra.ordered = true;
         SelfCheck.Result result = SelfCheck.check(before, SimPlayer.world(mc.theWorld, mc.thePlayer), sentYaw, sprint,
                 sneak, this.pendingX, this.pendingY, this.pendingZ, extra);
         if (this.velocityOffer != null) {
@@ -539,6 +561,7 @@ public final class MoveCheck {
         }
         if (result.explosion && result.offset <= SelfCheck.OFF) {
             this.explosionCarry = null;
+            this.explosionAfterCarry = null;
         }
         boolean off = result.offset > SelfCheck.OFF;
         String tag = movers(this.pendingMovers, atlas.util.ActionWatch.peekTickMovers());

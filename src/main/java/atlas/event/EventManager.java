@@ -260,11 +260,12 @@ public final class EventManager {
             /* 2026-10-11: and what a module does to the player without a
                packet -- motion, ground, look, timer (ActionWatch). */
             final boolean moved = atlas.util.ActionWatch.watches(event);
-            /* MoveCheck's start of the tick: the move is done and no module has had this PRE yet (2026-11-11). */
-            Runnable startOfTick = atlas.util.ActionWatch.beforeUpdatePre;
-            if (startOfTick != null && event instanceof atlas.events.UpdateEvent
-                    && ((atlas.events.UpdateEvent) event).getType() == atlas.event.types.EventType.PRE) {
-                startOfTick.run();
+            /* MoveCheck's end of the tick: the move is made, its packet is out, and no module has had this POST yet
+               (2026-11-12; it was "before PRE", which is before the move, not after it). */
+            java.util.function.Consumer<atlas.events.UpdateEvent> endOfTick = atlas.util.ActionWatch.beforeUpdatePost;
+            if (endOfTick != null && event instanceof atlas.events.UpdateEvent
+                    && ((atlas.events.UpdateEvent) event).getType() == atlas.event.types.EventType.POST) {
+                endOfTick.accept((atlas.events.UpdateEvent) event);
             }
             if (event instanceof EventStoppable) {
                 EventStoppable stoppable = (EventStoppable) event;

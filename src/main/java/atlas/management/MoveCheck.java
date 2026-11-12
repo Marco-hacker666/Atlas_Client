@@ -10,6 +10,7 @@ import atlas.events.PacketEvent;
 import atlas.events.UpdateEvent;
 import atlas.module.Module;
 import atlas.module.modules.*;
+import atlas.sim.Impulses;
 import atlas.sim.MoveModel;
 import atlas.sim.PlayerSim;
 import atlas.sim.SelfCheck;
@@ -18,6 +19,7 @@ import atlas.util.AsyncLog;
 import atlas.util.render.DeviceProfile;
 import atlas.util.render.MobileSafe;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C0BPacketEntityAction;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
@@ -52,8 +54,19 @@ import java.util.TreeMap;
  * 2026-11-11, the self check (atlas.sim.SelfCheck): the question a re-simulating anticheat (GrimAC) asks, asked here.
  * From the state at the end of the last tick, with the yaw this tick's packet carried and the sprint and sneak state
  * the packets told the server, does any input (every key combination, a jump, an item's slowdown) end where the player
- * is? SELF lines are ticks more than a thousandth off, with the closest keys and what was steering (tag()); each SUM
- * ends with "self off/ticks worst plain off/ticks". Plain ticks should be 0 off; off on others names the module.
+ * is? SELF lines are ticks more than a thousandth off, with the closest keys and the modules that changed the move;
+ * each SUM ends with "self off/ticks worst plain off/ticks". Plain ticks should be 0 off; off on others names the
+ * module.
+ *
+ * 2026-11-12, its tick put right. A tick here runs: UpdateEvent PRE (EntityPlayerSP.onUpdate's head), the move, the
+ * movement packet, UpdateEvent POST. The check took its start before PRE and its end before the next PRE, which is
+ * one move -- but held it against the yaw and the sprint of the packet after that one, a tick late. Standing still or
+ * walking straight it made no difference; turning while walking, every move looked a little off. Now a move is taken
+ * as a server takes it, from one movement packet to the next: just before any module has UpdateEvent POST
+ * (ActionWatch.beforeUpdatePost) the move that packet reported is checked from the state kept at the same point one
+ * tick before, with that packet's yaw and the sprint and sneak sent with it; then the state is kept for the next.
+ * Everything a module did in between -- at POST, in the game's tick, at PRE, during the move -- is in the stretch, and
+ * so are the attacks, knockback and explosions of it (atlas.sim.Impulses).
  *
  * 2026-11-12 (owner: "make the simulation the default, not a feature"): no longer a module. It is part of the client
  * and runs by itself, set by Client Settings > Performance > Move check (Auto / On / Off). Auto runs it except on a
@@ -70,9 +83,7 @@ public final class MoveCheck {
     private static final int LOW_FPS_SECONDS = 5;
     private static final int HIGH_FPS = 115;
     private static final int HIGH_FPS_SECONDS = 10;
-    private boolean slow;
-    private int lowSeconds;
-    private int highSeconds;
+    private final FpsGate fps = new FpsGate(LOW_FPS, LOW_FPS_SECONDS, HIGH_FPS, HIGH_FPS_SECONDS);
     private long fpsSampledAt;
     private boolean wasActive;
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -122,50 +133,23 @@ public final class MoveCheck {
     private double simWorst;
     private static final double SIM_OFF = 0.001;
     /*
-     * 2026-11-11 (second form): the start state is taken at the start of UpdateEvent PRE, before any module has that
-     * event (ActionWatch.beforeUpdatePre): the move just made, nothing changed after it. Taken at POST, a motion a
-     * module set at PRE (Speed and the like) was already in it and so never showed. The check of a move runs at its
-     * tick's POST (the yaw sent is final there), from the start one tick before to where that tick's move ended.
+     * The self check's start: the player as the last movement packet left it, kept just before any module has
+     * UpdateEvent POST (endOfTick), and the tick it was kept on -- a move is checked only from the tick right before
+     * (a tick TickBase skips, or one the simulation does not cover, leaves nothing to check).
      */
     private PlayerSim selfStart;
-    /*
-     * 2026-11-12, after GrimAC's guesses: what acted on the motion between one start of tick and the next. Attacks
-     * sent and a knockback or explosion received in that window go with the move that follows it. A knockback the
-     * client cannot place in time is offered to that move and to the next one; never taken by either, it is logged as
-     * a KB line -- what a server checking knockback would flag.
-     */
-    /* Written by the packet handlers, taken whole by the client thread (getAndSet), so none is lost in between. */
-    private final java.util.concurrent.atomic.AtomicInteger attacksSinceStart = new java.util.concurrent.atomic.AtomicInteger();
-    private int attacksPending;
-    private final java.util.concurrent.atomic.AtomicReference<double[]> velocitySinceStart =
-            new java.util.concurrent.atomic.AtomicReference<double[]>();
-    private double[] velocityCarry;
-    private double[] velocityOffer;
-    private boolean velocityOfferLast;
-    private final java.util.concurrent.atomic.AtomicReference<double[]> explosionSinceStart =
-            new java.util.concurrent.atomic.AtomicReference<double[]>();
-    /* The explosions since the last knockback in this window: a knockback replaces the motion, so with it taken only
-       these still push (review, PR #38). Reset by each knockback. */
-    private final java.util.concurrent.atomic.AtomicReference<double[]> explosionAfterVelocity =
-            new java.util.concurrent.atomic.AtomicReference<double[]>();
-    private double[] explosionAfterCarry;
-    private double[] explosionAfterOffer;
+    private int selfStartTick;
+    /* 2026-11-12, after GrimAC's guesses: the attacks sent and the knockback or explosions received from one
+       movement packet to the next go with the move between them. */
+    private final Impulses impulses = new Impulses();
     /** This player's entity id as the client thread last saw it, for the network thread to compare with. */
-    private volatile int playerId = Integer.MIN_VALUE;
-    private double[] explosionCarry;
-    private double[] explosionOffer;
+    private static volatile int playerId = Integer.MIN_VALUE;
+    /** The module that cancelled the last knockback packet, for the line that says it was not kept. */
+    private static volatile String knockbackHeldBy;
     private int kbOffered;
     private int kbIgnored;
-    private int selfStartTick;
-    /** The move to check at this tick's POST: from, to, and what modules changed between. */
-    private PlayerSim pendingFrom;
-    private double pendingX;
-    private double pendingY;
-    private double pendingZ;
-    private java.util.Map<String, java.util.TreeSet<String>> pendingMovers;
     /** Self check ticks and offs by module that changed the movement, {ticks, off}. */
     private final Map<String, int[]> selfBy = new TreeMap<String, int[]>();
-    private final Runnable startOfTick = this::startOfTick;
     /** The sprint and sneak state the sent packets gave the server; null until one is seen. */
     private volatile Boolean serverSprint;
     private volatile Boolean serverSneak;
@@ -175,15 +159,18 @@ public final class MoveCheck {
     private int selfPlainOff;
     private double selfWorst;
     private long selfLineSecond;
-    /** This tick's move as the client made it, for the SELF line: its yaw and sprint once the keys were final. */
+    /** This tick's move as the client made it, for the SELF line: its yaw, sprint and sneak once the keys were
+        final, and the tick they are of. */
     private float moveYaw = Float.NaN;
     private boolean moveSprinting;
+    private boolean moveSneaking;
+    private int moveTick = Integer.MIN_VALUE;
     private int selfLinesThisSecond;
     /** Ticks and misses by what was running. */
     private final Map<String, int[]> byTag = new TreeMap<String, int[]>();
 
     public MoveCheck() {
-        atlas.util.ActionWatch.beforeUpdatePre = this.startOfTick;
+        atlas.util.ActionWatch.beforeUpdatePost = this::endOfTick;
         reset();
     }
 
@@ -220,7 +207,7 @@ public final class MoveCheck {
             on = false;
         } else {
             sampleFps();
-            on = !this.slow && !DeviceProfile.isMobile();
+            on = !this.fps.slow() && !DeviceProfile.isMobile();
         }
         if (on && !this.wasActive) {
             reset();
@@ -236,20 +223,7 @@ public final class MoveCheck {
             return;
         }
         this.fpsSampledAt = now;
-        int fps = Minecraft.getDebugFPS();
-        if (!this.slow) {
-            this.lowSeconds = fps < LOW_FPS ? this.lowSeconds + 1 : 0;
-            if (this.lowSeconds >= LOW_FPS_SECONDS) {
-                this.slow = true;
-                this.highSeconds = 0;
-            }
-        } else {
-            this.highSeconds = fps >= HIGH_FPS ? this.highSeconds + 1 : 0;
-            if (this.highSeconds >= HIGH_FPS_SECONDS) {
-                this.slow = false;
-                this.lowSeconds = 0;
-            }
-        }
+        this.fps.sample(Minecraft.getDebugFPS());
     }
 
     /*
@@ -261,7 +235,7 @@ public final class MoveCheck {
     public static final String[] CHAT_MODES = {"On", "Off"};
     private static volatile int chatSetting = -1;
     private static final long ALERT_EVERY_MS = 3000L;
-    private final Map<String, long[]> alerted = new java.util.HashMap<String, long[]>();
+    private final AlertLimiter alerts = new AlertLimiter(ALERT_EVERY_MS);
 
     public static void setChat(int mode) {
         chatSetting = Math.max(0, Math.min(CHAT_MODES.length - 1, mode));
@@ -276,47 +250,34 @@ public final class MoveCheck {
         return mode == 0;
     }
 
-    /** {@code tag}: the modules that changed the move ("plain": none, so the prediction itself may be off). */
-    private void alert(String tag, String what) {
+    /**
+     * {@code tag}: the modules that changed the move ("plain": none seen). {@code why}: what is known of the cause
+     * besides ("" for nothing); with neither a module nor a cause the prediction itself may be what is off, and the
+     * line says so.
+     */
+    private void alert(String tag, String what, String why) {
         if (!chatOn() || mc.thePlayer == null) {
             return;
         }
-        long now = System.currentTimeMillis();
-        long[] state = this.alerted.get(tag);
-        if (state == null) {
-            state = new long[]{0L, 0L};
-            this.alerted.put(tag, state);
-        }
-        if (now - state[0] < ALERT_EVERY_MS) {
-            state[1]++;
+        int held = this.alerts.pass(tag, System.currentTimeMillis());
+        if (held < 0) {
             return;
         }
-        String who = "plain".equals(tag) ? "&7no module &8(the prediction may be off)" : "&f" + tag;
-        String more = state[1] > 0 ? String.format(" &8+%d more", state[1]) : "";
-        state[0] = now;
-        state[1] = 0L;
-        atlas.util.ChatUtil.sendFormatted("&7[&cSim&7] " + who + " &7" + what + more);
+        String who = !"plain".equals(tag) ? "&f" + tag
+                : why.isEmpty() ? "&7no module &8(the prediction may be off)" : "&7no module seen";
+        String more = held > 0 ? String.format(" &8+%d more", held) : "";
+        atlas.util.ChatUtil.sendFormatted("&7[&cSim&7] " + who + " &7" + what + why + more);
     }
 
     private void reset() {
-        this.alerted.clear();
-        this.attacksSinceStart.set(0);
-        this.attacksPending = 0;
-        this.velocitySinceStart.set(null);
-        this.velocityCarry = null;
-        this.velocityOffer = null;
-        this.explosionSinceStart.set(null);
-        this.explosionCarry = null;
-        this.explosionOffer = null;
-        this.explosionAfterVelocity.set(null);
-        this.explosionAfterCarry = null;
-        this.explosionAfterOffer = null;
+        this.alerts.clear();
+        this.impulses.clear();
+        knockbackHeldBy = null;
         this.logFile = null;
         this.modulesLogged = "";
         this.sampled = false;
         this.lastSentYaw = Float.NaN;
         this.selfStart = null;
-        this.pendingFrom = null;
         this.serverSprint = null;
         this.serverSneak = null;
         clearCounts();
@@ -333,23 +294,12 @@ public final class MoveCheck {
         this.sampled = false;
         this.lastSentYaw = Float.NaN;
         this.selfStart = null;
-        this.pendingFrom = null;
         this.serverSprint = null;
         this.serverSneak = null;
         /* Nothing the old world sent reaches the new one's first moves (review, PR #38). */
-        this.playerId = Integer.MIN_VALUE;
-        this.attacksSinceStart.set(0);
-        this.attacksPending = 0;
-        this.velocitySinceStart.set(null);
-        this.velocityCarry = null;
-        this.velocityOffer = null;
-        this.velocityOfferLast = false;
-        this.explosionSinceStart.set(null);
-        this.explosionCarry = null;
-        this.explosionOffer = null;
-        this.explosionAfterVelocity.set(null);
-        this.explosionAfterCarry = null;
-        this.explosionAfterOffer = null;
+        playerId = Integer.MIN_VALUE;
+        knockbackHeldBy = null;
+        this.impulses.clear();
     }
 
     /* First: Velocity cancels the packet at HIGH, and the motion it would have set still counts as a push. */
@@ -363,22 +313,29 @@ public final class MoveCheck {
         if (event.getPacket() instanceof S08PacketPlayerPosLook) {
             this.correctedAt = System.currentTimeMillis();
         } else if (event.getPacket() instanceof S12PacketEntityVelocity
-                && ((S12PacketEntityVelocity) event.getPacket()).getEntityID() == this.playerId) {
+                && ((S12PacketEntityVelocity) event.getPacket()).getEntityID() == playerId) {
             this.knockedAt = System.currentTimeMillis();
             /* What the server applied, whatever a module does to it on the way in (the self check grades that). */
             S12PacketEntityVelocity velocity = (S12PacketEntityVelocity) event.getPacket();
-            this.velocitySinceStart.set(new double[]{velocity.getMotionX() / 8000.0, velocity.getMotionY() / 8000.0,
-                    velocity.getMotionZ() / 8000.0});
-            this.explosionAfterVelocity.set(null);
+            knockbackHeldBy = null;
+            this.impulses.velocity(velocity.getMotionX() / 8000.0, velocity.getMotionY() / 8000.0,
+                    velocity.getMotionZ() / 8000.0);
         } else if (event.getPacket() instanceof S27PacketExplosion) {
             this.knockedAt = System.currentTimeMillis();
             S27PacketExplosion explosion = (S27PacketExplosion) event.getPacket();
-            final double[] push = {explosion.func_149149_c(), explosion.func_149144_d(), explosion.func_149147_e()};
-            /* Two in one window both push, as the game adds each (review, PR #38). */
-            this.explosionSinceStart.getAndUpdate(old -> old == null ? push
-                    : new double[]{old[0] + push[0], old[1] + push[1], old[2] + push[2]});
-            this.explosionAfterVelocity.getAndUpdate(old -> old == null ? push
-                    : new double[]{old[0] + push[0], old[1] + push[1], old[2] + push[2]});
+            this.impulses.explosion(explosion.func_149149_c(), explosion.func_149144_d(), explosion.func_149147_e());
+        }
+    }
+
+    /**
+     * A module cancelled this packet on its way in (EventManager, which alone knows who). A knockback for this
+     * player that never reaches the game is the commonest reason one is "not kept": the name goes on that line. It
+     * is cleared by the next knockback to arrive (onPacket, which runs before any module can cancel). Any thread.
+     */
+    public static void packetHeld(String module, Packet<?> packet) {
+        if (running && packet instanceof S12PacketEntityVelocity
+                && ((S12PacketEntityVelocity) packet).getEntityID() == playerId) {
+            knockbackHeldBy = module;
         }
     }
 
@@ -390,7 +347,7 @@ public final class MoveCheck {
         }
         if (event.getPacket() instanceof C02PacketUseEntity
                 && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK) {
-            this.attacksSinceStart.incrementAndGet();
+            this.impulses.attack();
             return;
         }
         if (!(event.getPacket() instanceof C0BPacketEntityAction)) {
@@ -436,75 +393,45 @@ public final class MoveCheck {
         if (event.getType() == EventType.POST && this.sampled) {
             this.sampled = false;
             finish(event.getYaw());
-            selfCheck(event.getYaw());
         }
     }
 
     /**
-     * Before any module has this tick's UpdateEvent PRE: where the move just made ended, checked at POST from the
-     * state kept one tick ago; and that state for the next. Only from the tick just before (a tick skipped by TickBase
-     * or a move the simulation does not cover leaves nothing to check).
+     * The end of a tick as a server sees one: this tick's move is made and its movement packet is out, and no module
+     * has had this UpdateEvent POST yet (ActionWatch.beforeUpdatePost). The move is checked from the state kept here
+     * one tick ago, with the yaw the packet carried; then the state is kept for the next move. What modules changed
+     * since the last time here is the move's tag; the attacks, knockback and explosions since then are what else may
+     * explain it.
      */
-    private void startOfTick() {
-        java.util.Map<String, java.util.TreeSet<String>> movers = atlas.util.ActionWatch.takeTickMovers();
-        this.pendingFrom = null;
+    private void endOfTick(UpdateEvent event) {
+        Map<String, java.util.TreeSet<String>> movers = atlas.util.ActionWatch.takeTickMovers();
         if (!this.active() || mc.thePlayer == null || mc.theWorld == null) {
             this.selfStart = null;
             return;
         }
-        /* The window that just closed goes with the move just made. A knockback not taken by its own move is offered
-           once more, to the next. */
-        this.attacksPending = this.attacksSinceStart.getAndSet(0);
-        double[] velocity = this.velocitySinceStart.getAndSet(null);
-        this.velocityOfferLast = velocity == null && this.velocityCarry != null;
-        this.velocityOffer = velocity != null ? velocity : this.velocityCarry;
-        this.velocityCarry = velocity;
-        double[] explosion = this.explosionSinceStart.getAndSet(null);
-        double[] explosionAfter = this.explosionAfterVelocity.getAndSet(null);
-        /* With a knockback this window, only what came after it goes with it; without, the explosions waiting do. */
-        this.explosionAfterOffer = velocity != null ? explosionAfter
-                : explosion != null ? explosion : this.explosionAfterCarry;
-        this.explosionOffer = explosion != null ? explosion : this.explosionCarry;
-        this.explosionCarry = explosion;
-        this.explosionAfterCarry = velocity != null ? explosionAfter : explosion;
-        if (mc.thePlayer != null) {
-            this.playerId = mc.thePlayer.getEntityId();
-        }
+        playerId = mc.thePlayer.getEntityId();
+        /* Closed every tick, checked or not, so nothing waits past the move it belongs to. */
+        SelfCheck.Extra extra = this.impulses.close();
         int tick = mc.thePlayer.ticksExisted;
         boolean supported = SimPlayer.supported(mc.thePlayer);
-        if (this.selfStart != null && supported && tick - this.selfStartTick == 1) {
-            this.pendingFrom = this.selfStart;
-            this.pendingX = mc.thePlayer.posX;
-            this.pendingY = mc.thePlayer.getEntityBoundingBox().minY;
-            this.pendingZ = mc.thePlayer.posZ;
-            this.pendingMovers = movers;
+        PlayerSim before = this.selfStart;
+        boolean checked = before != null && supported && tick - this.selfStartTick == 1
+                && selfCheck(before, event.getYaw(), extra, changes(movers));
+        if (!checked) {
+            /* What came in with a move nobody checked is not held against the next one. */
+            this.impulses.skip();
         }
         this.selfStart = supported ? SimPlayer.state(mc.thePlayer) : null;
         this.selfStartTick = tick;
     }
 
-    /** The module changes of a move, as "Speed:move,sprint MoveFix:input"; "plain" for none. MoveCheck left out. */
-    private String movers(java.util.Map<String, java.util.TreeSet<String>> during,
-                          java.util.Map<String, java.util.TreeSet<String>> turning) {
-        java.util.Map<String, java.util.TreeSet<String>> all = new TreeMap<String, java.util.TreeSet<String>>();
-        for (java.util.Map<String, java.util.TreeSet<String>> part : java.util.Arrays.asList(during, turning)) {
-            for (Map.Entry<String, java.util.TreeSet<String>> entry : part.entrySet()) {
-                if (entry.getKey().equals("MoveCheck")) {
-                    continue;
-                }
-                java.util.TreeSet<String> kinds = all.get(entry.getKey());
-                if (kinds == null) {
-                    kinds = new java.util.TreeSet<String>();
-                    all.put(entry.getKey(), kinds);
-                }
-                kinds.addAll(entry.getValue());
-            }
-        }
-        if (all.isEmpty()) {
+    /** The module changes of a move, as "Speed:move,sprint MoveFix:input"; "plain" for none. */
+    private static String changes(Map<String, java.util.TreeSet<String>> movers) {
+        if (movers.isEmpty()) {
             return "plain";
         }
         StringBuilder out = new StringBuilder();
-        for (Map.Entry<String, java.util.TreeSet<String>> entry : all.entrySet()) {
+        for (Map.Entry<String, java.util.TreeSet<String>> entry : movers.entrySet()) {
             if (out.length() > 0) {
                 out.append(' ');
             }
@@ -519,53 +446,37 @@ public final class MoveCheck {
     }
 
     /**
-     * The self check of this tick's move, at its POST: from the start state, with the yaw sent and the sprint and
-     * sneak the server has; tagged with the modules that changed movement, input, sprint, push or look on the way
-     * (from the last start of tick, and this PRE's turns). Not after a correction or knockback.
+     * The self check of the move just made: from {@code before}, with the yaw sent and the sprint and sneak the
+     * server has, to where the player is; {@code tag} names the modules that changed movement, input, sprint, push or
+     * look on the way. Not after a correction (the start is then not where the server has the player): false, the
+     * move was left out.
      */
-    private void selfCheck(float sentYaw) {
+    private boolean selfCheck(final PlayerSim before, final float sentYaw, final SelfCheck.Extra extra, String tag) {
         long now = System.currentTimeMillis();
-        PlayerSim before = this.pendingFrom;
-        this.pendingFrom = null;
-        /* After a correction the start is not where the server has the player. Knockback no longer skips: it is offered
-           to the check (2026-11-12). */
-        if (before == null || now - this.correctedAt < AFTER_CORRECTION_MS) {
-            return;
+        if (now - this.correctedAt < AFTER_CORRECTION_MS) {
+            return false;
         }
-        boolean sprint = this.serverSprint != null ? this.serverSprint : mc.thePlayer.isSprinting();
-        boolean sneak = this.serverSneak != null ? this.serverSneak : mc.thePlayer.isSneaking();
-        SelfCheck.Extra extra = new SelfCheck.Extra();
-        extra.attacks = this.attacksPending;
-        extra.velocity = this.velocityOffer;
-        extra.explosion = this.explosionOffer;
-        extra.explosionAfterVelocity = this.explosionAfterOffer;
-        extra.ordered = true;
-        SelfCheck.Result result = SelfCheck.check(before, SimPlayer.world(mc.theWorld, mc.thePlayer), sentYaw, sprint,
-                sneak, this.pendingX, this.pendingY, this.pendingZ, extra);
-        if (this.velocityOffer != null) {
-            /* Taken only by a move it explains (review, PR #38): the closest guess using it but still off is not. */
-            if (result.velocity && result.offset <= SelfCheck.OFF) {
-                this.velocityCarry = null;
-                this.kbOffered++;
-            } else if (this.velocityOfferLast && !SelfCheck.fitsWithVelocity(before,
-                    SimPlayer.world(mc.theWorld, mc.thePlayer), sentYaw, sprint, sneak, this.pendingX, this.pendingY,
-                    this.pendingZ, extra)) {
-                /* The plain move fitting is not enough to call it ignored: against a wall the knockback can end in the
-                   same place (review, PR #38). Only when no input with the knockback fits. */
-                this.kbOffered++;
-                this.kbIgnored++;
-                String kbTag = movers(this.pendingMovers, atlas.util.ActionWatch.peekTickMovers());
-                write(String.format("KB not taken: %.3f %.3f %.3f over two moves | %s", this.velocityOffer[0],
-                        this.velocityOffer[1], this.velocityOffer[2], kbTag));
-                alert(kbTag, "&ckept no knockback");
-            }
-        }
-        if (result.explosion && result.offset <= SelfCheck.OFF) {
-            this.explosionCarry = null;
-            this.explosionAfterCarry = null;
+        final boolean sprint = this.serverSprint != null ? this.serverSprint : mc.thePlayer.isSprinting();
+        final boolean sneak = this.serverSneak != null ? this.serverSneak : mc.thePlayer.isSneaking();
+        final PlayerSim.World world = SimPlayer.world(mc.theWorld, mc.thePlayer);
+        final double x = mc.thePlayer.posX;
+        final double y = mc.thePlayer.getEntityBoundingBox().minY;
+        final double z = mc.thePlayer.posZ;
+        SelfCheck.Result result = SelfCheck.check(before, world, sentYaw, sprint, sneak, x, y, z, extra);
+        Impulses.Knockback knockback = this.impulses.settle(result,
+                () -> SelfCheck.fitsWithVelocity(before, world, sentYaw, sprint, sneak, x, y, z, extra));
+        if (knockback == Impulses.Knockback.TAKEN) {
+            this.kbOffered++;
+        } else if (knockback == Impulses.Knockback.IGNORED) {
+            this.kbOffered++;
+            this.kbIgnored++;
+            String held = knockbackHeldBy;
+            String kbTag = held == null ? tag : tag.equals("plain") ? held + ":knockback" : tag + " " + held + ":knockback";
+            write(String.format("KB not taken: %.3f %.3f %.3f over two moves | %s", extra.velocity[0],
+                    extra.velocity[1], extra.velocity[2], kbTag));
+            alert(kbTag, "&ckept no knockback", "");
         }
         boolean off = result.offset > SelfCheck.OFF;
-        String tag = movers(this.pendingMovers, atlas.util.ActionWatch.peekTickMovers());
         boolean plain = tag.equals("plain");
         this.selfTicks++;
         this.selfOff += off ? 1 : 0;
@@ -586,9 +497,23 @@ public final class MoveCheck {
             }
         }
         if (!off) {
-            return;
+            return true;
         }
-        alert(tag, String.format("off &f%.4f &8(keys %s)", result.offset, result.keys()));
+        /* What tells a cause apart without a module's name: the move ran by another yaw than the packet carried, or
+           with another sprint or sneak than the server was told. Only when this tick's move was seen. */
+        boolean seen = this.moveTick == mc.thePlayer.ticksExisted && !Float.isNaN(this.moveYaw);
+        StringBuilder why = new StringBuilder();
+        if (seen && Math.abs(MathHelper.wrapAngleTo180_float(this.moveYaw - sentYaw)) > 0.01F) {
+            why.append(String.format(" &8(moved by yaw %.1f, sent %.1f)", MathHelper.wrapAngleTo180_float(this.moveYaw),
+                    MathHelper.wrapAngleTo180_float(sentYaw)));
+        }
+        if (seen && this.moveSprinting != sprint) {
+            why.append(sprint ? " &8(the server has a sprint the move did not)" : " &8(sprinted, the server not told)");
+        }
+        if (seen && this.moveSneaking != sneak) {
+            why.append(sneak ? " &8(the server has a sneak the move did not)" : " &8(sneaked, the server not told)");
+        }
+        alert(tag, String.format("off &f%.4f &8(keys %s)", result.offset, result.keys()), why.toString());
         long second = now / 1000L;
         if (second != this.selfLineSecond) {
             this.selfLineSecond = second;
@@ -599,12 +524,13 @@ public final class MoveCheck {
                server's, the ground speed the last tick left for this move, and who changed what. */
             write(String.format("SELF off %.4f (x %.4f y %.4f z %.4f) keys %s | yaw %.1f move-yaw %.1f %s%s%s| client %s"
                             + "| speed %.4f air %.4f | %s", result.offset,
-                    this.pendingX - result.end.x(), this.pendingY - result.end.y(), this.pendingZ - result.end.z(),
+                    x - result.end.x(), y - result.end.y(), z - result.end.z(),
                     result.keys(), MathHelper.wrapAngleTo180_float(sentYaw),
-                    Float.isNaN(this.moveYaw) ? Float.NaN : MathHelper.wrapAngleTo180_float(this.moveYaw),
+                    seen ? MathHelper.wrapAngleTo180_float(this.moveYaw) : Float.NaN,
                     mc.thePlayer.onGround ? "ground " : "air ", sprint ? "sprint " : "", sneak ? "sneak " : "",
-                    this.moveSprinting ? "sprint " : "walk ", before.moveSpeed, before.airSpeed, tag));
+                    !seen ? "? " : this.moveSprinting ? "sprint " : "walk ", before.moveSpeed, before.airSpeed, tag));
         }
+        return true;
     }
 
     /* LOWEST: the keys, the sprint and whatever a module set are final; the game's own move is next. */
@@ -616,6 +542,8 @@ public final class MoveCheck {
         }
         this.moveYaw = SimPlayer.moveYaw(mc.thePlayer);
         this.moveSprinting = mc.thePlayer.isSprinting();
+        this.moveSneaking = mc.thePlayer.isSneaking();
+        this.moveTick = mc.thePlayer.ticksExisted;
         if (!SimPlayer.supported(mc.thePlayer)) {
             return;
         }

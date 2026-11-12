@@ -52,8 +52,11 @@ public final class ActionWatch {
     private static int keys;
     /** Module -> kinds of change, since the last takeTickMovers. Client thread only. */
     private static Map<String, TreeSet<String>> tickMovers = new TreeMap<String, TreeSet<String>>();
-    /** Run just before an UpdateEvent PRE goes to any listener (MoveCheck's start of the tick). */
-    public static volatile Runnable beforeUpdatePre;
+    /**
+     * Run just before an UpdateEvent POST goes to any listener: the tick's move is made and its movement packet is
+     * out, and no module has acted since (MoveCheck's end of the tick).
+     */
+    public static volatile java.util.function.Consumer<UpdateEvent> beforeUpdatePost;
 
     private ActionWatch() {
     }

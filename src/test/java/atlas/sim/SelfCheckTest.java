@@ -120,6 +120,26 @@ public class SelfCheckTest {
         assertTrue("moved by another yaw: " + result.offset, result.offset > SelfCheck.OFF);
     }
 
+    /** 2026-11-12 (owner: "just sprint-jumping and it reports"): a sprint started this tick counts at once on the ground. */
+    @Test
+    public void theTickASprintStartsFits() {
+        PlayerSim sim = standing();
+        PlayerSim.Input walk = keys(-70.0F, 1.0F, 0.0F, false, false, false);
+        for (int i = 0; i < 10; i++) {
+            sim.tick(WORLD, walk);
+        }
+        PlayerSim before = sim.copy();
+        PlayerSim.Input sprint = keys(-70.0F, 1.0F, 0.0F, false, false, true);
+        sim.tick(WORLD, sprint);
+        assertTrue("sprinting now", sim.sprinting);
+        SelfCheck.Result result = SelfCheck.check(before, WORLD, -70.0F, true, false, sim.x(), sim.y(), sim.z());
+        assertEquals(0.0, result.offset, 1.0E-9);
+        PlayerSim jumpBefore = sim.copy();
+        sim.tick(WORLD, keys(-70.0F, 1.0F, 0.0F, true, false, true));
+        assertEquals(0.0, SelfCheck.check(jumpBefore, WORLD, -70.0F, true, false, sim.x(), sim.y(), sim.z()).offset,
+                1.0E-9);
+    }
+
     @Test
     public void standingStillFitsNoKeys() {
         assertEquals(0.0, worst(keys(0.0F, 0.0F, 0.0F, false, false, false), 10, "none"), 1.0E-9);

@@ -177,7 +177,11 @@ public final class PlayerSim {
     public Stage stage = Stage.START;
     /** Ticks until the next jump of a held jump key (EntityLivingBase.jumpTicks). */
     public int jumpTicks;
-    /** The ground speed this tick's move uses: getAIMoveSpeed, set at the end of the tick before. */
+    /**
+     * The ground speed this tick's move uses: EntityPlayer.getAIMoveSpeed, which reads the movement-speed attribute
+     * as it is, so a sprint started or stopped this tick counts at once (2026-11-12: it was taken from the tick before,
+     * and the self check was 0.0294 off on every tick a sprint started). Set from walkSpeed and the sprint at each move.
+     */
     public float moveSpeed = 0.1F;
     /** The same in the air (jumpMovementFactor). */
     public float airSpeed = AIR_SPEED;
@@ -401,13 +405,19 @@ public final class PlayerSim {
         } else {
             this.jumpTicks = 0;
         }
+        this.moveSpeed = groundSpeed();
         moveWithHeading(world, in.strafe * 0.98F, in.forward * 0.98F, in.yaw, in.sneak);
-        /* EntityPlayer.onLivingUpdate's end: the speeds the next tick's move uses. */
+        /* EntityPlayer.onLivingUpdate's end: the air speed the next tick's move uses (this one does lag a tick). */
         this.airSpeed = AIR_SPEED;
         if (this.sprinting) {
             this.airSpeed = (float) ((double) this.airSpeed + (double) AIR_SPEED * 0.3);
         }
-        this.moveSpeed = (float) (this.sprinting ? this.walkSpeed * (1.0 + SPRINT_BOOST) : this.walkSpeed);
+        this.moveSpeed = groundSpeed();
+    }
+
+    /** The movement-speed attribute with the sprint as it stands: walkSpeed, times 1.3 while sprinting. */
+    private float groundSpeed() {
+        return (float) (this.sprinting ? this.walkSpeed * (1.0 + SPRINT_BOOST) : this.walkSpeed);
     }
 
     private void jump(float yaw) {

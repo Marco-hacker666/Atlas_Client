@@ -614,14 +614,15 @@ public final class MoveCheck {
         if (!this.active() || mc.thePlayer == null || mc.theWorld == null) {
             return;
         }
-        this.moveYaw = SimPlayer.inputAsMoved(mc.thePlayer).yaw;
+        this.moveYaw = SimPlayer.moveYaw(mc.thePlayer);
         this.moveSprinting = mc.thePlayer.isSprinting();
         if (!SimPlayer.supported(mc.thePlayer)) {
             return;
         }
-        PlayerSim sim = SimPlayer.stateInMove(mc.thePlayer);
-        sim.tick(SimPlayer.world(mc.theWorld, mc.thePlayer), SimPlayer.inputAsMoved(mc.thePlayer));
-        this.simPredicted = sim;
+        /* The game is past its water push, its push out of blocks and its sprint rule: only the move is run. */
+        SimPlayer.Snapshot now = SimPlayer.snapshot(mc.thePlayer, PlayerSim.Stage.MOVE);
+        now.sim.tick(now.world, now.input);
+        this.simPredicted = now.sim;
     }
 
     /** The simulation's place for this tick against the real one. */

@@ -26,6 +26,22 @@ import java.util.List;
  * Depth Strider), lava, ladders and vines, cobwebs, soul sand and slime. Not
  * covered: riding and flying -- {@link SimPlayer#supported} says when the
  * player is doing one of those, and the caller keeps what it did before.
+ *
+ * 2026-11-12, after holding every step against the game's own code (1.8.9
+ * with Forge's patches), four things it left out are in:
+ *   - a player that was not in water asks again where its move ended
+ *     (EntityLivingBase.updateFallState), so the tick it enters flowing water
+ *     it is already pushed, a tick before the push at the start of a tick;
+ *   - the push out of a block the player is inside (EntityPlayerSP
+ *     .pushOutOfBlocks, with Forge's test of the whole height);
+ *   - where the chunk is not loaded the player sinks at a fixed 0.1 instead
+ *     of falling;
+ *   - a sprint ends by itself after 600 ticks (sprintingTicksLeft).
+ * Still not modelled: the double tap of the forward key that starts a sprint
+ * without the sprint key (it needs the keys of the tick before).
+ *
+ * A state says how far into its tick it was taken ({@link Stage}), so the
+ * first tick run from it does only what the game has not done yet.
  */
 public final class PlayerSim {
 
@@ -69,6 +85,30 @@ public final class PlayerSim {
         default int touching(AxisAlignedBB area, Touch kind) {
             return 0;
         }
+
+        /** A full cube at this cell (Block.isNormalCube): what a player inside it is pushed out of. */
+        default boolean solid(int x, int y, int z) {
+            return false;
+        }
+
+        /** Whether the chunk of this column is there (World.isBlockLoaded and Chunk.isLoaded). */
+        default boolean loaded(int x, int z) {
+            return true;
+        }
+    }
+
+    /**
+     * How far into the player's tick a state was taken: what the first tick run from it still has to do. The game's
+     * tick, in order: the water's flow (Entity.onEntityUpdate), the keys, the push out of blocks and the sprint rule
+     * (EntityPlayerSP.onLivingUpdate), then the move.
+     */
+    public enum Stage {
+        /** Between ticks (TickEvent, UpdateEvent): the whole tick is still to come. */
+        START,
+        /** The water has pushed, the sprint's count has run and the keys are read (MoveInputEvent). */
+        INPUT,
+        /** The push out of blocks and the sprint rule are done (LivingUpdateEvent): only the move is left. */
+        MOVE
     }
 
     /** Blocks that act on a player who touches them (onEntityCollidedWithBlock). */
@@ -115,6 +155,7 @@ public final class PlayerSim {
     private static final float SPRINT_FORWARD = 0.8F;
     private static final double SPRINT_BOOST = (double) 0.3F;
     private static final float AIR_SPEED = 0.02F;
+    private static final int SPRINT_TICKS = 600;
 
     public AxisAlignedBB box;
     public double motionX;
@@ -130,11 +171,10 @@ public final class PlayerSim {
     /** The boots' Depth Strider level (EnchantmentHelper.getDepthStriderModifier). */
     public float depthStrider;
     /**
-     * The state was taken inside the player's tick, after handleWaterMovement (at LivingUpdateEvent or
-     * MoveInputEvent): this tick's flow push is already in the motion, so the first move does not add it again.
-     * Cleared by that move (review, PR #37).
+     * How far into its tick the state was taken (review, PR #37: a state taken after the water's push must not be
+     * pushed again). The first {@link #tick} or {@link #move} runs the rest of that tick and sets it back to START.
      */
-    public boolean waterPushed;
+    public Stage stage = Stage.START;
     /** Ticks until the next jump of a held jump key (EntityLivingBase.jumpTicks). */
     public int jumpTicks;
     /** The ground speed this tick's move uses: getAIMoveSpeed, set at the end of the tick before. */
@@ -146,6 +186,11 @@ public final class PlayerSim {
     /** 0.1 a level of Jump Boost, added to the jump. */
     public float jumpBoost;
     public float stepHeight = 0.6F;
+    /** Entity.width and height: where the push out of blocks looks. */
+    public float width = 0.6F;
+    public float height = 1.8F;
+    /** Ticks until a sprint ends by itself (EntityPlayerSP.sprintingTicksLeft: 600 from each start); 0 for no end. */
+    public int sprintTicksLeft;
     /** Food above 6, or may fly: sprint is kept only with it. */
     public boolean canSprint = true;
     /** Not using an item and not blind: sprint starts only with it. */
@@ -171,7 +216,10 @@ public final class PlayerSim {
         s.inWater = this.inWater;
         s.inWeb = this.inWeb;
         s.depthStrider = this.depthStrider;
-        s.waterPushed = this.waterPushed;
+        s.stage = this.stage;
+        s.width = this.width;
+        s.height = this.height;
+        s.sprintTicksLeft = this.sprintTicksLeft;
         return s;
     }
 
@@ -193,39 +241,143 @@ public final class PlayerSim {
         return Math.sqrt(this.motionX * this.motionX + this.motionZ * this.motionZ);
     }
 
-    /** One tick: EntityPlayerSP.onLivingUpdate from the sprint rule on, down to the friction. */
+    /** One tick of the player, or what is left of it from the state's {@link #stage}. */
     public void tick(World world, Input in) {
-        sprintRule(in);
-        move(world, in);
+        run(world, in, true);
     }
 
-    /** The client's sprint rule, on the keys as scaled (a sneak's 0.3 and an item's 0.2 are under 0.8). */
+    /**
+     * The same without the sprint rule, {@link #sprinting} as it stands. A caller that knows the sprint state some
+     * other way (what the server was told) sets it and runs this.
+     */
+    public void move(World world, Input in) {
+        run(world, in, false);
+    }
+
+    private void run(World world, Input in, boolean sprintRule) {
+        Stage from = this.stage;
+        this.stage = Stage.START;
+        if (from == Stage.START) {
+            /* Entity.onEntityUpdate, before onLivingUpdate. */
+            waterStep(world);
+        }
+        if (from != Stage.MOVE) {
+            /* EntityPlayerSP.onLivingUpdate, once the keys are read. */
+            pushOutOfBlocks(world);
+            if (sprintRule) {
+                if (from == Stage.START) {
+                    sprintRule(in);
+                } else {
+                    sprintKeys(in);
+                }
+            }
+        }
+        livingMove(world, in);
+    }
+
+    /**
+     * The client's sprint rule for one tick: the count that ends a sprint after 600 ticks (the first thing
+     * EntityPlayerSP.onLivingUpdate does), then the keys. A held sprint key starts it again in the same tick, as in
+     * the game.
+     */
     public void sprintRule(Input in) {
+        if (this.sprintTicksLeft > 0 && --this.sprintTicksLeft == 0) {
+            this.sprinting = false;
+        }
+        sprintKeys(in);
+    }
+
+    /** The rule on the keys as scaled (a sneak's 0.3 and an item's 0.2 are under 0.8). */
+    private void sprintKeys(Input in) {
         if (!this.sprinting && in.sprint && in.forward >= SPRINT_FORWARD && this.canSprint && this.canStartSprint) {
             this.sprinting = true;
+            this.sprintTicksLeft = SPRINT_TICKS;
         }
         if (this.sprinting && (in.forward < SPRINT_FORWARD || this.collidedHorizontally || !this.canSprint)) {
             this.sprinting = false;
+            this.sprintTicksLeft = 0;
         }
     }
 
     /**
-     * The tick after the sprint rule, with {@link #sprinting} as it stands: the jump, the push, the move, gravity and
-     * friction, and the speeds the next tick uses. A caller that knows the sprint state some other way (what the
-     * server was told) sets it and runs only this.
+     * Entity.handleWaterMovement: in water or not where the box is now, and the flow's push. The game divides the
+     * summed flow by its length as a float (Vec3.normalize through MathHelper.sqrt_double).
      */
-    public void move(World world, Input in) {
-        /* Entity.handleWaterMovement, before onLivingUpdate: in water or not, and the flow's push. */
+    private void waterStep(World world) {
         double[] flow = new double[3];
         this.inWater = world.water(this.box.expand(0.0, -0.4000000059604645, 0.0).contract(0.001, 0.001, 0.001), flow);
-        double flowLength = Math.sqrt(flow[0] * flow[0] + flow[1] * flow[1] + flow[2] * flow[2]);
-        boolean pushed = this.waterPushed;
-        this.waterPushed = false;
-        if (this.inWater && flowLength >= 1.0E-4 && !pushed) {
-            this.motionX += flow[0] / flowLength * 0.014;
-            this.motionY += flow[1] / flowLength * 0.014;
-            this.motionZ += flow[2] / flowLength * 0.014;
+        double length = (double) MathHelper.sqrt_double(flow[0] * flow[0] + flow[1] * flow[1] + flow[2] * flow[2]);
+        if (this.inWater && length >= 1.0E-4) {
+            this.motionX += flow[0] / length * 0.014;
+            this.motionY += flow[1] / length * 0.014;
+            this.motionZ += flow[2] / length * 0.014;
         }
+    }
+
+    /**
+     * EntityPlayerSP.pushOutOfBlocks: at four points inside the box (0.35 of the width from the middle, half a block
+     * up), in the game's order, a point inside a full cube sets the motion to 0.1 toward the nearest open side.
+     */
+    private void pushOutOfBlocks(World world) {
+        double out = (double) this.width * 0.35;
+        double y = this.box.minY + 0.5;
+        pushOut(world, x() - out, y, z() + out);
+        pushOut(world, x() - out, y, z() - out);
+        pushOut(world, x() + out, y, z() - out);
+        pushOut(world, x() + out, y, z() + out);
+    }
+
+    private void pushOut(World world, double x, double y, double z) {
+        int cellX = MathHelper.floor_double(x);
+        int cellY = MathHelper.floor_double(y);
+        int cellZ = MathHelper.floor_double(z);
+        if (open(world, cellX, cellY, cellZ)) {
+            return;
+        }
+        double inX = x - (double) cellX;
+        double inZ = z - (double) cellZ;
+        int side = -1;
+        double nearest = 9999.0;
+        if (open(world, cellX - 1, cellY, cellZ) && inX < nearest) {
+            nearest = inX;
+            side = 0;
+        }
+        if (open(world, cellX + 1, cellY, cellZ) && 1.0 - inX < nearest) {
+            nearest = 1.0 - inX;
+            side = 1;
+        }
+        if (open(world, cellX, cellY, cellZ - 1) && inZ < nearest) {
+            nearest = inZ;
+            side = 4;
+        }
+        if (open(world, cellX, cellY, cellZ + 1) && 1.0 - inZ < nearest) {
+            side = 5;
+        }
+        float push = 0.1F;
+        if (side == 0) {
+            this.motionX = (double) (-push);
+        } else if (side == 1) {
+            this.motionX = (double) push;
+        } else if (side == 4) {
+            this.motionZ = (double) (-push);
+        } else if (side == 5) {
+            this.motionZ = (double) push;
+        }
+    }
+
+    /** Forge's isHeadspaceFree: no full cube in this cell or above it, for as many cells as the player is tall. */
+    private boolean open(World world, int x, int y, int z) {
+        int tall = Math.max((int) Math.ceil(this.height), 1);
+        for (int up = 0; up < tall; up++) {
+            if (world.solid(x, y + up, z)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** EntityLivingBase.onLivingUpdate: the jump, the push, the move, gravity and friction, and the next speeds. */
+    private void livingMove(World world, Input in) {
         if (this.jumpTicks > 0) {
             this.jumpTicks--;
         }
@@ -358,7 +510,12 @@ public final class PlayerSim {
         if (this.collidedHorizontally && onLadder(world)) {
             this.motionY = 0.2;
         }
-        this.motionY -= 0.08;
+        /* The game casts here where it floors everywhere else; kept, so a negative column is one off as in the game. */
+        if (!world.loaded((int) x(), (int) z())) {
+            this.motionY = this.box.minY > 0.0 ? -0.1 : 0.0;
+        } else {
+            this.motionY -= 0.08;
+        }
         this.motionY *= 0.9800000190734863;
         this.motionX *= (double) friction;
         this.motionZ *= (double) friction;
@@ -503,6 +660,11 @@ public final class PlayerSim {
         this.collidedHorizontally = wantedX != x || wantedZ != z;
         boolean collidedVertically = wantedY != y;
         this.onGround = collidedVertically && wantedY < 0.0;
+        if (!this.inWater) {
+            /* EntityLivingBase.updateFallState: not in water before the move, it asks again where the move ended --
+               and water there pushes at once, before the motion a wall stopped is cleared. */
+            waterStep(world);
+        }
         if (wantedX != x) {
             this.motionX = 0.0;
         }

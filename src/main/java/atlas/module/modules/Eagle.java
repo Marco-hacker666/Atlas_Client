@@ -38,13 +38,12 @@ public class Eagle extends Module {
      */
     private boolean canMoveSafely(boolean atMoveInput) {
         if (SimPlayer.supported(mc.thePlayer)) {
-            PlayerSim sim = atMoveInput ? SimPlayer.stateInMove(mc.thePlayer) : SimPlayer.state(mc.thePlayer);
-            PlayerSim.World world = SimPlayer.world(mc.theWorld, mc.thePlayer);
-            PlayerSim.Input in = atMoveInput ? SimPlayer.inputBeforeMove(mc.thePlayer) : SimPlayer.inputAhead(mc.thePlayer);
-            in.jump = false;
-            in.sneak = false;
-            sim.tick(world, in);
-            return !sim.hasFloor(world, 0.0);
+            SimPlayer.Snapshot now = SimPlayer.snapshot(mc.thePlayer,
+                    atMoveInput ? PlayerSim.Stage.INPUT : PlayerSim.Stage.START);
+            now.input.jump = false;
+            now.input.sneak = false;
+            now.sim.tick(now.world, now.input);
+            return !now.sim.hasFloor(now.world, 0.0);
         }
         double[] offset = MoveUtil.predictMovement();
         return PlayerUtil.canMove(mc.thePlayer.motionX + offset[0], mc.thePlayer.motionZ + offset[1]);

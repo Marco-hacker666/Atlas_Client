@@ -1849,13 +1849,13 @@ public class Scaffold extends Module {
                potion, ice and whatever is in the way. Asked at the run tick the keys are the ones held; asked at the
                input stage they are this tick's, as the modules before left them. No jump: the forecast is of the
                walk. */
-            PlayerSim sim = atMoveInput ? SimPlayer.stateInMove(mc.thePlayer) : SimPlayer.state(mc.thePlayer);
-            PlayerSim.Input in = atMoveInput ? SimPlayer.inputBeforeMove(mc.thePlayer) : SimPlayer.inputAhead(mc.thePlayer);
-            in.jump = false;
-            double x = sim.x();
-            double z = sim.z();
-            sim.tick(SimPlayer.world(mc.theWorld, mc.thePlayer), in);
-            return new double[]{sim.x() - x, sim.z() - z};
+            SimPlayer.Snapshot now = SimPlayer.snapshot(mc.thePlayer,
+                    atMoveInput ? PlayerSim.Stage.INPUT : PlayerSim.Stage.START);
+            now.input.jump = false;
+            double x = now.sim.x();
+            double z = now.sim.z();
+            now.sim.tick(now.world, now.input);
+            return new double[]{now.sim.x() - x, now.sim.z() - z};
         }
         /* Where the simulation does not go (water, a ladder, a cobweb...): the estimate from before it. */
         double radians = Math.toRadians(this.getCurrentYaw());
@@ -1876,8 +1876,8 @@ public class Scaffold extends Module {
         if (!mc.thePlayer.onGround) {
             return false;
         }
-        return !PlayerSim.stopsOnFloor(SimPlayer.stateInMove(mc.thePlayer), SimPlayer.world(mc.theWorld, mc.thePlayer),
-                SimPlayer.inputBeforeMove(mc.thePlayer), 0.02, 0.99);
+        SimPlayer.Snapshot now = SimPlayer.snapshot(mc.thePlayer, PlayerSim.Stage.INPUT);
+        return !PlayerSim.stopsOnFloor(now.sim, now.world, now.input, 0.02, 0.99);
     }
 
     /**
@@ -2072,12 +2072,11 @@ public class Scaffold extends Module {
         if (SimPlayer.supported(mc.thePlayer)) {
             /* By the stage asked from (review, PR #38): inside the tick the keys are movementInput's and the water's
                push is in; between ticks (POLAR's and GODBRIDGE's run, at UpdateEvent PRE) the keys are the ones held. */
-            PlayerSim sim = atMoveInput ? SimPlayer.stateInMove(mc.thePlayer) : SimPlayer.state(mc.thePlayer);
-            PlayerSim.World world = SimPlayer.world(mc.theWorld, mc.thePlayer);
-            PlayerSim.Input in = atMoveInput ? SimPlayer.inputBeforeMove(mc.thePlayer) : SimPlayer.inputAhead(mc.thePlayer);
-            in.jump = false;
-            sim.tick(world, in);
-            return !sim.hasFloor(world, 0.2);
+            SimPlayer.Snapshot now = SimPlayer.snapshot(mc.thePlayer,
+                    atMoveInput ? PlayerSim.Stage.INPUT : PlayerSim.Stage.START);
+            now.input.jump = false;
+            now.sim.tick(now.world, now.input);
+            return !now.sim.hasFloor(now.world, 0.2);
         }
         AxisAlignedBB next = mc.thePlayer.getEntityBoundingBox().expand(-0.2, 0.0, -0.2)
                 .offset(mc.thePlayer.motionX, -1.0, mc.thePlayer.motionZ);

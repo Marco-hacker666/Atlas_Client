@@ -102,9 +102,10 @@ public class BlockLadder extends Module {
      */
     private BlockPos predictLanding() {
         if (SimPlayer.supported(mc.thePlayer)) {
-            PlayerSim sim = SimPlayer.state(mc.thePlayer);
-            PlayerSim.World world = SimPlayer.world(mc.theWorld, mc.thePlayer);
-            PlayerSim.Input in = SimPlayer.inputAhead(mc.thePlayer);
+            SimPlayer.Snapshot now = SimPlayer.snapshot(mc.thePlayer, PlayerSim.Stage.START);
+            PlayerSim sim = now.sim;
+            PlayerSim.World world = now.world;
+            PlayerSim.Input in = now.input;
             for (int t = 0; t < 100; t++) {
                 sim.tick(world, in);
                 if (sim.inWater || sim.y() < 0.0) {

@@ -369,6 +369,60 @@ public class PlayerSimTerrainTest {
         assertFalse(Double.isNaN(onSlime));
     }
 
+    /** Water from y = -40 up to the cell under y = 0, flowing as given; a floor far below. */
+    private static Terrain flowingPool(double flowX, double flowZ) {
+        Terrain t = new Terrain().box(-100, -41, -100, 100, -40, 100);
+        t.fill(t.water, -60, -40, -10, 60, -1, 10);
+        for (String cell : t.water) {
+            t.flow.put(cell, new double[]{flowX, 0.0, flowZ});
+        }
+        return t;
+    }
+
+    @Test
+    public void theTickAPlayerEntersFlowingWaterItIsAlreadyPushed() {
+        /* 2026-11-12, from the game's code (EntityLivingBase.updateFallState): not in water before the move, the
+           player asks again where the move ended. Falling a block from y 0.5, the box is in the water after the
+           move: pushed 0.014 at once (then the air's 0.91), and again at the start of the next tick. */
+        Terrain t = flowingPool(2.0, 0.0);
+        PlayerSim sim = at(0.5, 0.5, 0.5, false);
+        sim.motionY = -1.0;
+        sim.tick(t, keys(0, false, false));
+        assertTrue(sim.inWater);
+        assertEquals(0.5, sim.x(), 0.0);
+        assertEquals(0.014 * (double) 0.91F, sim.motionX, 0.0);
+        sim.tick(t, keys(0, false, false));
+        assertEquals(0.5 + 0.014 * (double) 0.91F + 0.014, sim.x(), 1.0E-15);
+    }
+
+    @Test
+    public void theFlowIsDividedByItsLengthAsAFloat() {
+        /* Vec3.normalize takes the length through MathHelper.sqrt_double, a float. One cell counted, flowing (1, 1):
+           each axis gets 1 / (float) sqrt 2 of the 0.014, not 1 / sqrt 2. */
+        Terrain t = flowingPool(1.0, 1.0);
+        PlayerSim sim = at(0.5, 0.5, 0.5, false);
+        sim.motionY = -1.0;
+        sim.tick(t, keys(0, false, false));
+        double gameS = 1.0 / (double) (float) Math.sqrt(2.0) * 0.014 * (double) 0.91F;
+        assertEquals(gameS, sim.motionX, 0.0);
+        assertEquals(gameS, sim.motionZ, 0.0);
+        assertTrue(Math.abs(1.0 / Math.sqrt(2.0) * 0.014 * (double) 0.91F - sim.motionX) > 1.0E-11);
+    }
+
+    @Test
+    public void aWallHitWhileEnteringWaterStillClearsThatMotion() {
+        /* The push of the entry comes before the game clears the motion a wall stopped: nothing of it is left. */
+        Terrain t = flowingPool(2.0, 0.0);
+        t.box(0.9, -40, -100, 100, 40, 100);
+        PlayerSim sim = at(0.5, 0.5, 0.5, false);
+        sim.motionY = -1.0;
+        sim.motionX = 0.3;
+        sim.tick(t, keys(0, false, false));
+        assertTrue(sim.inWater);
+        assertTrue(sim.collidedHorizontally);
+        assertEquals(0.0, sim.motionX, 0.0);
+    }
+
     @Test
     public void aStateTakenAfterTheFlowPushIsNotPushedAgain() {
         /* Review, PR #37: taken inside the tick (handleWaterMovement done), the first move carries no second push. */
@@ -378,11 +432,13 @@ public class PlayerSimTerrainTest {
         }
         PlayerSim between = at(0, -20, 0, false);
         PlayerSim inside = between.copy();
-        inside.waterPushed = true;
+        /* As SimPlayer gives it inside the tick: the game has already found the water. */
+        inside.stage = PlayerSim.Stage.INPUT;
+        inside.inWater = true;
         between.tick(t, keys(0, false, false));
         inside.tick(t, keys(0, false, false));
         assertEquals(0.014, between.x() - inside.x(), 1.0E-9);
-        assertFalse(inside.waterPushed);
+        assertEquals(PlayerSim.Stage.START, inside.stage);
         /* From the second tick on, both are pushed. */
         double a = between.x();
         double b = inside.x();

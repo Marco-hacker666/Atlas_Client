@@ -33,15 +33,19 @@ import java.util.List;
  * The game's side of {@link PlayerSim} (2026-11-11): the player as it is now,
  * the world it moves in, and the keys its next move will get.
  *
- * Which keys depends on when in the tick the question is asked:
- *   - {@link #inputAhead}: before the move's keys are read (UpdateEvent PRE,
- *     TickEvent) -- from the keys held;
- *   - {@link #inputBeforeMove}: at MoveInputEvent, before the shared look
- *     turns the keys (RotationHelper, LOWEST) -- from movementInput as the
- *     modules so far left it;
- *   - {@link #inputAsMoved}: once the keys are final (LivingUpdateEvent) --
- *     movementInput as it is.
- * All three give the yaw the move runs by: the look's when a module turns the
+ * Both the state and the keys depend on when in the tick the question is
+ * asked, and they have to be of the same moment. {@link #snapshot} gives the
+ * two together for a {@link PlayerSim.Stage} (2026-11-12; before, a caller
+ * picked a state method and a keys method itself and could pair them wrong):
+ *   - START, between ticks (TickEvent, UpdateEvent): the whole tick is to
+ *     come, and the keys are the ones held;
+ *   - INPUT, at MoveInputEvent before the shared look turns the keys
+ *     (RotationHelper, LOWEST): the water has pushed, and the keys are
+ *     movementInput's as the modules so far left them, with the turn and the
+ *     item's slowdown still to come;
+ *   - MOVE, at LivingUpdateEvent: only the move is left, and the keys are
+ *     movementInput's as they are.
+ * The yaw is the one the move runs by: the look's when a module turns the
  * move, else the camera's.
  *
  * What the simulation cannot see: a module that changes the push itself at
@@ -54,29 +58,56 @@ public final class SimPlayer {
     private SimPlayer() {
     }
 
+    /** The player, the keys of its next move and the world, all of one moment in the tick. */
+    public static final class Snapshot {
+        /** A new state each time: tick it freely. Its first tick runs what is left of the game's. */
+        public final PlayerSim sim;
+        /** The keys that tick's move gets. A new object: change it to ask "what if". */
+        public final PlayerSim.Input input;
+        public final PlayerSim.World world;
+
+        private Snapshot(PlayerSim sim, PlayerSim.Input input, PlayerSim.World world) {
+            this.sim = sim;
+            this.input = input;
+            this.world = world;
+        }
+    }
+
     /**
      * False where the simulation does not cover the move: riding, flying,
-     * no-clip, sleeping. (Water, lava, ladders, cobwebs, soul sand and slime
-     * are covered since 2026-11-12.) The caller keeps what it did before.
+     * no-clip, sleeping, dead (the game then takes no keys). (Water, lava,
+     * ladders, cobwebs, soul sand and slime are covered since 2026-11-12.)
+     * The caller keeps what it did before.
      */
     public static boolean supported(EntityPlayerSP player) {
         if (player == null || player.worldObj == null || player.movementInput == null) {
             return false;
         }
-        return !player.isRiding() && !player.capabilities.isFlying && !player.noClip && !player.isPlayerSleeping();
+        return !player.isRiding() && !player.capabilities.isFlying && !player.noClip && !player.isPlayerSleeping()
+                && player.isEntityAlive();
     }
 
-    /**
-     * The player now, asked inside its tick (LivingUpdateEvent, MoveInputEvent): the water's flow has already pushed
-     * this tick's motion, so the simulation's first move does not push again.
-     */
-    public static PlayerSim stateInMove(EntityPlayerSP player) {
+    /** The player, its keys and the world as they are at {@code stage} of the tick; ask only where that is true. */
+    public static Snapshot snapshot(EntityPlayerSP player, PlayerSim.Stage stage) {
         PlayerSim sim = state(player);
-        sim.waterPushed = true;
-        return sim;
+        sim.stage = stage;
+        PlayerSim.Input input;
+        if (stage == PlayerSim.Stage.START) {
+            input = inputAhead(player);
+        } else if (stage == PlayerSim.Stage.INPUT) {
+            input = inputBeforeMove(player);
+        } else {
+            input = inputAsMoved(player);
+        }
+        return new Snapshot(sim, input, world(player.worldObj, player));
     }
 
-    /** The player now, asked between ticks (TickEvent, UpdateEvent). A new object each call: tick it freely. */
+    /** The yaw the player's move runs by now: the look's when a module turns the move, else the camera's. */
+    public static float moveYaw(EntityPlayerSP player) {
+        return RotationState.isActived() ? RotationState.getSmoothedYaw() : player.rotationYaw;
+    }
+
+    /** The player now, as between ticks (TickEvent, UpdateEvent). A new object each call: tick it freely. */
     public static PlayerSim state(EntityPlayerSP player) {
         PlayerSim sim = new PlayerSim();
         sim.box = player.getEntityBoundingBox();
@@ -95,6 +126,9 @@ public final class SimPlayer {
         PotionEffect jump = player.getActivePotionEffect(Potion.jump);
         sim.jumpBoost = jump == null ? 0.0F : (float) (jump.getAmplifier() + 1) * 0.1F;
         sim.stepHeight = player.stepHeight;
+        sim.width = player.width;
+        sim.height = player.height;
+        sim.sprintTicksLeft = player.sprintingTicksLeft;
         sim.canSprint = (float) player.getFoodStats().getFoodLevel() > 6.0F || player.capabilities.allowFlying;
         /* The game asks isUsingItem here too, and gets NoSlow's answer (MixinEntityPlayerSP.isUsing); asked here
            without counting the tick. */
@@ -190,11 +224,24 @@ public final class SimPlayer {
                 }
                 return count;
             }
+
+            /* EntityPlayerSP.isOpenBlockSpace, as Forge left it: one cell. */
+            @Override
+            public boolean solid(int x, int y, int z) {
+                return world.getBlockState(new BlockPos(x, y, z)).getBlock().isNormalCube();
+            }
+
+            /* The test moveEntityWithHeading makes before gravity. */
+            @Override
+            public boolean loaded(int x, int z) {
+                BlockPos pos = new BlockPos(x, 0, z);
+                return world.isBlockLoaded(pos) && world.getChunkFromBlockCoords(pos).isLoaded();
+            }
         };
     }
 
     /** The keys the next move will get, asked before they are read this tick: from the keys held. */
-    public static PlayerSim.Input inputAhead(EntityPlayerSP player) {
+    private static PlayerSim.Input inputAhead(EntityPlayerSP player) {
         PlayerSim.Input in = look(player);
         boolean sneak = mc.gameSettings.keyBindSneak.isKeyDown();
         float scale = sneak ? 0.3F : 1.0F;
@@ -206,18 +253,18 @@ public final class SimPlayer {
     }
 
     /** The keys this tick's move will get, asked at MoveInputEvent before the shared look turns them. */
-    public static PlayerSim.Input inputBeforeMove(EntityPlayerSP player) {
+    private static PlayerSim.Input inputBeforeMove(EntityPlayerSP player) {
         return turnedAndSlowed(player, held(player));
     }
 
-    /** The keys as they are in movementInput: this tick's move's once they are final, else the last move's. */
-    public static PlayerSim.Input inputAsMoved(EntityPlayerSP player) {
+    /** The keys as they are in movementInput: this tick's move's once they are final. */
+    private static PlayerSim.Input inputAsMoved(EntityPlayerSP player) {
         return held(player);
     }
 
     private static PlayerSim.Input look(EntityPlayerSP player) {
         PlayerSim.Input in = new PlayerSim.Input();
-        in.yaw = RotationState.isActived() ? RotationState.getSmoothedYaw() : player.rotationYaw;
+        in.yaw = moveYaw(player);
         in.sprint = mc.gameSettings.keyBindSprint.isKeyDown();
         return in;
     }

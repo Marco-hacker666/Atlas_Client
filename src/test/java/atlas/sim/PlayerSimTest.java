@@ -5,8 +5,10 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -23,6 +25,10 @@ public class PlayerSimTest {
     private static final class Fake implements PlayerSim.World {
         final List<AxisAlignedBB> solid = new ArrayList<AxisAlignedBB>();
         final Map<String, Float> slippery = new HashMap<String, Float>();
+        /** Cells that are a full cube (with no box here, so the push out of them is seen alone). */
+        final Set<String> cubes = new HashSet<String>();
+        /** Columns with x under this have no chunk. */
+        int loadedFromX = Integer.MIN_VALUE;
 
         Fake box(double x1, double y1, double z1, double x2, double y2, double z2) {
             this.solid.add(new AxisAlignedBB(x1, y1, z1, x2, y2, z2));
@@ -44,6 +50,16 @@ public class PlayerSimTest {
         public float slipperiness(int x, int y, int z) {
             Float value = this.slippery.get(x + "," + y + "," + z);
             return value == null ? 0.6F : value;
+        }
+
+        @Override
+        public boolean solid(int x, int y, int z) {
+            return this.cubes.contains(x + "," + y + "," + z);
+        }
+
+        @Override
+        public boolean loaded(int x, int z) {
+            return x >= this.loadedFromX;
         }
     }
 
@@ -339,5 +355,138 @@ public class PlayerSimTest {
         copy.tick(flat(), east(1.0F));
         assertEquals(0.0, sim.x(), 0.0);
         assertTrue(copy.x() > 0.0);
+    }
+
+    /* 2026-11-12, from the game's own code: EntityPlayerSP.pushOutOfBlocks. */
+
+    private static final double PUSH = (double) 0.1F;
+
+    @Test
+    public void aPlayerInsideABlockIsPushedToTheNearestOpenSide() {
+        /* The box reaches 0.2 into the cube at x 1..2; the point 0.21 east of the middle is 0.11 inside it. */
+        Fake world = flat();
+        world.cubes.add("1,0,0");
+        PlayerSim sim = standing(0.9, 0.5);
+        sim.tick(world, east(0.0F));
+        assertEquals(0.9 - PUSH, sim.x(), 1.0E-12);
+        assertEquals(0.5, sim.z(), 0.0);
+        /* From the other side of the same cube the nearest open side is the east one. */
+        PlayerSim other = standing(2.1, 0.5);
+        other.tick(world, east(0.0F));
+        assertEquals(2.1 + PUSH, other.x(), 1.0E-12);
+    }
+
+    @Test
+    public void aCubeAtTheHeadPushesToo() {
+        /* Forge looks at every cell the player is tall: here only the head is inside. */
+        Fake world = flat();
+        world.cubes.add("1,1,0");
+        PlayerSim sim = standing(0.9, 0.5);
+        sim.tick(world, east(0.0F));
+        assertEquals(0.9 - PUSH, sim.x(), 1.0E-12);
+    }
+
+    @Test
+    public void whollyInsideACubeTheLastCornerAskedWinsAndAShutSideIsNotChosen() {
+        /* All four points are in the cube at x 1..2, and the cube east of it shuts that side. In the game's order:
+           the two west corners (0.29 from the west face) set x toward west; the two east corners cannot go east, so
+           the first goes north and the second, asked last, south. */
+        Fake world = flat();
+        world.cubes.add("1,0,0");
+        world.cubes.add("2,0,0");
+        PlayerSim sim = standing(1.5, 0.5);
+        sim.tick(world, east(0.0F));
+        assertEquals(1.5 - PUSH, sim.x(), 1.0E-12);
+        assertEquals(0.5 + PUSH, sim.z(), 1.0E-12);
+        /* With the east open the east corners, asked after the west ones, win: toward east, nothing across. */
+        Fake open = flat();
+        open.cubes.add("1,0,0");
+        PlayerSim free = standing(1.5, 0.5);
+        free.tick(open, east(0.0F));
+        assertEquals(1.5 + PUSH, free.x(), 1.0E-12);
+        assertEquals(0.5, free.z(), 0.0);
+    }
+
+    @Test
+    public void aStateTakenAfterThePushOutIsNotPushedAgain() {
+        Fake world = flat();
+        world.cubes.add("1,0,0");
+        PlayerSim sim = standing(0.9, 0.5);
+        sim.stage = PlayerSim.Stage.MOVE;
+        sim.tick(world, east(0.0F));
+        assertEquals(0.9, sim.x(), 0.0);
+        /* The tick after is a whole one again. */
+        sim.tick(world, east(0.0F));
+        assertEquals(0.9 - PUSH, sim.x(), 1.0E-12);
+    }
+
+    /* The chunk rule of moveEntityWithHeading. */
+
+    @Test
+    public void whereTheChunkIsNotLoadedThePlayerSinksAtAFixedRate() {
+        Fake world = new Fake();
+        world.loadedFromX = 16;
+        PlayerSim sim = new PlayerSim();
+        sim.box = new AxisAlignedBB(4.7, 30.0, 0.2, 5.3, 31.8, 0.8);
+        sim.motionY = -1.5;
+        sim.tick(world, east(0.0F));
+        assertEquals(-0.1 * 0.9800000190734863, sim.motionY, 0.0);
+        /* At or under y 0 it does not sink at all. */
+        PlayerSim low = new PlayerSim();
+        low.box = new AxisAlignedBB(4.7, -3.0, 0.2, 5.3, -1.2, 0.8);
+        low.motionY = -1.5;
+        low.tick(world, east(0.0F));
+        assertEquals(0.0, low.motionY, 0.0);
+        /* Loaded, the same fall is gravity's. */
+        PlayerSim loaded = new PlayerSim();
+        loaded.box = new AxisAlignedBB(19.7, 30.0, 0.2, 20.3, 31.8, 0.8);
+        loaded.motionY = -1.5;
+        loaded.tick(world, east(0.0F));
+        assertEquals((-1.5 - 0.08) * 0.9800000190734863, loaded.motionY, 0.0);
+    }
+
+    @Test
+    public void theChunkIsLookedUpByTheGamesCastNotAFloor() {
+        /* x = -0.5 is column -1 by a floor and column 0 by the game's (int) cast: the game's answer is "loaded". */
+        Fake world = new Fake();
+        world.loadedFromX = 0;
+        PlayerSim sim = new PlayerSim();
+        sim.box = new AxisAlignedBB(-0.8, 30.0, 0.2, -0.2, 31.8, 0.8);
+        sim.motionY = -1.5;
+        sim.tick(world, east(0.0F));
+        assertEquals((-1.5 - 0.08) * 0.9800000190734863, sim.motionY, 0.0);
+    }
+
+    /* EntityPlayerSP.sprintingTicksLeft. */
+
+    @Test
+    public void aSprintEndsByItselfAfterItsCountAndAHeldKeyStartsItAgain() {
+        PlayerSim.Input walk = east(1.0F);
+        PlayerSim sim = standing(0, 0);
+        sim.sprinting = true;
+        sim.sprintTicksLeft = 2;
+        sim.sprintRule(walk);
+        assertTrue(sim.sprinting);
+        sim.sprintRule(walk);
+        assertFalse("no sprint key: it stays off", sim.sprinting);
+
+        PlayerSim.Input held = east(1.0F);
+        held.sprint = true;
+        PlayerSim keyed = standing(0, 0);
+        keyed.sprinting = true;
+        keyed.sprintTicksLeft = 1;
+        keyed.sprintRule(held);
+        assertTrue("started again in the same tick", keyed.sprinting);
+        assertEquals(600, keyed.sprintTicksLeft);
+        /* Stopping clears the count; a state with none (0) never ends by itself. */
+        keyed.sprintRule(east(0.0F));
+        assertFalse(keyed.sprinting);
+        assertEquals(0, keyed.sprintTicksLeft);
+        PlayerSim noCount = standing(0, 0);
+        noCount.sprinting = true;
+        for (int i = 0; i < 700; i++) {
+            noCount.sprintRule(walk);
+        }
+        assertTrue(noCount.sprinting);
     }
 }

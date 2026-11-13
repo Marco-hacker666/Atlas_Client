@@ -14,14 +14,18 @@ import java.util.ArrayDeque;
  *
  * The shadow knows more than the positions do. A position is a cell 1/32 of a block wide; the shadow is a point in
  * it with an exact motion, and it is only pushed back into the cell when it leaves it. And while the player holds
- * the same keys without turning, the yaw is taken from the whole run since it began, not from the last two cells:
- * a run of twelve moves holds it six times tighter.
+ * the same keys without turning, its motion is that of the whole run since the keys last changed, by one yaw, not
+ * of a yaw found anew for each two cells: a run of twelve moves holds the yaw six times tighter than two.
+ *
+ * What a forecast takes for granted is that the keys stay as they are. Two things it adds to that. A player whose
+ * yaw has been turning one way keeps turning (circling a target). And keys let go a moment ago by a player still
+ * sliding may be a stop or a tap, so the answer is the middle of both.
  *
  * When nothing fits -- a knockback this client was not told of (the server sends a melee hit's only to the player
- * hit), a teleport, a cheat that moves as no 1.8 player can -- the shadow starts again from the two last positions:
- * placed in the new cell, with the motion that distance leaves after friction. Until two positions are explained
- * again (one, in the air, where a fall leaves little to guess) the answer is the straight line, so it is never worse
- * than what the modules did before, and it says which of the two it is.
+ * hit), a teleport, a cheat that moves as no 1.8 player can -- the shadow keeps its place and takes the motion that
+ * leads from there to the new cell. Until two positions are explained again (one, in the air, where a fall leaves
+ * little to guess) the answer is the straight line, so it is never worse than what the modules did before, and it
+ * says which of the two it is.
  *
  * Not thread safe: positions arrive on the network thread and must be handed over to the thread that asks.
  */
@@ -43,6 +47,9 @@ public final class TargetTrack {
     /** Keys that add less than this over the run (blocks) say nothing about its yaw. */
     private static final double TRAIL_WEAK = 0.1;
     private static final float FASTEST_TURN = 30.0F;
+    /** Keys let go this few moves ago, by a player still sliding faster than TAP_SPEED, may be a tap. */
+    private static final int TAP_MOVES = 4;
+    private static final double TAP_SPEED = 0.05;
 
     /** The player's movement-speed attribute without the sprint's share (0.1 with no potion). */
     public double walkSpeed = (double) 0.1F;
@@ -70,6 +77,10 @@ public final class TargetTrack {
     private TargetFit.Seen seen;
     private TargetFit.Seen before;
     private TargetFit.Keys keys;
+    /** The keys held before they were all let go, whether that was a sprint, and the moves since; null when held. */
+    private TargetFit.Keys heldBefore;
+    private boolean sprintBefore;
+    private int releasedFor;
     private TargetFit.Result lastFit;
     /** The explained positions of the run now going, oldest first: same keys, same flags, no turn. */
     private final ArrayDeque<Mark> trail = new ArrayDeque<Mark>();
@@ -95,6 +106,8 @@ public final class TargetTrack {
         this.seen = null;
         this.before = null;
         this.keys = null;
+        this.heldBefore = null;
+        this.releasedFor = 0;
         this.lastFit = null;
         this.trail.clear();
         this.lineX = 0.0;
@@ -191,14 +204,14 @@ public final class TargetTrack {
         float yawMid = last.yaw + turned / 2.0F + TargetFit.YAW_MID;
         float yawHalf = Math.abs(turned) / 2.0F + TargetFit.YAW_HALF;
         double slackY = this.looseHeight ? 2.0 * TargetFit.UNIT : TargetFit.SLACK;
-        TargetFit.Result fit = TargetFit.fit(start, world, now, yawMid, yawHalf, candidates(moves), moves, this.keys,
-                this.expected, slackY);
+        TargetFit.Result fit = TargetFit.fit(start, world, now, last, yawMid, yawHalf, candidates(moves), moves,
+                this.keys, this.expected, slackY);
         if (!fit.fits() && this.other != null) {
             /* The last position had two readings; this one may follow from the second. */
             PlayerSim second = this.other.copy();
             apply(second, now);
-            TargetFit.Result otherFit = TargetFit.fit(second, world, now, yawMid, yawHalf, candidates(moves), moves,
-                    this.keys, this.expected, slackY);
+            TargetFit.Result otherFit = TargetFit.fit(second, world, now, last, yawMid, yawHalf, candidates(moves),
+                    moves, this.keys, this.expected, slackY);
             if (otherFit.fits()) {
                 fit = otherFit;
                 start = second;
@@ -209,22 +222,38 @@ public final class TargetTrack {
         int made;
         if (fit.fits()) {
             made = fit.moves;
-            boolean steady = !rested && turned == 0.0F && fit.impulseAt < 0 && this.keys != null
+            /* One set of keys by one yaw for all the moves: a stretch the yaw can be taken from. */
+            boolean single = fit.impulseAt < 0 && fit.led == 0 && turned == 0.0F;
+            boolean steady = single && !rested && this.keys != null
                     && fit.keys.sameDirection(this.keys) && fit.keys.jump == this.keys.jump
                     && now.sprinting == last.sprinting && now.sneaking == last.sneaking
                     && now.usingItem == last.usingItem;
             this.shadow = fit.end;
             settle(this.shadow, now, fit.moves);
+            if (fit.keys.forward != 0 || fit.keys.strafe != 0) {
+                this.heldBefore = null;
+                this.releasedFor = 0;
+            } else if (this.keys != null && (this.keys.forward != 0 || this.keys.strafe != 0)) {
+                this.heldBefore = this.keys;
+                this.sprintBefore = last.sprinting;
+                this.releasedFor = fit.moves;
+            } else {
+                this.releasedFor += fit.moves;
+            }
             this.keys = fit.keys;
             if (!steady) {
                 this.trail.clear();
+                if (single) {
+                    /* The run begins where these moves began: they ran by the new keys from there. */
+                    this.trail.addLast(new Mark(start, last, 0));
+                }
             }
             this.trail.addLast(new Mark(this.shadow.copy(), now, fit.moves));
             while (this.trail.size() > TRAIL_MARKS || trailMoves() > TRAIL_MOVES) {
                 this.trail.removeFirst();
             }
             if (this.trail.size() >= 3) {
-                yawFromTheRun(world, start, now, fit.moves, slackY);
+                yawFromTheRun(world, now, fit.moves, slackY);
             }
             if (this.shadow.onGround) {
                 this.looseHeight = false;
@@ -237,6 +266,8 @@ public final class TargetTrack {
         } else {
             made = likely;
             this.shadow = unexplained(start, now, last, likely, world, fit);
+            this.heldBefore = null;
+            this.releasedFor = 0;
             this.trail.clear();
             this.explained = this.explained << 1;
             this.streak = 0;
@@ -275,10 +306,18 @@ public final class TargetTrack {
         if (held != null && perMoveX * perMoveX + perMoveZ * perMoveZ <= TELEPORT * TELEPORT
                 && (!now.sprinting || held.forward == 1)) {
             int count = Math.min(moves, 4);
-            PlayerSim first = TargetFit.solve(start, world, now, held, count, 0);
-            PlayerSim late = count > 1 ? TargetFit.solve(start, world, now, held, count, count - 1) : null;
+            /* The fall is the same whatever the keys: where it already ends at the right height it is kept, and
+               only the level motion is looked for. */
+            PlayerSim asIs = TargetFit.end(start, world, held.input(now.sneaking), now.sprinting, count);
+            boolean height = !now.onGround && (asIs.onGround || now.under(asIs.y()) != 0.0);
+            PlayerSim first = TargetFit.solve(start, world, now, held, count, 0, height);
+            PlayerSim late = count > 1 ? TargetFit.solve(start, world, now, held, count, count - 1, height) : null;
             if (first != null || late != null) {
-                this.looseHeight = !now.onGround;
+                if (now.onGround) {
+                    this.looseHeight = false;
+                } else if (height) {
+                    this.looseHeight = true;
+                }
                 this.other = first != null ? late : null;
                 return first != null ? first : late;
             }
@@ -337,18 +376,19 @@ public final class TargetTrack {
     /**
      * The yaw of the whole run since the keys last changed, in place of the last moves' own. The keys are run from
      * the oldest position of the run to this one, turned to end in this cell; if that one yaw also passes every
-     * position in between, it is the run's, and the last moves are made again by it. If it does not, the run was
+     * position in between, it is the run's, and the shadow takes the motion that run ends with: the motion of one
+     * yaw held all the way, not of a yaw found anew for each pair of cells. If it does not pass them, the run was
      * not straight, and its oldest position is let go.
      */
-    private void yawFromTheRun(PlayerSim.World world, PlayerSim start, TargetFit.Seen now, int moves, double slackY) {
+    private void yawFromTheRun(PlayerSim.World world, TargetFit.Seen now, int moves, double slackY) {
         Mark oldest = this.trail.peekFirst();
         int total = trailMoves();
         PlayerSim.Input idle = this.keys.input(now.sneaking);
         idle.forward = 0.0F;
         idle.strafe = 0.0F;
-        double[][] still = TargetFit.positions(oldest.state, world, idle, false, total, null, -1);
+        double[][] still = TargetFit.positions(oldest.state, world, idle, false, total);
         double[][] pushed = TargetFit.positions(oldest.state, world, this.keys.input(now.sneaking), now.sprinting,
-                total, null, -1);
+                total);
         double addX = pushed[total - 1][0] - still[total - 1][0];
         double addZ = pushed[total - 1][2] - still[total - 1][2];
         if (Math.sqrt(addX * addX + addZ * addZ) < TRAIL_WEAK) {
@@ -361,8 +401,7 @@ public final class TargetTrack {
         }
         TargetFit.Keys better = this.keys.copy();
         better.yaw = this.keys.yaw + turn;
-        double[][] path = TargetFit.positions(oldest.state, world, better.input(now.sneaking), now.sprinting, total,
-                null, -1);
+        double[][] path = TargetFit.positions(oldest.state, world, better.input(now.sneaking), now.sprinting, total);
         int at = 0;
         boolean first = true;
         for (Mark mark : this.trail) {
@@ -378,9 +417,11 @@ public final class TargetTrack {
                 return;
             }
         }
-        PlayerSim end = TargetFit.end(start, world, better.input(now.sneaking), now.sprinting, moves, null, -1);
-        if (now.outside(end.x(), end.z()) <= TargetFit.SLACK && Math.abs(now.under(end.y())) <= slackY
-                && end.onGround == this.shadow.onGround) {
+        PlayerSim end = TargetFit.end(oldest.state, world, better.input(now.sneaking), now.sprinting, total);
+        if (end.onGround == this.shadow.onGround) {
+            /* The run's motion, at the shadow's place: that has been held in every cell on the way, the run's
+               end only in the first and the last. */
+            end.box = end.box.offset(this.shadow.x() - end.x(), 0.0, this.shadow.z() - end.z());
             settle(end, now, moves);
             this.shadow = end;
             this.keys = better;
@@ -544,6 +585,23 @@ public final class TargetTrack {
                 sim.jumpTicks = 0;
                 sim.tick(world, in);
                 set(out, i, sim.x(), sim.y(), sim.z(), sim.onGround);
+            }
+            if (this.heldBefore != null && this.releasedFor <= TAP_MOVES && this.shadow.speed() > TAP_SPEED) {
+                /* The keys were let go a moment ago and the player is still sliding: a stop, or a tap (the
+                   sprint reset of every 1.8 fight) with the keys back in a tick or two. Which is not known, so
+                   the answer is the middle of the two: half the error either way, instead of all of it one way. */
+                PlayerSim back = this.shadow.copy();
+                apply(back, this.seen);
+                PlayerSim.Input held = this.heldBefore.input(this.seen.sneaking);
+                held.jump = in.jump;
+                held.sprint = this.sprintBefore;
+                for (int i = 1; i <= moves; i++) {
+                    held.yaw = yaw + this.yawRate * (float) i;
+                    back.jumpTicks = 0;
+                    back.tick(world, held);
+                    out.x[i] = (out.x[i] + back.x()) / 2.0;
+                    out.z[i] = (out.z[i] + back.z()) / 2.0;
+                }
             }
             return out;
         }

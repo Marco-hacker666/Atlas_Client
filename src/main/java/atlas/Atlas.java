@@ -78,6 +78,9 @@ public class Atlas {
         EventManager.register(new atlas.management.PerfLog());
         EventManager.register(new atlas.management.HitTimer());
         EventManager.register(new atlas.management.LogUploader());
+        /* Other players followed and forecast; holds nothing until something asks (2026-11-13). Before whoever
+           asks it for a forecast in the same tick (review, PR #41). */
+        EventManager.register(atlas.sim.SimTargets.get());
         /* Anonymous SpeedBlocker run data, only with the player's yes (2026-11-01). */
         EventManager.register(new atlas.management.RunCollector());
         EventManager.register(new atlas.management.PlaceRotations());
@@ -299,6 +302,7 @@ public class Atlas {
         commandManager.commands.add(new BindCommand());
         commandManager.commands.add(new atlas.command.commands.ReportCommand());
         commandManager.commands.add(new atlas.command.commands.RunDataCommand());
+        commandManager.commands.add(new atlas.command.commands.TargetsCommand());
         commandManager.commands.add(new ClickGuiCommand());
         commandManager.commands.add(new ConfigCommand());
         commandManager.commands.add(new DenickCommand());

@@ -937,7 +937,9 @@ public class SpeedBlocker extends Module {
             this.recorder.observe(this.tick, player.getEntityId(), player.getName(), this.nowX(player),
                     this.nowZ(player), x, z, fresh, motion == null ? Double.NaN : motion[0],
                     motion == null ? Double.NaN : motion[1], player.rotationYawHead, mc.thePlayer.posX,
-                    mc.thePlayer.posZ, player.onGround, sprinting);
+                    mc.thePlayer.posZ, player.onGround, sprinting,
+                    this.recorder.samples(this.tick)
+                            ? atlas.sim.SimTargets.path(player, atlas.combat.RunRecorder.LENGTH) : null);
         }
     }
 

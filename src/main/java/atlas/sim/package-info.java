@@ -15,7 +15,10 @@
  *   <li>{@link atlas.sim.MoveModel}: the older, level-only model; MoveCheck's look check uses it.</li>
  *   <li>{@link atlas.sim.TargetFit}, {@link atlas.sim.TargetTrack}, {@link atlas.sim.TargetForecast}: another
  *       player's movement. The server sends little of it and coarsely; the keys are found from the positions, and
- *       the player is run ahead by them. No module uses these yet.</li>
+ *       the player is run ahead by them. {@link atlas.sim.TargetScore} holds the forecasts against what came.</li>
+ *   <li>{@link atlas.sim.SimTargets}: the game's side of those -- the players near this one, followed while
+ *       something asks. So far only the measuring asks (.targets, and the run recorder's engineErr column); no
+ *       module aims by it yet.</li>
  *   <li>{@link atlas.sim.SimPlayer}: the game's side -- the player, its keys and the world, all of one moment of the
  *       tick. The only class here that needs the game.</li>
  * </ul>
@@ -48,8 +51,8 @@
  * <ul>
  *   <li>PlayerSim follows the game's code step by step, a float where the game uses a float. A change names the place
  *       in the game's code it comes from and has a test with the game's number.</li>
- *   <li>Only SimPlayer may use more of the game than AxisAlignedBB and MathHelper; the rest is tested with no game
- *       running.</li>
+ *   <li>Only SimPlayer and SimTargets may use more of the game than AxisAlignedBB and MathHelper; the rest is tested
+ *       with no game running.</li>
  *   <li>Ask for the player with {@link atlas.sim.SimPlayer#snapshot} and the stage you are at. The state and the keys
  *       of two different moments do not go together.</li>
  *   <li>What it does not see: what a module does to the move (it is what the check reports), and what only the

@@ -399,7 +399,12 @@ public final class TargetFit {
             }
             boolean weak = add < WEAK;
             Keys turned = keys.copy();
-            if (weak) {
+            if (weak && this.start.inWater) {
+                /* Water stops a player in a few moves, so what is forecast is the keys' doing, and their yaw has
+                   to be the newest there is: the packet's. (In the air the motion carries on and an older, finer
+                   yaw is the better one.) */
+                turned.yaw = this.yawMid;
+            } else if (weak) {
                 turned.yaw = inBand(this.last != null ? this.last.yaw : this.seen.yaw, this.yawMid, this.yawHalf);
             } else {
                 turned.yaw = inBand(this.yawMid + turn(addX, addZ, gapX, gapZ), this.yawMid, this.yawHalf);

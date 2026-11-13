@@ -363,6 +363,54 @@ public class TargetFitTest {
         assertTrue(TargetFit.positions(standing(), WORLD, hop, false, 1)[0][1] > 0.4);
     }
 
+    /** {@link #WORLD} under four blocks of still water. */
+    private static final PlayerSim.World POOL = new PlayerSim.World() {
+        @Override
+        public List<AxisAlignedBB> boxes(AxisAlignedBB area) {
+            return WORLD.boxes(area);
+        }
+
+        @Override
+        public float slipperiness(int x, int y, int z) {
+            return 0.6F;
+        }
+
+        @Override
+        public boolean water(AxisAlignedBB area, double[] flow) {
+            return area.minY < 4.0;
+        }
+    };
+
+    @Test
+    public void aSwimmerIsFoundWithItsJumpKey() {
+        /* In water the held jump key lifts with no ground under the player; the height tells it. */
+        for (int held = 0; held < 2; held++) {
+            boolean jump = held == 1;
+            float yaw = 50.0F;
+            PlayerSim start = standing();
+            start.box = start.box.offset(0.0, 1.5, 0.0);
+            start.onGround = false;
+            PlayerSim.Input in = keys(yaw, 1.0F, 0.0F, jump);
+            for (int i = 0; i < 8; i++) {
+                start.move(POOL, in);
+            }
+            assertTrue(start.inWater);
+            assertFalse(start.onGround);
+            PlayerSim end = start.copy();
+            for (int i = 0; i < 3; i++) {
+                end.move(POOL, in);
+            }
+            TargetFit.Seen now = seen(end, yaw, false);
+            TargetFit.Result result = TargetFit.fit(start, POOL, now, null, now.yaw + TargetFit.YAW_MID,
+                    TargetFit.YAW_HALF, TargetTrack.candidates(3.0), 3.0, null, null, TargetFit.SLACK);
+            assertTrue("jump " + jump, result.fits());
+            assertEquals(3, result.moves);
+            assertEquals(jump, result.keys.jump);
+            assertTrue(result.end.inWater);
+            assertEquals(end.motionY, result.end.motionY, 1.0E-9);
+        }
+    }
+
     @Test
     public void wrapAndCopies() {
         assertEquals(-170.0, TargetFit.wrap(190.0), 1.0E-9);

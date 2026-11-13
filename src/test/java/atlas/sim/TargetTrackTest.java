@@ -59,6 +59,19 @@ public class TargetTrackTest {
         public float slipperiness(int x, int y, int z) {
             return 0.6F;
         }
+
+        /** Still water from the ground up to this height; none by default. */
+        private double waterTop = -1.0;
+
+        Course water(double top) {
+            this.waterTop = top;
+            return this;
+        }
+
+        @Override
+        public boolean water(AxisAlignedBB area, double[] flow) {
+            return area.minY < this.waterTop;
+        }
     }
 
     /** The keys of one tick; it may also change the player before the tick. */
@@ -438,6 +451,28 @@ public class TargetTrackTest {
             }
         });
         assertBeatsLine(slab, 3, 1.0);
+    }
+
+    @Test
+    public void aSwimmerIsFollowedThroughWater() {
+        /* Deep water, the jump key held to stay up, turning slowly: water's drag and lift, not the air's. */
+        Stats stats = follow(new Course().water(30.0), 200, new Script() {
+            @Override
+            public void keys(int tick, PlayerSim.Input in, PlayerSim game) {
+                if (tick == 0) {
+                    game.box = game.box.offset(0.0, 12.0, 0.0);
+                    game.onGround = false;
+                }
+                in.yaw = YAW + 3.0F * (float) tick;
+                in.forward = 1.0F;
+                in.jump = tick % 40 < 20;
+            }
+        });
+        /* Water is slow, so the line is not far off level; what it does not know at all is the height. */
+        assertBeatsLine(stats, AHEAD, 0.8);
+        assertTrue(stats.engineHeight(AHEAD) + " of " + stats.lineHeight(AHEAD),
+                stats.engineHeight(AHEAD) < 0.5 * stats.lineHeight(AHEAD));
+        assertTrue(stats.simulated * 10 >= stats.measured * 8);
     }
 
     @Test

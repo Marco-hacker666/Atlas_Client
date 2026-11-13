@@ -30,7 +30,8 @@ public class RunRecorderTest {
         String first = rows.get(0);
         /* Sampled at tick 0; horizon 5 is settled at the first fresh tick past it, 6. */
         assertTrue(first, first.startsWith("0,e7,6,"));
-        String[] cells = first.split(",");
+        /* The last cell (engineErr) is empty with no simulation: keep it in the count. */
+        String[] cells = first.split(",", -1);
         assertEquals(RunRecorder.HEADER.split(",").length, cells.length);
         /* A steady straight sprint at vanilla speed: the model and the line both land within a few hundredths. */
         assertTrue(first, Double.parseDouble(cells[10]) < 0.02);
@@ -55,5 +56,25 @@ public class RunRecorderTest {
         recorder.observe(10, 2, "e2", 2.0, 0.0, 2.0, 0.0, true, 0.2, 0.0, -90.0, 0.0, 50.0, true, false);
         assertTrue(rows.isEmpty());
         assertEquals("nothing settled yet", recorder.summary());
+    }
+
+    @Test
+    public void theSimulationsAnswerGetsItsOwnColumn() {
+        final java.util.List<String> rows = new java.util.ArrayList<String>();
+        RunRecorder recorder = new RunRecorder(rows::add);
+        /* A player going 0.2 a tick along x. The simulation is handed a path 0.1 off to the side. */
+        double[][] engine = new double[RunRecorder.LENGTH][];
+        for (int i = 0; i < engine.length; i++) {
+            engine[i] = new double[]{0.2 * (double) (i + 1), 0.1};
+        }
+        assertTrue(recorder.samples(0));
+        assertFalse(recorder.samples(3));
+        recorder.observe(0, 4, "e4", 0.0, 0.0, 0.0, 0.0, true, 0.2, 0.0, -90.0, 0.0, 50.0, true, false, engine);
+        recorder.observe(5, 4, "e4", 1.0, 0.0, 1.0, 0.0, true, 0.2, 0.0, -90.0, 0.0, 50.0, true, false, null);
+        assertEquals(1, rows.size());
+        String[] cells = rows.get(0).split(",", -1);
+        assertEquals(RunRecorder.HEADER.split(",").length, cells.length);
+        assertEquals("0.100", cells[cells.length - 1]);
+        assertTrue(recorder.summary(), recorder.summary().contains(", engine 0.10 (n 1)"));
     }
 }

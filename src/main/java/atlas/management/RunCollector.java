@@ -260,6 +260,8 @@ public final class RunCollector {
                 List<String> rows = new ArrayList<String>(Arrays.asList(
                         new String(Files.readAllBytes(PENDING_FILE.toPath()), StandardCharsets.UTF_8).split("\n")));
                 rows.removeIf(String::isEmpty);
+                /* Rows saved by a version with fewer columns. */
+                rows.replaceAll(RunRecorder::padded);
                 PENDING_FILE.delete();
                 return rows.size() > CAPACITY ? new ArrayList<String>(rows.subList(0, CAPACITY)) : rows;
             }

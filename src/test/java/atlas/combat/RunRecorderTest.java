@@ -77,4 +77,14 @@ public class RunRecorderTest {
         assertEquals("0.100", cells[cells.length - 1]);
         assertTrue(recorder.summary(), recorder.summary().contains(", engine 0.10 (n 1)"));
     }
+
+    @Test
+    public void aRowOfAnOlderHeaderGetsItsEmptyCells() {
+        String old = "40,e7,5,3.20,0.280,0.100,0,1,1,1,0.050,0.090";
+        assertEquals(old + ",", RunRecorder.padded(old));
+        assertEquals(RunRecorder.HEADER.split(",").length, RunRecorder.padded(old).split(",", -1).length);
+        String now = old + ",0.040";
+        assertEquals(now, RunRecorder.padded(now));
+        assertEquals(old + ",", RunRecorder.padded(old + ","));
+    }
 }

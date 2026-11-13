@@ -40,6 +40,20 @@ public final class RunRecorder {
     /** How many ticks ahead a prediction has to reach: a few past the last horizon. */
     public static final int LENGTH = HORIZONS[HORIZONS.length - 1] + 3;
 
+    /**
+     * A row as the header has it now: one written before a column was added (kept across a launch) gets the empty
+     * cells it lacks, so every row sent under one header has its columns (review, PR #41).
+     */
+    public static String padded(String row) {
+        int want = HEADER.split(",").length;
+        int have = row.split(",", -1).length;
+        StringBuilder sb = new StringBuilder(row);
+        for (int i = have; i < want; i++) {
+            sb.append(',');
+        }
+        return sb.toString();
+    }
+
     private static final class Sample {
         final int id;
         final String name;

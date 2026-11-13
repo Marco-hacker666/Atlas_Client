@@ -2,6 +2,7 @@ package atlas.sim;
 
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
+import atlas.event.types.Priority;
 import atlas.events.LoadWorldEvent;
 import atlas.events.PacketEvent;
 import atlas.events.TickEvent;
@@ -178,7 +179,8 @@ public final class SimTargets {
         return this.measuring || this.tick <= this.wantedUntil;
     }
 
-    @EventTarget
+    /* First in the tick: whoever asks for a forecast in it (the run recorders) gets this tick's positions. */
+    @EventTarget(Priority.HIGHEST)
     public void onTick(TickEvent event) {
         if (event.getType() != EventType.PRE) {
             return;

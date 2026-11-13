@@ -60,6 +60,10 @@ final class AtlasTheme {
     final ModeProperty tint = new ModeProperty("glass-tint", 1, TINTS);
     final IntProperty tintHue = new IntProperty("tint-hue", 225, 0, 360, () -> this.tint.getValue() == 6);
     final PercentProperty opacity = new PercentProperty("glass-opacity", 42, 0, 90, null);
+    /* 2026-11-12 (owner: the Appearance colours did not reach the HUD, its notifications or chat): the accent also
+       colours the HUD module list (and what follows the HUD's colour), the HUD notifications and the [Atlas] chat
+       prefix; the glass colour tints the notifications. Off: each keeps its own colours as before. */
+    final BooleanProperty accentEverywhere = new BooleanProperty("accent-everywhere", true);
 
     // ---- Glass
     final PercentProperty blur = new PercentProperty("blur", 70, 0, 100, null);
@@ -149,8 +153,11 @@ final class AtlasTheme {
 
     AtlasTheme() {
         /* Language: English only since 2026-10-22 (the Chinese interface was removed). */
-        group("Colors", "The accent that marks what is on and selected, and the colour of the glass itself.",
-                this.mode, this.accent, this.accentHue, this.accentSaturation, this.tint, this.tintHue, this.opacity);
+        group("Colors", "The accent that marks what is on and selected, and the colour of the glass itself. Accent "
+                        + "everywhere: the HUD module list, the HUD notifications and the [Atlas] chat prefix take the "
+                        + "accent too (chat in its nearest chat colour); off, they keep their own colours.",
+                this.mode, this.accent, this.accentHue, this.accentSaturation, this.accentEverywhere, this.tint,
+                this.tintHue, this.opacity);
         group("Glass", "The window's material: how much it blurs and bends the world behind it, and how "
                         + "light catches its edge.",
                 this.blur, this.saturation, this.brightness, this.refraction, this.bezel, this.clearEdge,
@@ -243,6 +250,14 @@ final class AtlasTheme {
         }
         return 0;
     }
+
+    /** The glass colour as drawn: the light glass in light mode. */
+    int glassColour() {
+        return isLight() ? LIGHT_TINT : tintBase();
+    }
+
+    /** The groups that are not about looks: the Client Settings sidebar lists them, the Theme window does not. */
+    static final String[] SYSTEM_GROUPS = {"Performance", "Privacy"};
 
     private int tintBase() {
         return this.tint.getValue() == 6 ? hsb(this.tintHue.getValue(), 0.55F, 0.12F) : TINT_COLOURS[this.tint.getValue()];

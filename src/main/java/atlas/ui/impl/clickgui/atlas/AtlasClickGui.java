@@ -1495,9 +1495,16 @@ public class AtlasClickGui extends GuiScreen {
         float profilesRow = profilesLabel + 10;
         float appearanceRow = profilesRow + CAT;
         float serversRow = appearanceRow + CAT;
+        /* 2026-11-12 (owner: "no Performance, no Privacy"): since Appearance opens the Theme window, which lists
+           only the looks, these two had no way in. Each has its own row. */
+        float[] systemRows = new float[AtlasTheme.SYSTEM_GROUPS.length];
+        for (int i = 0; i < systemRows.length; i++) {
+            systemRows[i] = serversRow + CAT * (i + 1);
+        }
+        float lastRow = systemRows.length == 0 ? serversRow : systemRows[systemRows.length - 1];
         boolean settingsPage = "Client Settings".equals(this.page);
         boolean profile = settingsPage && this.theme.accountCard.getValue()
-                && y + height - (serversRow + CAT_H) >= 46;
+                && y + height - (lastRow + CAT_H) >= 46;
         float limit = y + height - (profile ? 44 : 4);
         /* Module pages: the categories scroll inside [top, listLimit], over a
            small fixed strip at the foot of the column. */
@@ -1514,7 +1521,10 @@ public class AtlasClickGui extends GuiScreen {
         int activeIndex = this.profilesView || this.appearanceView || this.serversView ? -1
                 : search().isEmpty() ? shownCategories.indexOf(this.category) : -1;
         boolean pillOnProfiles = this.profilesView && profilesFit;
-        boolean pillOnAppearance = this.appearanceView && appearanceFit;
+        int systemIndex = this.appearanceView ? java.util.Arrays.asList(AtlasTheme.SYSTEM_GROUPS)
+                .indexOf(this.appearanceGroup) : -1;
+        boolean pillOnSystem = settingsPage && systemIndex >= 0 && systemRows[systemIndex] + CAT_H <= limit;
+        boolean pillOnAppearance = this.appearanceView && appearanceFit && systemIndex < 0;
         boolean pillOnServers = this.serversView && serversFit;
 
         /* The selected category sits under a droplet of clear glass. It slides
@@ -1526,10 +1536,11 @@ public class AtlasClickGui extends GuiScreen {
            carries the pill with it instead of leaving it to catch up. */
         Spring pill = spring("catPill", pillOnProfiles ? profilesRow - top
                         : pillOnAppearance ? appearanceRow - top
-                        : pillOnServers ? serversRow - top : Math.max(0, activeIndex) * CAT - scrolled,
+                        : pillOnServers ? serversRow - top
+                        : pillOnSystem ? systemRows[systemIndex] - top : Math.max(0, activeIndex) * CAT - scrolled,
                 380.0F, 26.0F);
-        float shownPill = ease("catPillShown", activeIndex >= 0 || pillOnProfiles || pillOnAppearance || pillOnServers,
-                12.0F);
+        float shownPill = ease("catPillShown", activeIndex >= 0 || pillOnProfiles || pillOnAppearance || pillOnServers
+                        || pillOnSystem, 12.0F);
         if (shownPill > 0.02F) {
             float stretch = Math.min(10.0F, Math.abs(pill.velocity) * this.jelly * 0.018F);
             float px = x + 10 + stretch * 0.25F;
@@ -1652,6 +1663,28 @@ public class AtlasClickGui extends GuiScreen {
             font(9.5F, this.serversView).draw("Servers", x + 36, cy, this.serversView ? TEXT : DIM);
             if (hovered) {
                 this.hint = "Which profile loads when you join which server";
+            }
+        }
+        for (int i = 0; i < systemRows.length; i++) {
+            float row = systemRows[i];
+            if (!settingsPage || row + CAT_H > limit) {
+                break;
+            }
+            String group = AtlasTheme.SYSTEM_GROUPS[i];
+            boolean on = i == systemIndex;
+            boolean hovered = mx >= x + 10 && mx <= x + sidebar - 10 && my >= row && my <= row + CAT_H;
+            hit("system", group, x + 10, row, x + sidebar - 10, row + CAT_H);
+            float rowLit = ease("cat:#system:" + group, hovered && !on, 10.0F);
+            if (rowLit > 0.01F) {
+                Liquid.rect(x + 10, row, x + sidebar - 10, row + CAT_H, 11.0F,
+                        alpha(ink(0x12), rowLit), alpha(ink(0x0A), rowLit));
+            }
+            float cy = row + CAT_H / 2.0F;
+            icon(group, x + 25, cy, on ? TEXT : DIM);
+            font(9.5F, on).draw(group, x + 36, cy, on ? TEXT : DIM);
+            if (hovered) {
+                this.hint = "Performance".equals(group) ? "Phone or PC layout, mobile-safe drawing, Move check"
+                        : "Sending logs and run data to the developers";
             }
         }
 
@@ -2097,6 +2130,8 @@ public class AtlasClickGui extends GuiScreen {
         this.CAT = (compact ? 24 : 28) + touch;
         this.RADIUS = this.theme.radius.getValue();
         this.FOOTER = this.mobile ? 30 : this.theme.hintBar.getValue() ? 20 : 8;
+        /* The chat prefix follows an accent changed here at once. */
+        syncChatPrefix(this.theme.accentEverywhere.getValue() ? accent() | 0xFF000000 : 0);
     }
 
     /**
@@ -2104,35 +2139,16 @@ public class AtlasClickGui extends GuiScreen {
      * settings, each with a one-line summary of where it stands.
      */
     private void drawAppearanceList(ScaledResolution sr, int x, int y, int width, int height, float mx, float my) {
-        font(15.0F, true).draw("Appearance", x + 16, y + 17, TEXT);
+        /* 2026-11-12: the looks are all in the Theme window (the Appearance row); this page keeps the client's own
+           choices, Performance and Privacy, which the Theme window does not list. */
+        font(15.0F, true).draw("Client", x + 16, y + 17, TEXT);
         font(8.0F, false).draw("Applies as you change it  ·  saved automatically", x + 16, y + 31, FAINT);
 
         float cursor = y + 50;
-        font(7.0F, true).drawTracked("PRESETS", x + 18, cursor, FAINT, 0.8F);
-        cursor += 15;
-        LiquidFont buttonFont = font(8.5F, true);
-        float bx = x + 16;
-        for (String preset : AtlasTheme.PRESETS) {
-            float w = buttonFont.width(preset) + 22;
-            if (bx + w > x + width - 12) {
-                bx = x + 16;
-                cursor += 24;
-            }
-            drawButton("preset", preset, bx, cursor, 0.0F, preset, 1, mx, my);
-            bx += w + 6;
-        }
-        float resetWidth = buttonFont.width("Reset") + 22;
-        if (bx + resetWidth > x + width - 12) {
-            bx = x + 16;
-            cursor += 24;
-        }
-        drawButton("themeReset", null, bx, cursor, 0.0F, "Reset", 2, mx, my);
-        cursor += 24;
-
         font(7.0F, true).drawTracked("SETTINGS", x + 18, cursor, FAINT, 0.8F);
         float top = cursor + 8;
         float bottom = y + height - 4;
-        List<String> groups = new ArrayList<String>(this.theme.groups.keySet());
+        List<String> groups = new ArrayList<String>(java.util.Arrays.asList(AtlasTheme.SYSTEM_GROUPS));
         int selectedIndex = groups.indexOf(this.appearanceGroup);
         this.appearanceMaxScroll = Math.max(0.0F, groups.size() * ROW - (ROW - ROW_H) - (bottom - top));
         this.appearanceScroll = Math.max(0.0F, Math.min(this.appearanceMaxScroll, this.appearanceScroll));
@@ -2185,11 +2201,10 @@ public class AtlasClickGui extends GuiScreen {
 
     /** The right column of the Appearance page: the open group's settings. */
     private void drawAppearanceDetail(ScaledResolution sr, int x, int y, int width, int height, float mx, float my) {
-        List<Property<?>> all = this.theme.groups.get(this.appearanceGroup);
-        if (all == null) {
-            this.appearanceGroup = "Colors";
-            all = this.theme.groups.get(this.appearanceGroup);
+        if (!java.util.Arrays.asList(AtlasTheme.SYSTEM_GROUPS).contains(this.appearanceGroup)) {
+            this.appearanceGroup = AtlasTheme.SYSTEM_GROUPS[0];
         }
+        List<Property<?>> all = this.theme.groups.get(this.appearanceGroup);
         float arrived = toward("groupArrive", 1.0F, 11.0F);
         float lift = (1.0F - arrived) * 6.0F;
         font(14.0F, true).draw(this.appearanceGroup, x + 16, y + 17 + lift, alpha(TEXT, arrived));
@@ -4085,6 +4100,11 @@ public class AtlasClickGui extends GuiScreen {
             /* A padlock: shackle over a body with a keyhole. */
             Liquid.ring(x, y - 2.2F, 2.8F, 1.1F, c);
             Liquid.rect(x - 4.2F, y - 1.0F, x + 4.2F, y + 5.0F, 1.2F, c);
+        } else if (key.equals("performance")) {
+            /* A gauge: the dial and its needle (2026-11-12, the Client Settings row). */
+            Liquid.ring(x, y + 0.6F, 4.8F, 1.1F, c);
+            Liquid.line(x, y + 0.6F, x + 2.8F, y - 2.4F, 1.2F, c);
+            Liquid.dot(x, y + 0.6F, 1.0F, c);
         } else if (key.equals("attention")) {
             /* A warning triangle and its mark. */
             Liquid.line(x, y - 4.6F, x - 4.8F, y + 3.8F, 1.1F, c);
@@ -4132,6 +4152,40 @@ public class AtlasClickGui extends GuiScreen {
     /** The accent, as the theme has it: its own colour, or the ClickGUI module's. */
     private int accent() {
         return this.theme.accent(clickGuiAccent());
+    }
+
+    /* 2026-11-12 (owner: the Appearance colours did not reach the HUD, its notifications or chat). */
+    private static final String DEFAULT_CHAT_PREFIX = "&7[&bAtlas&7]&r ";
+    private static int chatPrefixFor = 0;
+
+    /**
+     * The Appearance accent (opaque) for drawing outside this menu, or 0 while "accent everywhere" is off. Keeps the
+     * [Atlas] chat prefix in its nearest chat colour as it goes.
+     */
+    public static int sharedAccent() {
+        AtlasClickGui gui = getInstance();
+        int accent = gui.theme.accentEverywhere.getValue() ? gui.accent() | 0xFF000000 : 0;
+        syncChatPrefix(accent);
+        return accent;
+    }
+
+    /** The Appearance glass colour (opaque) for drawing outside this menu, or 0 while "accent everywhere" is off. */
+    public static int sharedGlass() {
+        AtlasClickGui gui = getInstance();
+        return gui.theme.accentEverywhere.getValue() ? gui.theme.glassColour() | 0xFF000000 : 0;
+    }
+
+    private static void syncChatPrefix(int accent) {
+        if (accent == chatPrefixFor) {
+            return;
+        }
+        chatPrefixFor = accent;
+        if (accent == 0) {
+            Atlas.clientName = DEFAULT_CHAT_PREFIX;
+            return;
+        }
+        char code = ChatAccent.codeFor(accent);
+        Atlas.clientName = code == 0 ? DEFAULT_CHAT_PREFIX : "&7[&" + code + "Atlas&7]&r ";
     }
 
     /** A neutral of the given alpha: white in dark mode, ink in light mode. */
@@ -4750,6 +4804,22 @@ public class AtlasClickGui extends GuiScreen {
         if ("appearance".equals(target.kind)) {
             /* 2026-11-09: every Appearance setting is in the Theme window, with a preview. */
             this.mc.displayGuiScreen(new ThemeStudio(this));
+            return;
+        }
+        if ("system".equals(target.kind)) {
+            String group = (String) target.payload;
+            if (!this.appearanceView || !group.equals(this.appearanceGroup)) {
+                this.infoOpen = null;
+                this.ui.set("groupArrive", Float.valueOf(0.0F));
+                this.detailScroll = 0;
+                this.ui.set("detailScroll", Float.valueOf(0.0F));
+            }
+            this.appearanceGroup = group;
+            this.appearanceView = true;
+            this.profilesView = false;
+            this.serversView = false;
+            this.page = "Client Settings";
+            this.searchInput.clear();
             return;
         }
         if ("servers".equals(target.kind)) {

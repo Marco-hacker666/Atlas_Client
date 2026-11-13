@@ -303,7 +303,9 @@ public class HUD extends Module {
      * also reaches every render module set to "HUD" colour.
      */
     public Color getColor(long time, long offset) {
-        Color own = this.getOwnColor(time, offset);
+        int accent = atlas.ui.impl.clickgui.atlas.AtlasClickGui.sharedAccent();
+        /* 2026-11-12: Appearance > Colors > accent everywhere (on by default) puts the menu accent here. */
+        Color own = accent != 0 ? new Color(accent) : this.getOwnColor(time, offset);
         ThemeStyle style = ThemeStyle.active(InterfaceColors.class);
         return style == null ? own : style.color(own, null, (int) Math.min(offset, 1000L));
     }
@@ -405,6 +407,26 @@ public class HUD extends Module {
         float total = (count - 1) * step + (height + pad * 2.0F + 2.0F) * s;
         HudLayout.report("HUD.list", "Module list", left, top, width, total,
                 HudLayout.ints(this.offsetX, right ? -1 : 1, this.offsetY, bottom ? -1 : 1), HudLayout.scale(this.scale));
+    }
+
+    /* 2026-11-14 (owner: "the Theme preview colours are completely unlike the game"): the preview asked
+       getColor for every row, but a JELLO list draws its names white with no edge bar. These answer as the
+       render below does. */
+
+    /** The colour a module-list name is drawn in, as the list draws it. */
+    public int listNameColour(long time, long offset) {
+        return HudPanel.active() ? 0xFFFFFFFF : this.getColor(time, offset).getRGB();
+    }
+
+    /** Whether the list draws its coloured edge bar. */
+    public boolean listEdgeBar() {
+        return !HudPanel.active() && this.hasSidebar();
+    }
+
+    /** The background behind each row when the list is not JELLO: 0 for none. */
+    public int listRowBackground() {
+        int alpha = (int) (255 * (this.background.getValue().floatValue() / 100.0F));
+        return alpha <= 0 ? 0 : (alpha << 24) | 0x0F0F0F;
     }
 
     private boolean hasSidebar() {
@@ -1069,7 +1091,12 @@ public class HUD extends Module {
         float slide = (1.0F - motion) * 14.0F + (1.0F - alpha) * 5.0F;
         float renderX = x + slide;
         int statusColor = notificationStatusColor(text, alpha);
-        int glass = new Color(10, 12, 16, (int) (92 * alpha)).getRGB();
+        /* 2026-11-12: with accent everywhere, the glass is the Appearance glass colour and the bar the accent. */
+        int sharedAccent = atlas.ui.impl.clickgui.atlas.AtlasClickGui.sharedAccent();
+        int sharedGlass = atlas.ui.impl.clickgui.atlas.AtlasClickGui.sharedGlass();
+        int glass = sharedGlass != 0 ? colorWithAlpha(sharedGlass, (int) (150 * alpha))
+                : new Color(10, 12, 16, (int) (92 * alpha)).getRGB();
+        int barColor = sharedAccent != 0 ? colorWithAlpha(sharedAccent, (int) (245 * alpha)) : statusColor;
         int hoverLayer = new Color(255, 255, 255, (int) (9 * alpha)).getRGB();
         int border = new Color(255, 255, 255, (int) (24 * alpha)).getRGB();
         int depth = new Color(0, 0, 0, (int) (28 * alpha)).getRGB();
@@ -1092,7 +1119,7 @@ public class HUD extends Module {
         RenderUtil.drawRoundedRect(progressX, progressY, progressW, 1.0F, 0.5F,
                 new Color(255, 255, 255, (int) (10 * alpha)).getRGB(), true, true, true, true);
         RenderUtil.drawRoundedRect(progressX, progressY, Math.max(1.0F, progressW * progress), 1.0F, 0.5F,
-                statusColor, true, true, true, true);
+                barColor, true, true, true, true);
 
         drawNotificationText(text, renderX + paddingX + 1.0F, y + paddingY + 1.0F, neutralText, statusColor);
     }
@@ -1144,7 +1171,10 @@ public class HUD extends Module {
 
     private int notificationStatusColor(String text, float alpha) {
         String lower = text.toLowerCase(Locale.ROOT);
-        int rgb = lower.endsWith(" enabled") ? 0x41D982 : lower.endsWith(" disabled") ? 0xFF5C6C : 0xE5E9F0;
+        int accent = atlas.ui.impl.clickgui.atlas.AtlasClickGui.sharedAccent();
+        /* Enabled and disabled keep green and red: they say something. Anything else takes the accent. */
+        int rgb = lower.endsWith(" enabled") ? 0x41D982 : lower.endsWith(" disabled") ? 0xFF5C6C
+                : accent != 0 ? accent & 0xFFFFFF : 0xE5E9F0;
         return colorWithAlpha(rgb, (int) (245 * alpha));
     }
 

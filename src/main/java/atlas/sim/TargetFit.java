@@ -8,17 +8,23 @@ package atlas.sim;
  * its yaw in 256ths of a turn and only once it is 4 of those (5.6 degrees) from the last one sent; whether it stands
  * on ground; and its sprint, sneak and item-use flags. Never its keys. But the keys are what a forecast needs, and
  * between two positions there are few things a 1.8 player can have done: one of eight walking directions or none,
- * with a jump or without, for one, two or three moves. This tries them, each with {@link PlayerSim} from the
- * player's state as it was at the last position, and says which ends in the cell the server now names.
+ * with a jump or without, for one to four moves. This tries them, each with {@link PlayerSim} from the player's
+ * state as it was at the last position, and says which ends in the cell the server now names.
  *
  * The yaw is not taken from the packet (5.6 degrees is 0.05 of a block over two sprinted moves, more than the cell):
  * it is solved. Without a wall in the way, what the keys add to a move turns rigidly with the yaw, so one run of the
  * keys at any yaw and one run with no keys give the yaw that points the keys' share at the cell; a last run at that
  * yaw checks it against the real collisions. The packet's yaw only bounds it, which is what tells W from W+A.
  *
- * What it cannot see: in the air the keys add so little (0.02 a tick) that every direction fits; there the keys of
- * last time are kept. And a player moved by something else -- a knockback this client is not told of, a cheat --
- * fits nothing: the caller starts again from the positions alone ({@link TargetTrack}).
+ * Keys change when the player presses them, not when the server sends, so about every second change falls between
+ * two positions and no one set of keys explains those moves. Only when none does, two more things are tried: the
+ * keys of before for the first move or more and new ones after; and a tap -- other keys or none first, then the
+ * keys of before again, which is the sprint reset of every 1.8 fight.
+ *
+ * What it cannot see: in the air the keys add so little (0.02 a move) that every direction fits; there the keys of
+ * last time are kept for as long as they fit at all. And a player moved by something else -- a knockback this client
+ * is not told of, a cheat -- fits nothing: {@link #solve} then finds the motion that must have replaced the
+ * player's, and {@link TargetTrack} goes on from that.
  */
 public final class TargetFit {
 
@@ -40,11 +46,15 @@ public final class TargetFit {
     private static final double RADIAL = 0.1;
     private static final double PER_MOVE = 0.004;
     private static final double CHANGED_KEYS = 0.006;
-    /** Where the keys add too little to tell them apart, the keys of last time stay unless clearly worse. */
-    private static final double CHANGED_WEAK_KEYS = 0.02;
+    /** Where the keys add too little to tell them apart, the keys of last time stay for as long as they fit. */
+    private static final double CHANGED_WEAK_KEYS = 0.05;
+    /** A landing shows a held jump key and a free one alike: as it was. */
+    private static final double CHANGED_JUMP = 0.002;
     private static final double GROUND_DIFFERS = 0.01;
     private static final double NOT_SLOWED = 0.004;
     private static final double WITH_IMPULSE = 0.01;
+    private static final double WITH_LEAD = 0.008;
+    private static final double WITH_TAP = 0.012;
 
     private static final int[][] DIRECTIONS = {
             {1, 0}, {1, 1}, {1, -1}, {0, 1}, {0, -1}, {-1, 0}, {-1, 1}, {-1, -1}};
@@ -174,6 +184,10 @@ public final class TargetFit {
         public PlayerSim end;
         /** The move (from 0) before which the expected impulse replaced the motion; -1 for none. */
         public int impulseAt = -1;
+        /** How many of the first moves ran by other keys than {@link #keys}; 0 when all ran by them. */
+        public int led;
+        /** True when those first moves were a tap and {@link #keys} are the keys held before it and after. */
+        public boolean tapped;
         double score = Double.MAX_VALUE;
 
         public boolean fits() {
@@ -181,9 +195,22 @@ public final class TargetFit {
         }
     }
 
+    /** What happened on the way besides the keys looked for. */
+    private static final class Way {
+        static final Way PLAIN = new Way();
+        /** A motion that replaced the player's before move {@code impulseAt}; null for none. */
+        double[] impulse;
+        int impulseAt = -1;
+        /** Other keys for the first {@code led} moves, with the sprint they ran by; null for none. */
+        PlayerSim.Input lead;
+        boolean leadSprint;
+        int led;
+    }
+
     /**
      * @param start    the player after the last position it was seen at, as between ticks; not changed
      * @param seen     what the server now says
+     * @param before   what it said at the last position, or null
      * @param yawMid   the middle of the yaws the moves may have run by, degrees
      * @param yawHalf  how far to either side of it they may lie
      * @param moves    how many moves it may have made since, likeliest first
@@ -194,8 +221,8 @@ public final class TargetFit {
      *                 start's height and fall are themselves only estimates
      * @return the best explanation; {@link Result#fits} says whether it is one
      */
-    public static Result fit(PlayerSim start, PlayerSim.World world, Seen seen, float yawMid, float yawHalf,
-                             int[] moves, double hint, Keys last, double[] impulse, double slackY) {
+    public static Result fit(PlayerSim start, PlayerSim.World world, Seen seen, Seen before, float yawMid,
+                             float yawHalf, int[] moves, double hint, Keys last, double[] impulse, double slackY) {
         int most = 0;
         for (int n : moves) {
             most = Math.max(most, n);
@@ -205,7 +232,7 @@ public final class TargetFit {
            more finely than any single pair of positions can. */
         if (last != null && (!seen.sprinting || last.forward == 1)) {
             for (int n : moves) {
-                PlayerSim end = end(start, world, last.input(seen.sneaking), seen.sprinting, n, null, -1);
+                PlayerSim end = end(start, world, last.input(seen.sneaking), seen.sprinting, n, Way.PLAIN);
                 if (seen.outside(end.x(), end.z()) == 0.0 && seen.under(end.y()) == 0.0
                         && end.onGround == seen.onGround) {
                     Result same = new Result();
@@ -219,174 +246,261 @@ public final class TargetFit {
                 }
             }
         }
-        Result best = new Result();
-        search(best, start, world, seen, yawMid, yawHalf, moves, most, hint, last, null, -1, slackY);
+        Search search = new Search(start, world, seen, yawMid, yawHalf, moves, most, hint, last, slackY);
+        search.all(Way.PLAIN);
         if (impulse != null) {
             for (int at = 0; at < most; at++) {
-                search(best, start, world, seen, yawMid, yawHalf, moves, most, hint, last, impulse, at, slackY);
+                Way hit = new Way();
+                hit.impulse = impulse;
+                hit.impulseAt = at;
+                search.all(hit);
             }
         }
-        return best;
+        if (!search.best.fits() && last != null && before != null && most >= 2) {
+            /* One set of keys for all the moves explains nothing: they changed on the way. Keys change when the
+               player presses them, not when the server sends, so about every second change falls between two
+               positions. First: the old keys for a move or more, then new ones. */
+            for (int led = 1; led < most; led++) {
+                Way changed = new Way();
+                changed.lead = last.input(before.sneaking);
+                changed.leadSprint = before.sprinting;
+                changed.led = led;
+                search.all(changed);
+            }
+            if (!search.best.fits()) {
+                search.taps();
+            }
+        }
+        return search.best;
     }
 
-    /** Every key and jump, for one way the motion may have been replaced on the way (or not at all). */
-    private static void search(Result best, PlayerSim start, PlayerSim.World world, Seen seen, float yawMid,
-                               float yawHalf, int[] moves, int most, double hint, Keys last, double[] impulse,
-                               int impulseAt, double slackY) {
-        PlayerSim.Input idle = new PlayerSim.Input();
-        idle.yaw = yawMid;
-        idle.sneak = seen.sneaking;
-        double[][] still = positions(start, world, idle, false, most, impulse, impulseAt);
-        boolean ground = start.onGround;
-        for (double[] at : still) {
-            ground |= at[3] != 0.0;
+    /** One search: what is the same for every candidate, and the best so far. */
+    private static final class Search {
+        final PlayerSim start;
+        final PlayerSim.World world;
+        final Seen seen;
+        final float yawMid;
+        final float yawHalf;
+        final int[] moves;
+        final int most;
+        final double hint;
+        final Keys last;
+        final double slackY;
+        final Result best = new Result();
+
+        Search(PlayerSim start, PlayerSim.World world, Seen seen, float yawMid, float yawHalf, int[] moves, int most,
+               double hint, Keys last, double slackY) {
+            this.start = start;
+            this.world = world;
+            this.seen = seen;
+            this.yawMid = yawMid;
+            this.yawHalf = yawHalf;
+            this.moves = moves;
+            this.most = most;
+            this.hint = hint;
+            this.last = last;
+            this.slackY = slackY;
         }
-        double[][] stillJumping = null;
-        boolean plain = true;
-        boolean jumping = false;
-        if (ground) {
+
+        /** Every key and jump, for one thing that may have happened on the way (or nothing). */
+        void all(Way way) {
+            PlayerSim.Input idle = new PlayerSim.Input();
+            idle.yaw = this.yawMid;
+            idle.sneak = this.seen.sneaking;
+            double[][] still = positions(this.start, this.world, idle, false, this.most, way);
+            boolean ground = this.start.onGround;
+            for (double[] at : still) {
+                ground |= at[3] != 0.0;
+            }
+            if (!ground) {
+                /* Nowhere near ground the jump key shows nothing: it stays as it was. */
+                branch(way, this.last != null && this.last.jump, still);
+                return;
+            }
             /* The height tells a jump from none, whatever the keys: where only one of the two can reach the
                cell's height the other is not run. Where neither or both can (a step up, an edge), both are. */
             PlayerSim.Input hop = idle.copy();
             hop.jump = true;
-            stillJumping = positions(start, world, hop, false, most, impulse, impulseAt);
-            boolean plainFits = reachesHeight(still, moves, seen, slackY);
-            boolean jumpFits = reachesHeight(stillJumping, moves, seen, slackY);
-            jumping = jumpFits || !plainFits;
-            plain = plainFits || !jumpFits;
-        }
-        if (!ground) {
-            /* Nowhere near ground the jump key shows nothing: it stays as it was. */
-            branch(best, start, world, seen, yawMid, yawHalf, moves, most, hint, last, impulse, impulseAt,
-                    last != null && last.jump, still, slackY);
-            return;
-        }
-        if (plain) {
-            branch(best, start, world, seen, yawMid, yawHalf, moves, most, hint, last, impulse, impulseAt, false,
-                    still, slackY);
-        }
-        if (jumping) {
-            branch(best, start, world, seen, yawMid, yawHalf, moves, most, hint, last, impulse, impulseAt, true,
-                    stillJumping, slackY);
-        }
-    }
-
-    private static boolean reachesHeight(double[][] still, int[] moves, Seen seen, double slackY) {
-        for (int n : moves) {
-            if (Math.abs(seen.under(still[n - 1][1])) <= slackY) {
-                return true;
+            double[][] stillJumping = positions(this.start, this.world, hop, false, this.most, way);
+            boolean plainFits = reachesHeight(still, way);
+            boolean jumpFits = reachesHeight(stillJumping, way);
+            if (plainFits || !jumpFits) {
+                branch(way, false, still);
+            }
+            if (jumpFits || !plainFits) {
+                branch(way, true, stillJumping);
             }
         }
-        return false;
-    }
 
-    /** No keys, and each of the eight directions, with the jump key as given. */
-    private static void branch(Result best, PlayerSim start, PlayerSim.World world, Seen seen, float yawMid,
-                               float yawHalf, int[] moves, int most, double hint, Keys last, double[] impulse,
-                               int impulseAt, boolean jump, double[][] still, double slackY) {
-        if (!seen.sprinting) {
-            for (int n : moves) {
-                Keys none = new Keys();
-                none.jump = jump;
-                none.yaw = yawMid;
-                offer(best, start, world, seen, none, n, hint, last, impulse, impulseAt, null,
-                        seen.outside(still[n - 1][0], still[n - 1][2]), seen.under(still[n - 1][1]), false, slackY);
-            }
-        }
-        for (int slowed = seen.usingItem ? 1 : 0; slowed >= 0; slowed--) {
-            for (int[] direction : DIRECTIONS) {
-                /* A sprint needs the forward key. */
-                if (seen.sprinting && direction[0] != 1) {
-                    continue;
+        private boolean reachesHeight(double[][] still, Way way) {
+            for (int n : this.moves) {
+                if (n > way.led && Math.abs(this.seen.under(still[n - 1][1])) <= this.slackY) {
+                    return true;
                 }
-                Keys keys = new Keys();
-                keys.forward = direction[0];
-                keys.strafe = direction[1];
-                keys.jump = jump;
-                keys.itemSlow = slowed == 1;
-                keys.yaw = yawMid;
-                double[][] pushed = positions(start, world, keys.input(seen.sneaking), seen.sprinting, most, impulse,
-                        impulseAt);
-                for (int n : moves) {
-                    /* What the keys added, and the gap they have to fill, level. */
-                    double addX = pushed[n - 1][0] - still[n - 1][0];
-                    double addZ = pushed[n - 1][2] - still[n - 1][2];
-                    double gapX = seen.midX() - still[n - 1][0];
-                    double gapZ = seen.midZ() - still[n - 1][2];
-                    double add = Math.sqrt(addX * addX + addZ * addZ);
-                    double gap = Math.sqrt(gapX * gapX + gapZ * gapZ);
-                    if (add < 1.0E-4 || Math.abs(gap - add) > RADIAL) {
+            }
+            return false;
+        }
+
+        /** No keys, and each of the eight directions, with the jump key as given. */
+        private void branch(Way way, boolean jump, double[][] still) {
+            if (!this.seen.sprinting) {
+                for (int n : this.moves) {
+                    if (n <= way.led) {
                         continue;
                     }
-                    boolean weak = add < WEAK;
-                    Keys turned = keys.copy();
-                    if (weak) {
-                        turned.yaw = inBand(last != null ? last.yaw : seen.yaw, yawMid, yawHalf);
-                    } else {
-                        turned.yaw = inBand(yawMid + turn(addX, addZ, gapX, gapZ), yawMid, yawHalf);
+                    Keys none = new Keys();
+                    none.jump = jump;
+                    none.yaw = this.yawMid;
+                    offer(none, n, way, false, null, this.seen.outside(still[n - 1][0], still[n - 1][2]),
+                            this.seen.under(still[n - 1][1]), false);
+                }
+            }
+            for (int slowed = this.seen.usingItem ? 1 : 0; slowed >= 0; slowed--) {
+                for (int[] direction : DIRECTIONS) {
+                    /* A sprint needs the forward key. */
+                    if (this.seen.sprinting && direction[0] != 1) {
+                        continue;
                     }
-                    PlayerSim end = end(start, world, turned.input(seen.sneaking), seen.sprinting, n, impulse,
-                            impulseAt);
-                    double offset = seen.outside(end.x(), end.z());
-                    if (offset > 0.0 && !weak) {
-                        /* A wall or the sine table bent it: once more from where it did end. */
-                        Keys again = turned.copy();
-                        again.yaw = inBand(turned.yaw + turn(end.x() - still[n - 1][0], end.z() - still[n - 1][2],
-                                gapX, gapZ), yawMid, yawHalf);
-                        if (again.yaw != turned.yaw) {
-                            PlayerSim second = end(start, world, again.input(seen.sneaking), seen.sprinting, n,
-                                    impulse, impulseAt);
-                            double secondOffset = seen.outside(second.x(), second.z());
-                            if (secondOffset < offset) {
-                                turned = again;
-                                end = second;
-                                offset = secondOffset;
-                            }
+                    Keys keys = new Keys();
+                    keys.forward = direction[0];
+                    keys.strafe = direction[1];
+                    keys.jump = jump;
+                    keys.itemSlow = slowed == 1;
+                    keys.yaw = this.yawMid;
+                    double[][] pushed = positions(this.start, this.world, keys.input(this.seen.sneaking),
+                            this.seen.sprinting, this.most, way);
+                    for (int n : this.moves) {
+                        if (n > way.led) {
+                            turned(way, keys, n, still[n - 1], pushed[n - 1]);
                         }
                     }
-                    offer(best, start, world, seen, turned, n, hint, last, impulse, impulseAt, end, offset,
-                            seen.under(end.y()), weak, slackY);
                 }
             }
         }
-    }
 
-    /** Keeps the candidate when it is the best so far: one that fits before one that does not, then by score. */
-    private static void offer(Result best, PlayerSim start, PlayerSim.World world, Seen seen, Keys keys, int n,
-                              double hint, Keys last, double[] impulse, int impulseAt, PlayerSim end, double offset,
-                              double under, boolean weak, double slackY) {
-        boolean fits = offset <= SLACK && Math.abs(under) <= slackY;
-        if (best.fits() && !fits) {
-            return;
+        /** These keys over {@code n} moves, by the yaw that points what they add at the cell. */
+        private void turned(Way way, Keys keys, int n, double[] still, double[] pushed) {
+            /* What the keys added, and the gap they have to fill, level. */
+            double addX = pushed[0] - still[0];
+            double addZ = pushed[2] - still[2];
+            double gapX = this.seen.midX() - still[0];
+            double gapZ = this.seen.midZ() - still[2];
+            double add = Math.sqrt(addX * addX + addZ * addZ);
+            double gap = Math.sqrt(gapX * gapX + gapZ * gapZ);
+            if (add < 1.0E-4 || Math.abs(gap - add) > RADIAL) {
+                return;
+            }
+            boolean weak = add < WEAK;
+            Keys turned = keys.copy();
+            if (weak) {
+                turned.yaw = inBand(this.last != null ? this.last.yaw : this.seen.yaw, this.yawMid, this.yawHalf);
+            } else {
+                turned.yaw = inBand(this.yawMid + turn(addX, addZ, gapX, gapZ), this.yawMid, this.yawHalf);
+            }
+            PlayerSim end = end(this.start, this.world, turned.input(this.seen.sneaking), this.seen.sprinting, n,
+                    way);
+            double offset = this.seen.outside(end.x(), end.z());
+            if (offset > 0.0 && !weak) {
+                /* A wall or the sine table bent it: once more from where it did end. */
+                Keys again = turned.copy();
+                again.yaw = inBand(turned.yaw + turn(end.x() - still[0], end.z() - still[2], gapX, gapZ),
+                        this.yawMid, this.yawHalf);
+                if (again.yaw != turned.yaw) {
+                    PlayerSim second = end(this.start, this.world, again.input(this.seen.sneaking),
+                            this.seen.sprinting, n, way);
+                    double secondOffset = this.seen.outside(second.x(), second.z());
+                    if (secondOffset < offset) {
+                        turned = again;
+                        end = second;
+                        offset = secondOffset;
+                    }
+                }
+            }
+            offer(turned, n, way, false, end, offset, this.seen.under(end.y()), weak);
         }
-        if (end == null) {
-            end = end(start, world, keys.input(seen.sneaking), seen.sprinting, n, impulse, impulseAt);
+
+        /**
+         * A tap: other keys (or none) for a move or more, then the keys of before again -- the sprint reset of a
+         * 1.8 fight when it falls between two positions. By the yaw of before; the keys stay the ones of before.
+         */
+        void taps() {
+            for (int index = -1; index < DIRECTIONS.length; index++) {
+                int forward = index < 0 ? 0 : DIRECTIONS[index][0];
+                int strafe = index < 0 ? 0 : DIRECTIONS[index][1];
+                if (forward == this.last.forward && strafe == this.last.strafe
+                        || this.seen.sprinting && this.last.forward != 1) {
+                    continue;
+                }
+                Keys tap = this.last.copy();
+                tap.forward = forward;
+                tap.strafe = strafe;
+                for (int led = 1; led < this.most; led++) {
+                    Way way = new Way();
+                    way.lead = tap.input(this.seen.sneaking);
+                    /* Off the forward key the sprint is off; back on it, it is on again in the same move. */
+                    way.leadSprint = this.seen.sprinting && forward == 1;
+                    way.led = led;
+                    double[][] path = positions(this.start, this.world, this.last.input(this.seen.sneaking),
+                            this.seen.sprinting, this.most, way);
+                    for (int n : this.moves) {
+                        if (n > led) {
+                            offer(this.last.copy(), n, way, true, null,
+                                    this.seen.outside(path[n - 1][0], path[n - 1][2]),
+                                    this.seen.under(path[n - 1][1]), false);
+                        }
+                    }
+                }
+            }
         }
-        double score = offset + Math.abs(under);
-        if (hint > 0.0) {
-            score += PER_MOVE * Math.abs((double) n - hint);
-        }
-        if (last != null && !keys.sameDirection(last)) {
-            score += weak ? CHANGED_WEAK_KEYS : CHANGED_KEYS;
-        }
-        if (end.onGround != seen.onGround) {
-            score += GROUND_DIFFERS;
-        }
-        if (seen.usingItem && !keys.itemSlow) {
-            score += NOT_SLOWED;
-        }
-        if (impulse != null) {
-            score += WITH_IMPULSE;
-        }
-        if ((fits && !best.fits()) || score < best.score) {
-            best.offset = offset;
-            best.under = under;
-            best.fits = fits;
-            best.score = score;
-            best.moves = n;
-            best.keys = keys;
-            best.end = end;
-            best.impulseAt = impulse == null ? -1 : impulseAt;
+
+        /** Keeps the candidate when it is the best so far: one that fits before one that does not, then by score. */
+        private void offer(Keys keys, int n, Way way, boolean tapped, PlayerSim end, double offset, double under,
+                           boolean weak) {
+            boolean fits = offset <= SLACK && Math.abs(under) <= this.slackY;
+            if (this.best.fits() && !fits) {
+                return;
+            }
+            double score = offset + Math.abs(under);
+            if (this.hint > 0.0) {
+                score += PER_MOVE * Math.abs((double) n - this.hint);
+            }
+            if (this.last != null && !keys.sameDirection(this.last)) {
+                score += weak ? CHANGED_WEAK_KEYS : CHANGED_KEYS;
+            }
+            if (this.last != null && keys.jump != this.last.jump) {
+                score += CHANGED_JUMP;
+            }
+            if (this.seen.usingItem && !keys.itemSlow) {
+                score += NOT_SLOWED;
+            }
+            if (way.impulse != null) {
+                score += WITH_IMPULSE;
+            }
+            if (way.led > 0) {
+                score += tapped ? WITH_TAP : WITH_LEAD;
+            }
+            if (!(fits && !this.best.fits()) && score >= this.best.score) {
+                return;
+            }
+            if (end == null) {
+                end = end(this.start, this.world, keys.input(this.seen.sneaking), this.seen.sprinting, n, way);
+            }
+            if (end.onGround != this.seen.onGround) {
+                score += GROUND_DIFFERS;
+                if (!(fits && !this.best.fits()) && score >= this.best.score) {
+                    return;
+                }
+            }
+            this.best.offset = offset;
+            this.best.under = under;
+            this.best.fits = fits;
+            this.best.score = score;
+            this.best.moves = n;
+            this.best.keys = keys;
+            this.best.end = end;
+            this.best.impulseAt = way.impulse == null ? -1 : way.impulseAt;
+            this.best.led = way.led;
+            this.best.tapped = tapped;
         }
     }
 
@@ -397,11 +511,15 @@ public final class TargetFit {
      * moves and adds what was missing, divided by how far a unit of motion carries over the moves left (the air's
      * friction, close enough to converge on ground too).
      *
+     * @param height false to leave the fall as it is and look for the level motion only: on ground at the end the
+     *               height says nothing of the fall, and a fall that already ends at the right height is better
+     *               than any worked back from two cells
      * @return the player after the moves, or null when no motion ends in the cell (a wall is in the way)
      */
-    static PlayerSim solve(PlayerSim start, PlayerSim.World world, Seen seen, Keys keys, int moves, int at) {
+    static PlayerSim solve(PlayerSim start, PlayerSim.World world, Seen seen, Keys keys, int moves, int at,
+                           boolean height) {
         PlayerSim.Input in = keys.input(seen.sneaking);
-        PlayerSim before = at == 0 ? start : end(start, world, in, seen.sprinting, at, null, -1);
+        PlayerSim before = at == 0 ? start : end(start, world, in, seen.sprinting, at, Way.PLAIN);
         int left = moves - at;
         double level = 0.0;
         double fall = 0.0;
@@ -413,12 +531,13 @@ public final class TargetFit {
             unitLevel *= (double) 0.91F;
             unitFall *= 0.9800000190734863;
         }
-        double[] motion = {before.motionX, before.motionY, before.motionZ};
-        /* On ground at the end the height says nothing of the fall: only the level motion is looked for. */
-        boolean height = !seen.onGround;
+        Way replaced = new Way();
+        replaced.impulse = new double[]{before.motionX, before.motionY, before.motionZ};
+        replaced.impulseAt = at;
+        double[] motion = replaced.impulse;
         PlayerSim end = null;
         for (int i = 0; i < 6; i++) {
-            end = end(start, world, in, seen.sprinting, moves, motion, at);
+            end = end(start, world, in, seen.sprinting, moves, replaced);
             double missX = seen.midX() - end.x();
             double missY = height ? seen.midY() - end.y() : 0.0;
             double missZ = seen.midZ() - end.z();
@@ -463,39 +582,49 @@ public final class TargetFit {
         return d;
     }
 
-    /** {x, y, z, on ground (1 or 0)} after each of {@code ticks} moves. */
+    /** {x, y, z, on ground (1 or 0)} after each of {@code ticks} moves by these keys. */
     static double[][] positions(PlayerSim start, PlayerSim.World world, PlayerSim.Input in, boolean sprinting,
-                                        int ticks, double[] impulse, int impulseAt) {
+                                int ticks) {
+        return positions(start, world, in, sprinting, ticks, Way.PLAIN);
+    }
+
+    /** The player after {@code ticks} moves by these keys. */
+    static PlayerSim end(PlayerSim start, PlayerSim.World world, PlayerSim.Input in, boolean sprinting, int ticks) {
+        return end(start, world, in, sprinting, ticks, Way.PLAIN);
+    }
+
+    private static double[][] positions(PlayerSim start, PlayerSim.World world, PlayerSim.Input in,
+                                        boolean sprinting, int ticks, Way way) {
         double[][] out = new double[ticks][];
         PlayerSim sim = start.copy();
-        sim.sprinting = sprinting;
         for (int i = 0; i < ticks; i++) {
-            step(sim, world, in, i, impulse, impulseAt);
+            step(sim, world, in, sprinting, i, way);
             out[i] = new double[]{sim.x(), sim.y(), sim.z(), sim.onGround ? 1.0 : 0.0};
         }
         return out;
     }
 
-    static PlayerSim end(PlayerSim start, PlayerSim.World world, PlayerSim.Input in, boolean sprinting,
-                         int ticks, double[] impulse, int impulseAt) {
+    private static PlayerSim end(PlayerSim start, PlayerSim.World world, PlayerSim.Input in, boolean sprinting,
+                                 int ticks, Way way) {
         PlayerSim sim = start.copy();
-        sim.sprinting = sprinting;
         for (int i = 0; i < ticks; i++) {
-            step(sim, world, in, i, impulse, impulseAt);
+            step(sim, world, in, sprinting, i, way);
         }
         return sim;
     }
 
-    private static void step(PlayerSim sim, PlayerSim.World world, PlayerSim.Input in, int index, double[] impulse,
-                             int impulseAt) {
-        if (impulse != null && index == impulseAt) {
-            sim.motionX = impulse[0];
-            sim.motionY = impulse[1];
-            sim.motionZ = impulse[2];
+    private static void step(PlayerSim sim, PlayerSim.World world, PlayerSim.Input in, boolean sprinting, int index,
+                             Way way) {
+        if (way.impulse != null && index == way.impulseAt) {
+            sim.motionX = way.impulse[0];
+            sim.motionY = way.impulse[1];
+            sim.motionZ = way.impulse[2];
         }
+        boolean leading = index < way.led;
+        sim.sprinting = leading ? way.leadSprint : sprinting;
         /* The wait between the jumps of a held key is the other client's own count, not known here; it is over
            by the time a jump lands, so a held key jumps on every landing. */
         sim.jumpTicks = 0;
-        sim.move(world, in);
+        sim.move(world, leading ? way.lead : in);
     }
 }

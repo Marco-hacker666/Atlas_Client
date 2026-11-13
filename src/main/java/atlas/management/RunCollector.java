@@ -36,7 +36,8 @@ import java.util.Set;
  *
  * With it on, every moving player within RANGE is predicted and later checked against where it went (RunRecorder,
  * velocity and position by RunTracker), whether SpeedBlocker is on or not. A row is only numbers: the horizon,
- * distance, speed, approach, key offset, chasing, ground, sprint and both errors. No name -- the player column is
+ * distance, speed, approach, key offset, chasing, ground, sprint and the errors (the model's, the straight line's
+ * and, since 2026-11-13, the movement simulation's). No name -- the player column is
  * "e" plus the entity id, which means nothing outside that session -- no server, no coordinates, no account. The
  * relay sees the sender's IP, as any website does, and uses it only for its hourly limit.
  *
@@ -183,7 +184,9 @@ public final class RunCollector {
                     || motion != null && Math.hypot(motion[0], motion[1]) >= 0.25;
             this.recorder.observe(this.tick, id, "e" + id, now[0], now[1], x, z, this.tracker.fresh(this.tick, id),
                     motion == null ? Double.NaN : motion[0], motion == null ? Double.NaN : motion[1],
-                    player.rotationYawHead, mc.thePlayer.posX, mc.thePlayer.posZ, player.onGround, sprinting);
+                    player.rotationYawHead, mc.thePlayer.posX, mc.thePlayer.posZ, player.onGround, sprinting,
+                    this.recorder.samples(this.tick)
+                            ? atlas.sim.SimTargets.path(player, RunRecorder.LENGTH) : null);
         }
         this.tracker.retain(alive);
         if (System.currentTimeMillis() - this.windowStart >= WINDOW_MS) {

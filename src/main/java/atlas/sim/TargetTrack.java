@@ -312,6 +312,14 @@ public final class TargetTrack {
             boolean height = !now.onGround && (asIs.onGround || now.under(asIs.y()) != 0.0);
             PlayerSim first = TargetFit.solve(start, world, now, held, count, 0, height);
             PlayerSim late = count > 1 ? TargetFit.solve(start, world, now, held, count, count - 1, height) : null;
+            /* With the fall left as it is, nothing has held the height against the cell yet: a player moved to
+               another floor is not on the old one, however well the level motion fits (review, PR #40). */
+            if (first != null && Math.abs(now.under(first.y())) > TargetFit.SLACK) {
+                first = null;
+            }
+            if (late != null && Math.abs(now.under(late.y())) > TargetFit.SLACK) {
+                late = null;
+            }
             if (first != null || late != null) {
                 if (now.onGround) {
                     this.looseHeight = false;
@@ -582,7 +590,6 @@ public final class TargetTrack {
             set(out, 0, sim.x(), sim.y(), sim.z(), sim.onGround);
             for (int i = 1; i <= moves; i++) {
                 in.yaw = yaw + this.yawRate * (float) i;
-                sim.jumpTicks = 0;
                 sim.tick(world, in);
                 set(out, i, sim.x(), sim.y(), sim.z(), sim.onGround);
             }
@@ -597,7 +604,6 @@ public final class TargetTrack {
                 held.sprint = this.sprintBefore;
                 for (int i = 1; i <= moves; i++) {
                     held.yaw = yaw + this.yawRate * (float) i;
-                    back.jumpTicks = 0;
                     back.tick(world, held);
                     out.x[i] = (out.x[i] + back.x()) / 2.0;
                     out.z[i] = (out.z[i] + back.z()) / 2.0;

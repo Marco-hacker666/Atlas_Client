@@ -312,16 +312,23 @@ public final class TargetFit {
             for (double[] at : still) {
                 ground |= at[3] != 0.0;
             }
-            if (!ground) {
-                /* Nowhere near ground the jump key shows nothing: it stays as it was. */
-                branch(way, this.last != null && this.last.jump, still);
-                return;
-            }
-            /* The height tells a jump from none, whatever the keys: where only one of the two can reach the
-               cell's height the other is not run. Where neither or both can (a step up, an edge), both are. */
             PlayerSim.Input hop = idle.copy();
             hop.jump = true;
             double[][] stillJumping = positions(this.start, this.world, hop, false, this.most, way);
+            if (!ground) {
+                boolean shows = false;
+                for (int i = 0; i < this.most; i++) {
+                    shows |= still[i][1] != stillJumping[i][1];
+                }
+                if (!shows) {
+                    /* Nowhere near ground the jump key shows nothing: it stays as it was. */
+                    branch(way, this.last != null && this.last.jump, still);
+                    return;
+                }
+                /* Off the ground and the key still lifts: a liquid (review, PR #40). Told by the height, below. */
+            }
+            /* The height tells a jump from none, whatever the keys: where only one of the two can reach the
+               cell's height the other is not run. Where neither or both can (a step up, an edge), both are. */
             boolean plainFits = reachesHeight(still, way);
             boolean jumpFits = reachesHeight(stillJumping, way);
             if (plainFits || !jumpFits) {
@@ -622,9 +629,8 @@ public final class TargetFit {
         }
         boolean leading = index < way.led;
         sim.sprinting = leading ? way.leadSprint : sprinting;
-        /* The wait between the jumps of a held key is the other client's own count, not known here; it is over
-           by the time a jump lands, so a held key jumps on every landing. */
-        sim.jumpTicks = 0;
+        /* The wait between the jumps of a held key (ten ticks) is the simulation's own count, carried from the
+           jump it ran: under a low ceiling the player is back on ground before it is over (review, PR #40). */
         sim.move(world, leading ? way.lead : in);
     }
 }

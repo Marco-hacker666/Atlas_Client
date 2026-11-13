@@ -353,6 +353,17 @@ public class TargetFitTest {
     }
 
     @Test
+    public void aHeldJumpKeyWaitsOutItsTenTicks() {
+        /* Back on ground early (a low ceiling) with the wait not over: the held key does not jump yet. */
+        PlayerSim waiting = standing();
+        waiting.jumpTicks = 5;
+        PlayerSim.Input hop = keys(0.0F, 0.0F, 0.0F, true);
+        assertEquals(0.0, TargetFit.positions(waiting, WORLD, hop, false, 4)[3][1], 0.0);
+        assertTrue(TargetFit.positions(waiting, WORLD, hop, false, 5)[4][1] > 0.4);
+        assertTrue(TargetFit.positions(standing(), WORLD, hop, false, 1)[0][1] > 0.4);
+    }
+
+    @Test
     public void wrapAndCopies() {
         assertEquals(-170.0, TargetFit.wrap(190.0), 1.0E-9);
         assertEquals(170.0, TargetFit.wrap(-190.0), 1.0E-9);

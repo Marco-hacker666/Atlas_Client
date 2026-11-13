@@ -234,7 +234,13 @@ public final class SimTargets {
                     && player.serverPosZ == target.z) {
                 continue;
             }
-            position(player, target);
+            try {
+                position(player, target);
+            } catch (RuntimeException e) {
+                /* A forecast is never worth the game: this player's track starts again. */
+                this.score.forget(player.getEntityId());
+                this.targets.put(player.getEntityId(), new Target());
+            }
         }
     }
 

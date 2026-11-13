@@ -1,6 +1,6 @@
 /**
- * The movement simulation: this player's own 1.8 movement, run ahead of the game or run again after it, with no game
- * needed to run it.
+ * The movement simulation: 1.8 movement -- this player's own, and another player's as far as the server tells of it
+ * -- run ahead of the game or run again after it, with no game needed to run it.
  *
  * <h3>The pieces</h3>
  * <ul>
@@ -13,6 +13,9 @@
  *   <li>{@link atlas.sim.MoveAudit}: the self check tick after tick -- which state a move is checked from, when, and
  *       with which packet's look. Its tests run the game's tick order.</li>
  *   <li>{@link atlas.sim.MoveModel}: the older, level-only model; MoveCheck's look check uses it.</li>
+ *   <li>{@link atlas.sim.TargetFit}, {@link atlas.sim.TargetTrack}, {@link atlas.sim.TargetForecast}: another
+ *       player's movement. The server sends little of it and coarsely; the keys are found from the positions, and
+ *       the player is run ahead by them. No module uses these yet.</li>
  *   <li>{@link atlas.sim.SimPlayer}: the game's side -- the player, its keys and the world, all of one moment of the
  *       tick. The only class here that needs the game.</li>
  * </ul>

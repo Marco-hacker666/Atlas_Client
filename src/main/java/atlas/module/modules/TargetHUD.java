@@ -166,6 +166,25 @@ public class TargetHUD extends Module {
         return null;
     }
 
+    /**
+     * The health bar colour the chosen style draws at this much health (0-1), for the Theme window's preview
+     * (2026-11-14). JELLO and DEFAULT as they draw it; the other styles by the color setting (HUD, or the health
+     * blend), which is what most of them use.
+     */
+    public int previewBarColour(float health) {
+        if (this.style.getValue() == 15) {
+            return 0xFFC8C8C8;
+        }
+        HUD hud = (HUD) Atlas.moduleManager.modules.get(HUD.class);
+        Color colour = this.color.getValue() == 1 && hud != null ? hud.getColor(System.currentTimeMillis())
+                : ColorUtil.getHealthBlend(health);
+        ThemeStyle themed = ThemeStyle.active(TargetColors.class);
+        if (themed != null && this.color.getValue() == 1) {
+            colour = themed.color(colour, null, -1);
+        }
+        return colour.getRGB() | 0xFF000000;
+    }
+
     /** Themed by the Target group; friends and marked targets keep their colours. */
     private Color getTargetColor(EntityLivingBase entityLivingBase) {
         Color own = this.ownTargetColor(entityLivingBase);

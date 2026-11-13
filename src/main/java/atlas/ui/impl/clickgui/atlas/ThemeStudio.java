@@ -333,13 +333,19 @@ public final class ThemeStudio extends GuiScreen {
         switch (index) {
             case 1: {
                 rows.add(Row.heading("Menu accent"));
-                add(rows, this.theme.mode, this.theme.accent, this.theme.accentHue, this.theme.accentSaturation);
+                add(rows, this.theme.mode, this.theme.accent, this.theme.accentHue, this.theme.accentSaturation,
+                        this.theme.accentEverywhere);
                 rows.add(Row.heading("Glass colour"));
                 add(rows, this.theme.tint, this.theme.tintHue, this.theme.opacity);
                 Module hud = module(HUD.class);
                 rows.add(Row.heading("HUD colours"));
                 for (String name : HUD_COLOURS) {
                     add(rows, propertyOf(hud, name));
+                }
+                if (HudPanel.active()) {
+                    /* 2026-11-14: the owner tuned these and the module list stayed white. */
+                    rows.add(Row.note("The JELLO HUD look draws the module list in white, so these colours show only "
+                            + "where something follows the HUD colour. HUD section > hud-theme CLASSIC colours the list."));
                 }
                 Module master = module(Theme.class);
                 if (master != null) {
@@ -1131,15 +1137,22 @@ public final class ThemeStudio extends GuiScreen {
         for (String name : names) {
             float w = fr.getStringWidth(name) + 8;
             float rx = x2 - 6 - w;
+            /* 2026-11-14 (owner: the preview's colours were unlike the game's): as HUD draws the list -- a JELLO
+               list has white names and no edge bar, whatever the HUD colour. */
+            int background = hud == null ? 0x70000000 : hud.listRowBackground();
             if (panels) {
                 HudPanel.row(rx, ry, x2 - 6, ry + 11);
-            } else {
-                Liquid.rect(rx, ry, x2 - 6, ry + 11, 0.0F, 0x70000000);
+            } else if (background != 0) {
+                Liquid.rect(rx, ry, x2 - 6, ry + 11, 0.0F, background);
             }
-            int colour = hud == null ? accent() : hud.getColor(now, (long) (unit * hud.colorDistance.getValue())).getRGB();
+            long offset = hud == null ? 0L : (long) (unit * hud.colorDistance.getValue());
+            int colour = hud == null ? accent() : hud.listNameColour(now, offset);
             textState();
             fr.drawStringWithShadow(name, rx + 4, ry + 2, colour);
-            Liquid.rect(x2 - 7.5F, ry + 1.5F, x2 - 6, ry + 9.5F, 0.75F, opaque(colour));
+            if (hud == null || hud.listEdgeBar()) {
+                int bar = hud == null ? accent() : hud.getColor(now, offset).getRGB();
+                Liquid.rect(x2 - 7.5F, ry + 1.5F, x2 - 6, ry + 9.5F, 0.75F, opaque(bar));
+            }
             ry += 12;
             unit++;
         }
@@ -1164,7 +1177,11 @@ public final class ThemeStudio extends GuiScreen {
             float barR = cx + cardW - 6;
             Liquid.rect(barL, cy + 19, barR, cy + 23, 2.0F, 0x33000000);
             Liquid.rect(barL, cy + 19, barL + (barR - barL) * Math.max(health, trail), cy + 23, 2.0F, 0xFF646464);
-            int colour = hud == null ? accent() : hud.getColor(now, 0L).getRGB();
+            /* The bar in the colour the chosen TargetHUD style draws it (JELLO: light grey). */
+            atlas.module.modules.TargetHUD target = (atlas.module.modules.TargetHUD) module(
+                    atlas.module.modules.TargetHUD.class);
+            int colour = target != null ? target.previewBarColour(health)
+                    : hud == null ? accent() : hud.getColor(now, 0L).getRGB();
             Liquid.rect(barL, cy + 19, barL + (barR - barL) * health, cy + 23, 2.0F, opaque(colour));
             GlStateManager.enableBlend();
         }
@@ -1181,18 +1198,22 @@ public final class ThemeStudio extends GuiScreen {
             float nx = x2 - 6 - w + (1.0F - shown) * 18.0F;
             float ny = y2 - 26;
             if (ny > cy + 36) {
-                if (panels) {
-                    HudPanel.panel(nx, ny, nx + w, ny + 18, true, shown);
-                } else {
-                    Liquid.rect(nx, ny, nx + w, ny + 18, 6.0F, alpha(0xC00A0C10, shown));
-                }
+                /* 2026-11-14: as HUD.drawModernNotification draws it -- with accent everywhere, the glass in the
+                   Appearance glass colour and the bar in the accent (owner: the preview did not match the game). */
+                int sharedAccent = AtlasClickGui.sharedAccent();
+                int sharedGlass = AtlasClickGui.sharedGlass();
+                /* Notifications never use the HUD panels: always this glass. */
+                Liquid.rect(nx, ny, nx + w, ny + 18, 6.0F, sharedGlass != 0
+                        ? alpha((150 << 24) | (sharedGlass & 0xFFFFFF), shown) : alpha(0x5C0A0C10, shown));
+                Liquid.rim(nx, ny, nx + w, ny + 18, 6.0F, 1.0F, alpha(0x18FFFFFF, shown), 0);
                 int alpha = Math.max(4, Math.round(shown * 255.0F)) << 24;
                 textState();
                 fr.drawStringWithShadow("Silent Aura ", nx + 7, ny + 5, alpha | 0xEEF1F5);
                 fr.drawStringWithShadow("enabled", nx + 7 + fr.getStringWidth("Silent Aura "), ny + 5,
                         alpha | 0x41D982);
                 float progress = clamp01(1.0F - phase / 3200.0F);
-                Liquid.rect(nx + 6, ny + 15, nx + 6 + (w - 12) * progress, ny + 16, 0.5F, alpha(0xFF41D982, shown));
+                Liquid.rect(nx + 6, ny + 15, nx + 6 + (w - 12) * progress, ny + 16, 0.5F,
+                        alpha(sharedAccent != 0 ? sharedAccent : 0xFF41D982, shown));
                 GlStateManager.enableBlend();
             }
         }

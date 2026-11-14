@@ -258,6 +258,7 @@ public class ListLayoutTest {
     public void aRowOnItsWayInIsFainterAndAside() {
         ListStyle style = plain();
         style.anim = ListStyle.Anim.SLIDE_FADE;
+        style.backgroundOpacity = 50;
         List<ListRow> rows = rows();
         rows.get(1).appear = 0.5F;
         ListFrame frame = ListLayout.frame(style, rows, TEXT, 0L, null);

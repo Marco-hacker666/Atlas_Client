@@ -2,8 +2,8 @@ package atlas.ui.hud.list;
 
 /**
  * Ready-made module lists (2026-11-14): each sets the shape of a {@link ListStyle} -- its backgrounds, bars,
- * corners, spacing and what the text is drawn in -- and leaves the colours, the order, the animation and where the
- * list sits as they are. A start to change from, not a mode: the settings a preset writes are ordinary settings.
+ * corners, spacing, what the text is drawn in and the blur -- and leaves the colours, the order, the animation, the
+ * glow and where the list sits as they are. A start to change from, not a mode: the settings a preset writes are ordinary settings.
  */
 public final class ListPresets {
 
@@ -35,7 +35,6 @@ public final class ListPresets {
         ListStyle.Bar bar = ListStyle.Bar.NONE;
         float barWidth = 1.5F;
         boolean blur = false;
-        boolean glow = false;
         switch (name) {
             case "CLEAN":
                 /* Text and nothing else. */
@@ -125,7 +124,35 @@ public final class ListPresets {
         s.bar = bar;
         s.barWidth = barWidth;
         s.blur = blur;
-        s.glow = glow;
         return true;
+    }
+
+    /**
+     * The preset whose shape this style has, or CUSTOM: what the choice shows, worked out from the settings rather
+     * than remembered, so it is right whichever order the settings were read or changed in.
+     */
+    public static String match(ListStyle style) {
+        for (int i = 1; i < NAMES.length; i++) {
+            ListStyle preset = new ListStyle();
+            apply(NAMES[i], preset);
+            if (sameShape(preset, style)) {
+                return NAMES[i];
+            }
+        }
+        return NAMES[0];
+    }
+
+    /** Whether two styles agree in everything a preset sets. */
+    static boolean sameShape(ListStyle a, ListStyle b) {
+        return a.text == b.text && a.suffix == b.suffix && a.textShadow == b.textShadow && near(a.padX, b.padX)
+                && near(a.padY, b.padY) && near(a.gap, b.gap) && a.background == b.background
+                && (a.backgroundColor & 0xFFFFFF) == (b.backgroundColor & 0xFFFFFF)
+                && a.backgroundOpacity == b.backgroundOpacity && a.backgroundTint == b.backgroundTint
+                && a.corners == b.corners && near(a.radius, b.radius) && a.bar == b.bar
+                && near(a.barWidth, b.barWidth) && a.blur == b.blur;
+    }
+
+    private static boolean near(float a, float b) {
+        return Math.abs(a - b) < 0.01F;
     }
 }

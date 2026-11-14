@@ -37,6 +37,11 @@ public final class ListFrame {
     }
 
     public final List<Op> ops = new ArrayList<Op>();
+    /**
+     * Each row's area in the row's colour, at the row's own fade: not drawn by {@link #paint}. What the game glows
+     * round, whether or not the row has a background.
+     */
+    public final List<Op> bodies = new ArrayList<Op>();
     /** The box round everything drawn; all zero for an empty list. */
     public float minX;
     public float minY;
@@ -50,6 +55,12 @@ public final class ListFrame {
         }
         this.ops.add(new Op(null, x1, y1, x2, y2, radius, radius > 0.0F ? corners : 0, argb, false, backing));
         grow(x1, y1, x2, y2);
+    }
+
+    void body(float x1, float y1, float x2, float y2, float radius, int corners, int argb) {
+        if (x2 - x1 > 0.0F && y2 - y1 > 0.0F && (argb >>> 24) != 0) {
+            this.bodies.add(new Op(null, x1, y1, x2, y2, radius, radius > 0.0F ? corners : 0, argb, false, false));
+        }
     }
 
     void text(String text, float x, float y, float width, float height, int argb, boolean shadow) {
@@ -92,6 +103,14 @@ public final class ListFrame {
             if (op.backing) {
                 painter.rect(op.x1, op.y1, op.x2, op.y2, op.radius, op.corners, argb);
             }
+        }
+    }
+
+    /** Draws each row's area in its colour at {@code strength} (0 to 1) of its own opacity: the glow's shape. */
+    public void paintGlow(ListPainter painter, float strength) {
+        for (Op op : this.bodies) {
+            float alpha = (op.argb >>> 24) / 255.0F * Math.max(0.0F, Math.min(1.0F, strength));
+            painter.rect(op.x1, op.y1, op.x2, op.y2, op.radius, op.corners, ListColors.argb(op.argb, alpha));
         }
     }
 

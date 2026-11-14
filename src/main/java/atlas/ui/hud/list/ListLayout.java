@@ -34,10 +34,11 @@ public final class ListLayout {
     /**
      * @param rows       the rows to draw, each measured and with its appear and slot set ({@link ListAnim})
      * @param textHeight the height of a line of text
-     * @param hud        the HUD's colour for a row, used when the style's paint is HUD; may be null
+     * @param source     the colour of a row where the style's paint is HUD or THEME, which only the game knows;
+     *                   may be null (colour 1 then)
      */
     public static ListFrame frame(ListStyle style, List<ListRow> rows, float textHeight, long timeMs,
-                                  ListColors.Source hud) {
+                                  ListColors.Source source) {
         ListFrame frame = new ListFrame();
         final int count = rows.size();
         if (count == 0) {
@@ -92,7 +93,8 @@ public final class ListLayout {
                 y1[i] = top;
                 y2[i] = top + rowH;
             }
-            rgb[i] = style.paint == ListStyle.Paint.HUD && hud != null ? hud.color(i) & 0xFFFFFF
+            boolean outside = style.paint == ListStyle.Paint.HUD || style.paint == ListStyle.Paint.THEME;
+            rgb[i] = outside && source != null ? source.color(i) & 0xFFFFFF
                     : ListColors.color(style, timeMs, i, row.name, row.category);
         }
         /* The rows from the top of the screen down, to know each one's neighbours. */
@@ -116,6 +118,14 @@ public final class ListLayout {
 
         float radius = style.corners == ListStyle.Corners.NONE ? 0.0F
                 : Math.max(0.0F, Math.min(style.radius, rowH / 2.0F));
+
+        /* Each row's area, for the glow. */
+        for (int i = 0; i < count; i++) {
+            float a = edge + shift[i];
+            float b = a + sx * width[i];
+            frame.body(Math.min(a, b), y1[i], Math.max(a, b), y2[i], radius,
+                    style.corners == ListStyle.Corners.NONE ? 0 : ListPainter.ALL, ListColors.argb(rgb[i], alpha[i]));
+        }
 
         /* The backgrounds. */
         if (block) {

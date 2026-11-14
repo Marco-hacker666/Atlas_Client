@@ -1,7 +1,7 @@
 package atlas.ui.hud.list;
 
 /**
- * Everything about how the module list looks, as plain numbers (2026-11-14, owner: "different module lists, as
+ * Everything about how the module list looks, as plain numbers. A new one is the SIDEBAR preset's shape (2026-11-14, owner: "different module lists, as
  * customisable as it gets"). The HUD module fills one of these from its settings each frame; {@link ListLayout}
  * turns it and the rows into rectangles and text; a {@link ListPainter} draws those. Nothing here knows the game,
  * so a look can be drawn to a picture and checked without it.
@@ -59,8 +59,10 @@ public final class ListStyle {
 
     /** Where a row's colour comes from. */
     public enum Paint {
-        /** The HUD's own colour for the line (its colour mode, the menu accent, the Theme tab). */
+        /** The HUD's own colour for the line (its colour mode, the menu accent, the Theme tab's Interface group). */
         HUD,
+        /** The Theme tab's own colours (the Theme module), whatever the HUD's are. */
+        THEME,
         STATIC,
         /** Colour 1 to colour 2 and back, travelling down the list. */
         GRADIENT,
@@ -121,7 +123,7 @@ public final class ListStyle {
     /** RGB. */
     public int backgroundColor = 0x0F0F0F;
     /** 0 to 100. */
-    public int backgroundOpacity = 50;
+    public int backgroundOpacity = 55;
     /** How much of the row's colour is mixed into its background, 0 to 100. */
     public int backgroundTint;
 
@@ -148,8 +150,9 @@ public final class ListStyle {
     /** Seconds a row takes to come or go. */
     public float animTime = 0.2F;
 
-    /** Drawn only in game: the screen behind the rows blurred, and a soft glow round them. */
+    /** Drawn only in game: the screen behind the rows' backgrounds blurred. Part of a preset's shape. */
     public boolean blur;
+    /** Drawn only in game: a soft glow in each row's colour. An effect on top of any shape: no preset sets it. */
     public boolean glow;
 
     /** The names of an enum's values, for a setting's choices. */

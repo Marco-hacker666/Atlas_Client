@@ -209,6 +209,14 @@ public class ListLayoutTest {
         assertEquals(ListPainter.ALL, block.get(0).corners);
         /* The text still ends at the anchored side. */
         assertEquals(-43.0F, texts(frame).get(2).x1, 1.0E-4F);
+        /* It fades with the rows in it: whole while one is there, then with the last one to go. */
+        style.backgroundOpacity = 50;
+        List<ListRow> leaving = rows();
+        leaving.get(0).appear = 0.5F;
+        leaving.get(2).appear = 0.25F;
+        assertEquals(0x80, backings(ListLayout.frame(style, leaving, TEXT, 0L, null)).get(0).argb >>> 24);
+        leaving.get(1).appear = 0.5F;
+        assertEquals(0x40, backings(ListLayout.frame(style, leaving, TEXT, 0L, null)).get(0).argb >>> 24);
         style.background = ListStyle.Background.NONE;
         assertFalse(ListLayout.frame(style, rows(), TEXT, 0L, null).hasBacking());
     }

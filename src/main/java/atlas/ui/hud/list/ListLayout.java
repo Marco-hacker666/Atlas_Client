@@ -134,6 +134,12 @@ public final class ListLayout {
             float a = edge;
             float b = edge + sx * widest;
             int base = ListColors.mix(style.backgroundColor, rgb[0], style.backgroundTint / 100.0F);
+            /* As there as the most present row: whole while one is, fading out with the last one to go, slid or
+               faded (review, PR #42). */
+            float present = 0.0F;
+            for (ListRow row : rows) {
+                present = Math.max(present, Math.max(0.0F, Math.min(1.0F, row.appear)));
+            }
             float blockRadius = style.corners == ListStyle.Corners.NONE ? 0.0F
                     : Math.max(0.0F, Math.min(style.radius, Math.min(widest, bottom - top) / 2.0F));
             int corners = ListPainter.ALL;
@@ -143,7 +149,7 @@ public final class ListLayout {
                         : ListPainter.TOP_LEFT | ListPainter.BOTTOM_LEFT);
             }
             frame.rect(Math.min(a, b), top, Math.max(a, b), bottom, blockRadius, corners,
-                    ListColors.argb(base, style.backgroundOpacity / 100.0F), true);
+                    ListColors.argb(base, style.backgroundOpacity / 100.0F * present), true);
         } else if (style.background == ListStyle.Background.ROW) {
             for (int i = 0; i < count; i++) {
                 float a = edge + shift[i];

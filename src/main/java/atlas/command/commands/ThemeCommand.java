@@ -1,6 +1,8 @@
 package atlas.command.commands;
 
+import atlas.Atlas;
 import atlas.command.Command;
+import atlas.module.Module;
 import atlas.ui.impl.clickgui.atlas.ThemeSwitch;
 import atlas.util.ChatUtil;
 
@@ -12,6 +14,9 @@ import java.util.Locale;
 /**
  * .theme [list | next | prev | save NAME | NAME]: the Theme window's saved looks without opening it (2026-11-14).
  * The Theme module's next-theme-key and previous-theme-key do next and prev from a key.
+ *
+ * ".theme" was the Theme module's own command (ModuleCommand, which takes every module's name): ".theme mode
+ * RAINBOW" set a setting. It still does -- a first word that is one of the module's settings goes to that command.
  */
 public class ThemeCommand extends Command {
     public ThemeCommand() {
@@ -20,6 +25,9 @@ public class ThemeCommand extends Command {
 
     @Override
     public void runCommand(ArrayList<String> args) {
+        if (args.size() > 1 && toModuleCommand(args)) {
+            return;
+        }
         String first = args.size() > 1 ? args.get(1).toLowerCase(Locale.ROOT) : "list";
         if (first.equals("list")) {
             list();
@@ -58,7 +66,25 @@ public class ThemeCommand extends Command {
                     ? "&a" + name + " &7(on)" : "&f" + name);
         }
         say(line.toString());
-        say("&8.theme NAME&7 puts one on, &8.theme next&7 / &8prev&7 go through them, &8.theme save NAME&7 saves.");
+        say("&8.theme NAME&7 puts one on, &8.theme next&7 / &8prev&7 go through them, &8.theme save NAME&7 saves. "
+                + "&8.theme SETTING VALUE&7 still sets the Theme module.");
+    }
+
+    /** A setting of the Theme module: handed to the module command, as before this command existed. */
+    private static boolean toModuleCommand(ArrayList<String> args) {
+        Module theme = Atlas.moduleManager.getModule("Theme");
+        if (theme == null || Atlas.propertyManager.getProperty(theme, args.get(1)) == null) {
+            return false;
+        }
+        for (Command command : Atlas.commandManager.commands) {
+            if (command instanceof ModuleCommand) {
+                ArrayList<String> forwarded = new ArrayList<String>(args);
+                forwarded.set(0, theme.getName());
+                command.runCommand(forwarded);
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String join(ArrayList<String> args, int from) {

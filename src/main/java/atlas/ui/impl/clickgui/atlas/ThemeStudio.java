@@ -65,8 +65,10 @@ public final class ThemeStudio extends GuiScreen {
     /** The HUD module's colour settings (Colours section) and the rest of its look (HUD section). */
     private static final String[] HUD_COLOURS = {"color", "color-speed", "color-saturation", "color-brightness",
             "custom-color-1", "custom-color-2", "custom-color-3", "color-dist"};
-    /* 2026-11-14: what the custom list shares with the others: the font and how the names and tags read. */
-    private static final String[] HUD_LIST_TEXT = {"font-mode", "suffixes", "separator-mode", "lower-case"};
+    /* 2026-11-14: what the custom list shares with the others: every HUD's look (hud-theme), the font, and how
+       the names and tags read. */
+    private static final String[] HUD_LIST_SHARED = {"hud-theme", "font-mode", "suffixes", "separator-mode",
+            "lower-case"};
     private static final String[] HUD_LIST = {"hud-theme", "font-mode", "background", "bg-alpha", "rounded",
             "corner-radius", "padding", "bar", "sidebar-mode", "shadow", "suffixes", "separator-mode", "lower-case",
             "blur", "blur-radius", "Shaders", "glow", "glow-color", "glow-custom-color", "glow-alpha", "glow-radius"};
@@ -391,7 +393,7 @@ public final class ThemeStudio extends GuiScreen {
                     add(rows, propertyOf(hud, name));
                 }
                 if (custom) {
-                    for (String name : HUD_LIST_TEXT) {
+                    for (String name : HUD_LIST_SHARED) {
                         add(rows, propertyOf(hud, name));
                     }
                 }

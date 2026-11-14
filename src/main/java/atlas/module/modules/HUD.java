@@ -3,6 +3,14 @@ package atlas.module.modules;
 import atlas.ui.impl.clickgui.atlas.HudPanel;
 import atlas.ui.UiMode;
 import atlas.ui.hud.HudLayout;
+import atlas.ui.hud.ListGlPainter;
+import atlas.ui.hud.list.ListAnim;
+import atlas.ui.hud.list.ListColors;
+import atlas.ui.hud.list.ListFrame;
+import atlas.ui.hud.list.ListLayout;
+import atlas.ui.hud.list.ListPresets;
+import atlas.ui.hud.list.ListRow;
+import atlas.ui.hud.list.ListStyle;
 
 import atlas.Atlas;
 import atlas.enums.BlinkModules;
@@ -107,7 +115,8 @@ public class HUD extends Module {
     public final IntProperty offsetX = new IntProperty("offset-x", 2, 0, 255);
     public final IntProperty offsetY = new IntProperty("offset-y", 2, 0, 255);
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
-    public final ModeProperty interfaceMode = new ModeProperty("interface", 0, new String[]{"ATLAS", "CREIDA"}).alias("atlas", "ATLAS");
+    /* 2026-11-14: CUSTOM draws the module list from the list-* settings below (atlas.ui.hud.list). */
+    public final ModeProperty interfaceMode = new ModeProperty("interface", 0, new String[]{"ATLAS", "CREIDA", "CUSTOM"}).alias("atlas", "ATLAS");
     /**
      * 2026-10-08: how every HUD element draws its background. JELLO
      * (default): LiquidBounce's JelloBounce theme -- black at 45%, a soft
@@ -124,8 +133,8 @@ public class HUD extends Module {
     public final ColorProperty glowCustomColor = new ColorProperty("glow-custom-color", Color.WHITE.getRGB() & 0xFFFFFF, () -> this.glow.getValue() && this.glowColorMode.getValue() == 1);
     public final IntProperty glowAlpha = new IntProperty("glow-alpha", 100, 0, 255, this.glow::getValue);
     public final FloatProperty glowRadius = new FloatProperty("glow-radius", 3.0F, 1.0F, 15.0F, this.glow::getValue);
-    public final BooleanProperty showBar = new BooleanProperty("bar", true);
-    public final ModeProperty sidebarMode = new ModeProperty("sidebar-mode", 0, new String[]{"RIGHT", "LEFT", "TOP", "OUTLINE", "NONE"}, this.showBar::getValue);
+    public final BooleanProperty showBar = new BooleanProperty("bar", true, () -> !this.customList());
+    public final ModeProperty sidebarMode = new ModeProperty("sidebar-mode", 0, new String[]{"RIGHT", "LEFT", "TOP", "OUTLINE", "NONE"}, () -> this.showBar.getValue() && !this.customList());
     public final BooleanProperty shadow = new BooleanProperty("shadow", true);
     public final BooleanProperty shaders = new BooleanProperty("Shaders", false);
     public final FloatProperty colorDistance = new FloatProperty("color-dist", 50F, 10F, 100F);
@@ -144,9 +153,175 @@ public class HUD extends Module {
     public final BooleanProperty creidaFont = new BooleanProperty("creida-font", true, () -> this.interfaceMode.getValue() == 1);
     public final BooleanProperty creidaWatermark = new BooleanProperty("creida-watermark", true, () -> this.interfaceMode.getValue() == 1);
     public final BooleanProperty clientInfo = new BooleanProperty("client-info", true);
-    public final BooleanProperty rounded = new BooleanProperty("rounded", true);
-    public final FloatProperty cornerRadius = new FloatProperty("corner-radius", 4.0F, 1.0F, 8.0F, () -> rounded.getValue());
-    public final FloatProperty padding = new FloatProperty("padding", 2.0F, 0.0F, 6.0F);
+    public final BooleanProperty rounded = new BooleanProperty("rounded", true, () -> !this.customList());
+    public final FloatProperty cornerRadius = new FloatProperty("corner-radius", 4.0F, 1.0F, 8.0F, () -> rounded.getValue() && !this.customList());
+    public final FloatProperty padding = new FloatProperty("padding", 2.0F, 0.0F, 6.0F, () -> !this.customList());
+
+    /*
+     * 2026-11-14 (owner: "different module lists, as customisable as it gets, the best experience"): the module
+     * list of interface CUSTOM. list-style picks one of ten ready-made shapes (ListPresets) and writes the shape
+     * settings below it; change one of those by hand and list-style shows CUSTOM, or the preset it now equals.
+     * Colours, order, animation and the glow are never touched by a preset. The layout is atlas.ui.hud.list,
+     * which has no game in it and is tested and drawn to pictures (ListPreview) without one.
+     */
+    public final ModeProperty listStyle = new ModeProperty("list-style", 2, ListPresets.NAMES, this::customList);
+    public final ModeProperty listColor = new ModeProperty("list-color", 0, ListStyle.names(ListStyle.Paint.values()), this::customList);
+    public final ColorProperty listColor1 = new ColorProperty("list-color-1", 0x55CDFC, () -> this.listPaints("STATIC", "GRADIENT", "TRIPLE", "PALETTE", "PULSE", "FADE"));
+    public final ColorProperty listColor2 = new ColorProperty("list-color-2", 0xF7A8B8, () -> this.listPaints("GRADIENT", "TRIPLE", "PALETTE", "PULSE"));
+    public final ColorProperty listColor3 = new ColorProperty("list-color-3", 0xFFFFFF, () -> this.listPaints("TRIPLE", "PALETTE"));
+    public final ColorProperty listColor4 = new ColorProperty("list-color-4", 0x9B6BFF, () -> this.listPaints("PALETTE"));
+    public final FloatProperty listSpeed = new FloatProperty("list-speed", 1.0F, -3.0F, 3.0F, () -> this.listPaints("GRADIENT", "TRIPLE", "PALETTE", "RAINBOW", "ASTOLFO", "PULSE", "FADE"));
+    public final PercentProperty listSpread = new PercentProperty("list-spread", 50, () -> this.listPaints("GRADIENT", "TRIPLE", "PALETTE", "RAINBOW", "ASTOLFO", "FADE"));
+    public final PercentProperty listSaturation = new PercentProperty("list-saturation", 100, () -> this.customList() && !this.listPaints("HUD", "THEME"));
+    public final PercentProperty listBrightness = new PercentProperty("list-brightness", 100, () -> this.customList() && !this.listPaints("HUD", "THEME"));
+    public final ModeProperty listText = new ModeProperty("list-text", 0, ListStyle.names(ListStyle.Text.values()), this::customList);
+    public final ModeProperty listSuffix = new ModeProperty("list-suffix", 0, ListStyle.names(ListStyle.Suffix.values()), () -> this.customList() && this.suffixes.getValue());
+    public final BooleanProperty listTextShadow = new BooleanProperty("list-text-shadow", true, this::customList);
+    public final ModeProperty listBackground = new ModeProperty("list-background", 1, ListStyle.names(ListStyle.Background.values()), this::customList);
+    public final ColorProperty listBgColor = new ColorProperty("list-bg-color", 0x0F0F0F, this::listHasBackground);
+    public final PercentProperty listBgOpacity = new PercentProperty("list-bg-opacity", 55, this::listHasBackground);
+    public final PercentProperty listBgTint = new PercentProperty("list-bg-tint", 0, this::listHasBackground);
+    public final ModeProperty listCorners = new ModeProperty("list-corners", 0, ListStyle.names(ListStyle.Corners.values()), this::customList);
+    public final FloatProperty listRadius = new FloatProperty("list-radius", 3.0F, 0.0F, 8.0F, () -> this.customList() && this.listCorners.getValue() != 0);
+    public final ModeProperty listBar = new ModeProperty("list-bar", 1, ListStyle.names(ListStyle.Bar.values()), this::customList);
+    public final FloatProperty listBarWidth = new FloatProperty("list-bar-width", 1.5F, 0.5F, 4.0F, () -> this.customList() && this.listBar.getValue() != 0);
+    public final FloatProperty listPadX = new FloatProperty("list-pad-x", 3.0F, 0.0F, 10.0F, this::customList);
+    public final FloatProperty listPadY = new FloatProperty("list-pad-y", 2.0F, 0.0F, 6.0F, this::customList);
+    public final FloatProperty listGap = new FloatProperty("list-gap", 0.0F, 0.0F, 8.0F, this::customList);
+    public final ModeProperty listSort = new ModeProperty("list-sort", 0, ListStyle.names(ListStyle.Sort.values()), this::customList);
+    public final ModeProperty listAnimation = new ModeProperty("list-animation", 3, ListStyle.names(ListStyle.Anim.values()), this::customList);
+    public final FloatProperty listAnimTime = new FloatProperty("list-anim-time", 0.2F, 0.05F, 1.0F, () -> this.customList() && this.listAnimation.getValue() != 0);
+    public final BooleanProperty listBlur = new BooleanProperty("list-blur", false, this::listHasBackground);
+    public final FloatProperty listBlurSize = new FloatProperty("list-blur-size", 10.0F, 1.0F, 30.0F, () -> this.listHasBackground() && this.listBlur.getValue());
+    public final BooleanProperty listGlow = new BooleanProperty("list-glow", false, this::customList);
+    public final PercentProperty listGlowStrength = new PercentProperty("list-glow-strength", 60, () -> this.customList() && this.listGlow.getValue());
+    public final FloatProperty listGlowSize = new FloatProperty("list-glow-size", 4.0F, 1.0F, 15.0F, () -> this.customList() && this.listGlow.getValue());
+
+    /** The custom list's settings, in the order above; every one of them is part of a saved look (ThemeFiles). */
+    public static final String[] LIST_SETTINGS = {"list-style", "list-color", "list-color-1", "list-color-2",
+            "list-color-3", "list-color-4", "list-speed", "list-spread", "list-saturation", "list-brightness",
+            "list-text", "list-suffix", "list-text-shadow", "list-background", "list-bg-color", "list-bg-opacity",
+            "list-bg-tint", "list-corners", "list-radius", "list-bar", "list-bar-width", "list-pad-x", "list-pad-y",
+            "list-gap", "list-sort", "list-animation", "list-anim-time", "list-blur", "list-blur-size", "list-glow",
+            "list-glow-strength", "list-glow-size"};
+    /** The settings a list-style preset writes. */
+    private static final Set<String> LIST_SHAPE = new HashSet<>(Arrays.asList("list-text", "list-suffix",
+            "list-text-shadow", "list-background", "list-bg-color", "list-bg-opacity", "list-bg-tint",
+            "list-corners", "list-radius", "list-bar", "list-bar-width", "list-pad-x", "list-pad-y", "list-gap",
+            "list-blur"));
+
+    private final ListAnim listAnim = new ListAnim();
+    /** Filled from the settings every frame. */
+    private final ListStyle listLook = new ListStyle();
+    /** This tick's rows of the custom list, measured; built with the tick's other caches. */
+    private List<ListRow> listRows = new ArrayList<>();
+    private long lastListFrame;
+    private boolean writingListShape;
+
+    /** Whether the module list is the custom one (interface CUSTOM). */
+    public boolean customList() {
+        return this.interfaceMode.getValue() == 2;
+    }
+
+    private boolean listHasBackground() {
+        return this.customList() && this.listBackground.getValue() != 0;
+    }
+
+    private boolean listPaints(String... paints) {
+        if (!this.customList()) {
+            return false;
+        }
+        String now = this.listColor.getModeString();
+        for (String paint : paints) {
+            if (paint.equals(now)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The custom list's look as the settings have it now, into {@code s}. */
+    private ListStyle readListStyle(ListStyle s) {
+        s.right = this.posX.getValue() == 1;
+        s.bottom = this.posY.getValue() == 1;
+        s.text = ListStyle.pick(ListStyle.Text.values(), this.listText.getValue());
+        s.suffix = ListStyle.pick(ListStyle.Suffix.values(), this.listSuffix.getValue());
+        s.textShadow = this.listTextShadow.getValue();
+        s.padX = this.listPadX.getValue();
+        s.padY = this.listPadY.getValue();
+        s.gap = this.listGap.getValue();
+        s.background = ListStyle.pick(ListStyle.Background.values(), this.listBackground.getValue());
+        s.backgroundColor = this.listBgColor.getValue() & 0xFFFFFF;
+        s.backgroundOpacity = this.listBgOpacity.getValue();
+        s.backgroundTint = this.listBgTint.getValue();
+        s.corners = ListStyle.pick(ListStyle.Corners.values(), this.listCorners.getValue());
+        s.radius = this.listRadius.getValue();
+        s.bar = ListStyle.pick(ListStyle.Bar.values(), this.listBar.getValue());
+        s.barWidth = this.listBarWidth.getValue();
+        s.paint = ListStyle.pick(ListStyle.Paint.values(), this.listColor.getValue());
+        s.colors[0] = this.listColor1.getValue() & 0xFFFFFF;
+        s.colors[1] = this.listColor2.getValue() & 0xFFFFFF;
+        s.colors[2] = this.listColor3.getValue() & 0xFFFFFF;
+        s.colors[3] = this.listColor4.getValue() & 0xFFFFFF;
+        s.speed = this.listSpeed.getValue();
+        s.spread = this.listSpread.getValue();
+        s.saturation = this.listSaturation.getValue();
+        s.brightness = this.listBrightness.getValue();
+        s.sort = ListStyle.pick(ListStyle.Sort.values(), this.listSort.getValue());
+        s.anim = ListStyle.pick(ListStyle.Anim.values(), this.listAnimation.getValue());
+        s.animTime = this.listAnimTime.getValue();
+        s.blur = this.listBlur.getValue();
+        s.glow = this.listGlow.getValue();
+        return s;
+    }
+
+    /** Writes the shape settings a preset sets (LIST_SHAPE). */
+    private void writeListShape(ListStyle s) {
+        this.listText.setValue(s.text.ordinal());
+        this.listSuffix.setValue(s.suffix.ordinal());
+        this.listTextShadow.setValue(s.textShadow);
+        this.listPadX.setValue(s.padX);
+        this.listPadY.setValue(s.padY);
+        this.listGap.setValue(s.gap);
+        this.listBackground.setValue(s.background.ordinal());
+        this.listBgColor.setValue(s.backgroundColor);
+        this.listBgOpacity.setValue(s.backgroundOpacity);
+        this.listBgTint.setValue(s.backgroundTint);
+        this.listCorners.setValue(s.corners.ordinal());
+        this.listRadius.setValue(s.radius);
+        this.listBar.setValue(s.bar.ordinal());
+        this.listBarWidth.setValue(s.barWidth);
+        this.listBlur.setValue(s.blur);
+    }
+
+    /**
+     * list-style picked: its shape is written. A shape setting changed: list-style shows the preset the shape now
+     * equals, or CUSTOM. Not while a config or a saved look is read (Config.loading): the values read are the ones
+     * that count, and the list-style read with them was worked out from them.
+     */
+    @Override
+    public void verifyValue(String name) {
+        super.verifyValue(name);
+        if (this.writingListShape || atlas.config.Config.loading || name == null || !name.startsWith("list-")) {
+            return;
+        }
+        this.writingListShape = true;
+        try {
+            if ("list-style".equals(name)) {
+                ListStyle shape = this.readListStyle(new ListStyle());
+                if (ListPresets.apply(this.listStyle.getModeString(), shape)) {
+                    this.writeListShape(shape);
+                }
+            } else if (LIST_SHAPE.contains(name)) {
+                String shown = ListPresets.match(this.readListStyle(new ListStyle()));
+                if (!shown.equals(this.listStyle.getModeString())) {
+                    this.listStyle.setValue(Arrays.asList(ListPresets.NAMES).indexOf(shown));
+                }
+            }
+        } finally {
+            this.writingListShape = false;
+        }
+    }
 
     private String getModuleName(Module module) {
         String moduleName = module.getName();
@@ -371,7 +546,140 @@ public class HUD extends Module {
             this.lineName = names;
             this.lineSuffix = suffixes;
             this.lineWidth = widths;
+            if (this.customList()) {
+                this.listRows = this.buildListRows(names, suffixes);
+            } else if (!this.listRows.isEmpty()) {
+                this.listRows = new ArrayList<>();
+                this.listAnim.clear();
+            }
         }
+    }
+
+    /** The custom list's rows: each listed module's name and tag as shown, measured in the HUD's font. */
+    private List<ListRow> buildListRows(java.util.Map<Module, String> names, java.util.Map<Module, String[]> suffixes) {
+        List<ListRow> rows = new ArrayList<>();
+        for (Module module : this.activeModules) {
+            String name = names.get(module);
+            String suffix = "";
+            if (this.suffixes.getValue()) {
+                StringBuilder joined = new StringBuilder();
+                for (String part : suffixes.get(module)) {
+                    joined.append(this.formatSuffix(part));
+                }
+                suffix = joined.toString();
+            }
+            atlas.module.Category category = atlas.module.ModuleCategories.of(module.getClass());
+            rows.add(new ListRow(module, name, suffix, category == null ? 0 : category.ordinal(),
+                    this.getStringWidth(name), suffix.isEmpty() ? 0.0F : this.getStringWidth(suffix)));
+        }
+        return rows;
+    }
+
+    private float listTextHeight() {
+        return this.fontMode.getValue() == 1 ? (float) mcFont.FONT_HEIGHT - 1.0F : (float) fontRenderer.FONT_HEIGHT - 1.0F;
+    }
+
+    private ListGlPainter listPainter() {
+        return new ListGlPainter(this.fontMode.getValue() == 1 ? null : this.fontRenderer, mcFont);
+    }
+
+    /** Where a row's colour comes from when the list's colour is HUD or THEME: only the game knows those. */
+    private ListColors.Source listSource(ListStyle style, final long time) {
+        if (style.paint == ListStyle.Paint.HUD) {
+            return index -> this.getColor(time, index).getRGB();
+        }
+        if (style.paint == ListStyle.Paint.THEME) {
+            final Theme theme = Theme.instance();
+            return index -> {
+                Color own = this.getColor(time, index);
+                return theme == null ? own.getRGB() : theme.color(own, null, index).getRGB();
+            };
+        }
+        return null;
+    }
+
+    /** The custom module list (interface CUSTOM): laid out by atlas.ui.hud.list, drawn here. */
+    private void renderCustomList() {
+        ListStyle style = this.readListStyle(this.listLook);
+        long now = System.nanoTime();
+        float dt = this.lastListFrame == 0L ? 0.016F : (now - this.lastListFrame) / 1.0E9F;
+        this.lastListFrame = now;
+        List<ListRow> rows = this.listAnim.step(ListRow.sorted(this.listRows, style.sort), style, dt);
+        long time = System.currentTimeMillis();
+        float s = this.scale.getValue();
+        if (!rows.isEmpty()) {
+            ListFrame frame = ListLayout.frame(style, rows, this.listTextHeight(), time, this.listSource(style, time));
+            ScaledResolution sr = new ScaledResolution(mc);
+            /* The corner the list hangs from, offset-x and offset-y in from the screen's. */
+            float ax = style.right ? (float) sr.getScaledWidth() - this.offsetX.getValue() : (float) this.offsetX.getValue();
+            float ay = style.bottom ? (float) sr.getScaledHeight() - this.offsetY.getValue() : (float) this.offsetY.getValue();
+            HudLayout.report("HUD.list", "Module list", ax + frame.minX * s, ay + frame.minY * s,
+                    (frame.maxX - frame.minX) * s, (frame.maxY - frame.minY) * s,
+                    HudLayout.ints(this.offsetX, style.right ? -1 : 1, this.offsetY, style.bottom ? -1 : 1),
+                    HudLayout.scale(this.scale));
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(ax, ay, 0.0F);
+            GlStateManager.scale(s, s, 1.0F);
+            ListGlPainter painter = this.listPainter();
+            /* The passes draw their shapes into a buffer of their own and need the texture back on before they
+               end (finish). Not in mobile-safe mode, as the list's other passes. */
+            if (!atlas.util.render.MobileSafe.active()) {
+                if (style.glow) {
+                    atlas.util.shader.BlurUtils.prepareBloom();
+                    frame.paintGlow(painter, this.listGlowStrength.getValue() / 100.0F);
+                    painter.finish();
+                    atlas.util.shader.BlurUtils.bloomEnd(3, this.listGlowSize.getValue());
+                }
+                if (style.blur && frame.hasBacking()) {
+                    atlas.util.shader.BlurUtils.prepareBlur();
+                    frame.paintBacking(painter, 0xFFFFFFFF);
+                    painter.finish();
+                    atlas.util.shader.BlurUtils.blurEnd(2, this.listBlurSize.getValue());
+                }
+            }
+            frame.paint(painter);
+            painter.finish();
+            GlStateManager.popMatrix();
+        }
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(s, s, 1.0F);
+        this.renderBlinkTimer(time, 0L);
+        GlStateManager.enableDepth();
+        GlStateManager.popMatrix();
+    }
+
+    /**
+     * A few rows of the custom list as it is drawn now, for the Theme window's preview: hanging from (x, y), the
+     * top right corner for a list on the right of the screen and the top left for one on the left, at a scale of
+     * 1. Returns how far down it reaches.
+     */
+    public float drawListPreview(float x, float y, long time) {
+        this.updateFontRenderer();
+        ListStyle style = this.readListStyle(new ListStyle());
+        style.bottom = false;
+        String[][] sample = {{"Silent Aura", "Switch"}, {"Velocity", "Hypixel"}, {"Scaffold", "GodBridge"},
+                {"Sprint", ""}};
+        int[] categories = {0, 0, 1, 2};
+        List<ListRow> rows = new ArrayList<>();
+        for (int i = 0; i < sample.length; i++) {
+            String name = this.lowerCase.getValue() ? sample[i][0].toLowerCase(Locale.ROOT) : sample[i][0];
+            String tag = this.lowerCase.getValue() ? sample[i][1].toLowerCase(Locale.ROOT) : sample[i][1];
+            String suffix = !this.suffixes.getValue() || tag.isEmpty() ? "" : this.formatSuffix(tag);
+            rows.add(new ListRow(sample[i][0], name, suffix, categories[i], this.getStringWidth(name),
+                    suffix.isEmpty() ? 0.0F : this.getStringWidth(suffix)));
+        }
+        ListStyle still = new ListStyle();
+        still.anim = ListStyle.Anim.NONE;
+        rows = new ListAnim().step(ListRow.sorted(rows, style.sort), still, 0.0F);
+        ListFrame frame = ListLayout.frame(style, rows, this.listTextHeight(), time, this.listSource(style, time));
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(x, y - frame.minY, 0.0F);
+        ListGlPainter painter = this.listPainter();
+        frame.paint(painter);
+        painter.finish();
+        GlStateManager.enableBlend();
+        GlStateManager.popMatrix();
+        return y + (frame.maxY - frame.minY);
     }
 
     private boolean shouldShowInArraylist(Module module) {
@@ -584,6 +892,8 @@ public class HUD extends Module {
             }
             if (this.interfaceMode.getValue() == 1) {
                 renderCreidaInterface();
+            } else if (this.customList()) {
+                this.renderCustomList();
             } else {
             float height = (float) fontRenderer.FONT_HEIGHT - 1.0F;
             float x = (float) this.offsetX.getValue()
@@ -824,36 +1134,7 @@ public class HUD extends Module {
                     GlStateManager.popMatrix();
                 }
             }
-            if (this.blinkTimer.getValue()) {
-                BlinkModules blinkingModule = Atlas.blinkManager.getBlinkingModule();
-                if (blinkingModule != BlinkModules.NONE && blinkingModule != BlinkModules.AUTO_BLOCK) {
-                    long movementPacketSize = Atlas.blinkManager.countMovement();
-                    if (movementPacketSize > 0L) {
-                        GlStateManager.enableBlend();
-                        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-                        if (fontMode.getValue() == 1) { // MINECRAFT
-                            mcFont.drawString(
-                                    String.valueOf(movementPacketSize),
-                                    (float) new ScaledResolution(mc).getScaledWidth() / 2.0F / this.scale.getValue()
-                                            - (float) mcFont.getStringWidth(String.valueOf(movementPacketSize)) / 2.0F,
-                                    (float) new ScaledResolution(mc).getScaledHeight() / 5.0F * 3.0F / this.scale.getValue(),
-                                    this.getColor(l, offset).getRGB() & 16777215 | -1090519040,
-                                    this.shadow.getValue()
-                            );
-                        } else {
-                            fontRenderer.drawString(
-                                    String.valueOf(movementPacketSize),
-                                    (float) new ScaledResolution(mc).getScaledWidth() / 2.0F / this.scale.getValue()
-                                            - (float) fontRenderer.getStringWidth(String.valueOf(movementPacketSize)) / 2.0F,
-                                    (float) new ScaledResolution(mc).getScaledHeight() / 5.0F * 3.0F / this.scale.getValue(),
-                                    this.getColor(l, offset).getRGB() & 16777215 | -1090519040,
-                                    this.shadow.getValue()
-                            );
-                        }
-                        GlStateManager.disableBlend();
-                    }
-                }
-            }
+            this.renderBlinkTimer(l, offset);
             GlStateManager.enableDepth();
             GlStateManager.popMatrix();
 
@@ -861,6 +1142,40 @@ public class HUD extends Module {
             }
         }
         renderNotifications();
+    }
+
+    /** The blink packet count in the middle of the screen; drawn in a matrix scaled by the HUD's scale. */
+    private void renderBlinkTimer(long time, long offset) {
+        if (this.blinkTimer.getValue()) {
+            BlinkModules blinkingModule = Atlas.blinkManager.getBlinkingModule();
+            if (blinkingModule != BlinkModules.NONE && blinkingModule != BlinkModules.AUTO_BLOCK) {
+                long movementPacketSize = Atlas.blinkManager.countMovement();
+                if (movementPacketSize > 0L) {
+                    GlStateManager.enableBlend();
+                    GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+                    if (fontMode.getValue() == 1) { // MINECRAFT
+                        mcFont.drawString(
+                                String.valueOf(movementPacketSize),
+                                (float) new ScaledResolution(mc).getScaledWidth() / 2.0F / this.scale.getValue()
+                                        - (float) mcFont.getStringWidth(String.valueOf(movementPacketSize)) / 2.0F,
+                                (float) new ScaledResolution(mc).getScaledHeight() / 5.0F * 3.0F / this.scale.getValue(),
+                                this.getColor(time, offset).getRGB() & 16777215 | -1090519040,
+                                this.shadow.getValue()
+                        );
+                    } else {
+                        fontRenderer.drawString(
+                                String.valueOf(movementPacketSize),
+                                (float) new ScaledResolution(mc).getScaledWidth() / 2.0F / this.scale.getValue()
+                                        - (float) fontRenderer.getStringWidth(String.valueOf(movementPacketSize)) / 2.0F,
+                                (float) new ScaledResolution(mc).getScaledHeight() / 5.0F * 3.0F / this.scale.getValue(),
+                                this.getColor(time, offset).getRGB() & 16777215 | -1090519040,
+                                this.shadow.getValue()
+                        );
+                    }
+                    GlStateManager.disableBlend();
+                }
+            }
+        }
     }
 
     private void renderCreidaInterface() {

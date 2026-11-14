@@ -57,11 +57,25 @@ public final class ThemeSwitch {
         }
     }
 
-    /** The saved look of this name, any case, as it is saved; null when there is none. */
+    /**
+     * The saved look of this name as it is saved: the exact name first, then one that differs only in case (a
+     * case-sensitive disk can hold both; review, PR #42). Null when there is none.
+     */
     public static String find(String name) {
-        String clean = ThemeFiles.cleanName(name);
-        for (String saved : names()) {
-            if (saved.equalsIgnoreCase(clean)) {
+        return match(names(), ThemeFiles.cleanName(name));
+    }
+
+    private static String match(List<String> names, String name) {
+        if (name == null || name.isEmpty()) {
+            return null;
+        }
+        for (String saved : names) {
+            if (saved.equals(name)) {
+                return saved;
+            }
+        }
+        for (String saved : names) {
+            if (saved.equalsIgnoreCase(name)) {
                 return saved;
             }
         }
@@ -89,25 +103,34 @@ public final class ThemeSwitch {
      */
     public static String step(int direction) {
         List<String> names = names();
-        if (names.isEmpty()) {
+        int size = names.size();
+        if (size == 0) {
             return null;
         }
-        String now = current();
-        int at = -1;
-        for (int i = 0; i < names.size(); i++) {
-            if (names.get(i).equalsIgnoreCase(now == null ? "" : now)) {
-                at = i;
-                break;
+        int dir = direction >= 0 ? 1 : -1;
+        int at = names.indexOf(match(names, current()));
+        int first = at < 0 ? (dir > 0 ? 0 : size - 1) : ((at + dir) % size + size) % size;
+        /* One that cannot be read is passed over, each tried once (review, PR #42): a broken file must not stop
+           the others being reached. */
+        for (int tried = 0; tried < size; tried++) {
+            String loaded = load(names.get(((first + dir * tried) % size + size) % size));
+            if (loaded != null) {
+                return loaded;
             }
         }
-        int next = at < 0 ? (direction >= 0 ? 0 : names.size() - 1)
-                : ((at + (direction >= 0 ? 1 : -1)) % names.size() + names.size()) % names.size();
-        return load(names.get(next));
+        return null;
     }
 
-    /** Saves the look as it is now under this name (cleaned as the Theme window cleans it); the name, or null. */
+    /**
+     * Saves the look as it is now under this name (cleaned as the Theme window cleans it); the name, or null. A
+     * look saved before under the same name in another case is written over, keeping its name.
+     */
     public static String save(String name) {
         String clean = ThemeFiles.cleanName(name);
+        String existing = match(names(), clean);
+        if (existing != null) {
+            clean = existing;
+        }
         if (clean.isEmpty() || !ThemeFiles.save(clean, AtlasClickGui.getInstance().theme())) {
             return null;
         }

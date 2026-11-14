@@ -12,7 +12,9 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * .theme [list | next | prev | save NAME | NAME]: the Theme window's saved looks without opening it (2026-11-14).
+ * .theme [list | next | prev | save NAME | load NAME | NAME]: the Theme window's saved looks without opening it
+ * (2026-11-14). "load" takes any name, even one that is also a word of this command or a Theme setting (review,
+ * PR #42).
  * The Theme module's next-theme-key and previous-theme-key do next and prev from a key.
  *
  * ".theme" was the Theme module's own command (ModuleCommand, which takes every module's name): ".theme mode
@@ -33,8 +35,9 @@ public class ThemeCommand extends Command {
             list();
         } else if (first.equals("next") || first.equals("prev") || first.equals("previous")) {
             String name = ThemeSwitch.step(first.equals("next") ? 1 : -1);
-            say(name == null ? "&7No saved themes yet. &8.theme save NAME&7 saves the look you have now."
-                    : "&7Theme: &f" + name);
+            say(name != null ? "&7Theme: &f" + name
+                    : ThemeSwitch.names().isEmpty() ? "&7No saved themes yet. &8.theme save NAME&7 saves the look you have now."
+                    : "&cNone of the saved themes could be read.");
         } else if (first.equals("save")) {
             String wanted = join(args, 2);
             if (wanted.isEmpty()) {
@@ -45,10 +48,22 @@ public class ThemeCommand extends Command {
             say(saved == null ? "&cCould not save " + wanted + "&7 (letters, digits, spaces, - and _)."
                     : "&7Saved the look as &f" + saved);
         } else {
-            String wanted = join(args, 1);
-            String loaded = ThemeSwitch.load(wanted);
-            say(loaded == null ? "&cNo saved theme called " + wanted + "&7. &8.theme list&7 shows them."
-                    : "&7Theme: &f" + loaded);
+            load(join(args, first.equals("load") ? 2 : 1));
+        }
+    }
+
+    private static void load(String wanted) {
+        if (wanted.isEmpty()) {
+            say("&7Which one? &8.theme load NAME&7; &8.theme list&7 shows them.");
+            return;
+        }
+        String loaded = ThemeSwitch.load(wanted);
+        if (loaded != null) {
+            say("&7Theme: &f" + loaded);
+        } else if (ThemeSwitch.find(wanted) != null) {
+            say("&cCould not read the saved theme " + wanted + "&7.");
+        } else {
+            say("&cNo saved theme called " + wanted + "&7. &8.theme list&7 shows them.");
         }
     }
 
@@ -66,8 +81,8 @@ public class ThemeCommand extends Command {
                     ? "&a" + name + " &7(on)" : "&f" + name);
         }
         say(line.toString());
-        say("&8.theme NAME&7 puts one on, &8.theme next&7 / &8prev&7 go through them, &8.theme save NAME&7 saves. "
-                + "&8.theme SETTING VALUE&7 still sets the Theme module.");
+        say("&8.theme NAME&7 (or &8.theme load NAME&7) puts one on, &8.theme next&7 / &8prev&7 go through them, "
+                + "&8.theme save NAME&7 saves. &8.theme SETTING VALUE&7 still sets the Theme module.");
     }
 
     /** A setting of the Theme module: handed to the module command, as before this command existed. */

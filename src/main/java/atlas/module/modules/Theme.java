@@ -66,10 +66,11 @@ public class Theme extends ThemeStyle {
             return;
         }
         String name = ThemeSwitch.step(direction);
-        ChatUtil.sendFormatted(name == null
+        ChatUtil.sendFormatted(name != null ? String.format("%s&7Theme: &f%s", Atlas.clientName, name)
+                : ThemeSwitch.names().isEmpty()
                 ? String.format("%s&7No saved themes yet: save one in the Theme window, or with &f.theme save NAME",
                 Atlas.clientName)
-                : String.format("%s&7Theme: &f%s", Atlas.clientName, name));
+                : String.format("%s&cNone of the saved themes could be read.", Atlas.clientName));
     }
 
     /** Every group module, in the order the tab lists them. */

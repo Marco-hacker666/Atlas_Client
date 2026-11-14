@@ -181,15 +181,21 @@ public final class ListPreview {
         g.dispose();
         ImageIO.write(sheet, "png", new File(out, "presets.png"));
 
-        /* Sheet 2: every colour mode, on the SIDEBAR preset. */
-        ListStyle.Paint[] paints = ListStyle.Paint.values();
-        sheet = new BufferedImage(cols * cw, ((paints.length - 1 + cols - 1) / cols) * ch, BufferedImage.TYPE_INT_RGB);
+        /* Sheet 2: every colour mode the list works out itself, on the SIDEBAR preset (HUD and THEME are the
+           game's colours). */
+        List<ListStyle.Paint> paints = new ArrayList<ListStyle.Paint>();
+        for (ListStyle.Paint paint : ListStyle.Paint.values()) {
+            if (paint != ListStyle.Paint.HUD && paint != ListStyle.Paint.THEME) {
+                paints.add(paint);
+            }
+        }
+        sheet = new BufferedImage(cols * cw, ((paints.size() + cols - 1) / cols) * ch, BufferedImage.TYPE_INT_RGB);
         g = graphics(sheet);
-        for (int i = 1; i < paints.length; i++) {
+        for (int i = 0; i < paints.size(); i++) {
             ListStyle style = new ListStyle();
             ListPresets.apply("SIDEBAR", style);
-            style.paint = paints[i];
-            cell(g, font, label, ((i - 1) % cols) * cw, ((i - 1) / cols) * ch, cw, ch, paints[i].name(), style,
+            style.paint = paints.get(i);
+            cell(g, font, label, (i % cols) * cw, (i / cols) * ch, cw, ch, paints.get(i).name(), style,
                     rows(g, font, style, 8, true), time);
         }
         g.dispose();

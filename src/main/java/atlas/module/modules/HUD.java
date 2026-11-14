@@ -555,11 +555,18 @@ public class HUD extends Module {
         }
     }
 
-    /** The custom list's rows: each listed module's name and tag as shown, measured in the HUD's font. */
+    /**
+     * The custom list's rows: each listed module's name and tag as shown, measured in the HUD's font. In the order
+     * the modules are registered, not activeModules' widest-first, so list-sort NONE means that order (review,
+     * PR #42); the other sorts are applied to it when drawn.
+     */
     private List<ListRow> buildListRows(java.util.Map<Module, String> names, java.util.Map<Module, String[]> suffixes) {
         List<ListRow> rows = new ArrayList<>();
-        for (Module module : this.activeModules) {
+        for (Module module : Atlas.moduleManager.modules.values()) {
             String name = names.get(module);
+            if (name == null) {
+                continue;
+            }
             String suffix = "";
             if (this.suffixes.getValue()) {
                 StringBuilder joined = new StringBuilder();
@@ -621,20 +628,30 @@ public class HUD extends Module {
             GlStateManager.translate(ax, ay, 0.0F);
             GlStateManager.scale(s, s, 1.0F);
             ListGlPainter painter = this.listPainter();
-            /* The passes draw their shapes into a buffer of their own and need the texture back on before they
-               end (finish). Not in mobile-safe mode, as the list's other passes. */
+            /* The passes draw their shapes into a buffer of their own, under the list's transform, and need the
+               texture back on before they end (finish). The end draws the result over the whole screen in GUI
+               units, so it runs outside the transform (review, PR #42). Not in mobile-safe mode, as the list's
+               other passes. */
             if (!atlas.util.render.MobileSafe.active()) {
                 if (style.glow) {
                     atlas.util.shader.BlurUtils.prepareBloom();
                     frame.paintGlow(painter, this.listGlowStrength.getValue() / 100.0F);
                     painter.finish();
+                    GlStateManager.popMatrix();
                     atlas.util.shader.BlurUtils.bloomEnd(3, this.listGlowSize.getValue());
+                    GlStateManager.pushMatrix();
+                    GlStateManager.translate(ax, ay, 0.0F);
+                    GlStateManager.scale(s, s, 1.0F);
                 }
                 if (style.blur && frame.hasBacking()) {
                     atlas.util.shader.BlurUtils.prepareBlur();
                     frame.paintBacking(painter, 0xFFFFFFFF);
                     painter.finish();
+                    GlStateManager.popMatrix();
                     atlas.util.shader.BlurUtils.blurEnd(2, this.listBlurSize.getValue());
+                    GlStateManager.pushMatrix();
+                    GlStateManager.translate(ax, ay, 0.0F);
+                    GlStateManager.scale(s, s, 1.0F);
                 }
             }
             frame.paint(painter);

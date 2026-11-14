@@ -610,6 +610,42 @@ public final class ModuleDocs {
         // 手機安全模式（2026-10-15，util.render.MobileSafe）：Client Settings > Performance > mobile-safe
         help("HUD", "blur", "背景模糊。手機安全模式（Client Settings > Performance > mobile-safe，手機 gl4es / Krypton Wrapper 自動開啟）下不畫。");
         help("HUD", "glow", "背景光暈。手機安全模式下不畫。");
+        // 自訂模組清單（2026-11-14，ui.hud.list）
+        help("HUD", "interface", "模組清單的畫法。ATLAS：原本的清單（hud-theme 決定 JELLO 或 CLASSIC）。CREIDA：Creida 的清單。CUSTOM：照「自訂模組清單」的設定畫，先選現成樣式再細調。");
+        help("HUD", "list-style", "現成樣式：一次設定背景、線條、圓角、間距、文字顏色和模糊。自己改了其中一項就顯示 CUSTOM（或剛好相同的樣式）；顏色、排序、動畫和光暈不受影響。");
+        help("HUD", "list-color", "每一列的顏色。HUD：跟 HUD 的顏色；THEME：跟 Theme 模組；STATIC 單色；GRADIENT 兩色、TRIPLE 三色、PALETTE 四色循環；RAINBOW；ASTOLFO；PULSE 整個清單一起變；FADE 單色明暗；CATEGORY 依模組分類；RANDOM 每個模組固定一色。");
+        help("HUD", "list-speed", "顏色流動的速度。負數往上流，0 不動。");
+        help("HUD", "list-spread", "相鄰兩列的顏色差多少。");
+        help("HUD", "list-text", "模組名稱的顏色。COLOR：該列的顏色。DARK：給整列填色的樣式（SOLID）。");
+        help("HUD", "list-suffix", "名稱後面模式文字的顏色。DIM：名稱顏色的淡色。");
+        help("HUD", "list-background", "背景。ROW：每列一塊。BLOCK：整個清單一塊。");
+        help("HUD", "list-bg-tint", "背景混入該列顏色的比例；100% 就是整列填滿顏色。");
+        help("HUD", "list-corners", "圓角。OUTER：只圓突出來的角（階梯狀）。EACH：每列四角都圓。");
+        help("HUD", "list-bar", "線條。SIDE：貼螢幕邊的側條。INNER：列的另一端。CAP：第一列外側。UNDERLINE：每列底線。OUTLINE：整個清單的外框。");
+        help("HUD", "list-gap", "列與列的間距；大於 0 時每列分開。");
+        help("HUD", "list-sort", "排序。WIDTH：最寬在前。WIDTH_REVERSED：最窄在前。ALPHABET：字母。CATEGORY：依分類。NONE：照模組順序。");
+        help("HUD", "list-animation", "模組開關時的動畫：滑入滑出、淡入淡出、兩者或沒有。");
+        help("HUD", "list-blur", "背景後面的畫面模糊。手機安全模式下不畫。");
+        help("HUD", "list-glow", "每列發出自己顏色的光暈。手機安全模式下不畫。");
+        help("HUD", "list-color-1", "第一個顏色。STATIC、GRADIENT、TRIPLE、PALETTE、PULSE、FADE 用。");
+        help("HUD", "list-color-2", "第二個顏色。GRADIENT、TRIPLE、PALETTE、PULSE 用。");
+        help("HUD", "list-color-3", "第三個顏色。TRIPLE、PALETTE 用。");
+        help("HUD", "list-color-4", "第四個顏色。PALETTE 用。");
+        help("HUD", "list-saturation", "列顏色的飽和度；0% 是灰色。HUD、THEME 顏色有自己的設定。");
+        help("HUD", "list-brightness", "列顏色的亮度。HUD、THEME 顏色有自己的設定。");
+        help("HUD", "list-text-shadow", "文字下面的陰影。DARK 文字不畫陰影。");
+        help("HUD", "list-bg-color", "背景的顏色。");
+        help("HUD", "list-bg-opacity", "背景的不透明度。");
+        help("HUD", "list-radius", "圓角的大小；不會超過列高的一半。");
+        help("HUD", "list-bar-width", "線條的粗細。");
+        help("HUD", "list-pad-x", "文字左右留的空間。");
+        help("HUD", "list-pad-y", "文字上下留的空間；決定列的高度。");
+        help("HUD", "list-anim-time", "一列出現或消失要幾秒。");
+        help("HUD", "list-blur-size", "模糊的程度。");
+        help("HUD", "list-glow-strength", "光暈有多亮。");
+        help("HUD", "list-glow-size", "光暈擴散多遠。");
+        help("Theme", "next-theme-key", "按下就換到下一個存好的主題（Theme 視窗 Saved 裡的，依字母順序）。也可以用 .theme next。");
+        help("Theme", "previous-theme-key", "按下就換到上一個存好的主題。也可以用 .theme prev。");
         help("ESP", "mode", "畫法。OUTLINE 用著色器和額外畫面緩衝；手機安全模式（Client Settings > Performance > mobile-safe）下改畫 3D 框。");
         d("NoDelay", "移除各種延遲：攻擊、點擊、跳躍。");
         d("MLG", "墜落時用水或梯子自救。");
@@ -872,6 +908,7 @@ public final class ModuleDocs {
                 h("背景與特效", "background", "bg-alpha", "blur", "blur-radius", "glow", "glow-*", "bar",
                         "sidebar-mode", "shadow", "Shaders", "rounded", "corner-radius", "padding", "chat-outline"),
                 h("模組清單", "suffixes", "separator-mode", "lower-case", "hide-*"),
+                h("自訂模組清單", "list-*"),
                 h("字型與資訊", "font-mode", "creida-*", "client-info", "blink-timer"),
                 h("通知", "notifications", "toggle-sounds", "toggle-alerts"));
         g("NameTags",

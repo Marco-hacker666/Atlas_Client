@@ -1,9 +1,13 @@
 package atlas.module.modules;
 
 import atlas.Atlas;
+import atlas.event.EventTarget;
+import atlas.events.KeyEvent;
 import atlas.module.Module;
+import atlas.property.properties.KeyProperty;
 import atlas.property.properties.ModeProperty;
 import atlas.property.properties.PercentProperty;
+import atlas.ui.impl.clickgui.atlas.ThemeSwitch;
 import atlas.util.ChatUtil;
 
 /**
@@ -31,6 +35,13 @@ public class Theme extends ThemeStyle {
     public final ModeProperty preset = new ModeProperty("preset", 0, PRESETS);
     /** Every group's transparency scaled at once. */
     public final PercentProperty alphaScale = new PercentProperty("alpha-scale", 100, 0, 200, null);
+    /*
+     * 2026-11-14 (owner: "switch the whole theme in one go"): keys that put on the next or the previous look saved
+     * in the Theme window, A to Z (ThemeSwitch; .theme does the same by name). Whether this module is on or not.
+     * A key is never part of a look: ThemeFiles leaves keys out.
+     */
+    public final KeyProperty nextLook = new KeyProperty("next-theme-key", 0);
+    public final KeyProperty previousLook = new KeyProperty("previous-theme-key", 0);
 
     private static Theme instance;
     private boolean applying;
@@ -42,6 +53,24 @@ public class Theme extends ThemeStyle {
 
     static Theme instance() {
         return instance;
+    }
+
+    @EventTarget(whenDisabled = true)
+    public void onKey(KeyEvent event) {
+        int key = event.getKey();
+        if (key <= 0) {
+            return;
+        }
+        int direction = key == this.nextLook.getValue() ? 1 : key == this.previousLook.getValue() ? -1 : 0;
+        if (direction == 0) {
+            return;
+        }
+        String name = ThemeSwitch.step(direction);
+        ChatUtil.sendFormatted(name != null ? String.format("%s&7Theme: &f%s", Atlas.clientName, name)
+                : ThemeSwitch.names().isEmpty()
+                ? String.format("%s&7No saved themes yet: save one in the Theme window, or with &f.theme save NAME",
+                Atlas.clientName)
+                : String.format("%s&cNone of the saved themes could be read.", Atlas.clientName));
     }
 
     /** Every group module, in the order the tab lists them. */

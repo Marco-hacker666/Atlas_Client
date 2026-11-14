@@ -303,6 +303,7 @@ public class Atlas {
         commandManager.commands.add(new atlas.command.commands.ReportCommand());
         commandManager.commands.add(new atlas.command.commands.RunDataCommand());
         commandManager.commands.add(new atlas.command.commands.TargetsCommand());
+        commandManager.commands.add(new atlas.command.commands.ThemeCommand());
         commandManager.commands.add(new ClickGuiCommand());
         commandManager.commands.add(new ConfigCommand());
         commandManager.commands.add(new DenickCommand());

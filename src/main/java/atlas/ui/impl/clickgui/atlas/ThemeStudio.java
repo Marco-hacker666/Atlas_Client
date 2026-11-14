@@ -65,6 +65,10 @@ public final class ThemeStudio extends GuiScreen {
     /** The HUD module's colour settings (Colours section) and the rest of its look (HUD section). */
     private static final String[] HUD_COLOURS = {"color", "color-speed", "color-saturation", "color-brightness",
             "custom-color-1", "custom-color-2", "custom-color-3", "color-dist"};
+    /* 2026-11-14: what the custom list shares with the others: every HUD's look (hud-theme), the font, and how
+       the names and tags read. */
+    private static final String[] HUD_LIST_SHARED = {"hud-theme", "font-mode", "suffixes", "separator-mode",
+            "lower-case"};
     private static final String[] HUD_LIST = {"hud-theme", "font-mode", "background", "bg-alpha", "rounded",
             "corner-radius", "padding", "bar", "sidebar-mode", "shadow", "suffixes", "separator-mode", "lower-case",
             "blur", "blur-radius", "Shaders", "glow", "glow-color", "glow-custom-color", "glow-alpha", "glow-radius"};
@@ -342,7 +346,12 @@ public final class ThemeStudio extends GuiScreen {
                 for (String name : HUD_COLOURS) {
                     add(rows, propertyOf(hud, name));
                 }
-                if (HudPanel.active()) {
+                boolean customList = hud instanceof HUD && ((HUD) hud).customList();
+                if (customList && !"HUD".equals(((HUD) hud).listColor.getModeString())) {
+                    rows.add(Row.note("The module list has colours of its own (HUD section > list-color); "
+                            + "set list-color to HUD to colour it with these."));
+                }
+                if (HudPanel.active() && !customList) {
                     /* 2026-11-14: the owner tuned these and the module list stayed white. */
                     rows.add(Row.note("The JELLO HUD look draws the module list in white, so these colours show only "
                             + "where something follows the HUD colour. HUD section > hud-theme CLASSIC colours the list."));
@@ -378,8 +387,15 @@ public final class ThemeStudio extends GuiScreen {
                 }
                 Module hud = module(HUD.class);
                 rows.add(Row.heading("Module list"));
-                for (String name : HUD_LIST) {
+                add(rows, propertyOf(hud, "interface"));
+                boolean custom = hud instanceof HUD && ((HUD) hud).customList();
+                for (String name : custom ? HUD.LIST_SETTINGS : HUD_LIST) {
                     add(rows, propertyOf(hud, name));
+                }
+                if (custom) {
+                    for (String name : HUD_LIST_SHARED) {
+                        add(rows, propertyOf(hud, name));
+                    }
                 }
                 rows.add(Row.note("Positions and sizes live in the HUD editor (button above)."));
                 break;
@@ -1130,38 +1146,46 @@ public final class ThemeStudio extends GuiScreen {
     private void drawHudPreview(HUD hud, float x, float y, float x2, float y2, long now) {
         net.minecraft.client.gui.FontRenderer fr = this.mc.fontRendererObj;
         boolean panels = HudPanel.active();
-        /* The module list, top right, coloured as the HUD colours it. */
-        String[] names = {"Silent Aura", "Velocity", "NoSlow", "Sprint"};
-        float ry = y + 6;
-        int unit = 0;
-        for (String name : names) {
-            float w = fr.getStringWidth(name) + 8;
-            float rx = x2 - 6 - w;
-            /* 2026-11-14 (owner: the preview's colours were unlike the game's): as HUD draws the list -- a JELLO
-               list has white names and no edge bar, whatever the HUD colour. */
-            int background = hud == null ? 0x70000000 : hud.listRowBackground();
-            if (panels) {
-                HudPanel.row(rx, ry, x2 - 6, ry + 11);
-            } else if (background != 0) {
-                Liquid.rect(rx, ry, x2 - 6, ry + 11, 0.0F, background);
+        /* 2026-11-14: the custom list (interface CUSTOM) is drawn by the HUD itself, with its own layout and
+           font: what the game shows. */
+        float shownListBottom = y + 6 + 4 * 12;
+        if (hud != null && hud.customList()) {
+            shownListBottom = hud.drawListPreview(hud.posX.getValue() == 1 ? x2 - 6 : x + 6, y + 6, now);
+            GlStateManager.enableBlend();
+        } else {
+            /* The module list, top right, coloured as the HUD colours it. */
+            String[] names = {"Silent Aura", "Velocity", "NoSlow", "Sprint"};
+            float ry = y + 6;
+            int unit = 0;
+            for (String name : names) {
+                float w = fr.getStringWidth(name) + 8;
+                float rx = x2 - 6 - w;
+                /* 2026-11-14 (owner: the preview's colours were unlike the game's): as HUD draws the list -- a JELLO
+                   list has white names and no edge bar, whatever the HUD colour. */
+                int background = hud == null ? 0x70000000 : hud.listRowBackground();
+                if (panels) {
+                    HudPanel.row(rx, ry, x2 - 6, ry + 11);
+                } else if (background != 0) {
+                    Liquid.rect(rx, ry, x2 - 6, ry + 11, 0.0F, background);
+                }
+                long offset = hud == null ? 0L : (long) (unit * hud.colorDistance.getValue());
+                int colour = hud == null ? accent() : hud.listNameColour(now, offset);
+                textState();
+                fr.drawStringWithShadow(name, rx + 4, ry + 2, colour);
+                if (hud == null || hud.listEdgeBar()) {
+                    int bar = hud == null ? accent() : hud.getColor(now, offset).getRGB();
+                    Liquid.rect(x2 - 7.5F, ry + 1.5F, x2 - 6, ry + 9.5F, 0.75F, opaque(bar));
+                }
+                ry += 12;
+                unit++;
             }
-            long offset = hud == null ? 0L : (long) (unit * hud.colorDistance.getValue());
-            int colour = hud == null ? accent() : hud.listNameColour(now, offset);
-            textState();
-            fr.drawStringWithShadow(name, rx + 4, ry + 2, colour);
-            if (hud == null || hud.listEdgeBar()) {
-                int bar = hud == null ? accent() : hud.getColor(now, offset).getRGB();
-                Liquid.rect(x2 - 7.5F, ry + 1.5F, x2 - 6, ry + 9.5F, 0.75F, opaque(bar));
-            }
-            ry += 12;
-            unit++;
+            GlStateManager.enableBlend();
         }
-        GlStateManager.enableBlend();
 
         /* A target card with a health bar that loses health and gets it back. */
         float cardW = Math.min(110.0F, x2 - x - 12);
         float cx = x + 6;
-        float cy = y + 6 + 4 * 12 + 6;
+        float cy = Math.max(y + 6 + 4 * 12 + 6, shownListBottom + 6);
         if (cy + 34 < y2 - 4) {
             if (panels) {
                 HudPanel.panel(cx, cy, cx + cardW, cy + 30, true, 1.0F);
@@ -1436,6 +1460,7 @@ public final class ThemeStudio extends GuiScreen {
             } else {
                 remember("loading " + payload);
                 ThemeFiles.apply(look, this.theme);
+                ThemeSwitch.remember((String) payload);
                 tell(payload + " is on", false);
             }
         } else if ("delete".equals(kind)) {
@@ -1471,6 +1496,7 @@ public final class ThemeStudio extends GuiScreen {
             return;
         }
         if (ThemeFiles.save(name, this.theme)) {
+            ThemeSwitch.remember(name);
             tell("Saved " + name, false);
             this.nameInput.set("");
             this.naming = false;

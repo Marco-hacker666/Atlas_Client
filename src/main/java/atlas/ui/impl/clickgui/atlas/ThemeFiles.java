@@ -6,6 +6,7 @@ import atlas.module.Module;
 import atlas.module.ModuleCategories;
 import atlas.module.modules.HUD;
 import atlas.property.Property;
+import atlas.property.properties.KeyProperty;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -51,12 +52,19 @@ final class ThemeFiles {
     static final int MAX_NAME = 24;
 
     /** The HUD module's settings that are its look. */
-    static final Set<String> HUD_LOOK = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
+    static final Set<String> HUD_LOOK = hudLook(new HashSet<String>(Arrays.asList(
             "color", "color-speed", "color-saturation", "color-brightness", "custom-color-1", "custom-color-2",
             "custom-color-3", "color-dist", "hud-theme", "background", "bg-alpha", "blur", "blur-radius", "glow",
             "glow-color", "glow-custom-color", "glow-alpha", "glow-radius", "bar", "sidebar-mode", "shadow",
             "Shaders", "suffixes", "separator-mode", "lower-case", "font-mode", "rounded", "corner-radius",
             "padding")));
+
+    /* 2026-11-14: which module list is drawn (interface), and every setting of the custom one. */
+    private static Set<String> hudLook(Set<String> names) {
+        names.add("interface");
+        names.addAll(Arrays.asList(HUD.LIST_SETTINGS));
+        return Collections.unmodifiableSet(names);
+    }
 
     private ThemeFiles() {
     }
@@ -155,6 +163,10 @@ final class ThemeFiles {
                 object.addProperty("toggled", module.isEnabled());
             }
             for (Property<?> property : propertiesOf(module)) {
+                /* A key is how a look is switched, not part of one (Theme's next-theme-key, 2026-11-14). */
+                if (property instanceof KeyProperty) {
+                    continue;
+                }
                 if (entry.getValue() == null || entry.getValue().contains(property.getName())) {
                     write(property, object);
                 }
@@ -197,7 +209,8 @@ final class ThemeFiles {
                     continue;
                 }
                 for (Property<?> property : propertiesOf(module)) {
-                    boolean held = entry.getValue() == null || entry.getValue().contains(property.getName());
+                    boolean held = !(property instanceof KeyProperty)
+                            && (entry.getValue() == null || entry.getValue().contains(property.getName()));
                     if (held && object.has(property.getName())) {
                         read(property, object);
                     }

@@ -267,6 +267,11 @@ public final class ModuleDocs {
         help("ProjectileAimBot", "redraw", "自動放箭後，右鍵還按著就馬上再拉下一弓（連射）。關：要放開再按才會拉下一弓，射完放開右鍵就不會多射出一支沒拉滿的弱箭。");
         help("ProjectileAimBot", "charge-random", "自動放箭在 shoot-charge 之後再隨機多等最多幾 tick，每箭不同，不會每次都同一 tick 放。");
         help("ProjectileAimBot", "allow-lob", "低彈道會被方塊擋住時改用高拋。");
+        help("ProjectileAimBot", "dodge-aim", "對付「看到箭才躲」的人：模擬他能躲的每一種方式（停下、左右、後退、衝刺、轉身衝刺、跳），在還能射中「他照原樣走」的前提下，選能蓋住最多種躲法的瞄準點。不知道他能怎麼躲時照原本的瞄法。需要開 predict。");
+        help("ProjectileAimBot", "dodge-wait", "自動放箭多一個條件：等到他躲不掉（蓋住的躲法夠多）才放。最多等 dodge-wait-ticks，時間到一定放；不知道他能怎麼躲時不等。");
+        help("ProjectileAimBot", "dodge-reaction", "箭射出後，對方要幾 tick 才開始動（看到、決定、加上他的延遲）。越小越保守：算他躲得快。");
+        help("ProjectileAimBot", "dodge-cover", "dodge-wait 要蓋住幾成的躲法才馬上放。100% 是每一種都躲不掉。");
+        help("ProjectileAimBot", "dodge-wait-ticks", "dodge-wait 最多讓一支可以放的箭等幾 tick；到了就照原本的方式放。");
         help("ProjectileAimBot", "show-path", "畫出瞄準用的飛行路徑：會命中時是綠色。");
         help("ProjectileAimBot", "move-fix", "瞄準時怎麼移動。SILENT：照瞄準方向算、按鍵自動轉過來，還是往畫面方向走，伺服器重算也對得上（走路、衝刺跳）。STRICT：照瞄準方向、按鍵不轉。NONE：照畫面方向，會被抓。");
         help("ProjectileAimBot", "turn-speed", "伺服器視角每 tick 最多轉幾度；瞄準結束後也用這個速度轉回畫面。");

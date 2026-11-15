@@ -10,10 +10,12 @@ import atlas.module.Module;
 import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
+import atlas.property.properties.PercentProperty;
 import atlas.property.properties.ModeProperty;
 import atlas.sim.SimTargets;
 import atlas.sim.TargetForecast;
 import atlas.util.CombatTargeting;
+import atlas.util.DodgeAim;
 import atlas.util.ProjectileSolver;
 import atlas.util.RenderUtil;
 import atlas.util.RotationUtil;
@@ -57,6 +59,11 @@ import java.util.List;
  * - A shot leaves along the look the server already has: the release (or throw) packet goes before the tick's
  *   movement packet. So the look is aimed for the next tick, and auto-shoot lets go only when the look the server
  *   has now, flown with the draw it has now, hits: never on a guess.
+ *
+ * - dodge-aim and dodge-wait (2026-11-16, both off until switched on) are for a target that only moves once the
+ *   arrow is in the air: the simulation runs each way it could get out of the way (atlas.sim.TargetDodges), the
+ *   aim takes the look that covers the most of them and still hits it carrying on (atlas.util.DodgeAim), and
+ *   auto-shoot can hold a shot for a few ticks for a moment the target cannot get away. Neither ever stops a shot.
  *
  * LiquidBounce (nextgen ModuleAutoBow, SituationalProjectileAngleCalculator) was read for the idea: solve flight time
  * and target position together, check the shot by flying it, release by charge and aim. No code was taken.
@@ -102,6 +109,33 @@ public class ProjectileAimBot extends Module {
     /** Up to this many ticks more draw, a new number each shot (LiquidBounce's ChargedRandom): not always on tick 20. */
     public final IntProperty chargeRandom = new IntProperty("charge-random", 2, 0, 5,
             () -> this.gravityType.getValue() == 1 && this.autoShoot.getValue());
+    /*
+     * 2026-11-16 (owner: "some only move once they see the arrow leave, and then it misses"; "make them switches,
+     * and it must never be the reason no arrow leaves"). Both are off until switched on, and both give way to the
+     * shot as it was whenever the target's ways out are not known.
+     *
+     * dodge-aim: among the looks that still hit the target carrying on, the one that also hits it on the most ways
+     * out of the arrow's path (atlas.util.DodgeAim over atlas.sim.TargetDodges). Never a look that misses what the
+     * plain aim hits.
+     * dodge-wait: auto-shoot holds a ready shot while too many ways out are open, for dodge-wait-ticks at most; then
+     * it lets go as before.
+     */
+    public final BooleanProperty dodgeAim = new BooleanProperty("dodge-aim", false,
+            () -> this.gravityType.getValue() == 1 && this.predict.getValue());
+    public final BooleanProperty dodgeWait = new BooleanProperty("dodge-wait", false,
+            () -> this.gravityType.getValue() == 1 && this.predict.getValue() && this.autoShoot.getValue());
+    /** Ticks from the arrow leaving to the target starting to move: seeing it, deciding, and its connection. */
+    public final IntProperty dodgeReaction = new IntProperty("dodge-reaction", 5, 0, 12,
+            () -> this.gravityType.getValue() == 1 && this.predict.getValue()
+                    && (this.dodgeAim.getValue() || this.dodgeWait.getValue() && this.autoShoot.getValue()));
+    /** The share of the ways out the shot has to cover for dodge-wait to let it go at once. */
+    public final PercentProperty dodgeCover = new PercentProperty("dodge-cover", 100, 50, 100,
+            () -> this.gravityType.getValue() == 1 && this.predict.getValue() && this.autoShoot.getValue()
+                    && this.dodgeWait.getValue());
+    /** The most ticks dodge-wait holds a ready shot; after them it leaves whatever the target can do. */
+    public final IntProperty dodgeWaitTicks = new IntProperty("dodge-wait-ticks", 8, 1, 40,
+            () -> this.gravityType.getValue() == 1 && this.predict.getValue() && this.autoShoot.getValue()
+                    && this.dodgeWait.getValue());
     /** The high arc when the low one would hit a block. */
     public final BooleanProperty allowLob = new BooleanProperty("allow-lob", true, () -> this.gravityType.getValue() == 1);
     public final FloatProperty turnSpeed = new FloatProperty("turn-speed", 120.0F, 10.0F, 180.0F);
@@ -154,6 +188,15 @@ public class ProjectileAimBot extends Module {
     private final java.util.Map<Integer, atlas.util.TargetLead> leads = new java.util.HashMap<Integer, atlas.util.TargetLead>();
     /** The round trip our own arrows showed (release to the server's arrow arriving), ms; -1 until one is seen. */
     private double arrowRttMs = -1.0;
+    /* dodge-aim and dodge-wait. Where the last dodge-proofed look aimed, and for whom: kept from tick to tick. */
+    private int dodgeKeptFor = -1;
+    private double dodgeKeptSide;
+    private double dodgeKeptUp;
+    /** The draw tick dodge-wait first held a ready shot on; -1 while it has not. */
+    private int dodgeHeldAt = -1;
+    /** What the dodge settings did this tick, for the trace and the suffix. */
+    private String dodgeNote = "";
+    private String dodgeShown = "";
     /** Who candidates() left out, and why, for the trace. */
     private final StringBuilder leftOut = new StringBuilder();
     private List<double[]> path = Collections.emptyList();
@@ -181,6 +224,9 @@ public class ProjectileAimBot extends Module {
     private void clear() {
         this.target = null;
         this.lastAimed = null;
+        this.dodgeHeldAt = -1;
+        this.extraCharge = -1;
+        this.dodgeKeptFor = -1;
         this.leads.clear();
         if (this.holdAfterShot) {
             this.holdAfterShot = false;
@@ -235,6 +281,8 @@ public class ProjectileAimBot extends Module {
         this.pathHits = false;
         this.shownDistance = -1;
         this.shownTicks = -1;
+        this.dodgeNote = "";
+        this.dodgeShown = "";
         this.recordPositions();
         this.traceArrows();
         boolean drawing = mc.thePlayer.isUsingItem() && mc.thePlayer.getHeldItem() != null
@@ -248,6 +296,12 @@ public class ProjectileAimBot extends Module {
                     atlas.management.RotationHelper.serverPitch(), mc.thePlayer.posX, mc.thePlayer.posY,
                     mc.thePlayer.posZ, mc.thePlayer.motionX, mc.thePlayer.motionZ));
             this.releasedAt = System.currentTimeMillis();
+        }
+        if (drawing != this.wasDrawing) {
+            /* A draw began or ended, however: dodge-wait and charge-random start again with the next one, whether
+               or not maybeRelease saw its first tick (review, PR #43). */
+            this.dodgeHeldAt = -1;
+            this.extraCharge = -1;
         }
         if (drawing && !this.wasDrawing) {
             this.releasedByUs = false;
@@ -284,7 +338,7 @@ public class ProjectileAimBot extends Module {
                                 this.shownDistance, this.whereKind, MathHelper.wrapAngleTo180_float(want[0]), want[1],
                                 this.shownTicks, this.pathHits ? "hits" : "MISSES"),
                         MathHelper.wrapAngleTo180_float(atlas.management.RotationHelper.serverYaw()),
-                        atlas.management.RotationHelper.serverPitch(), release));
+                        atlas.management.RotationHelper.serverPitch(), this.dodgeNote + release));
             }
         } else {
             List<EntityPlayer> found = this.candidates();
@@ -411,6 +465,13 @@ public class ProjectileAimBot extends Module {
                 }
                 continue;
             }
+            if (this.dodgeAim.getValue() && this.predict.getValue()) {
+                /* The look that also covers the ways out, when there is a better one; else the aim stays. */
+                ProjectileSolver.Aim proofed = this.dodgeProofed(eye, shot, where, candidate, aim);
+                if (proofed != null) {
+                    aim = proofed;
+                }
+            }
             ProjectileSolver.Flight flight = ProjectileSolver.fly(eye[0], eye[1], eye[2], aim.yaw, aim.pitch,
                     shot.speedAim, shot.kind, where, this.blocks(), ProjectileSolver.MAX_TICKS);
             this.target = candidate;
@@ -437,6 +498,127 @@ public class ProjectileAimBot extends Module {
             return new float[]{bestAim.yaw, bestAim.pitch};
         }
         return null;
+    }
+
+    /** A path of the simulation as a target: its box {@code ticks} after the shot, the shot being at {@code offset}. */
+    private static ProjectileSolver.Target along(final TargetForecast f, final double offset) {
+        return ticks -> {
+            double at = Math.max(0.0, Math.min(f.moves(), offset + ticks));
+            int i = (int) Math.floor(at);
+            int j = Math.min(f.moves(), i + 1);
+            double k = at - i;
+            double x = f.x[i] + (f.x[j] - f.x[i]) * k;
+            double y = f.y[i] + (f.y[j] - f.y[i]) * k;
+            double z = f.z[i] + (f.z[j] - f.z[i]) * k;
+            return new double[]{x - 0.3, y, z - 0.3, x + 0.3, y + 1.8, z + 0.3};
+        };
+    }
+
+    /**
+     * The target's ways out of the path of a shot let go {@code delay} ticks from now that flies about
+     * {@code flightTicks}: a target each, or null when they are not known (then nothing about the shot changes).
+     */
+    private List<ProjectileSolver.Target> dodgeTargets(EntityPlayer t, int delay, double flightTicks) {
+        double latency = this.latencyCompensation.getValue() ? latencyMs() / 50.0 : 0.0;
+        /* As far as the flight is followed and a little on; a long lob's end is taken as where the path ends. */
+        int ticks = (int) Math.min(80.0, Math.ceil(latency) + delay + DodgeAim.flightTicks(flightTicks) + 2);
+        SimTargets.Dodges dodges = SimTargets.dodges(t, latency + delay + this.dodgeReaction.getValue(), ticks);
+        if (dodges == null) {
+            return null;
+        }
+        List<ProjectileSolver.Target> out = new ArrayList<ProjectileSolver.Target>();
+        double offset = dodges.age + latency + delay;
+        for (TargetForecast path : dodges.paths) {
+            out.add(along(path, offset));
+        }
+        return out;
+    }
+
+    /**
+     * dodge-aim: the look that hits the target carrying on and the most of its ways out, checked against the blocks;
+     * null to keep {@code aim} (nothing known, nothing better, a block in the way, or anything going wrong).
+     */
+    private ProjectileSolver.Aim dodgeProofed(double[] eye, Shot shot, ProjectileSolver.Target where,
+                                              EntityPlayer candidate, ProjectileSolver.Aim aim) {
+        try {
+            List<ProjectileSolver.Target> dodges = this.dodgeTargets(candidate, 1, aim.ticks);
+            if (dodges == null) {
+                this.dodgeNote = " | dodge: ways out not known";
+                return null;
+            }
+            boolean same = this.dodgeKeptFor == candidate.getEntityId();
+            DodgeAim.Result result = DodgeAim.best(eye[0], eye[1], eye[2], aim, shot.speedAim, shot.kind, where, dodges,
+                    same ? this.dodgeKeptSide : 0.0, same ? this.dodgeKeptUp : 0.0);
+            if (result.aim == aim) {
+                this.dodgeKeptFor = candidate.getEntityId();
+                this.dodgeKeptSide = 0.0;
+                this.dodgeKeptUp = 0.0;
+                this.dodgeShown = result.covered + "/" + result.total;
+                this.dodgeNote = String.format(" | dodge: middle covers %d/%d", result.covered, result.total);
+                return null;
+            }
+            if (!this.flight(eye, result.aim, shot.speedAim, shot.kind, where).isEmpty()) {
+                /* The aim stays the plain one: what is shown is what that one covers (review, PR #43). */
+                int plain = DodgeAim.covered(eye[0], eye[1], eye[2], aim.yaw, aim.pitch, shot.speedAim,
+                        DodgeAim.safe(shot.kind, mc.thePlayer.getDistanceToEntity(candidate)), dodges,
+                        DodgeAim.flightTicks(aim.ticks));
+                this.dodgeShown = plain + "/" + dodges.size();
+                this.dodgeNote = String.format(" | dodge: the better look is stopped by a block, middle covers %d/%d",
+                        plain, dodges.size());
+                return null;
+            }
+            this.dodgeShown = result.covered + "/" + result.total;
+            this.dodgeKeptFor = candidate.getEntityId();
+            this.dodgeKeptSide = result.side;
+            this.dodgeKeptUp = result.up;
+            this.dodgeNote = String.format(" | dodge: %.2f aside %.2f up covers %d/%d", result.side, result.up,
+                    result.covered, result.total);
+            return result.aim;
+        } catch (RuntimeException e) {
+            this.dodgeNote = " | dodge: failed (" + e + ")";
+            return null;
+        }
+    }
+
+    /**
+     * dodge-wait: a reason to hold a shot that is ready, or null to let it go. It holds only while the target's ways
+     * out are known, too many of them are open, and dodge-wait-ticks have not passed since it first held; so the
+     * arrow always leaves, at the latest that many ticks after it would have.
+     */
+    private String dodgeHold(Shot shot, double[] eye, float yaw, float pitch, ProjectileSolver.Flight flight) {
+        if (!this.dodgeWait.getValue() || !this.predict.getValue()) {
+            return null;
+        }
+        try {
+            if (this.dodgeHeldAt > shot.useTicks) {
+                /* Held on a later tick than this one: left over from another draw. */
+                this.dodgeHeldAt = -1;
+            }
+            int waited = this.dodgeHeldAt < 0 ? 0 : shot.useTicks - this.dodgeHeldAt;
+            if (waited >= this.dodgeWaitTicks.getValue()) {
+                this.dodgeNote = " | dodge: waited " + waited + ", lets go";
+                return null;
+            }
+            List<ProjectileSolver.Target> dodges = this.dodgeTargets(this.target, 0, flight.hitTick);
+            if (dodges == null) {
+                return null;
+            }
+            double distance = mc.thePlayer.getDistanceToEntity(this.target);
+            int covered = DodgeAim.covered(eye[0], eye[1], eye[2], yaw, pitch, shot.speedNow,
+                    DodgeAim.safe(shot.kind, distance), dodges, DodgeAim.flightTicks(flight.hitTick));
+            int need = (int) Math.ceil(dodges.size() * this.dodgeCover.getValue() / 100.0);
+            this.dodgeShown = covered + "/" + dodges.size();
+            if (covered >= need) {
+                return null;
+            }
+            if (this.dodgeHeldAt < 0) {
+                this.dodgeHeldAt = shot.useTicks;
+            }
+            return String.format(" | hold: it can still get away (%d/%d covered, need %d), %d more ticks at most",
+                    covered, dodges.size(), need, this.dodgeWaitTicks.getValue() - waited);
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /** The low arc if nothing stops it, else the high one (allow-lob); through-walls takes the low arc regardless. */
@@ -482,6 +664,8 @@ public class ProjectileAimBot extends Module {
         if (this.extraCharge < 0 || shot.useTicks <= 1) {
             this.extraCharge = this.chargeRandom.getValue() <= 0 ? 0
                     : (int) (Math.random() * (this.chargeRandom.getValue() + 1));
+            /* A new draw: dodge-wait has held nothing of it yet. */
+            this.dodgeHeldAt = -1;
         }
         if (this.target == null || shot.useTicks < this.shootCharge.getValue() + this.extraCharge
                 || shot.speedNow <= 0.0) {
@@ -506,9 +690,14 @@ public class ProjectileAimBot extends Module {
             }
         }
         if (flight.hits()) {
+            String hold = this.dodgeHold(shot, eye, yaw, pitch, flight);
+            if (hold != null) {
+                return hold;
+            }
             /* The release packet goes now, before this tick's movement packet, as the game sends it from input. */
             mc.playerController.onStoppedUsingItem(mc.thePlayer);
             this.extraCharge = -1;
+            this.dodgeHeldAt = -1;
             this.releasedByUs = true;
             this.releasedAt = System.currentTimeMillis();
             this.trace(String.format("END draw %d ticks: auto-shoot let go | look %.1f/%.1f", shot.useTicks,
@@ -810,7 +999,9 @@ public class ProjectileAimBot extends Module {
     @Override
     public String[] getSuffix() {
         if (this.shownDistance >= 0) {
-            return new String[]{this.gravityType.getModeString(), this.shownDistance + "m " + this.shownTicks + "t"};
+            /* With a dodge setting on: how many of the target's ways out the shot covers. */
+            return new String[]{this.gravityType.getModeString(), this.shownDistance + "m " + this.shownTicks + "t"
+                    + (this.dodgeShown.isEmpty() ? "" : " " + this.dodgeShown)};
         }
         return new String[]{this.gravityType.getModeString()};
     }

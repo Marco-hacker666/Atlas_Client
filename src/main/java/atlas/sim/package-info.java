@@ -16,6 +16,8 @@
  *   <li>{@link atlas.sim.TargetFit}, {@link atlas.sim.TargetTrack}, {@link atlas.sim.TargetForecast}: another
  *       player's movement. The server sends little of it and coarsely; the keys are found from the positions, and
  *       the player is run ahead by them. {@link atlas.sim.TargetScore} holds the forecasts against what came.</li>
+ *   <li>{@link atlas.sim.TargetDodges}: where another player gets to if it changes what it is doing -- each way out
+ *       of an arrow's path, run. The bow aimbot's dodge settings aim and wait by it.</li>
  *   <li>{@link atlas.sim.SimTargets}: the game's side of those -- the players near this one, followed while
  *       something asks. So far only the measuring asks (.targets, and the run recorder's engineErr column); no
  *       module aims by it yet.</li>

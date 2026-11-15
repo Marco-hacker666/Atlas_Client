@@ -157,6 +157,55 @@ public final class SimTargets {
         return target == null ? null : target.track.forecast(SimPlayer.world(mc.theWorld, player), moves);
     }
 
+    /** The ways a player can get out of the way ({@link TargetDodges}), as paths. */
+    public static final class Dodges {
+        /** A path for each of {@link TargetDodges#WAYS}, in that order. */
+        public final List<TargetForecast> paths;
+        /** How many moves ago index 0 of the paths was: the age of the last position, or 0 for a player at rest. */
+        public final int age;
+        /** The player has sent nothing for a while: it stands still, and the paths start from rest. */
+        public final boolean atRest;
+
+        Dodges(List<TargetForecast> paths, int age, boolean atRest) {
+            this.paths = paths;
+            this.age = age;
+            this.atRest = atRest;
+        }
+    }
+
+    /**
+     * Where this player gets to if it changes what it is doing {@code after} ticks from now (2026-11-16, the bow
+     * aimbot's dodge settings): a path for each way out, reaching {@code ticks} ticks from now. A player followed
+     * and explained goes on as forecast until then; one that has sent nothing for {@link #STALE} ticks stands
+     * still and starts from rest. Null when neither is known: not followed yet, or moving in a way the simulation
+     * does not explain.
+     */
+    public static Dodges dodges(Entity player, double after, int ticks) {
+        want();
+        if (player == null || mc.theWorld == null || ticks < 1) {
+            return null;
+        }
+        Target target = INSTANCE.targets.get(player.getEntityId());
+        if (target == null || !target.known) {
+            return null;
+        }
+        int age = INSTANCE.tick - target.tick;
+        if (age < 0) {
+            return null;
+        }
+        PlayerSim.World world = SimPlayer.world(mc.theWorld, player);
+        List<TargetForecast> paths;
+        boolean atRest = age > STALE;
+        if (atRest) {
+            age = 0;
+            paths = TargetDodges.pathsAtRest(target.track, world, ticks, (int) Math.round(after),
+                    player.getRotationYawHead());
+        } else {
+            paths = TargetDodges.paths(target.track, world, age + ticks, age + (int) Math.round(after));
+        }
+        return paths.isEmpty() ? null : new Dodges(paths, age, atRest);
+    }
+
     /**
      * Where the simulation has this player {x, z} one tick from now, two, ... up to {@code ticks}; null when it has
      * no answer of its own (not followed, nothing sent lately, or its moves were not explained).

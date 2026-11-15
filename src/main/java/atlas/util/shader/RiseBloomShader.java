@@ -106,9 +106,9 @@ public final class RiseBloomShader {
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GL20.glUniform2f(getUniform("u_direction"), 0.0F, compression);
         outputFramebuffer.bindFramebufferTexture();
-        GL13.glActiveTexture(GL13.GL_TEXTURE16);
-        RenderUtil.bindTexture(framebufferTexture);
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        /* Unit 16 is past the 8 GlStateManager tracks (its bindTexture would index out of range): bound
+           directly, after the cache is put on unit 0 so both end there (2026-11-15). */
+        RenderUtil.bindTextureOnUnit16(framebufferTexture);
         drawQuad();
 
         GlStateManager.disableBlend();

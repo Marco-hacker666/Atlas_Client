@@ -680,7 +680,7 @@ final class Liquid {
             GL11.glEnable(GL11.GL_LINE_SMOOTH);
             GL11.glLineWidth(Math.max(1.0F, width * scale));
             int c = Glass.alpha(colour, alpha);
-            GL11.glColor4f(((c >> 16) & 0xFF) / 255.0F, ((c >> 8) & 0xFF) / 255.0F,
+            GlStateManager.color(((c >> 16) & 0xFF) / 255.0F, ((c >> 8) & 0xFF) / 255.0F,
                     (c & 0xFF) / 255.0F, ((c >>> 24) & 0xFF) / 255.0F);
             GL11.glBegin(GL11.GL_LINES);
             GL11.glVertex2f(ax, ay);

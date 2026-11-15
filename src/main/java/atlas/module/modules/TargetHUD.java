@@ -693,10 +693,10 @@ public class TargetHUD extends Module {
         }
 
         GL11.glPushMatrix();
-        GL11.glEnable(GL11.GL_BLEND);
+        GlStateManager.enableBlend();
         this.mcText(playerInfo, x, y,
                 new Color(220, 220, 220, 255).getRGB() & 0xFFFFFF | Math.min(alpha + 15, 255) << 24, true);
-        GL11.glDisable(GL11.GL_BLEND);
+        GlStateManager.disableBlend();
         GL11.glPopMatrix();
     }
 
@@ -923,15 +923,15 @@ public class TargetHUD extends Module {
         int outerR = radius + 4;
         int arcSeg = 30;
 
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.disableTexture2D();
 
         Tessellator tessellator = Tessellator.getInstance();
         WorldRenderer worldrenderer = tessellator.getWorldRenderer();
 
         if (healthArc > 0) {
-            GL11.glColor4f(1, 0, 0, alpha);
+            GlStateManager.color(1, 0, 0, alpha);
             worldrenderer.begin(GL11.GL_TRIANGLE_STRIP, DefaultVertexFormats.POSITION);
             for (int i = 0; i <= arcSeg; i++) {
                 double a = Math.toRadians(-90 + healthArc * i / arcSeg);
@@ -942,7 +942,7 @@ public class TargetHUD extends Module {
         }
 
         if (armorArc > 0) {
-            GL11.glColor4f(0, 0.75F, 1, alpha);
+            GlStateManager.color(0, 0.75F, 1, alpha);
             worldrenderer.begin(GL11.GL_TRIANGLE_STRIP, DefaultVertexFormats.POSITION);
             for (int i = 0; i <= arcSeg; i++) {
                 double a = Math.toRadians(90 + armorArc * i / arcSeg);
@@ -952,8 +952,8 @@ public class TargetHUD extends Module {
             tessellator.draw();
         }
 
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glDisable(GL11.GL_BLEND);
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
 
         String targetName = TeamUtil.stripName(entity);
         int nameColor = (int) (alpha * 0xFF) << 24 | 0xFFFFFF;
@@ -1200,9 +1200,9 @@ public class TargetHUD extends Module {
             GL11.glEnable(GL11.GL_STENCIL_TEST);
             GL11.glStencilFunc(GL11.GL_ALWAYS, 1, 0xFF);
             GL11.glStencilOp(GL11.GL_KEEP, GL11.GL_KEEP, GL11.GL_REPLACE);
-            GL11.glColorMask(false, false, false, false);
+            GlStateManager.colorMask(false, false, false, false);
             RenderUtil.drawRect(pos[0], pos[1], pos[0] + width, pos[1] + height, -1);
-            GL11.glColorMask(true, true, true, true);
+            GlStateManager.colorMask(true, true, true, true);
             GL11.glStencilFunc(GL11.GL_EQUAL, 1, 0xFF);
             GL11.glStencilOp(GL11.GL_KEEP, GL11.GL_KEEP, GL11.GL_KEEP);
             BlurShader.renderBlur(getHudBlurRadius(), pos[0], pos[1], width, height, 1.0F);
@@ -1214,9 +1214,9 @@ public class TargetHUD extends Module {
             GL11.glEnable(GL11.GL_STENCIL_TEST);
             GL11.glStencilFunc(GL11.GL_ALWAYS, 1, 0xFF);
             GL11.glStencilOp(GL11.GL_KEEP, GL11.GL_KEEP, GL11.GL_REPLACE);
-            GL11.glColorMask(false, false, false, false);
+            GlStateManager.colorMask(false, false, false, false);
             RenderUtil.drawRect(pos[0], pos[1], pos[0] + width, pos[1] + height, -1);
-            GL11.glColorMask(true, true, true, true);
+            GlStateManager.colorMask(true, true, true, true);
             GL11.glStencilFunc(GL11.GL_NOTEQUAL, 1, 0xFF);
             GL11.glStencilOp(GL11.GL_KEEP, GL11.GL_KEEP, GL11.GL_KEEP);
 
@@ -1251,6 +1251,7 @@ public class TargetHUD extends Module {
 
         GlStateManager.popMatrix();
         GL11.glPopAttrib();
+        atlas.util.render.GlSync.afterPopAttrib();
         GlStateManager.resetColor();
     }
 
@@ -1423,13 +1424,13 @@ public class TargetHUD extends Module {
 
         GlStateManager.disableBlend();
         GlStateManager.enableAlpha();
-        GL11.glAlphaFunc(GL11.GL_GREATER, 0.0F);
+        GlStateManager.alphaFunc(GL11.GL_GREATER, 0.0F);
         GL11.glDisable(GL11.GL_POLYGON_SMOOTH);
         GL11.glDisable(GL11.GL_LINE_SMOOTH);
 
-        GL11.glColorMask(false, false, false, false);
+        GlStateManager.colorMask(false, false, false, false);
         RenderUtil.drawRoundedRect(x, y, width, height, r, -1, true, true, true, true);
-        GL11.glColorMask(true, true, true, true);
+        GlStateManager.colorMask(true, true, true, true);
 
         GlStateManager.enableBlend();
         GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
@@ -1570,9 +1571,9 @@ public class TargetHUD extends Module {
         GL11.glStencilOp(GL11.GL_KEEP, GL11.GL_KEEP, GL11.GL_REPLACE);
         GL11.glStencilMask(0xFF);
 
-        GL11.glColorMask(false, false, false, false);
+        GlStateManager.colorMask(false, false, false, false);
         RenderUtil.drawRoundedRect(x, y, w, h, r, -1, true, true, true, true);
-        GL11.glColorMask(true, true, true, true);
+        GlStateManager.colorMask(true, true, true, true);
 
         GL11.glStencilFunc(GL11.GL_EQUAL, 1, 0xFF);
         GL11.glStencilMask(0x00);

@@ -231,7 +231,7 @@ public class Raven17Script extends RavenScript {
         }
 
         public static void depthFunc(int func) {
-            GL11.glDepthFunc(func);
+            GlStateManager.depthFunc(func);
         }
 
         public static void lineWidth(double width) {
@@ -251,7 +251,7 @@ public class Raven17Script extends RavenScript {
         }
 
         public static void polygonOffset(float factor, float units) {
-            GL11.glPolygonOffset(factor, units);
+            GlStateManager.doPolygonOffset(factor, units);
         }
 
         public static void rotate(double angle, double x, double y, double z) {

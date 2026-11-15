@@ -1,5 +1,7 @@
 package atlas.util;
 
+
+import net.minecraft.client.renderer.GlStateManager;
 import atlas.enums.ChatColors;
 import atlas.mixin.IAccessorEntityRenderer;
 import atlas.mixin.IAccessorMinecraft;
@@ -163,7 +165,7 @@ public class RenderUtil {
         GlStateManager.depthMask(true);
         GlStateManager.clear(256);
         RenderHelper.enableGUIStandardItemLighting();
-        GL11.glDisable(GL11.GL_LIGHTING);
+        GlStateManager.disableLighting();
         GlStateManager.pushMatrix();
         GlStateManager.scale(1.0f, 1.0f, -0.01f);
         RenderUtil.mc.getRenderItem().zLevel = -150.0f;
@@ -203,7 +205,7 @@ public class RenderUtil {
     }
 
     public static void glColor(final int n) {
-        GL11.glColor4f((float) (n >> 16 & 0xFF) / 255.0f, (float) (n >> 8 & 0xFF) / 255.0f, (float) (n & 0xFF) / 255.0f, (float) (n >> 24 & 0xFF) / 255.0f);
+        GlStateManager.color((float) (n >> 16 & 0xFF) / 255.0f, (float) (n >> 8 & 0xFF) / 255.0f, (float) (n & 0xFF) / 255.0f, (float) (n >> 24 & 0xFF) / 255.0f);
     }
 
 
@@ -219,12 +221,12 @@ public class RenderUtil {
             framebuffer = new Framebuffer(mc.displayWidth, mc.displayHeight, depth);
             framebuffer.setFramebufferFilter(GL_LINEAR);
         }
-        glBindTexture(GL_TEXTURE_2D, framebuffer.framebufferTexture);
+        GlStateManager.bindTexture(framebuffer.framebufferTexture);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        GlStateManager.bindTexture(0);
         return framebuffer;
     }
 
@@ -237,7 +239,18 @@ public class RenderUtil {
     }
 
     public static void bindTexture(int texture) {
+        GlStateManager.bindTexture(texture);
+    }
+
+    /**
+     * Binds a texture on unit 16 for a shader's second sampler and leaves unit 0 active. GlStateManager tracks units
+     * 0-7 only, so this one is set directly; the cache is put on unit 0 first so it and the real state agree after.
+     */
+    public static void bindTextureOnUnit16(int texture) {
+        GlStateManager.setActiveTexture(org.lwjgl.opengl.GL13.GL_TEXTURE0);
+        org.lwjgl.opengl.GL13.glActiveTexture(org.lwjgl.opengl.GL13.GL_TEXTURE16);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, texture);
+        org.lwjgl.opengl.GL13.glActiveTexture(org.lwjgl.opengl.GL13.GL_TEXTURE0);
     }
 
     public static void setAlphaLimit(float limit) {
@@ -260,8 +273,8 @@ public class RenderUtil {
         y2 *= 2.0f;
         GL11.glPushAttrib(1);
         GL11.glScaled(0.5, 0.5, 0.5);
-        glEnable(3042);
-        GL11.glDisable(3553);
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
         glEnable(2848);
         GL11.glBegin(9);
         setColor(n6);
@@ -283,7 +296,7 @@ public class RenderUtil {
         }
         GL11.glEnd();
         GL11.glPushMatrix();
-        GL11.glShadeModel(7425);
+        GlStateManager.shadeModel(7425);
         GL11.glLineWidth(2.0f);
         GL11.glBegin(2);
         if (n7 != 0L) {
@@ -310,14 +323,15 @@ public class RenderUtil {
         }
         GL11.glEnd();
         glPopMatrix();
-        glEnable(3553);
-        GL11.glDisable(3042);
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
         GL11.glDisable(2848);
-        glEnable(3553);
+        GlStateManager.enableTexture2D();
         GL11.glScaled(2.0, 2.0, 2.0);
         GL11.glPopAttrib();
+        atlas.util.render.GlSync.afterPopAttrib();
         GL11.glLineWidth(1.0f);
-        GL11.glShadeModel(7424);
+        GlStateManager.shadeModel(7424);
         GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
     }
     public static int mergeAlpha(int color, int alpha) {
@@ -343,8 +357,8 @@ public class RenderUtil {
         y2 *= 2.0;
         GL11.glPushAttrib(0);
         GL11.glScaled(0.5, 0.5, 0.5);
-        glEnable(3042);
-        GL11.glDisable(3553);
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
         glEnable(2848);
         GL11.glBegin(9);
         glColor(color);
@@ -367,12 +381,13 @@ public class RenderUtil {
             }
         }
         GL11.glEnd();
-        glEnable(3553);
-        GL11.glDisable(3042);
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
         GL11.glDisable(2848);
-        glEnable(3553);
+        GlStateManager.enableTexture2D();
         GL11.glScaled(2.0, 2.0, 2.0);
         GL11.glPopAttrib();
+        atlas.util.render.GlSync.afterPopAttrib();
         GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
@@ -389,22 +404,22 @@ public class RenderUtil {
 
         radius = Math.min(radius, 4.0f);
 
-        glEnable(3042);
-        GL11.glDisable(3553);
-        GL11.glBlendFunc(770, 771);
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
+        GlStateManager.blendFunc(770, 771);
         glEnable(2848);
-        GL11.glShadeModel(7425);
+        GlStateManager.shadeModel(7425);
         GL11.glPushAttrib(0);
         GL11.glScaled(0.5, 0.5, 0.5);
         x *= 2.0;
         y *= 2.0;
         x2 *= 2.0;
         y2 *= 2.0;
-        glEnable(3042);
-        GL11.glDisable(3553);
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
         glColor(n6);
         glEnable(2848);
-        GL11.glShadeModel(7425);
+        GlStateManager.shadeModel(7425);
         GL11.glBegin(9);
         for (int i = 0; i <= 90; i += 3) {
             final double n10 = i * 0.017453292f;
@@ -428,17 +443,18 @@ public class RenderUtil {
             }
         }
         GL11.glEnd();
-        glEnable(3553);
-        GL11.glDisable(3042);
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
         GL11.glDisable(2848);
-        GL11.glDisable(3042);
-        glEnable(3553);
+        GlStateManager.disableBlend();
+        GlStateManager.enableTexture2D();
         GL11.glScaled(2.0, 2.0, 2.0);
         GL11.glPopAttrib();
-        glEnable(3553);
-        GL11.glDisable(3042);
+        atlas.util.render.GlSync.afterPopAttrib();
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
         GL11.glDisable(2848);
-        GL11.glShadeModel(7424);
+        GlStateManager.shadeModel(7424);
     }
 
     public static void drawGradientRect(int left, int top, float right, int bottom, int startColor, int endColor) {
@@ -450,11 +466,11 @@ public class RenderUtil {
         float endRed = (endColor >> 16 & 255) / 255.0F;
         float endGreen = (endColor >> 8 & 255) / 255.0F;
         float endBlue = (endColor & 255) / 255.0F;
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glDisable(GL11.GL_ALPHA_TEST);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glShadeModel(GL11.GL_SMOOTH);
+        GlStateManager.disableTexture2D();
+        GlStateManager.enableBlend();
+        GlStateManager.disableAlpha();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.shadeModel(GL11.GL_SMOOTH);
         Tessellator tessellator = Tessellator.getInstance();
         WorldRenderer worldrenderer = tessellator.getWorldRenderer();
         worldrenderer.begin(7, DefaultVertexFormats.POSITION_COLOR);
@@ -463,10 +479,10 @@ public class RenderUtil {
         worldrenderer.pos(left, bottom, 0.0D).color(endRed, endGreen, endBlue, endAlpha).endVertex();
         worldrenderer.pos(right, bottom, 0.0D).color(endRed, endGreen, endBlue, endAlpha).endVertex();
         tessellator.draw();
-        GL11.glShadeModel(GL11.GL_FLAT);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_ALPHA_TEST);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GlStateManager.shadeModel(GL11.GL_FLAT);
+        GlStateManager.disableBlend();
+        GlStateManager.enableAlpha();
+        GlStateManager.enableTexture2D();
     }
 
     public static int clamp(int n) {
@@ -911,7 +927,7 @@ public class RenderUtil {
         GL11.glEnable(GL11.GL_POINT_SMOOTH);
         GL11.glHint(GL11.GL_POINT_SMOOTH_HINT, GL11.GL_NICEST);
         GL11.glBegin(GL11.GL_POINTS);
-        GL11.glColor4f(red / 255.0f, green / 255.0f, blue / 255.0f, 1.0f);
+        GlStateManager.color(red / 255.0f, green / 255.0f, blue / 255.0f, 1.0f);
         GL11.glVertex3d(0, 0, 0);
         GL11.glEnd();
         GL11.glDisable(GL11.GL_POINT_SMOOTH);
@@ -1353,17 +1369,17 @@ public class RenderUtil {
         double yPos = y - mc.getRenderManager().viewerPosY;
         double zPos = z - mc.getRenderManager().viewerPosZ;
         GL11.glPushMatrix();
-        GL11.glBlendFunc(770, 771);
-        GL11.glEnable(3042);
+        GlStateManager.blendFunc(770, 771);
+        GlStateManager.enableBlend();
         GL11.glLineWidth(2.0f);
-        GL11.glDisable(3553);
-        GL11.glDisable(2929);
-        GL11.glDepthMask(false);
+        GlStateManager.disableTexture2D();
+        GlStateManager.disableDepth();
+        GlStateManager.depthMask(false);
         float a = (color >> 24 & 0xFF) / 255.0f;
         float r = (color >> 16 & 0xFF) / 255.0f;
         float g = (color >> 8 & 0xFF) / 255.0f;
         float b = (color & 0xFF) / 255.0f;
-        GL11.glColor4f(r, g, b, a);
+        GlStateManager.color(r, g, b, a);
         AxisAlignedBB axisAlignedBB = new AxisAlignedBB(xPos, yPos, zPos, xPos + x2, yPos + y2, zPos + z2);
         if (outline) {
             RenderGlobal.drawSelectionBoundingBox(axisAlignedBB);
@@ -1371,11 +1387,11 @@ public class RenderUtil {
         if (shade) {
             drawFilledBoundingBox(axisAlignedBB, r, g, b, 0.25f);
         }
-        GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-        GL11.glEnable(3553);
-        GL11.glEnable(2929);
-        GL11.glDepthMask(true);
-        GL11.glDisable(3042);
+        GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
+        GlStateManager.enableTexture2D();
+        GlStateManager.enableDepth();
+        GlStateManager.depthMask(true);
+        GlStateManager.disableBlend();
         GL11.glPopMatrix();
     }
 

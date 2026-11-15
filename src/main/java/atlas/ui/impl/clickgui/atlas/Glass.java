@@ -111,7 +111,7 @@ final class Glass {
         begin();
         boolean shaded = top != bottom;
         if (shaded) {
-            GL11.glShadeModel(GL11.GL_SMOOTH);
+            GlStateManager.shadeModel(GL11.GL_SMOOTH);
         } else {
             colour(top);
         }
@@ -129,7 +129,7 @@ final class Glass {
         GL11.glVertex2f(x2 - radius, y);
         GL11.glEnd();
         if (shaded) {
-            GL11.glShadeModel(GL11.GL_FLAT);
+            GlStateManager.shadeModel(GL11.GL_FLAT);
         }
         end();
     }
@@ -147,12 +147,12 @@ final class Glass {
         begin();
         GL11.glEnable(GL11.GL_LINE_SMOOTH);
         GL11.glHint(GL11.GL_LINE_SMOOTH_HINT, GL11.GL_NICEST);
-        GL11.glShadeModel(GL11.GL_SMOOTH);
+        GlStateManager.shadeModel(GL11.GL_SMOOTH);
         GL11.glLineWidth(1.0F);
         GL11.glBegin(GL11.GL_LINE_LOOP);
         sweep(x + 0.5F, y + 0.5F, x2 - 0.5F, y2 - 0.5F, radius, top, bottom, true);
         GL11.glEnd();
-        GL11.glShadeModel(GL11.GL_FLAT);
+        GlStateManager.shadeModel(GL11.GL_FLAT);
         GL11.glDisable(GL11.GL_LINE_SMOOTH);
         end();
     }
@@ -291,7 +291,7 @@ final class Glass {
     }
 
     private static void colour(int c) {
-        GL11.glColor4f(((c >> 16) & 0xFF) / 255.0F, ((c >> 8) & 0xFF) / 255.0F,
+        GlStateManager.color(((c >> 16) & 0xFF) / 255.0F, ((c >> 8) & 0xFF) / 255.0F,
                 (c & 0xFF) / 255.0F, ((c >>> 24) & 0xFF) / 255.0F);
     }
 

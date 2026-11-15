@@ -171,7 +171,7 @@ public class Accessories extends Module {
 
     /** A flat ring in the XZ plane, for brims and halos. */
     private void ring(double y, double inner, double outer, float red, float green, float blue, float alpha) {
-        GL11.glColor4f(red, green, blue, alpha);
+        GlStateManager.color(red, green, blue, alpha);
         GL11.glBegin(GL11.GL_QUAD_STRIP);
         for (int i = 0; i <= HAT_SEGMENTS; i++) {
             double angle = Math.PI * 2.0 * i / HAT_SEGMENTS;
@@ -185,7 +185,7 @@ public class Accessories extends Module {
 
     /** A cylinder wall between two heights. */
     private void band(double bottom, double top, double radius, float red, float green, float blue) {
-        GL11.glColor4f(red, green, blue, 1.0F);
+        GlStateManager.color(red, green, blue, 1.0F);
         GL11.glBegin(GL11.GL_QUAD_STRIP);
         for (int i = 0; i <= HAT_SEGMENTS; i++) {
             double angle = Math.PI * 2.0 * i / HAT_SEGMENTS;
@@ -199,7 +199,7 @@ public class Accessories extends Module {
 
     /** A cone with its point above a circular base. */
     private void cone(double base, double radius, double height, float red, float green, float blue) {
-        GL11.glColor4f(red, green, blue, 1.0F);
+        GlStateManager.color(red, green, blue, 1.0F);
         GL11.glBegin(GL11.GL_TRIANGLE_FAN);
         GL11.glVertex3d(0.0, base + height, 0.0);
         for (int i = 0; i <= HAT_SEGMENTS; i++) {
@@ -237,7 +237,7 @@ public class Accessories extends Module {
     private void quad(double x1, double y1, double z1, double x2, double y2, double z2,
                       double x3, double y3, double z3, double x4, double y4, double z4,
                       float red, float green, float blue, float alpha) {
-        GL11.glColor4f(red, green, blue, alpha);
+        GlStateManager.color(red, green, blue, alpha);
         GL11.glBegin(GL11.GL_QUADS);
         GL11.glVertex3d(x1, y1, z1);
         GL11.glVertex3d(x2, y2, z2);

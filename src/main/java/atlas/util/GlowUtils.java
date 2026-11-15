@@ -179,8 +179,8 @@ public class GlowUtils { // credit: Horaizion
         GlStateManager.disableAlpha();
         GlStateManager.enableTexture2D();
 
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glColor4f(1f, 1f, 1f, 1f);
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.color(1f, 1f, 1f, 1f);
 
         GlStateManager.bindTexture(texture);
 
@@ -204,6 +204,6 @@ public class GlowUtils { // credit: Horaizion
 
         GlStateManager.enableAlpha();
         GlStateManager.disableBlend();
-        GL11.glColor4f(1f,1f,1f,1f);
+        GlStateManager.color(1f,1f,1f,1f);
     }
 }

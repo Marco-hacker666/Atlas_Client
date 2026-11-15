@@ -25,11 +25,11 @@ public final class AuraRender {
         }
         GlStateManager.depthMask(false);
         GL11.glEnable(GL11.GL_LINE_SMOOTH);
-        GL11.glShadeModel(GL11.GL_SMOOTH);
+        GlStateManager.shadeModel(GL11.GL_SMOOTH);
     }
 
     public static void end() {
-        GL11.glShadeModel(GL11.GL_FLAT);
+        GlStateManager.shadeModel(GL11.GL_FLAT);
         GL11.glDisable(GL11.GL_LINE_SMOOTH);
         GlStateManager.depthMask(true);
         GlStateManager.enableDepth();
@@ -41,7 +41,7 @@ public final class AuraRender {
     }
 
     private static void color(int argb) {
-        GL11.glColor4f((argb >> 16 & 255) / 255.0F, (argb >> 8 & 255) / 255.0F, (argb & 255) / 255.0F,
+        GlStateManager.color((argb >> 16 & 255) / 255.0F, (argb >> 8 & 255) / 255.0F, (argb & 255) / 255.0F,
                 (argb >>> 24) / 255.0F);
     }
 

@@ -7,6 +7,8 @@
  */
 package atlas.util.render;
 
+
+import net.minecraft.client.renderer.GlStateManager;
 import java.awt.Color;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.opengl.GL11;
@@ -18,9 +20,9 @@ public class BlurShadowRenderer {
         if (blurStrength <= 0) {
             return;
         }
-        GL11.glDisable(3553);
-        GL11.glEnable(3042);
-        GL11.glBlendFunc(770, 771);
+        GlStateManager.disableTexture2D();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(770, 771);
         Color bgColor = new Color(0, 0, 0, Math.min(255, alpha));
         for (int i = 0; i < blurStrength; ++i) {
             float offset = (float)i * 0.6f;
@@ -28,8 +30,8 @@ public class BlurShadowRenderer {
             int color = new Color(0, 0, 0, currentAlpha).getRGB();
             BlurShadowRenderer.drawRoundedRect(x - offset, y - offset, w + offset * 2.0f, h + offset * 2.0f, radius, color);
         }
-        GL11.glEnable(3553);
-        GL11.glDisable(3042);
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
     }
 
     private static void drawRoundedRect(float x, float y, float w, float h, float radius, int color) {
@@ -37,7 +39,7 @@ public class BlurShadowRenderer {
         float red = (float)(color >> 16 & 0xFF) / 255.0f;
         float green = (float)(color >> 8 & 0xFF) / 255.0f;
         float blue = (float)(color & 0xFF) / 255.0f;
-        GL11.glColor4f(red, green, blue, alpha);
+        GlStateManager.color(red, green, blue, alpha);
         GL11.glBegin(7);
         GL11.glVertex2f(x + radius, y);
         GL11.glVertex2f(x + w - radius, y);
@@ -59,7 +61,7 @@ public class BlurShadowRenderer {
     }
 
     private static void drawArc(float cx, float cy, float r, float start, float end, float red, float green, float blue, float alpha) {
-        GL11.glColor4f(red, green, blue, alpha);
+        GlStateManager.color(red, green, blue, alpha);
         GL11.glBegin(6);
         GL11.glVertex2f(cx, cy);
         for (float i = start; i <= end; i += 5.0f) {

@@ -1,5 +1,7 @@
 package atlas.module.modules;
 
+
+import net.minecraft.client.renderer.GlStateManager;
 import atlas.Atlas;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
@@ -142,14 +144,14 @@ public class TickBase extends Module {
         if (!this.isEnabled() || !line.getValue() || tickBuffer.isEmpty()) return;
         Color color = new Color(lineColor.getValue(), true);
         GL11.glPushMatrix();
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.disableTexture2D();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GL11.glEnable(GL11.GL_LINE_SMOOTH);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
+        GlStateManager.enableBlend();
+        GlStateManager.disableDepth();
         mc.entityRenderer.disableLightmap();
         GL11.glBegin(GL11.GL_LINE_STRIP);
-        GL11.glColor4f(color.getRed() / 255.0F, color.getGreen() / 255.0F, color.getBlue() / 255.0F, color.getAlpha() / 255.0F);
+        GlStateManager.color(color.getRed() / 255.0F, color.getGreen() / 255.0F, color.getBlue() / 255.0F, color.getAlpha() / 255.0F);
         double renderX = mc.getRenderManager().viewerPosX;
         double renderY = mc.getRenderManager().viewerPosY;
         double renderZ = mc.getRenderManager().viewerPosZ;
@@ -158,12 +160,12 @@ public class TickBase extends Module {
                 GL11.glVertex3d(tick.position.xCoord - renderX, tick.position.yCoord - renderY, tick.position.zCoord - renderZ);
             }
         }
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         GL11.glEnd();
-        GL11.glEnable(GL11.GL_DEPTH_TEST);
+        GlStateManager.enableDepth();
         GL11.glDisable(GL11.GL_LINE_SMOOTH);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GlStateManager.disableBlend();
+        GlStateManager.enableTexture2D();
         GL11.glPopMatrix();
     }
 

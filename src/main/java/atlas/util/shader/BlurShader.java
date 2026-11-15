@@ -131,7 +131,7 @@ public class BlurShader {
 
         pass1.framebufferClear();
         pass1.bindFramebuffer(false);
-        GL11.glClearColor(0, 0, 0, 0);
+        GlStateManager.clearColor(0, 0, 0, 0);
 
         s.init();
         s.setUniformi("DiffuseSampler", 0);
@@ -147,7 +147,7 @@ public class BlurShader {
 
         pass2.framebufferClear();
         pass2.bindFramebuffer(false);
-        GL11.glClearColor(0, 0, 0, 0);
+        GlStateManager.clearColor(0, 0, 0, 0);
 
         s.init();
         s.setUniformi("DiffuseSampler", 0);
@@ -166,7 +166,7 @@ public class BlurShader {
         GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
 
         GlStateManager.bindTexture(pass2.framebufferTexture);
-        GL11.glColor4f(1, 1, 1, 1);
+        GlStateManager.color(1, 1, 1, 1);
 
         drawQuads((float) sr.getScaledWidth_double(), (float) sr.getScaledHeight_double());
 

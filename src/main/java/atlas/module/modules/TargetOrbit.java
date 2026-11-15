@@ -1184,7 +1184,7 @@ public class TargetOrbit extends Module {
     }
 
     private static void colour(int color, float alpha) {
-        GL11.glColor4f(((color >> 16) & 0xFF) / 255.0F, ((color >> 8) & 0xFF) / 255.0F, (color & 0xFF) / 255.0F,
+        GlStateManager.color(((color >> 16) & 0xFF) / 255.0F, ((color >> 8) & 0xFF) / 255.0F, (color & 0xFF) / 255.0F,
                 Math.max(0.0F, Math.min(1.0F, alpha)));
     }
 

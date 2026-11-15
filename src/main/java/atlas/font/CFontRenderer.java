@@ -169,7 +169,7 @@ public class CFontRenderer extends CFont {
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
 
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, tex.getGlTextureId());
+            GlStateManager.bindTexture(tex.getGlTextureId());
 
             /* 2026-10-22 (plan item 14): glyphs are batched into one glBegin/glEnd run, ended before anything
                that must not happen inside one (a texture bind, a line); it was a draw call per glyph. Same
@@ -397,13 +397,13 @@ public class CFontRenderer extends CFont {
     protected DynamicTexture texItalicBold;
 
     private void drawLine(double x, double y, double x1, double y1, float width) {
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GlStateManager.disableTexture2D();
         GL11.glLineWidth(width);
         GL11.glBegin(GL11.GL_LINES);
         GL11.glVertex2d(x, y);
         GL11.glVertex2d(x1, y1);
         GL11.glEnd();
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GlStateManager.enableTexture2D();
     }
 
     public List<String> wrapWords(String text, double width) {

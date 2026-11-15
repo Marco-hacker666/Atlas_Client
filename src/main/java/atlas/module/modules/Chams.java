@@ -132,12 +132,12 @@ public class Chams extends Module {
             if (this.shouldRenderChams(event.getEntity())) {
                 switch (event.getType()) {
                     case PRE:
-                        GL11.glEnable(32823);
-                        GL11.glPolygonOffset(1.0F, -2500000.0F);
+                        GlStateManager.enablePolygonOffset();
+                        GlStateManager.doPolygonOffset(1.0F, -2500000.0F);
                         break;
                     case POST:
-                        GL11.glPolygonOffset(1.0F, 2500000.0F);
-                        GL11.glDisable(32823);
+                        GlStateManager.doPolygonOffset(1.0F, 2500000.0F);
+                        GlStateManager.disablePolygonOffset();
                 }
             }
         }

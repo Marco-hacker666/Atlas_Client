@@ -161,7 +161,7 @@ public class BlocksESP extends Module {
         GL11.glEnable(GL11.GL_LINE_SMOOTH);
         GL11.glHint(GL11.GL_LINE_SMOOTH_HINT, GL11.GL_NICEST);
         GL11.glBegin(GL11.GL_LINES);
-        GL11.glColor4f(red, green, blue, alpha);
+        GlStateManager.color(red, green, blue, alpha);
         GL11.glVertex3d(start.xCoord, start.yCoord, start.zCoord);
         GL11.glVertex3d(targetX, targetY, targetZ);
         GL11.glEnd();

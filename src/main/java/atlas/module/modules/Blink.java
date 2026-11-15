@@ -520,9 +520,9 @@ public class Blink extends Module {
                    so it gets its own colour; the rest fade forward to now. */
                 float along = i / (float) Math.max(1, this.trail.size() - 1);
                 if (i == 0) {
-                    GL11.glColor4f(1.0F, 0.9F, 0.25F, 0.9F);
+                    GlStateManager.color(1.0F, 0.9F, 0.25F, 0.9F);
                 } else {
-                    GL11.glColor4f(0.4F + 0.6F * along, 0.8F - 0.5F * along, 1.0F - 0.6F * along, 0.55F);
+                    GlStateManager.color(0.4F + 0.6F * along, 0.8F - 0.5F * along, 1.0F - 0.6F * along, 0.55F);
                 }
                 GL11.glVertex3d(point[0] - renderX, point[1] - renderY, point[2] - renderZ);
             }
@@ -533,7 +533,7 @@ public class Blink extends Module {
             /* Reddens as the drift approaches the limit, so the warning
                arrives before the correction does. */
             float heat = (float) Math.min(1.0, this.drift / Math.max(0.1F, this.maxDrift.getValue()));
-            GL11.glColor4f(0.35F + 0.65F * heat, 1.0F - 0.75F * heat, 0.45F - 0.35F * heat, 0.75F);
+            GlStateManager.color(0.35F + 0.65F * heat, 1.0F - 0.75F * heat, 0.45F - 0.35F * heat, 0.75F);
             double half = mc.thePlayer.width / 2.0;
             double minX = this.anchorX - half - renderX;
             double minY = this.anchorY - renderY;

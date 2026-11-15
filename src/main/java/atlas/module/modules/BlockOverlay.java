@@ -57,15 +57,15 @@ public class BlockOverlay extends Module {
 
         Color color = getOverlayColor();
         GlStateManager.pushMatrix();
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GL11.glEnable(GL11.GL_LINE_SMOOTH);
         GL11.glHint(GL11.GL_LINE_SMOOTH_HINT, GL11.GL_NICEST);
         ThemeStyle style = ThemeStyle.active(BlockColors.class);
         GL11.glLineWidth(style == null ? this.thickness.getValue() : style.width());
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        if (!this.depth.getValue()) GL11.glDisable(GL11.GL_DEPTH_TEST);
-        GL11.glDepthMask(false);
+        GlStateManager.disableTexture2D();
+        if (!this.depth.getValue()) GlStateManager.disableDepth();
+        GlStateManager.depthMask(false);
         GlStateManager.color(color.getRed() / 255.0F, color.getGreen() / 255.0F, color.getBlue() / 255.0F, color.getAlpha() / 255.0F);
 
         String mode = this.mode.getModeString().toLowerCase();
@@ -76,10 +76,10 @@ public class BlockOverlay extends Module {
             RenderGlobal.drawSelectionBoundingBox(bb);
         }
 
-        GL11.glDepthMask(true);
-        if (!this.depth.getValue()) GL11.glEnable(GL11.GL_DEPTH_TEST);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glDisable(GL11.GL_BLEND);
+        GlStateManager.depthMask(true);
+        if (!this.depth.getValue()) GlStateManager.enableDepth();
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
         GL11.glDisable(GL11.GL_LINE_SMOOTH);
         GlStateManager.resetColor();
         GlStateManager.popMatrix();

@@ -119,7 +119,7 @@ public class FallIndicator extends Module {
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GlStateManager.disableDepth();
         GL11.glLineWidth(2.0F);
-        GL11.glColor4f(red / 255.0F, green / 255.0F, blue / 255.0F, alpha);
+        GlStateManager.color(red / 255.0F, green / 255.0F, blue / 255.0F, alpha);
         GL11.glBegin(GL11.GL_LINE_LOOP);
         for (int i = 0; i < segments; i++) {
             double angle = Math.PI * 2.0 * i / segments;

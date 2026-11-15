@@ -229,9 +229,9 @@ final class OrbitPreview {
         float g = ((accent >> 8) & 0xFF) / 255.0F;
         float b = (accent & 0xFF) / 255.0F;
         GL11.glBegin(GL11.GL_TRIANGLE_FAN);
-        GL11.glColor4f(r * 0.3F, g * 0.3F, b * 0.3F, 0.45F);
+        GlStateManager.color(r * 0.3F, g * 0.3F, b * 0.3F, 0.45F);
         GL11.glVertex3f(0.0F, 0.0F, 0.0F);
-        GL11.glColor4f(r, g, b, 0.0F);
+        GlStateManager.color(r, g, b, 0.0F);
         for (int i = 0; i <= 40; i++) {
             double a = i * Math.PI * 2.0 / 40;
             GL11.glVertex3d(Math.cos(a) * 1.1, 0.0, Math.sin(a) * 1.1);

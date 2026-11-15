@@ -1,6 +1,8 @@
 // not rat bro XD
 package atlas.module.modules;
 
+
+import net.minecraft.client.renderer.GlStateManager;
 import atlas.Atlas;
 import atlas.event.EventTarget;
 import atlas.events.Render3DEvent;
@@ -138,11 +140,11 @@ public class TargetESP extends Module {
         int alpha = (int) (a * 200);
         RenderUtil.drawEntityBoundingBox(entity, r, g, b, alpha, 2.0F, 0.05 * size.getValue());
 
-        GL11.glColor4f(r / 255f, g / 255f, b / 255f, a * 0.15f);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.color(r / 255f, g / 255f, b / 255f, a * 0.15f);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         RenderUtil.drawEntityBox(entity, r, g, b);
-        GL11.glDisable(GL11.GL_BLEND);
+        GlStateManager.disableBlend();
     }
 
     // ── Hat styles ────────────────────────────────────────────────────────────
@@ -163,10 +165,10 @@ public class TargetESP extends Module {
 
         GL11.glPushMatrix();
         GL11.glTranslated(ex, top, ez);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.disableTexture2D();
+        GlStateManager.disableDepth();
         GL11.glLineWidth(1.5f);
 
         switch (hatStyle.getValue()) {
@@ -176,9 +178,9 @@ public class TargetESP extends Module {
             case 3: drawCrownHat(hw, fr, fg, fb, a);   break;
         }
 
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_DEPTH_TEST);
-        GL11.glDisable(GL11.GL_BLEND);
+        GlStateManager.enableTexture2D();
+        GlStateManager.enableDepth();
+        GlStateManager.disableBlend();
         GL11.glPopMatrix();
     }
 
@@ -191,7 +193,7 @@ public class TargetESP extends Module {
         double tb     = gap + brimH;
 
         // Brim faces
-        GL11.glColor4f(r, g, b, a * 0.85f);
+        GlStateManager.color(r, g, b, a * 0.85f);
         GL11.glBegin(GL11.GL_QUADS);
         quad(-hw-brimX, gap, -hw-brimX,  hw+brimX, gap, -hw-brimX,  hw+brimX, tb, -hw-brimX, -hw-brimX, tb, -hw-brimX);
         quad( hw+brimX, gap,  hw+brimX, -hw-brimX, gap,  hw+brimX, -hw-brimX, tb,  hw+brimX,  hw+brimX, tb,  hw+brimX);
@@ -202,7 +204,7 @@ public class TargetESP extends Module {
         GL11.glEnd();
 
         // Body
-        GL11.glColor4f(r, g, b, a * 0.75f);
+        GlStateManager.color(r, g, b, a * 0.75f);
         GL11.glBegin(GL11.GL_QUADS);
         quad(-hw, tb, -hw,  hw, tb, -hw,  hw, tb+hatH, -hw, -hw, tb+hatH, -hw);
         quad(-hw, tb,  hw,  hw, tb,  hw,  hw, tb+hatH,  hw, -hw, tb+hatH,  hw);
@@ -212,7 +214,7 @@ public class TargetESP extends Module {
         GL11.glEnd();
 
         // Edges
-        GL11.glColor4f(r, g, b, 1.0f);
+        GlStateManager.color(r, g, b, 1.0f);
         GL11.glBegin(GL11.GL_LINE_LOOP);
         GL11.glVertex3d(-hw, tb+hatH, -hw); GL11.glVertex3d( hw, tb+hatH, -hw);
         GL11.glVertex3d( hw, tb+hatH,  hw); GL11.glVertex3d(-hw, tb+hatH,  hw);
@@ -222,14 +224,14 @@ public class TargetESP extends Module {
     // ── PYRAMID hat ───────────────────────────────────────────────────────────
     private void drawPyramidHat(double hw, float r, float g, float b, float a) {
         double gap = 0.04, h = 0.6;
-        GL11.glColor4f(r, g, b, a * 0.75f);
+        GlStateManager.color(r, g, b, a * 0.75f);
         GL11.glBegin(GL11.GL_TRIANGLES);
         tri(0, gap+h, 0,  -hw, gap, -hw,  hw, gap, -hw);
         tri(0, gap+h, 0,   hw, gap, -hw,  hw, gap,  hw);
         tri(0, gap+h, 0,   hw, gap,  hw, -hw, gap,  hw);
         tri(0, gap+h, 0,  -hw, gap,  hw, -hw, gap, -hw);
         GL11.glEnd();
-        GL11.glColor4f(r, g, b, 1.0f);
+        GlStateManager.color(r, g, b, 1.0f);
         GL11.glBegin(GL11.GL_LINE_LOOP);
         GL11.glVertex3d(-hw, gap, -hw); GL11.glVertex3d(hw, gap, -hw);
         GL11.glVertex3d( hw, gap,  hw); GL11.glVertex3d(-hw, gap,  hw);
@@ -250,7 +252,7 @@ public class TargetESP extends Module {
         double brimH = 0.025 * size.getValue();
 
         // Filled cone body (smooth)
-        GL11.glColor4f(r, g, b, a * 0.72f);
+        GlStateManager.color(r, g, b, a * 0.72f);
         GL11.glBegin(GL11.GL_TRIANGLES);
         for (int i = 0; i < segments; i++) {
             double a1 = 2 * Math.PI * i       / segments;
@@ -262,7 +264,7 @@ public class TargetESP extends Module {
         GL11.glEnd();
 
         // Brim ring (flat annulus)
-        GL11.glColor4f(r, g, b, a * 0.65f);
+        GlStateManager.color(r, g, b, a * 0.65f);
         GL11.glBegin(GL11.GL_QUAD_STRIP);
         double innerR = hw * 0.85;
         for (int i = 0; i <= segments; i++) {
@@ -274,7 +276,7 @@ public class TargetESP extends Module {
         GL11.glEnd();
 
         // Smooth outline on brim edge
-        GL11.glColor4f(r, g, b, 1.0f);
+        GlStateManager.color(r, g, b, 1.0f);
         GL11.glBegin(GL11.GL_LINE_LOOP);
         for (int i = 0; i < segments; i++) {
             double ang = 2 * Math.PI * i / segments;
@@ -290,7 +292,7 @@ public class TargetESP extends Module {
         double spikeH = 0.45;
         int spikes = 5;
 
-        GL11.glColor4f(r, g, b, a * 0.8f);
+        GlStateManager.color(r, g, b, a * 0.8f);
         GL11.glBegin(GL11.GL_QUADS);
         quad(-hw, gap, -hw,  hw, gap, -hw,  hw, gap+baseH, -hw, -hw, gap+baseH, -hw);
         quad(-hw, gap,  hw,  hw, gap,  hw,  hw, gap+baseH,  hw, -hw, gap+baseH,  hw);
@@ -298,7 +300,7 @@ public class TargetESP extends Module {
         quad( hw, gap, -hw,  hw, gap,  hw,  hw, gap+baseH,  hw,  hw, gap+baseH, -hw);
         GL11.glEnd();
 
-        GL11.glColor4f(r, g, b, a * 0.85f);
+        GlStateManager.color(r, g, b, a * 0.85f);
         GL11.glBegin(GL11.GL_TRIANGLES);
         for (int i = 0; i < spikes; i++) {
             double t  = (double) i / spikes;
@@ -311,7 +313,7 @@ public class TargetESP extends Module {
         }
         GL11.glEnd();
 
-        GL11.glColor4f(r, g, b, 1.0f);
+        GlStateManager.color(r, g, b, 1.0f);
         GL11.glBegin(GL11.GL_LINE_LOOP);
         GL11.glVertex3d(-hw, gap, -hw); GL11.glVertex3d(hw, gap, -hw);
         GL11.glVertex3d( hw, gap,  hw); GL11.glVertex3d(-hw, gap, hw);

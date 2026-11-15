@@ -1,5 +1,7 @@
 package atlas.module.modules;
 
+
+import net.minecraft.client.renderer.GlStateManager;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -760,16 +762,16 @@ public class Displace extends Module {
                         | GL11.GL_LINE_BIT
                         | GL11.GL_DEPTH_BUFFER_BIT
                         | GL11.GL_CURRENT_BIT);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glDisable(GL11.GL_LIGHTING);
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
-        GL11.glDisable(GL11.GL_CULL_FACE);
-        GL11.glDepthMask(false);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.disableTexture2D();
+        GlStateManager.disableLighting();
+        GlStateManager.disableDepth();
+        GlStateManager.disableCull();
+        GlStateManager.depthMask(false);
         GL11.glEnable(GL11.GL_LINE_SMOOTH);
 
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 0.82F * alpha);
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 0.82F * alpha);
         GL11.glBegin(GL11.GL_TRIANGLES);
         GL11.glVertex3d(tailX - viewerX, centerY - viewerY, tailZ - viewerZ);
         arrowVertex(bodyEndX, centerY, bodyEndZ, -ARROW_BODY_HALF_HEIGHT, viewerX, viewerY, viewerZ);
@@ -786,7 +788,7 @@ public class Displace extends Module {
         GL11.glEnd();
 
         GL11.glLineWidth(2.0F);
-        GL11.glColor4f(0.0F, 0.0F, 0.0F, 0.95F * alpha);
+        GlStateManager.color(0.0F, 0.0F, 0.0F, 0.95F * alpha);
         GL11.glBegin(GL11.GL_LINE_LOOP);
         GL11.glVertex3d(tailX - viewerX, centerY - viewerY, tailZ - viewerZ);
         arrowVertex(bodyEndX, centerY, bodyEndZ, -ARROW_BODY_HALF_HEIGHT, viewerX, viewerY, viewerZ);
@@ -797,6 +799,7 @@ public class Displace extends Module {
         GL11.glEnd();
 
         GL11.glPopAttrib();
+        atlas.util.render.GlSync.afterPopAttrib();
         GL11.glPopMatrix();
 
         if (activeArrow) {

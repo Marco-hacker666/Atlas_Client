@@ -224,6 +224,9 @@ public class ProjectileAimBot extends Module {
     private void clear() {
         this.target = null;
         this.lastAimed = null;
+        this.dodgeHeldAt = -1;
+        this.extraCharge = -1;
+        this.dodgeKeptFor = -1;
         this.leads.clear();
         if (this.holdAfterShot) {
             this.holdAfterShot = false;
@@ -293,6 +296,12 @@ public class ProjectileAimBot extends Module {
                     atlas.management.RotationHelper.serverPitch(), mc.thePlayer.posX, mc.thePlayer.posY,
                     mc.thePlayer.posZ, mc.thePlayer.motionX, mc.thePlayer.motionZ));
             this.releasedAt = System.currentTimeMillis();
+        }
+        if (drawing != this.wasDrawing) {
+            /* A draw began or ended, however: dodge-wait and charge-random start again with the next one, whether
+               or not maybeRelease saw its first tick (review, PR #43). */
+            this.dodgeHeldAt = -1;
+            this.extraCharge = -1;
         }
         if (drawing && !this.wasDrawing) {
             this.releasedByUs = false;
@@ -540,18 +549,25 @@ public class ProjectileAimBot extends Module {
             boolean same = this.dodgeKeptFor == candidate.getEntityId();
             DodgeAim.Result result = DodgeAim.best(eye[0], eye[1], eye[2], aim, shot.speedAim, shot.kind, where, dodges,
                     same ? this.dodgeKeptSide : 0.0, same ? this.dodgeKeptUp : 0.0);
-            this.dodgeShown = result.covered + "/" + result.total;
             if (result.aim == aim) {
                 this.dodgeKeptFor = candidate.getEntityId();
                 this.dodgeKeptSide = 0.0;
                 this.dodgeKeptUp = 0.0;
+                this.dodgeShown = result.covered + "/" + result.total;
                 this.dodgeNote = String.format(" | dodge: middle covers %d/%d", result.covered, result.total);
                 return null;
             }
             if (!this.flight(eye, result.aim, shot.speedAim, shot.kind, where).isEmpty()) {
-                this.dodgeNote = " | dodge: the better look is stopped by a block";
+                /* The aim stays the plain one: what is shown is what that one covers (review, PR #43). */
+                int plain = DodgeAim.covered(eye[0], eye[1], eye[2], aim.yaw, aim.pitch, shot.speedAim,
+                        DodgeAim.safe(shot.kind, mc.thePlayer.getDistanceToEntity(candidate)), dodges,
+                        DodgeAim.flightTicks(aim.ticks));
+                this.dodgeShown = plain + "/" + dodges.size();
+                this.dodgeNote = String.format(" | dodge: the better look is stopped by a block, middle covers %d/%d",
+                        plain, dodges.size());
                 return null;
             }
+            this.dodgeShown = result.covered + "/" + result.total;
             this.dodgeKeptFor = candidate.getEntityId();
             this.dodgeKeptSide = result.side;
             this.dodgeKeptUp = result.up;
@@ -574,6 +590,10 @@ public class ProjectileAimBot extends Module {
             return null;
         }
         try {
+            if (this.dodgeHeldAt > shot.useTicks) {
+                /* Held on a later tick than this one: left over from another draw. */
+                this.dodgeHeldAt = -1;
+            }
             int waited = this.dodgeHeldAt < 0 ? 0 : shot.useTicks - this.dodgeHeldAt;
             if (waited >= this.dodgeWaitTicks.getValue()) {
                 this.dodgeNote = " | dodge: waited " + waited + ", lets go";

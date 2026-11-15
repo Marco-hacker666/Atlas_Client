@@ -209,7 +209,14 @@ final class ModuleDocsEn {
         help("SpeedBlocker", "retry-cooldown", "A cell that took max-retries clicks is left alone this long: a placement the server ignores (a claim, a region) stays open here and would be retried every tick.");
         d("KBDisplacement", "In fights by hand, silently aims your knockback at nearby hazards (void, lava).");
         // Ported from OpenSkid (2026-10-05)
-        d("KeyStrokes", "Shows WASD, space and the mouse buttons (with CPS) on screen. Movable in the HUD editor.");
+        d("KeyStrokes", "Shows WASD, space and the mouse buttons (with CPS) on screen. The CPS counts every click that reaches the game, AutoClicker's too. Movable in the HUD editor.");
+        // 2026-11-15: Freecam rewritten (the body stays put and keeps sending its packets; only the camera moves)
+        d("Freecam", "Flies the camera out of your body to look around. Your body stays where it is and keeps standing still as far as the server sees.");
+        help("Freecam", "speed", "How fast the camera flies. Hold sprint to go twice as fast; jump and sneak go up and down.");
+        help("Freecam", "camera-interact", "Attack, use and break blocks from the camera. Off: none of these while flying, as from the camera they would reach through walls and from far away, which servers check.");
+        help("Freecam", "leave-on-damage", "Back to your body as soon as it takes damage.");
+        help("Freecam", "reload-chunks", "Rebuild the drawn chunks when Freecam starts and stops, as F3+A does. Off by default: with OptiFine the chunks come back over a few seconds, near ones first.");
+        help("Freecam", "stay-sneaking", "Sneaking when Freecam starts: your body keeps sneaking, so it cannot slide off an edge.");
         d("PotionHUD", "Lists your active potion effects and their time left. Movable in the HUD editor.");
         d("InventoryHUD", "Shows your worn armour and hotbar items on screen. Movable in the HUD editor.");
         d("PlayerList", "A custom on-screen player list (ping, sorting, game-mode filter). Movable in the HUD editor.");
@@ -523,7 +530,7 @@ final class ModuleDocsEn {
         d("Capes", "Shows custom capes.");
         d("Accessories", "Draws headwear and wings on players; only you see them.");
         d("Freeze", "Holds incoming knockback packets, then releases them at the timeout.");
-        d("ProjectileAimBot", "Bow aimbot: while you draw a bow (or hold an egg, snowball or pearl) the look the server gets turns onto the best target, leading it along the arc. The camera stays, and you still draw and let go yourself. No aim at a target out of reach. (from LiquidBounce)");
+        d("ProjectileAimBot", "Bow aimbot: while you draw a bow (or hold an egg, snowball or pearl) the look the server gets turns onto the target so the shot flies, as the game flies it, into the middle of where the target will be when it gets there. The camera stays. A shot a wall would stop is not aimed (or goes over it with allow-lob). auto-shoot lets go only when the look the server already has would hit.");
         help("ProjectileAimBot", "bow", "Aim while drawing a bow.");
         help("ProjectileAimBot", "egg", "Aim while holding eggs.");
         help("ProjectileAimBot", "snowball", "Aim while holding snowballs.");
@@ -533,9 +540,19 @@ final class ModuleDocsEn {
         help("ProjectileAimBot", "through-walls", "Also aim at targets behind walls.");
         help("ProjectileAimBot", "through-walls-range", "Farthest target behind a wall.");
         help("ProjectileAimBot", "priority", "Health: lowest; Distance: nearest; Direction: closest to the crosshair.");
-        help("ProjectileAimBot", "gravity-type", "Projectile: lead along the arc; None: straight at the body.");
-        help("ProjectileAimBot", "predict", "Lead the target's and your own movement.");
-        help("ProjectileAimBot", "predict-size", "Ticks of the target's movement to lead.");
+        help("ProjectileAimBot", "teams", "Leave out players on your team (the same scoreboard colour), as KillAura's Teams. Some servers (Hypixel games) can give an enemy your colour: turn it off if it will not aim at someone you can see.");
+        help("ProjectileAimBot", "bot-check", "Leave out players that look like bots (not in the tab list), as KillAura's BotCheck.");
+        help("ProjectileAimBot", "bow-trace", "Log only (needs Logs): config/Atlas/bow-*.txt, a line a tick while you draw (who was left out and why, the shot worked out, the release) and every arrow of yours the server shot.");
+        help("ProjectileAimBot", "gravity-type", "Projectile: the game's own flight (drag, gravity, the side start), solved against where the target will be; None: straight at the body.");
+        help("ProjectileAimBot", "predict", "Lead the target to where the movement simulation (the one .targets measures) says it will be; off: aim where it stands.");
+        help("ProjectileAimBot", "latency-compensation", "Lead by your ping too: the target's position reached you half a ping ago, and the shot reaches the server half a ping from now.");
+        help("ProjectileAimBot", "auto-shoot", "Let go of the bow by itself, at shoot-charge or more, the moment the look the server already has would hit. Never on a guess. Off: you let go.");
+        help("ProjectileAimBot", "shoot-charge", "Ticks of draw before auto-shoot may let go: 20 is a full draw (most damage and a critical).");
+        help("ProjectileAimBot", "redraw", "After auto-shoot, draw again at once while right click is still held (one shot after another). Off: let go and press again for the next one, so letting go just after a shot never looses a weak half-drawn arrow.");
+        help("ProjectileAimBot", "charge-random", "auto-shoot waits up to this many ticks past shoot-charge, a new number each shot, so the shots are not all let go on the same tick.");
+        help("ProjectileAimBot", "allow-lob", "When a block stops the low arc, aim the high arc over it. Also lets a target behind cover be aimed at when the high arc reaches it.");
+        help("ProjectileAimBot", "show-path", "Draw the flight the aim is worked out for: green when it hits.");
+        help("ProjectileAimBot", "move-fix", "How you move while the look is turned. SILENT: by the look's direction with your keys turned to match, so you still go where you look and a server that re-runs your moves sees them fit (walking, sprint jumps). STRICT: by the look's direction as the keys are. NONE: by the camera's, which servers flag.");
         help("ProjectileAimBot", "turn-speed", "Most degrees the server look turns a tick, also back to the camera after.");
         help("ProjectileAimBot", "highest-body-point", "None: top of the aimed part.");
         help("ProjectileAimBot", "lowest-body-point", "None: bottom of the aimed part.");

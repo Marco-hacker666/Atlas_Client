@@ -80,6 +80,9 @@ public final class SimTargets {
     private volatile int tick;
     private volatile int wantedUntil = -1;
     private volatile boolean measuring;
+    /* 2026-11-15 (bow aimbot): one player followed whatever its distance, while asked for (focus). */
+    private volatile int focusId = -1;
+    private volatile int focusUntil = -1;
 
     private SimTargets() {
     }
@@ -92,6 +95,19 @@ public final class SimTargets {
     /** Keeps the tracking running for {@link #WANTED_FOR} more ticks. A forecast asked for does this itself. */
     public static void want() {
         INSTANCE.wantedUntil = INSTANCE.tick + WANTED_FOR;
+    }
+
+    /**
+     * Follows this player too, however far, for the next few ticks (ask again every tick): a bow shoots past
+     * {@link #RANGE}. It is followed first, so it is never the one left out by {@link #MOST}.
+     */
+    public static void focus(Entity player) {
+        if (player == null) {
+            return;
+        }
+        want();
+        INSTANCE.focusId = player.getEntityId();
+        INSTANCE.focusUntil = INSTANCE.tick + 5;
     }
 
     /** Measuring (.targets on): the tracking runs, and every forecast is held against what comes. */
@@ -195,14 +211,24 @@ public final class SimTargets {
             return;
         }
         List<EntityPlayer> near = new ArrayList<EntityPlayer>();
+        EntityPlayer focused = null;
+        boolean focusing = this.tick <= this.focusUntil;
         for (EntityPlayer player : mc.theWorld.playerEntities) {
-            if (player != mc.thePlayer && covered(player) && distanceSq(player) <= RANGE * RANGE) {
+            if (player == mc.thePlayer || !covered(player)) {
+                continue;
+            }
+            if (focusing && player.getEntityId() == this.focusId) {
+                focused = player;
+            } else if (distanceSq(player) <= RANGE * RANGE) {
                 near.add(player);
             }
         }
-        if (near.size() > MOST) {
+        if (near.size() > MOST - (focused != null ? 1 : 0)) {
             near.sort((a, b) -> Double.compare(distanceSq(a), distanceSq(b)));
-            near = near.subList(0, MOST);
+            near = new ArrayList<EntityPlayer>(near.subList(0, Math.max(0, MOST - (focused != null ? 1 : 0))));
+        }
+        if (focused != null) {
+            near.add(0, focused);
         }
         Set<Integer> followed = new HashSet<Integer>();
         for (EntityPlayer player : near) {

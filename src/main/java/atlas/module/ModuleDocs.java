@@ -256,9 +256,19 @@ public final class ModuleDocs {
         help("ProjectileAimBot", "through-walls", "也瞄準被牆擋住的目標。");
         help("ProjectileAimBot", "through-walls-range", "隔牆目標的最遠距離。");
         help("ProjectileAimBot", "priority", "Health：血最少的；Distance：最近的；Direction：離準星最近的。");
-        help("ProjectileAimBot", "gravity-type", "Projectile：照拋物線算提前量；None：直接對準身體。");
-        help("ProjectileAimBot", "predict", "預判目標和自己的移動。");
-        help("ProjectileAimBot", "predict-size", "目標移動預判幾個 tick。");
+        help("ProjectileAimBot", "teams", "排除同隊（計分板顏色相同）的玩家，跟 KillAura 的 Teams 一樣。有些伺服器（Hypixel）會讓敵人跟你同色：看得到人卻不瞄時把它關掉。");
+        help("ProjectileAimBot", "bot-check", "排除像機器人的玩家（不在 Tab 名單），跟 KillAura 的 BotCheck 一樣。");
+        help("ProjectileAimBot", "bow-trace", "只寫記錄（要開 Logs）：config/Atlas/bow-*.txt，拉弓時每 tick 一行（誰被排除、為什麼、算出的射擊、放箭），以及伺服器射出的每支你的箭。");
+        help("ProjectileAimBot", "gravity-type", "Projectile：照遊戲本身的飛行（阻力、重力、側邊出手）對準目標到時候的位置；None：直接對準身體。");
+        help("ProjectileAimBot", "predict", "用走位預測（.targets 測的那個）算目標到時候在哪；關掉就瞄它現在的位置。");
+        help("ProjectileAimBot", "latency-compensation", "把你的延遲也算進提前量。");
+        help("ProjectileAimBot", "auto-shoot", "拉到 shoot-charge 以上、而且伺服器已經收到的角度會命中時自動放箭。關掉就自己放。");
+        help("ProjectileAimBot", "shoot-charge", "自動放箭前至少拉弓幾 tick：20 是滿弓（傷害最高、爆擊）。");
+        help("ProjectileAimBot", "redraw", "自動放箭後，右鍵還按著就馬上再拉下一弓（連射）。關：要放開再按才會拉下一弓，射完放開右鍵就不會多射出一支沒拉滿的弱箭。");
+        help("ProjectileAimBot", "charge-random", "自動放箭在 shoot-charge 之後再隨機多等最多幾 tick，每箭不同，不會每次都同一 tick 放。");
+        help("ProjectileAimBot", "allow-lob", "低彈道會被方塊擋住時改用高拋。");
+        help("ProjectileAimBot", "show-path", "畫出瞄準用的飛行路徑：會命中時是綠色。");
+        help("ProjectileAimBot", "move-fix", "瞄準時怎麼移動。SILENT：照瞄準方向算、按鍵自動轉過來，還是往畫面方向走，伺服器重算也對得上（走路、衝刺跳）。STRICT：照瞄準方向、按鍵不轉。NONE：照畫面方向，會被抓。");
         help("ProjectileAimBot", "turn-speed", "伺服器視角每 tick 最多轉幾度；瞄準結束後也用這個速度轉回畫面。");
         help("ProjectileAimBot", "highest-body-point", "None：瞄準範圍的最高點。");
         help("ProjectileAimBot", "lowest-body-point", "None：瞄準範圍的最低點。");
@@ -309,7 +319,12 @@ public final class ModuleDocs {
         d("BedProximityAlert", "敵人接近你的床時發出警報。");
         d("BurstClicker", "點擊時額外送出連續點擊以提升命中率。");
         d("LegitReach", "在難以察覺的範圍內微調攻擊距離。");
-        d("Freecam", "讓視角離開身體自由飛行偵查。");
+        d("Freecam", "讓視角離開身體自由飛行偵查。身體留在原地，伺服器看到的是你站著不動。");
+        help("Freecam", "speed", "鏡頭飛行速度。按住衝刺鍵兩倍速；跳躍、蹲下往上往下。");
+        help("Freecam", "camera-interact", "從鏡頭位置攻擊、使用、挖方塊。關閉時飛行中都不能做，因為從鏡頭會隔牆、超距離，伺服器會檢查。");
+        help("Freecam", "leave-on-damage", "身體一受傷就回到身體。");
+        help("Freecam", "reload-chunks", "開關 Freecam 時重新載入畫面上的區塊（像 F3+A）。預設關：OptiFine 下區塊要幾秒才重建完，近的先出來。");
+        help("Freecam", "stay-sneaking", "開啟時正在蹲：身體繼續蹲著，不會從邊緣滑下去。");
         d("AutoPlace", "準心對準方塊面時自動放置方塊。");
         d("AutoRequeue", "遊戲結束後自動重新排隊。");
         d("ArmorBreaker", "戰鬥中自動切換斧頭以破壞對手護甲。");
@@ -447,7 +462,7 @@ public final class ModuleDocs {
         d("KeepRange", "連擊中自動放開前進（S-tap），避免貼太近浪費對手的擊退。");
         d("KBDisplacement", "手動打人時，靜默把擊退方向轉向附近的危險（虛空、岩漿）。");
         // Ported from OpenSkid (2026-10-05)
-        d("KeyStrokes", "在畫面上顯示 WASD、空白鍵和滑鼠按鍵（含 CPS）。可在 HUD 編輯器拖曳。");
+        d("KeyStrokes", "在畫面上顯示 WASD、空白鍵和滑鼠按鍵（含 CPS）。CPS 會算進每一次送進遊戲的點擊，包括 AutoClicker 的。可在 HUD 編輯器拖曳。");
         d("PotionHUD", "在畫面上列出目前的藥水效果和剩餘時間。可在 HUD 編輯器拖曳。");
         d("InventoryHUD", "在畫面上顯示身上的裝備和快捷欄物品。可在 HUD 編輯器拖曳。");
         d("PlayerList", "在畫面上顯示自訂的玩家列表（可顯示延遲、排序、篩選模式）。可在 HUD 編輯器拖曳。");

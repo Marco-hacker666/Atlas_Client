@@ -81,6 +81,8 @@ public class Atlas {
         /* Other players followed and forecast; holds nothing until something asks (2026-11-13). Before whoever
            asks it for a forecast in the same tick (review, PR #41). */
         EventManager.register(atlas.sim.SimTargets.get());
+        /* 2026-11-15: .targets on is kept across starts. */
+        atlas.command.commands.TargetsCommand.restore();
         /* Anonymous SpeedBlocker run data, only with the player's yes (2026-11-01). */
         EventManager.register(new atlas.management.RunCollector());
         EventManager.register(new atlas.management.PlaceRotations());

@@ -123,6 +123,7 @@ public class ShaderUtils {
             "uniform sampler2D inTexture, textureToCheck;\n" +
             "uniform vec2 halfpixel, offset, iResolution;\n" +
             "uniform int check;\n" +
+            "uniform float strength;\n" +
             "\n" +
             "void main() {\n" +
             "    vec2 uv = gl_FragCoord.xy / iResolution;\n" +
@@ -162,7 +163,7 @@ public class ShaderUtils {
             "\n" +
             "    vec4 result = sum / 12.0;\n" +
             "    float checkAlpha = texture2D(textureToCheck, gl_TexCoord[0].st).a;\n" +
-            "    gl_FragColor = vec4(result.rgb / result.a, mix(result.a, result.a * (1.0 - checkAlpha), float(check)));\n" +
+            "    gl_FragColor = vec4(result.rgb / result.a, mix(result.a, result.a * (1.0 - checkAlpha) * strength, float(check)));\n" +
             "}\n";
     private final String kawaseDownBloom = "#version 120\n" +
             "\n" +

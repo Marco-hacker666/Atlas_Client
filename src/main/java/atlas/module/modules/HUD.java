@@ -635,10 +635,12 @@ public class HUD extends Module {
             if (!atlas.util.render.MobileSafe.active()) {
                 if (style.glow) {
                     atlas.util.shader.BlurUtils.prepareBloom();
-                    frame.paintGlow(painter, this.listGlowStrength.getValue() / 100.0F);
+                    /* The shape at full opacity; how strong the glow is goes to the bloom (2026-11-15): drawn into
+                       the mask with blending, a part-opaque colour would be stored at its alpha squared. */
+                    frame.paintGlow(painter, 1.0F);
                     painter.finish();
                     GlStateManager.popMatrix();
-                    atlas.util.shader.BlurUtils.bloomEnd(3, this.listGlowSize.getValue());
+                    atlas.util.shader.BlurUtils.bloomEnd(3, this.listGlowSize.getValue(), this.listGlowStrength.getValue() / 100.0F);
                     GlStateManager.pushMatrix();
                     GlStateManager.translate(ax, ay, 0.0F);
                     GlStateManager.scale(s, s, 1.0F);
@@ -945,8 +947,13 @@ public class HUD extends Module {
                         float bgY1 = currentY / this.scale.getValue() - pad - (this.posY.getValue() == 0 ? (offset == 0L ? 1.0F : 0.0F) : (this.shadow.getValue() ? 1.0F : 0.0F));
                         float bgX2 = x / this.scale.getValue() + 1.0F + pad + (this.posX.getValue() == 0 ? totalWidth : 0.0F);
                         float bgY2 = currentY / this.scale.getValue() + height + pad + (this.posY.getValue() == 0 ? (this.shadow.getValue() ? 1.0F : 0.0F) : (offset == 0L ? 1.0F : 0.0F));
-                        int glowColor = new Color(0, 0, 0, 150).getRGB(); // Glassmorphic drop shadow instead of gradient
-                        glowColor = RenderUtil.mergeAlpha(glowColor, this.glowAlpha.getValue());
+                        /* 2026-11-15 (owner's screenshot: a big black blob behind the CLASSIC list): this was a
+                           black "drop shadow" whatever glow-color said, and the bloom spread it into a slab. The
+                           glow is the setting's colour: the row's HUD colour (SYNC) or the custom one. */
+                        int glowRgb = this.glowColorMode.getValue() == 0 ? this.getColor(l, offset).getRGB()
+                                : this.glowCustomColor.getValue();
+                        /* Opaque in the mask: how strong the glow is, glow-alpha, is the bloom's strength. */
+                        int glowColor = glowRgb | 0xFF000000;
                         if (this.rounded.getValue()) {
                             float bgW = bgX2 - bgX1;
                             float bgH = bgY2 - bgY1;
@@ -964,7 +971,7 @@ public class HUD extends Module {
                         currentY += (height + (this.shadow.getValue() ? 1.0F : 0.0F) + this.padding.getValue() * 2.0F) * this.scale.getValue() * (this.posY.getValue() == 0 ? 1.0F : -1.0F);
                         offset++;
                     }
-                    atlas.util.shader.BlurUtils.bloomEnd(3, this.glowRadius.getValue());
+                    atlas.util.shader.BlurUtils.bloomEnd(3, this.glowRadius.getValue(), this.glowAlpha.getValue() / 255.0F);
                 }
                 if (this.blur.getValue()) {
                     atlas.util.shader.BlurUtils.prepareBlur();

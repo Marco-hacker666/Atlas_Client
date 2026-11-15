@@ -50,13 +50,18 @@ public class BlurUtils {
     }
 
     public static void bloomEnd(int passes, float radius) {
+        bloomEnd(passes, radius, 1.0F);
+    }
+
+    /** strength: how opaque the glow is where the mask was solid (0-1). */
+    public static void bloomEnd(int passes, float radius, float strength) {
         if (bloomMasked) {
             bloomMasked = false;
             GlStateManager.colorMask(true, true, true, true);
             return;
         }
         stencilFrameBufferBloom.unbindFramebuffer();
-        KawaseBloom.renderBlur(stencilFrameBufferBloom.framebufferTexture, passes, radius);
+        KawaseBloom.renderBlur(stencilFrameBufferBloom.framebufferTexture, passes, radius, strength);
     }
 
     public static void prepareRiseBloom() {

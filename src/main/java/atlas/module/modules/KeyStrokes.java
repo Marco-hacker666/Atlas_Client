@@ -7,7 +7,10 @@ package atlas.module.modules;
 
 import atlas.ui.impl.clickgui.atlas.HudPanel;
 import atlas.event.EventTarget;
+import atlas.event.types.Priority;
+import atlas.events.LeftClickMouseEvent;
 import atlas.events.Render2DEvent;
+import atlas.events.RightClickMouseEvent;
 import atlas.module.Module;
 import atlas.ui.hud.HudLayout;
 import atlas.property.properties.BooleanProperty;
@@ -48,6 +51,12 @@ public class KeyStrokes extends Module {
     private final Deque<Long> rightClicks = new ArrayDeque<Long>();
     private boolean prevLeft = false;
     private boolean prevRight = false;
+    /* 2026-11-15 (owner: KeyStrokes did not count the clicks AutoClicker makes): when a click last reached the game,
+       so a module's click lights the button too. */
+    private long lastLeftClick;
+    private long lastRightClick;
+    /** How long a click a module made shows the button pressed. */
+    private static final long FLASH_MS = 80L;
 
     public KeyStrokes() {
         super("KeyStrokes", false, false, "Shows your keys and clicks on screen.");
@@ -68,6 +77,37 @@ public class KeyStrokes extends Module {
         rightClicks.clear();
         prevLeft = false;
         prevRight = false;
+        lastLeftClick = 0L;
+        lastRightClick = 0L;
+    }
+
+    /**
+     * Every left click that reaches the game, yours or a module's (AutoClicker presses the attack key, which the game
+     * turns into this same click). Counted here, after every module has had its say, and not from the mouse button:
+     * the button only shows your own clicks. A click a module cancelled (HitSelect and the like) never happened.
+     */
+    @EventTarget(Priority.LOWEST)
+    public void onLeftClick(LeftClickMouseEvent event) {
+        if (!isEnabled() || event.isCancelled()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        leftClicks.addLast(now);
+        lastLeftClick = now;
+    }
+
+    /**
+     * A right click a module made: with the button up. With it held, the game repeats the use every four ticks by
+     * itself; those are not clicks, and the press itself is counted from the button below.
+     */
+    @EventTarget(Priority.LOWEST)
+    public void onRightClick(RightClickMouseEvent event) {
+        if (!isEnabled() || event.isCancelled() || Mouse.isButtonDown(1)) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        rightClicks.addLast(now);
+        lastRightClick = now;
     }
 
     @EventTarget
@@ -119,16 +159,16 @@ public class KeyStrokes extends Module {
         boolean sDown = Keyboard.isKeyDown(mc.gameSettings.keyBindBack.getKeyCode());
         boolean dDown = Keyboard.isKeyDown(mc.gameSettings.keyBindRight.getKeyCode());
         boolean jumpDown = Keyboard.isKeyDown(mc.gameSettings.keyBindJump.getKeyCode());
-        boolean lDown = Mouse.isButtonDown(0);
-        boolean rDown = Mouse.isButtonDown(1);
-        if (lDown && !prevLeft) {
-            leftClicks.addLast(now);
-        }
-        if (rDown && !prevRight) {
+        boolean lHeld = Mouse.isButtonDown(0);
+        boolean rHeld = Mouse.isButtonDown(1);
+        /* Left clicks are counted as they reach the game (onLeftClick); in a menu nothing reaches it. */
+        if (rHeld && !prevRight) {
             rightClicks.addLast(now);
         }
-        prevLeft = lDown;
-        prevRight = rDown;
+        prevLeft = lHeld;
+        prevRight = rHeld;
+        boolean lDown = lHeld || now - lastLeftClick < FLASH_MS;
+        boolean rDown = rHeld || now - lastRightClick < FLASH_MS;
         prune(leftClicks, now);
         prune(rightClicks, now);
         GlStateManager.pushMatrix();

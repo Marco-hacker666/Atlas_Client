@@ -566,6 +566,47 @@ public final class TargetTrack {
         return this.shadow == null ? null : this.shadow.copy();
     }
 
+    /*
+     * 2026-11-16 (TargetDodges: where the player gets to if it changes what it is doing): what forecast() runs on
+     * from, for other runs of the same shadow.
+     */
+
+    /** The shadow at the last position with what the server says of the player now; null when not {@link #locked}. */
+    PlayerSim runStart() {
+        if (!locked() || this.keys == null || this.seen == null) {
+            return null;
+        }
+        PlayerSim sim = this.shadow.copy();
+        apply(sim, this.seen);
+        return sim;
+    }
+
+    /** The keys forecast() holds; only with a {@link #runStart}. */
+    PlayerSim.Input runInput() {
+        PlayerSim.Input in = this.keys.input(this.seen.sneaking);
+        in.sprint = this.seen.sprinting;
+        return in;
+    }
+
+    /** The yaw forecast() starts from: its move i runs by this plus {@link #yawRate} times i. */
+    float runYaw() {
+        return this.keys.yaw + this.yawRate * (float) (this.lastMoves - 1) / 2.0F;
+    }
+
+    /**
+     * The player standing still in the cell the server last named: where one that has sent nothing for a while is.
+     * Null before the first position, or when that was not on ground.
+     */
+    PlayerSim restStart(PlayerSim.World world) {
+        if (this.seen == null || !this.seen.onGround) {
+            return null;
+        }
+        PlayerSim sim = placed(this.seen, null, 0, world);
+        sim.sprinting = false;
+        sim.airSpeed = 0.02F;
+        return sim;
+    }
+
     /**
      * Where the player will be over its next {@code moves} moves, counted from the last position the server sent:
      * the shadow run on with the keys it was found to hold (and turning on, when it has been turning), or, when its

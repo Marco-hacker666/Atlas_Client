@@ -588,6 +588,20 @@ public final class TargetTrack {
         return in;
     }
 
+    /**
+     * The keys of before a release that forecast() still gives half its weight to (keys let go a moment ago, the
+     * player still sliding: a stop or a tap); null when it does not. Only with a {@link #runStart}.
+     */
+    PlayerSim.Input runTapInput() {
+        if (this.heldBefore == null || this.releasedFor > TAP_MOVES || !(this.shadow.speed() > TAP_SPEED)) {
+            return null;
+        }
+        PlayerSim.Input held = this.heldBefore.input(this.seen.sneaking);
+        held.jump = this.keys.jump;
+        held.sprint = this.sprintBefore;
+        return held;
+    }
+
     /** The yaw forecast() starts from: its move i runs by this plus {@link #yawRate} times i. */
     float runYaw() {
         return this.keys.yaw + this.yawRate * (float) (this.lastMoves - 1) / 2.0F;

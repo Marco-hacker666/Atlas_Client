@@ -170,6 +170,41 @@ public class TargetDodgesTest {
     }
 
     @Test
+    public void keysJustLetGoKeepThePathsOnTheForecast() {
+        /* A sprint, then the keys let go for a move: a stop or a tap, and the forecast is the middle of the two. */
+        float yaw = -60.0F;
+        PlayerSim game = standing();
+        PlayerSim.Input in = new PlayerSim.Input();
+        in.yaw = yaw;
+        in.forward = 1.0F;
+        in.sprint = true;
+        TargetTrack track = new TargetTrack();
+        track.observe(seen(game, yaw, false), WORLD, 0.0);
+        for (int i = 0; i < 12; i++) {
+            game.tick(WORLD, in);
+            game.tick(WORLD, in);
+            track.observe(seen(game, yaw, true), WORLD, 2.0);
+        }
+        in.forward = 0.0F;
+        in.sprint = false;
+        game.tick(WORLD, in);
+        track.observe(seen(game, yaw, false), WORLD, 1.0);
+        assertTrue(track.locked());
+        assertTrue("the forecast is blending", track.runTapInput() != null);
+        TargetForecast forecast = track.forecast(WORLD, 8);
+        List<TargetForecast> paths = TargetDodges.paths(track, WORLD, 8, 3);
+        for (TargetForecast path : paths) {
+            for (int i = 0; i <= 3; i++) {
+                assertEquals(forecast.x[i], path.x[i], 1.0E-9);
+                assertEquals(forecast.z[i], path.z[i], 1.0E-9);
+            }
+        }
+        /* After that they part again. */
+        assertTrue(Math.hypot(way(paths, "turn left").x[8] - forecast.x[8],
+                way(paths, "turn left").z[8] - forecast.z[8]) > 0.3);
+    }
+
+    @Test
     public void nothingKnownGivesNoPaths() {
         assertTrue(TargetDodges.paths(null, WORLD, 10, 3).isEmpty());
         assertTrue(TargetDodges.pathsAtRest(new TargetTrack(), WORLD, 10, 3, 0.0F).isEmpty());

@@ -72,9 +72,20 @@ public final class TargetDodges {
             return Collections.emptyList();
         }
         PlayerSim.Input before = track.runInput();
+        /* Keys let go a moment ago: the forecast is the middle of a stop and a tap, and so is each way here, so
+           that every path is the forecast until the player reacts (review, PR #43). */
+        PlayerSim.Input tap = track.runTapInput();
         List<TargetForecast> out = new ArrayList<TargetForecast>();
         for (Way way : WAYS) {
-            out.add(run(start, world, moves, after, before, track.runYaw(), track.yawRate(), way));
+            TargetForecast path = run(start, world, moves, after, before, track.runYaw(), track.yawRate(), way);
+            if (tap != null) {
+                TargetForecast tapped = run(start, world, moves, after, tap, track.runYaw(), track.yawRate(), way);
+                for (int i = 1; i <= moves; i++) {
+                    path.x[i] = (path.x[i] + tapped.x[i]) / 2.0;
+                    path.z[i] = (path.z[i] + tapped.z[i]) / 2.0;
+                }
+            }
+            out.add(path);
         }
         return out;
     }

@@ -106,6 +106,9 @@ tasks.withType(JavaCompile::class) {
 }
 tasks.withType(org.gradle.jvm.tasks.Jar::class) {
     archiveBaseName.set(jarName)
+    /* 2026-11-15: Atlas-v<version>.jar, the name the release uses. The old base name "Atlas.jar" made
+       Atlas.jar-<version>.jar, which Forge loaded without finding mixins.atlas.json (the game did not start). */
+    archiveVersion.set("v" + project.version)
     manifest.attributes.run {
         this["FMLCorePluginContainsFMLMod"] = "true"
         this["ForceLoadAsMod"] = "true"

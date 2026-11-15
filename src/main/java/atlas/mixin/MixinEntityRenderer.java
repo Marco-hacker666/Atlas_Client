@@ -157,6 +157,51 @@ public abstract class MixinEntityRenderer {
         EventManager.call(new Render3DEvent(float2));
     }
 
+    /*
+     * 2026-11-15 (Freecam underground): RenderGlobal.setupTerrain finds the chunks to draw by flooding out from the
+     * camera through open faces; from inside solid stone nothing is open and only the camera's own chunk was drawn.
+     * The game drops that occlusion culling for a spectator inside an opaque block; the same while the Freecam camera
+     * flies. Set here, on the call's argument by its place in the signature: a @ModifyVariable inside setupTerrain
+     * (the first try) can land on the int frame counter where the method has no local variable table (OptiFine), and
+     * then only one chunk is ever drawn.
+     */
+    @ModifyArg(
+            method = {"renderWorldPass"},
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/RenderGlobal;setupTerrain(Lnet/minecraft/entity/Entity;DLnet/minecraft/client/renderer/culling/ICamera;IZ)V"
+            ),
+            index = 4,
+            require = 0
+    )
+    private boolean atlas$freecamAsSpectator(boolean playerSpectator) {
+        return playerSpectator || atlas.module.modules.Freecam.camera() != null;
+    }
+
+    /* 2026-11-15 (Freecam): the hand belongs to the body, not to the camera flying about. Vanilla's signature only and
+       not required: OptiFine reworks renderHand, and a hand left showing is better than a game that will not start. */
+    @Inject(method = {"renderHand(FI)V"}, at = {@At("HEAD")}, cancellable = true, require = 0)
+    private void atlas$freecamHand(float partialTicks, int xOffset, CallbackInfo callbackInfo) {
+        if (atlas.module.modules.Freecam.camera() != null) {
+            callbackInfo.cancel();
+        }
+    }
+
+    /*
+     * 2026-11-15 (Freecam): the crosshair is traced from the render view, the camera. Unless camera-interact is on,
+     * nothing is under it: no outline, nothing to break, attack or use from where the body could not reach.
+     */
+    @Inject(method = {"getMouseOver"}, at = {@At("RETURN")})
+    private void atlas$freecamMouseOver(float partialTicks, CallbackInfo callbackInfo) {
+        if (atlas.module.modules.Freecam.blocksInteraction() && this.mc.thePlayer != null) {
+            Vec3 eyes = this.mc.thePlayer.getPositionEyes(partialTicks);
+            this.mc.objectMouseOver = new net.minecraft.util.MovingObjectPosition(
+                    net.minecraft.util.MovingObjectPosition.MovingObjectType.MISS, eyes,
+                    net.minecraft.util.EnumFacing.UP, new net.minecraft.util.BlockPos(eyes));
+            this.mc.pointedEntity = null;
+        }
+    }
+
     @ModifyConstant(
             method = {"hurtCameraEffect"},
             constant = {@Constant(

@@ -82,6 +82,12 @@ public abstract class MixinEntity {
            camera and never reach the fields the movement packet is built from.
            Anything downstream -- the yaw sent to the server, the head other
            players see, where attacks are aimed -- is therefore untouched. */
+        /* 2026-11-15: Freecam -- the mouse turns the camera, never the body. */
+        if (atlas.module.modules.Freecam.camera() != null) {
+            atlas.module.modules.Freecam.turn(yawDelta, pitchDelta);
+            callbackInfo.cancel();
+            return;
+        }
         FreeLook freeLook = (FreeLook) Atlas.moduleManager.modules.get(FreeLook.class);
         if (freeLook != null && freeLook.isFreeLooking()) {
             freeLook.updateCamera(yawDelta, pitchDelta);

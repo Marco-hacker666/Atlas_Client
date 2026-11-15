@@ -23,6 +23,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @SideOnly(Side.CLIENT)
 @Mixin(value = {EntityPlayerSP.class}, priority = 9999)
@@ -153,6 +154,18 @@ public abstract class MixinEntityPlayerSP extends MixinEntityPlayer {
     )
     private void beforeUpdateMove(CallbackInfo callbackInfo) {
         EventManager.call(new atlas.events.PreMoveInputEvent());
+    }
+
+    /*
+     * 2026-11-15 (Freecam): the game sends movement packets, and applies the movement keys, only for the render view
+     * entity. While the Freecam camera is the render view the body still counts as it, so it keeps sending the packets
+     * a player standing still sends (Freecam clears its movement input).
+     */
+    @Inject(method = {"isCurrentViewEntity"}, at = {@At("HEAD")}, cancellable = true)
+    private void atlas$freecamBody(CallbackInfoReturnable<Boolean> callbackInfo) {
+        if (atlas.module.modules.Freecam.keepsBody(this)) {
+            callbackInfo.setReturnValue(Boolean.TRUE);
+        }
     }
 
     @Inject(

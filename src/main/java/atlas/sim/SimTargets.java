@@ -193,7 +193,8 @@ public final class SimTargets {
         if (age < 0) {
             return null;
         }
-        PlayerSim.World world = SimPlayer.world(mc.theWorld, player);
+        /* Eleven ways from one place: the cache answers nearly all of their questions (2026-11-16). */
+        PlayerSim.World world = SimWorlds.cached(SimPlayer.world(mc.theWorld, player));
         List<TargetForecast> paths;
         boolean atRest = age > STALE;
         if (atRest) {
@@ -341,7 +342,8 @@ public final class SimTargets {
         }
         target.track.walkSpeed = walkSpeed(player);
         target.track.depthStrider = (float) EnchantmentHelper.getDepthStriderModifier(player);
-        PlayerSim.World world = SimPlayer.world(mc.theWorld, player);
+        /* A fit runs many candidates from the last position: the cache answers nearly all of their questions. */
+        PlayerSim.World world = SimWorlds.cached(SimPlayer.world(mc.theWorld, player));
         target.track.observe(seen, world, (double) since);
         target.known = true;
         target.x = seen.x;

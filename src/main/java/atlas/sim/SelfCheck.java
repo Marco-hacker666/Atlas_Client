@@ -118,6 +118,25 @@ public final class SelfCheck {
         boolean velocityOnly;
     }
 
+    /**
+     * The look check (2026-11-16; it was MoveModel's, flat ground only, and left out every tick with a wall, water,
+     * a ladder or a knockback): how far the move is from the nearest input at the yaw the packet sent, and at the
+     * camera's. A move that fits the camera and not the packet was turned by a module that did not carry the keys
+     * round with it (LOOK); one that fits neither was pushed (SPEED).
+     *
+     * @param atSent the check's own answer at {@code sentYaw}, already worked out: it is not run twice
+     * @return {at the packet's yaw, at the camera's}
+     */
+    public static double[] lookErrors(PlayerSim before, PlayerSim.World world, Result atSent, float sentYaw,
+                                      float cameraYaw, boolean sprinting, boolean sneaking, double x, double y,
+                                      double z, Extra extra) {
+        float apart = sentYaw - cameraYaw;
+        apart -= 360.0F * (float) Math.floor((apart + 180.0F) / 360.0F);
+        double camera = Math.abs(apart) < 0.01F ? atSent.offset
+                : check(before, world, cameraYaw, sprinting, sneaking, x, y, z, extra).offset;
+        return new double[]{atSent.offset, camera};
+    }
+
     /** Whether some input with the knockback taken explains the move (whatever explains it without). */
     public static boolean fitsWithVelocity(PlayerSim before, PlayerSim.World world, float yaw, boolean sprinting,
                                            boolean sneaking, double x, double y, double z, Extra extra) {

@@ -5,14 +5,14 @@
  * <h3>The pieces</h3>
  * <ul>
  *   <li>{@link atlas.sim.PlayerSim}: the engine. One tick as the game runs it. Pure: the world is an interface.</li>
- *   <li>{@link atlas.sim.SimWorlds}: a world built from another (a block about to be placed).</li>
+ *   <li>{@link atlas.sim.SimWorlds}: a world built from another (a block about to be placed), or answering its
+ *       area questions from a bigger area asked once, for a computation that runs many times from one place.</li>
  *   <li>{@link atlas.sim.SelfCheck}: a re-simulating anticheat's question asked of one's own move: does any input
  *       explain it?</li>
  *   <li>{@link atlas.sim.Impulses}: what else may explain a move -- the attacks, knockback and explosions between two
  *       movement packets -- and which move each is offered to.</li>
  *   <li>{@link atlas.sim.MoveAudit}: the self check tick after tick -- which state a move is checked from, when, and
  *       with which packet's look. Its tests run the game's tick order.</li>
- *   <li>{@link atlas.sim.MoveModel}: the older, level-only model; MoveCheck's look check uses it.</li>
  *   <li>{@link atlas.sim.TargetFit}, {@link atlas.sim.TargetTrack}, {@link atlas.sim.TargetForecast}: another
  *       player's movement. The server sends little of it and coarsely; the keys are found from the positions, and
  *       the player is run ahead by them. {@link atlas.sim.TargetScore} holds the forecasts against what came.</li>

@@ -27,6 +27,8 @@ public final class MoveAudit {
         public double[] velocity;
         /** The state the move was checked from: its speeds are the ones the move ran with. Null with no check. */
         public PlayerSim from;
+        /** What the move was checked with besides the keys (attacks, knockback, explosions). Null with no check. */
+        public SelfCheck.Extra extra;
     }
 
     private final Impulses impulses = new Impulses();
@@ -74,6 +76,7 @@ public final class MoveAudit {
                     () -> SelfCheck.fitsWithVelocity(before, world, sentYaw, sprint, sneak, x, y, z, extra));
             verdict.velocity = extra.velocity;
             verdict.from = before;
+            verdict.extra = extra;
         } else {
             this.impulses.skip();
         }

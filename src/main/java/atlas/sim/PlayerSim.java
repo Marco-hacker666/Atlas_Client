@@ -15,7 +15,7 @@ import java.util.List;
  *
  * Before this, every module that needed to know where the player would be
  * had its own few lines for it (Scaffold's fall guard, Eagle, BlockLadder,
- * MoveUtil.predictMovement, MoveModel), each covering a part: flat ground
+ * MoveUtil.predictMovement, MoveModel -- removed 2026-11-16), each covering a part: flat ground
  * only, no sprint, no collisions. This is the one place for it. A caller
  * takes the player as it is now ({@link SimPlayer#snapshot}) and ticks that
  * state with the keys it wants to try.

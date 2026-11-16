@@ -14,7 +14,6 @@ import atlas.module.modules.*;
 import atlas.sim.HeldKnockback;
 import atlas.sim.Impulses;
 import atlas.sim.MoveAudit;
-import atlas.sim.MoveModel;
 import atlas.sim.PlayerSim;
 import atlas.sim.SelfCheck;
 import atlas.sim.SimPlayer;
@@ -28,7 +27,6 @@ import net.minecraft.network.play.client.C0BPacketEntityAction;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.minecraft.network.play.server.S12PacketEntityVelocity;
 import net.minecraft.network.play.server.S27PacketExplosion;
-import net.minecraft.util.BlockPos;
 import net.minecraft.util.MathHelper;
 
 import java.io.File;
@@ -109,11 +107,15 @@ public final class MoveCheck {
     private volatile long correctedAt;
     private volatile long knockedAt;
 
-    private final MoveModel.State state = new MoveModel.State();
+    /*
+     * The look check of the move just made (2026-11-16): worked out at the end of the tick with the self check, on
+     * the full simulation, and counted at UpdateEvent POST. Null when the move was not checked. It was MoveModel's,
+     * flat ground only, which left out every tick with a wall, water, a ladder or a knockback.
+     */
+    private double[] lookErrors;
+    /** The move's flags for the look check's line: sprint, ground or air, jump, item. */
+    private String lookFlags = "";
     private boolean sampled;
-    private double startX;
-    private double startY;
-    private double startZ;
     private float lastSentYaw = Float.NaN;
     private boolean lastSprinting;
 
@@ -424,15 +426,6 @@ public final class MoveCheck {
             return;
         }
         if (event.getType() == EventType.PRE) {
-            this.startX = mc.thePlayer.posX;
-            this.startY = mc.thePlayer.posY;
-            this.startZ = mc.thePlayer.posZ;
-            this.state.motionX = mc.thePlayer.motionX;
-            this.state.motionZ = mc.thePlayer.motionZ;
-            this.state.onGround = mc.thePlayer.onGround;
-            this.state.slipperiness = mc.theWorld.getBlockState(new BlockPos(MathHelper.floor_double(mc.thePlayer.posX),
-                    MathHelper.floor_double(mc.thePlayer.getEntityBoundingBox().minY) - 1,
-                    MathHelper.floor_double(mc.thePlayer.posZ))).getBlock().slipperiness;
             this.sampled = true;
             return;
         }
@@ -472,8 +465,16 @@ public final class MoveCheck {
         MoveAudit.Verdict verdict = this.audit.endOfTick(mc.thePlayer.ticksExisted, state,
                 SimPlayer.world(mc.theWorld, mc.thePlayer), event.getYaw(), sprint, sneak,
                 now - this.correctedAt < AFTER_CORRECTION_MS);
+        this.lookErrors = null;
         if (verdict.result != null) {
             report(verdict, state, changes(movers), event.getYaw(), sprint, sneak, now);
+            this.lookErrors = SelfCheck.lookErrors(verdict.from, SimPlayer.world(mc.theWorld, mc.thePlayer),
+                    verdict.result, event.getYaw(), mc.thePlayer.rotationYaw, sprint, sneak, state.x(), state.y(),
+                    state.z(), verdict.extra);
+            /* Rising after the move, not just higher: a step up a slab rises too, and has no jump. */
+            boolean jumped = verdict.from.onGround && mc.thePlayer.motionY > 0.2;
+            this.lookFlags = (sprint ? "sprint " : "") + (verdict.from.onGround ? "ground " : "air ")
+                    + (jumped ? "jump " : "") + (mc.thePlayer.isUsingItem() ? "use " : "");
         }
     }
 
@@ -644,33 +645,18 @@ public final class MoveCheck {
         if (turn >= BIG_TURN) {
             this.bigTurns++;
         }
-        if (leftOut(now)) {
+        double[] errors = this.lookErrors;
+        this.lookErrors = null;
+        if (errors == null) {
+            /* Not checked: right after a correction, a tick skipped, or a state the simulation does not cover. */
             this.skipped++;
         } else {
-            double moveX = mc.thePlayer.posX - this.startX;
-            double moveZ = mc.thePlayer.posZ - this.startZ;
-            this.state.sprinting = sprinting;
-            this.state.sneaking = mc.thePlayer.isSneaking();
-            this.state.usingItem = mc.thePlayer.isUsingItem();
-            /* Rising after the move, not just higher: a step up a slab rises too, and has no jump boost. */
-            this.state.jumped = this.state.onGround && mc.thePlayer.motionY > 0.2;
-            this.state.moveSpeed = mc.thePlayer.getAIMoveSpeed();
-            double lookError = MoveModel.bestError(this.state, sentYaw, moveX, moveZ);
-            double cameraError = MoveModel.bestError(this.state, mc.thePlayer.rotationYaw, moveX, moveZ);
-            record(now, lookError, cameraError, sentYaw, turn);
+            record(now, errors[0], errors[1], sentYaw, turn);
         }
         if (now - this.summaryAt >= LOG_EVERY * 1000L) {
             summary();
             this.summaryAt = now;
         }
-    }
-
-    /** Ticks the model does not cover. */
-    private boolean leftOut(long now) {
-        return mc.thePlayer.isCollidedHorizontally || mc.thePlayer.isInWater() || mc.thePlayer.isInLava()
-                || mc.thePlayer.isOnLadder() || mc.thePlayer.isRiding() || mc.thePlayer.capabilities.isFlying
-                || mc.thePlayer.isPlayerSleeping() || now - this.correctedAt < AFTER_CORRECTION_MS
-                || now - this.knockedAt < AFTER_KNOCKBACK_MS;
     }
 
     private void record(long now, double lookError, double cameraError, float sentYaw, float turn) {
@@ -702,11 +688,10 @@ public final class MoveCheck {
             this.linesThisSecond = 0;
         }
         if (this.linesThisSecond++ < MISS_LINES_A_SECOND) {
-            write(String.format("MISS %s look-err %.3f cam-err %.3f | yaw sent %.1f cam %.1f turn %.1f | %s%s%s%s | %s",
+            write(String.format("MISS %s look-err %.3f cam-err %.3f | yaw sent %.1f cam %.1f turn %.1f | %s| %s",
                     cameraMiss ? "SPEED" : "LOOK", lookError, cameraError, MathHelper.wrapAngleTo180_float(sentYaw),
                     MathHelper.wrapAngleTo180_float(mc.thePlayer.rotationYaw), turn,
-                    this.state.sprinting ? "sprint " : "", this.state.onGround ? "ground " : "air ",
-                    this.state.jumped ? "jump " : "", this.state.usingItem ? "use " : "", tag));
+                    this.lookFlags, tag));
         }
     }
 

@@ -75,17 +75,16 @@ public final class TargetDodges {
         /* Keys let go a moment ago: the forecast is the middle of a stop and a tap, and so is each way here, so
            that every path is the forecast until the player reacts (review, PR #43). */
         PlayerSim.Input tap = track.runTapInput();
-        List<TargetForecast> out = new ArrayList<TargetForecast>();
-        for (Way way : WAYS) {
-            TargetForecast path = run(start, world, moves, after, before, track.runYaw(), track.yawRate(), way);
-            if (tap != null) {
-                TargetForecast tapped = run(start, world, moves, after, tap, track.runYaw(), track.yawRate(), way);
+        List<TargetForecast> out = runAll(start, world, moves, after, before, track.runYaw(), track.yawRate());
+        if (tap != null) {
+            List<TargetForecast> tapped = runAll(start, world, moves, after, tap, track.runYaw(), track.yawRate());
+            for (int w = 0; w < out.size(); w++) {
+                TargetForecast path = out.get(w);
                 for (int i = 1; i <= moves; i++) {
-                    path.x[i] = (path.x[i] + tapped.x[i]) / 2.0;
-                    path.z[i] = (path.z[i] + tapped.z[i]) / 2.0;
+                    path.x[i] = (path.x[i] + tapped.get(w).x[i]) / 2.0;
+                    path.z[i] = (path.z[i] + tapped.get(w).z[i]) / 2.0;
                 }
             }
-            out.add(path);
         }
         return out;
     }
@@ -101,16 +100,77 @@ public final class TargetDodges {
         if (start == null || moves < 1) {
             return Collections.emptyList();
         }
-        PlayerSim.Input before = new PlayerSim.Input();
+        return runAll(start, world, moves, after, new PlayerSim.Input(), yaw, 0.0F);
+    }
+
+    /**
+     * Every way's path, as {@link #run} gives each (2026-11-16): the moves before the player reacts are the same for
+     * all of them, so they are run once and each way goes on from a copy of where they end.
+     */
+    static List<TargetForecast> runAll(PlayerSim start, PlayerSim.World world, int moves, int after,
+                                       PlayerSim.Input before, float yaw, float yawRate) {
+        after = Math.max(0, after);
+        int shared = Math.min(after, moves);
+        TargetForecast prefix = new TargetForecast(moves);
+        PlayerSim sim = start.copy();
+        set(prefix, 0, sim);
+        PlayerSim.Input in = new PlayerSim.Input();
+        for (int i = 1; i <= shared; i++) {
+            hold(in, before, yaw + yawRate * (float) i);
+            sim.tick(world, in);
+            set(prefix, i, sim);
+        }
         List<TargetForecast> out = new ArrayList<TargetForecast>();
         for (Way way : WAYS) {
-            out.add(run(start, world, moves, after, before, yaw, 0.0F, way));
+            TargetForecast path = new TargetForecast(moves);
+            path.simulated = true;
+            path.confidence = 1.0;
+            for (int i = 0; i <= shared; i++) {
+                path.x[i] = prefix.x[i];
+                path.y[i] = prefix.y[i];
+                path.z[i] = prefix.z[i];
+                path.onGround[i] = prefix.onGround[i];
+            }
+            PlayerSim branch = sim.copy();
+            float changedYaw = yaw + yawRate * (float) shared + way.turn;
+            for (int i = shared + 1; i <= moves; i++) {
+                change(in, before, way, changedYaw);
+                branch.tick(world, in);
+                set(path, i, branch);
+            }
+            out.add(path);
         }
         return out;
     }
 
+    /** The keys of before, at this yaw. */
+    private static void hold(PlayerSim.Input in, PlayerSim.Input before, float yaw) {
+        in.forward = before.forward;
+        in.strafe = before.strafe;
+        in.jump = before.jump;
+        in.sneak = before.sneak;
+        in.sprint = before.sprint;
+        in.yaw = yaw;
+    }
+
+    /** The way's keys, at the yaw it turned to. */
+    private static void change(PlayerSim.Input in, PlayerSim.Input before, Way way, float yaw) {
+        if (way.keep) {
+            hold(in, before, yaw);
+            in.jump = before.jump || way.jump;
+        } else {
+            in.forward = (float) way.forward;
+            in.strafe = (float) way.strafe;
+            in.jump = way.jump;
+            in.sneak = false;
+            in.sprint = way.sprint;
+            in.yaw = yaw;
+        }
+    }
+
     /**
      * One path: {@code before} held, turning on by {@code yawRate} a move, for {@code after} moves, then the way.
+     * {@link #runAll} gives the same for every way at once; this one is kept as the plain form of it.
      */
     static TargetForecast run(PlayerSim start, PlayerSim.World world, int moves, int after, PlayerSim.Input before,
                               float yaw, float yawRate, Way way) {

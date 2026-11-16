@@ -205,6 +205,34 @@ public class TargetDodgesTest {
     }
 
     @Test
+    public void runningTheSharedMovesOnceGivesEachWaysOwnPath() {
+        float yaw = 33.0F;
+        PlayerSim game = standing();
+        PlayerSim.Input in = new PlayerSim.Input();
+        in.yaw = yaw;
+        in.forward = 1.0F;
+        in.sprint = true;
+        for (int i = 0; i < 9; i++) {
+            game.tick(WORLD, in);
+        }
+        for (int after : new int[]{0, 1, 4, 12, 20}) {
+            for (float rate : new float[]{0.0F, 7.5F}) {
+                List<TargetForecast> all = TargetDodges.runAll(game, WORLD, 12, after, in, yaw, rate);
+                for (int w = 0; w < TargetDodges.WAYS.length; w++) {
+                    TargetForecast one = TargetDodges.run(game, WORLD, 12, after, in, yaw, rate, TargetDodges.WAYS[w]);
+                    for (int i = 0; i <= 12; i++) {
+                        String where = TargetDodges.WAYS[w].name + " after " + after + " rate " + rate + " move " + i;
+                        assertEquals(where, one.x[i], all.get(w).x[i], 0.0);
+                        assertEquals(where, one.y[i], all.get(w).y[i], 0.0);
+                        assertEquals(where, one.z[i], all.get(w).z[i], 0.0);
+                        assertEquals(where, one.onGround[i], all.get(w).onGround[i]);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     public void nothingKnownGivesNoPaths() {
         assertTrue(TargetDodges.paths(null, WORLD, 10, 3).isEmpty());
         assertTrue(TargetDodges.pathsAtRest(new TargetTrack(), WORLD, 10, 3, 0.0F).isEmpty());

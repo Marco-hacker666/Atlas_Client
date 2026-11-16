@@ -280,4 +280,73 @@ public class SelfCheckTest {
         assertEquals(0.0, result.offset, 1.0E-9);
         assertTrue(result.velocity && result.explosion);
     }
+
+    /* The look check (2026-11-16, on the simulation instead of MoveModel's flat ground). */
+
+    @Test
+    public void theLookCheckFitsTheYawTheMoveWasMadeAtAndNotOneFarOff() {
+        PlayerSim.Input in = keys(37.0F, 1.0F, 0.0F, false, false, true);
+        PlayerSim sim = standing();
+        for (int i = 0; i < 8; i++) {
+            sim.tick(WORLD, in);
+        }
+        PlayerSim before = sim.copy();
+        sim.tick(WORLD, in);
+        SelfCheck.Result atSent = SelfCheck.check(before, WORLD, 37.0F, true, false, sim.x(), sim.y(), sim.z());
+        /* The camera where the move was made, the packet 22 degrees off: a module turned the look alone. */
+        double[] turned = SelfCheck.lookErrors(before, WORLD,
+                SelfCheck.check(before, WORLD, 59.0F, true, false, sim.x(), sim.y(), sim.z()), 59.0F, 37.0F, true,
+                false, sim.x(), sim.y(), sim.z(), null);
+        assertTrue("look " + turned[0], turned[0] > 0.02);
+        assertEquals(0.0, turned[1], 1.0E-9);
+        /* The same yaw both ways: the answer given is used, not worked out again. */
+        double[] same = SelfCheck.lookErrors(before, WORLD, atSent, 37.0F, 37.0F + 360.0F, true, false, sim.x(),
+                sim.y(), sim.z(), null);
+        assertEquals(atSent.offset, same[0], 0.0);
+        assertEquals(atSent.offset, same[1], 0.0);
+        assertEquals(0.0, same[0], 1.0E-9);
+    }
+
+    @Test
+    public void theLookCheckCoversAMoveIntoAWall() {
+        /* The flat model left every tick against a wall out; the simulation knows the wall. */
+        PlayerSim.World walled = new PlayerSim.World() {
+            private final AxisAlignedBB ground = new AxisAlignedBB(-100, -1, -100, 100, 0, 100);
+            private final AxisAlignedBB wall = new AxisAlignedBB(3, 0, -100, 4, 3, 100);
+
+            @Override
+            public List<AxisAlignedBB> boxes(AxisAlignedBB area) {
+                List<AxisAlignedBB> out = new ArrayList<AxisAlignedBB>();
+                if (this.ground.intersectsWith(area)) {
+                    out.add(this.ground);
+                }
+                if (this.wall.intersectsWith(area)) {
+                    out.add(this.wall);
+                }
+                return out;
+            }
+
+            @Override
+            public float slipperiness(int x, int y, int z) {
+                return 0.6F;
+            }
+        };
+        PlayerSim.Input in = keys(-60.0F, 1.0F, 0.0F, false, false, true);
+        PlayerSim sim = standing();
+        for (int i = 0; i < 20; i++) {
+            sim.tick(walled, in);
+        }
+        assertTrue(sim.collidedHorizontally);
+        PlayerSim before = sim.copy();
+        sim.tick(walled, in);
+        /* The sprint the server has: the wall stops it. */
+        SelfCheck.Result atSent = SelfCheck.check(before, walled, -60.0F, sim.sprinting, false, sim.x(), sim.y(),
+                sim.z());
+        double[] errors = SelfCheck.lookErrors(before, walled, atSent, -60.0F, -38.0F, sim.sprinting, false, sim.x(),
+                sim.y(), sim.z(), null);
+        assertEquals(0.0, errors[0], 1.0E-9);
+        /* 22 degrees off, between two key directions: no keys slide along the wall as fast. (A right angle off
+           would fit: W at one yaw is A at the other.) */
+        assertTrue("camera " + errors[1], errors[1] > 0.005);
+    }
 }

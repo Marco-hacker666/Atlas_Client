@@ -191,8 +191,9 @@ final class AtlasTheme {
                         + "send. Share run data: anonymous SpeedBlocker movement numbers (no names, no server, no coordinates). "
                         + "Share dodge data: when ProjectileAimBot watches a player dodge your arrow, that player's name "
                         + "and how it dodged go to the shared record every Atlas player reads (nothing about you). "
-                        + "Share usage: while you play, your Minecraft name, IP address, server, Atlas version, FPS, ping, "
-                        + "modules on and system details go to the Atlas developer, and your account is checked with "
+                        + "Share usage: while you play, your Minecraft name, server, Atlas version, FPS, ping, "
+                        + "modules on and system details go to the Atlas developer (your IP address and location are never "
+                        + "shown to anyone), and your account is checked with "
                         + "Mojang (your login stays between you and Mojang). Only the owner and admins see it; the public "
                         + "Atlas site shows only your public name. Deleted after 30 days. Public name: 2-20 letters, "
                         + "digits, spaces, _ - or .",

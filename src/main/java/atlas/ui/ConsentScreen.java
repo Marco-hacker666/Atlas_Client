@@ -27,7 +27,7 @@ public final class ConsentScreen extends GuiScreen {
                     + "unless you agree."};
     private static final String[] SENT = {
             "Your Minecraft name and UUID (checked with Mojang; your login never leaves you and Mojang)",
-            "The server you play on, and your IP address",
+            "The server you play on (never your IP address or location)",
             "Atlas version, FPS, ping and the modules you have on",
             "Your system: OS, Java, memory, graphics card, screen",
             "Bug reports you send will show they came from you"};

@@ -33,8 +33,9 @@ import java.util.concurrent.TimeUnit;
  * While it is yes and the player is in a world: "start" when it joins (a new random session id for each server),
  * "beat" every 45 seconds, "stop" when it leaves or the game closes. Each carries the player's name and UUID, the
  * server's address, the Atlas version, FPS, ping, the modules turned on and the client's details (system, Java,
- * memory, graphics, screen, menu style) and the name the player chose for the public site. The relay adds the IP
- * address it sees and keeps it all 30 days; the public site shows only the chosen name, the owner and admins the rest.
+ * memory, graphics, screen, menu style) and the name the player chose for the public site. The relay keeps it 30 days;
+ * the public site shows only the chosen name, the owner and admins the rest. No page shows the player's IP address or
+ * location (owner, 2026-11-17); the relay uses the address only to stop abuse.
  *
  * Proof (2026-11-17, owner: "make sure it is my client and nobody can fake the data"): every message is signed by
  * the official build (BuildSignature); at the start of a session the relay hands out a one-off server id and the

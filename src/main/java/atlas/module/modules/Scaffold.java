@@ -262,6 +262,7 @@ public class Scaffold extends Module {
     private final IntProperty gb2StartDelayMax = new IntProperty("gb2-start-delay-max", 13, 0, 40, this::isGodBridge2Mode);
     private final BooleanProperty gb2StartCrouch = new BooleanProperty("gb2-start-crouch", true, this::isGodBridge2Mode);
     private final GodBridgeRhythm rhythm = new GodBridgeRhythm();
+    private boolean wasGodBridge2;
     /* 2026-11-18, MOONWALK (MoonWalk): the sway across the row, in blocks; the middle re-drawn every so many ticks. */
     private final FloatProperty moonWidthMin = new FloatProperty("moonwalk-width-min", 0.05F, 0.0F, 0.2F, this::isMoonWalkMode);
     private final FloatProperty moonWidthMax = new FloatProperty("moonwalk-width-max", 0.1F, 0.0F, 0.2F, this::isMoonWalkMode);
@@ -630,6 +631,8 @@ public class Scaffold extends Module {
                 this.blocksSinceJump++;
                 if (this.isRunMode()) {
                     this.run.placed();
+                }
+                if (this.isGodBridge2Mode()) {
                     this.rhythm.placed();
                 }
                 if (this.swing.getValue()) {
@@ -1632,6 +1635,12 @@ public class Scaffold extends Module {
     @EventTarget
     public void onMoveInput(MoveInputEvent event) {
         if (this.isEnabled()) {
+            /* Into GODBRIDGE2 from another mode: its rhythm starts from standing, with nothing counted (review, PR #45). */
+            boolean gb2 = this.isGodBridge2Mode();
+            if (gb2 != this.wasGodBridge2) {
+                this.wasGodBridge2 = gb2;
+                this.rhythm.reset();
+            }
             if (this.safeStuckTicks > 0) {
                 mc.thePlayer.movementInput.moveForward = 0.0f;
                 mc.thePlayer.movementInput.moveStrafe = 0.0f;
@@ -2065,6 +2074,8 @@ public class Scaffold extends Module {
         in.settled = plan.look && plan.maxTurn >= 180.0F;
         double speed = Math.hypot(mc.thePlayer.motionX, mc.thePlayer.motionZ);
         in.sliding = mc.thePlayer.onGround && speed > SLIDE_STOPPED;
+        /* The same test the jump below is made on, so a jump the stop would drop stays due (review, PR #45). */
+        in.canJump = !plan.stop && mc.thePlayer.onGround && !mc.thePlayer.isInWater();
         GodBridgeRhythm.Keys out = this.rhythm.tick(in, this.rhythmSettings());
         if (out.hold || plan.stop) {
             keys.moveForward = 0.0F;
@@ -2130,12 +2141,28 @@ public class Scaffold extends Module {
      * telly-turn-speed. The click is onUpdateClick's, along the look really sent, so a look still on its way places
      * nothing.
      */
+    private boolean tellyBack;
+    private boolean tellyReturning;
+    private float tellyForwardYaw;
+    private float tellyForwardPitch;
+
     private void tellyTick(UpdateEvent event) {
         boolean back = TellyBridge.placing(mc.thePlayer.onGround, mc.thePlayer.motionY, MoveUtil.isForwardPressed());
         BlockData target = back ? this.getBlockData() : null;
         float aimYaw;
         float aimPitch;
         Vec3 hitVec = null;
+        boolean real = this.moveFix.getModeString().equals("REAL");
+        if (back && !this.tellyBack) {
+            /* The forward look, kept: under REAL the camera turns back with the placing look (review, PR #45). A
+               look still on its way forward is not the forward one: the one kept stays. */
+            if (!this.tellyReturning) {
+                this.tellyForwardYaw = mc.thePlayer.rotationYaw;
+                this.tellyForwardPitch = mc.thePlayer.rotationPitch;
+            }
+            this.tellyReturning = real;
+        }
+        this.tellyBack = back;
         if (back) {
             aimYaw = RotationUtil.wrapAngleDiff(this.getCurrentYaw() - 180.0F, event.getYaw());
             aimPitch = 80.0F;
@@ -2146,7 +2173,16 @@ public class Scaffold extends Module {
                 MovingObjectPosition mop = this.lookHit(target, aimYaw, aimPitch);
                 hitVec = mop != null ? mop.hitVec : null;
             }
+        } else if (this.tellyReturning && real) {
+            /* Under REAL the camera is the placing look now: back to the forward one kept, then the camera's again. */
+            aimYaw = RotationUtil.wrapAngleDiff(this.tellyForwardYaw, event.getYaw());
+            aimPitch = this.tellyForwardPitch;
+            if (Math.abs(MathHelper.wrapAngleTo180_float(event.getYaw() - this.tellyForwardYaw)) < 1.0F
+                    && Math.abs(event.getPitch() - this.tellyForwardPitch) < 1.0F) {
+                this.tellyReturning = false;
+            }
         } else {
+            this.tellyReturning = false;
             aimYaw = mc.thePlayer.rotationYaw;
             aimPitch = mc.thePlayer.rotationPitch;
         }
@@ -2720,6 +2756,8 @@ public class Scaffold extends Module {
         this.run.release();
         this.rhythm.reset();
         this.moonWalk.reset();
+        this.tellyBack = false;
+        this.tellyReturning = false;
         this.runPlan = null;
         this.canRotate = false;
         this.towerTick = 0;

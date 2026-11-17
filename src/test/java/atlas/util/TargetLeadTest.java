@@ -64,4 +64,49 @@ public class TargetLeadTest {
         double[] later = lead.predict(15.0, 64.0);
         assertEquals(64.0, later[1], 1.0E-9);
     }
+
+    /** Positions every other tick, as the server sends a player's: (x every two ticks) for a run of {@code ticks}. */
+    private static double feed(TargetLead lead, double x, int ticks, double v) {
+        for (int i = 0; i < ticks; i++) {
+            if (i % 2 == 1) {
+                x += 2.0 * v;
+            }
+            lead.add(x, 64.0, 0.0, true);
+        }
+        return x;
+    }
+
+    @Test
+    public void onceItStopsItIsNotLedOn() {
+        TargetLead lead = new TargetLead();
+        double x = feed(lead, 0.0, 6, 0.0);
+        x = feed(lead, x, 8, 0.2);
+        x = feed(lead, x, 6, 0.0);
+        assertTrue(lead.stillNow());
+        assertEquals(x, lead.predict(15.0, Double.NaN)[0], 1.0E-9);
+    }
+
+    @Test
+    public void aStopAndGoPlayerIsLedToTheEndOfItsUsualStep() {
+        TargetLead lead = new TargetLead();
+        double x = feed(lead, 0.0, 6, 0.0);
+        for (int i = 0; i < 3; i++) {
+            x = feed(lead, x, 4, 0.2);
+            x = feed(lead, x, 6, 0.0);
+        }
+        assertTrue(lead.typicalBurst() > 0 && lead.typicalBurst() <= 6);
+        /* A new step has begun. */
+        x = feed(lead, x, 2, 0.2);
+        double[] at = lead.predict(15.0, Double.NaN);
+        /* Leading the whole flight would put it 3 blocks on; its steps end within about a block. */
+        assertTrue("led to " + (at[0] - x), at[0] - x < 1.2);
+    }
+
+    @Test
+    public void aRunnerIsStillLedTheWholeWay() {
+        TargetLead lead = new TargetLead();
+        double x = feed(lead, 0.0, 20, 0.28);
+        assertEquals(-1, lead.typicalBurst());
+        assertEquals(x + 2.8, lead.predict(10.0, Double.NaN)[0], 0.4);
+    }
 }

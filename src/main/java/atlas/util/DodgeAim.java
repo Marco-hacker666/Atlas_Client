@@ -37,13 +37,16 @@ public final class DodgeAim {
         /** Where it aims, from the target's middle: to the side (blocks, positive to the shooter's right) and up. */
         public final double side;
         public final double up;
+        /** The weight of the dodges it covers with room to spare (all weights 1 when none were given). */
+        public final double weight;
 
-        Result(ProjectileSolver.Aim aim, int covered, int total, double side, double up) {
+        Result(ProjectileSolver.Aim aim, int covered, int total, double side, double up, double weight) {
             this.aim = aim;
             this.covered = covered;
             this.total = total;
             this.side = side;
             this.up = up;
+            this.weight = weight;
         }
     }
 
@@ -68,6 +71,16 @@ public final class DodgeAim {
     public static Result best(double eyeX, double eyeY, double eyeZ, ProjectileSolver.Aim base, double speed,
                               ProjectileSolver.Kind kind, ProjectileSolver.Target baseline,
                               List<ProjectileSolver.Target> dodges, double keepSide, double keepUp) {
+        return best(eyeX, eyeY, eyeZ, base, speed, kind, baseline, dodges, keepSide, keepUp, null);
+    }
+
+    /**
+     * best() with a weight for each dodge (2026-11-16, the target's habits, atlas.sim.DodgeHabits): a look scores
+     * the weights of what it hits instead of their count. Null weights count each as 1, as best() always did.
+     */
+    public static Result best(double eyeX, double eyeY, double eyeZ, ProjectileSolver.Aim base, double speed,
+                              ProjectileSolver.Kind kind, ProjectileSolver.Target baseline,
+                              List<ProjectileSolver.Target> dodges, double keepSide, double keepUp, double[] weights) {
         double[] box = baseline.box(Math.max(0.0, base.ticks - 0.5));
         double dx = (box[0] + box[3]) / 2.0 - eyeX;
         double dy = (box[1] + box[4]) / 2.0 - eyeY;
@@ -77,9 +90,9 @@ public final class DodgeAim {
         int maxTicks = flightTicks(base.ticks);
         /* What the middle hits, as the game counts it: no look that loses one of these is taken. */
         boolean[] middle = hits(eyeX, eyeY, eyeZ, base.yaw, base.pitch, speed, kind, dodges, maxTicks);
-        Result best = new Result(base, covered(eyeX, eyeY, eyeZ, base.yaw, base.pitch, speed, safe, dodges, maxTicks),
-                dodges.size(), 0.0, 0.0);
-        int bestScore = best.covered + count(middle);
+        boolean[] middleSafe = hits(eyeX, eyeY, eyeZ, base.yaw, base.pitch, speed, safe, dodges, maxTicks);
+        Result best = new Result(base, count(middleSafe), dodges.size(), 0.0, 0.0, weigh(middleSafe, weights));
+        double bestScore = weigh(middleSafe, weights) + weigh(middle, weights);
         double bestKeep = Math.hypot(keepSide, keepUp);
         for (final double up : UP) {
             ProjectileSolver.Aim level = base;
@@ -111,12 +124,12 @@ public final class DodgeAim {
                 if (loses) {
                     continue;
                 }
-                int count = covered(eyeX, eyeY, eyeZ, yaw, level.pitch, speed, safe, dodges, maxTicks);
-                int score = count + count(reached);
+                boolean[] safeHits = hits(eyeX, eyeY, eyeZ, yaw, level.pitch, speed, safe, dodges, maxTicks);
+                double score = weigh(safeHits, weights) + weigh(reached, weights);
                 double keep = Math.hypot(side - keepSide, up - keepUp);
-                if (score > bestScore || score == bestScore && keep < bestKeep - 1.0E-9) {
-                    best = new Result(new ProjectileSolver.Aim(yaw, level.pitch, level.ticks, base.lob), count,
-                            dodges.size(), side, up);
+                if (score > bestScore + 1.0E-9 || Math.abs(score - bestScore) <= 1.0E-9 && keep < bestKeep - 1.0E-9) {
+                    best = new Result(new ProjectileSolver.Aim(yaw, level.pitch, level.ticks, base.lob),
+                            count(safeHits), dodges.size(), side, up, weigh(safeHits, weights));
                     bestScore = score;
                     bestKeep = keep;
                 }
@@ -149,6 +162,23 @@ public final class DodgeAim {
                     ProjectileSolver.OPEN, maxTicks).hits();
         }
         return out;
+    }
+
+    /** The weights of the dodges hit; each 1 without weights. */
+    private static double weigh(boolean[] hits, double[] weights) {
+        double sum = 0.0;
+        for (int i = 0; i < hits.length; i++) {
+            if (hits[i]) {
+                sum += weights == null || i >= weights.length ? 1.0 : weights[i];
+            }
+        }
+        return sum;
+    }
+
+    /** Which of the dodges this look, flown, hits ({@code kind} as given; {@link #safe} for room to spare). */
+    public static boolean[] hitsEach(double eyeX, double eyeY, double eyeZ, float yaw, float pitch, double speed,
+                                     ProjectileSolver.Kind kind, List<ProjectileSolver.Target> dodges, int maxTicks) {
+        return hits(eyeX, eyeY, eyeZ, yaw, pitch, speed, kind, dodges, maxTicks);
     }
 
     private static int count(boolean[] hits) {

@@ -259,6 +259,8 @@ public final class ModuleDocs {
         help("ProjectileAimBot", "teams", "排除同隊（計分板顏色相同）的玩家，跟 KillAura 的 Teams 一樣。有些伺服器（Hypixel）會讓敵人跟你同色：看得到人卻不瞄時把它關掉。");
         help("ProjectileAimBot", "bot-check", "排除像機器人的玩家（不在 Tab 名單），跟 KillAura 的 BotCheck 一樣。");
         help("ProjectileAimBot", "bow-trace", "只寫記錄（要開 Logs）：config/Atlas/bow-*.txt，拉弓時每 tick 一行（誰被排除、為什麼、算出的射擊、放箭），以及伺服器射出的每支你的箭。");
+        help("ProjectileAimBot", "learn-habits", "每次射完觀察對方：多久開始動、往哪邊躲。每個人分開記（config/Atlas/dodge-habits.txt）。他自己的反應時間取代 dodge-reaction，dodge-aim 會偏向他常躲的那邊。");
+        help("ProjectileAimBot", "dodge-hint", "拉弓時在目標身旁顯示一張卡片：這一箭的命中機率和結論（綠 NO ESCAPE、黃 MAY ESCAPE、紅 CAN ESCAPE），依他能怎麼躲和他的習慣算，不會擋到名字。手動射也能參考。");
         help("ProjectileAimBot", "gravity-type", "Projectile：照遊戲本身的飛行（阻力、重力、側邊出手）對準目標到時候的位置；None：直接對準身體。");
         help("ProjectileAimBot", "predict", "用走位預測（.targets 測的那個）算目標到時候在哪；關掉就瞄它現在的位置。");
         help("ProjectileAimBot", "latency-compensation", "把你的延遲也算進提前量。");

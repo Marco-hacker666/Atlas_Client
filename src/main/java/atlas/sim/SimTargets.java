@@ -124,6 +124,32 @@ public final class SimTargets {
         return INSTANCE.score.summary();
     }
 
+    /* 2026-11-16 (owner: "save the .targets numbers by themselves"): while measuring, the numbers .targets stats
+       shows go to config/Atlas/targets-*.txt once a minute (with Logs on), with the server. */
+    private static final int SAVE_EVERY = 1200;
+    private java.io.File scoreFile;
+    private String lastSaved = "";
+
+    private void saveScore() {
+        String line = this.score.summary();
+        if (line == null || line.isEmpty() || line.equals(this.lastSaved) || line.contains("nothing measured")) {
+            return;
+        }
+        this.lastSaved = line;
+        if (this.scoreFile == null) {
+            this.scoreFile = new java.io.File("./config/Atlas/",
+                    "targets-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmmss").format(new java.util.Date()) + ".txt");
+        }
+        String server = mc.getCurrentServerData() == null ? "singleplayer" : mc.getCurrentServerData().serverIP;
+        atlas.util.AsyncLog.append(this.scoreFile, new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date())
+                + " " + server + " | " + line);
+    }
+
+    /** Writes the numbers now (when measuring stops, so the last minute is kept). */
+    public static void saveNow() {
+        INSTANCE.saveScore();
+    }
+
     public static void resetScore() {
         INSTANCE.score.reset();
     }
@@ -256,6 +282,9 @@ public final class SimTargets {
             return;
         }
         this.tick++;
+        if (this.measuring && this.tick % SAVE_EVERY == 0) {
+            saveScore();
+        }
         if (!running()) {
             clear();
             return;

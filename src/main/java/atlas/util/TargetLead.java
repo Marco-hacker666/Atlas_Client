@@ -12,6 +12,10 @@ package atlas.util;
  *   over (e^(-t / {@link #HANDOVER})) to a straight line fitted to the whole window by least squares: a runner's
  *   fit is its run, a strafer's is the middle of its swing. (The window's two ends were tried first: the strafe's
  *   phase at either end biased them.)
+ * - (2026-11-16, owner: "some move a little and stop, and the aim leads far ahead") A player standing still now is
+ *   led nowhere: the fitted line still carried the steps it had just taken. And a player that moves in short bursts
+ *   is led only to where its burst usually ends: the length of each burst it made is kept, and the lead runs for
+ *   the median of them less what this one has run, then for the slide the ground's friction leaves (0.546 a tick).
  * - It carried a rise straight up. A player in the air here falls as the game makes it, (vy - 0.08) * 0.98 a tick,
  *   down to the ground it stood on (or that is under it).
  */
@@ -27,6 +31,15 @@ public final class TargetLead {
     private final boolean[] ground = new boolean[WINDOW];
     private int count;
     private int head = -1;
+    /* Stop-and-go: how long the burst now running has lasted (ticks), and the last bursts' lengths. */
+    private int run;
+    private final java.util.ArrayDeque<Integer> bursts = new java.util.ArrayDeque<Integer>();
+    /** Bursts kept. */
+    public static final int BURSTS = 8;
+    /** Moving: more than this across the ground over two ticks (positions come every other tick). */
+    public static final double MOVING = 0.06;
+    /** Ground friction a tick with no key held (0.91 x 0.6): what is left of the speed. */
+    private static final double SLIDE = 0.546;
 
     /** The server's position for this tick (call once a tick). */
     public void add(double px, double py, double pz, boolean onGround) {
@@ -38,6 +51,69 @@ public final class TargetLead {
         if (this.count < WINDOW) {
             this.count++;
         }
+        boolean moving = this.movedOverTwo(0);
+        if (moving) {
+            this.run++;
+        } else if (this.run > 0 && !this.movedOverTwo(1)) {
+            /* Two still ticks in a row end a burst (one alone is the gap between two position updates). */
+            this.bursts.addLast(this.run);
+            if (this.bursts.size() > BURSTS) {
+                this.bursts.removeFirst();
+            }
+            this.run = 0;
+        }
+    }
+
+    /** Whether it moved more than MOVING over the two ticks ending {@code back} ticks ago. */
+    private boolean movedOverTwo(int back) {
+        if (this.count < back + 3) {
+            return this.count >= back + 2 && dist(this.at(back), this.at(back + 1)) > MOVING;
+        }
+        return dist(this.at(back), this.at(back + 2)) > MOVING;
+    }
+
+    private static double dist(double[] a, double[] b) {
+        return Math.hypot(a[0] - b[0], a[2] - b[2]);
+    }
+
+    /** Standing still now: no move over the last two ticks, nor the two before. */
+    public boolean stillNow() {
+        return this.count >= 3 && !this.movedOverTwo(0) && !this.movedOverTwo(1);
+    }
+
+    /** The median length of its last bursts, ticks; -1 until two are known. */
+    public int typicalBurst() {
+        if (this.bursts.size() < 2) {
+            return -1;
+        }
+        java.util.List<Integer> sorted = new java.util.ArrayList<Integer>(this.bursts);
+        java.util.Collections.sort(sorted);
+        return sorted.get(sorted.size() / 2);
+    }
+
+    /** Ticks the burst now running has lasted. */
+    public int currentRun() {
+        return this.run;
+    }
+
+    /**
+     * The ticks of movement to lead by over {@code t} ticks: all of them for a player that keeps going, none for one
+     * standing, and for one that moves in bursts the rest of its usual burst plus the slide after it.
+     */
+    double movingTicks(double t) {
+        if (this.stillNow()) {
+            return 0.0;
+        }
+        int typical = this.typicalBurst();
+        if (typical < 0) {
+            return t;
+        }
+        double left = Math.max(1.0, typical - this.run);
+        if (t <= left) {
+            return t;
+        }
+        double after = t - left;
+        return left + SLIDE * (1.0 - Math.pow(SLIDE, after)) / (1.0 - SLIDE);
     }
 
     public int size() {
@@ -121,8 +197,17 @@ public final class TargetLead {
         double[] quick = this.quickSpeed();
         double[] line = this.fit();
         double w = Math.exp(-t / HANDOVER);
-        double px = w * (now[0] + quick[0] * t) + (1.0 - w) * (line[0] + line[1] * t);
-        double pz = w * (now[2] + quick[1] * t) + (1.0 - w) * (line[2] + line[3] * t);
+        double px;
+        double pz;
+        if (this.stillNow()) {
+            /* Standing: where it stands, not where the steps it took before would carry it. */
+            px = now[0];
+            pz = now[2];
+        } else {
+            double m = this.movingTicks(t);
+            px = w * (now[0] + quick[0] * m) + (1.0 - w) * (line[0] + line[1] * m);
+            pz = w * (now[2] + quick[1] * m) + (1.0 - w) * (line[2] + line[3] * m);
+        }
         double py = now[1];
         boolean onGround = this.ground[this.head];
         double vy = this.verticalSpeed();

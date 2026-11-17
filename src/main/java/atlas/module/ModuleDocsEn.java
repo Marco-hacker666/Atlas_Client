@@ -543,6 +543,8 @@ final class ModuleDocsEn {
         help("ProjectileAimBot", "teams", "Leave out players on your team (the same scoreboard colour), as KillAura's Teams. Some servers (Hypixel games) can give an enemy your colour: turn it off if it will not aim at someone you can see.");
         help("ProjectileAimBot", "bot-check", "Leave out players that look like bots (not in the tab list), as KillAura's BotCheck.");
         help("ProjectileAimBot", "bow-trace", "Log only (needs Logs): config/Atlas/bow-*.txt, a line a tick while you draw (who was left out and why, the shot worked out, the release) and every arrow of yours the server shot.");
+        help("ProjectileAimBot", "learn-habits", "Watch each player after you shoot at it: how long it took to move and which way it went. Kept per player (config/Atlas/dodge-habits.txt). Its own reaction replaces dodge-reaction, and dodge-aim weighs the way it usually goes most.");
+        help("ProjectileAimBot", "dodge-hint", "A card beside the target while you draw: the chance this shot hits and the verdict (green NO ESCAPE, yellow MAY ESCAPE, red CAN ESCAPE), from the ways it can go and its habits; it never covers the name tag. Useful when you shoot by hand too.");
         help("ProjectileAimBot", "gravity-type", "Projectile: the game's own flight (drag, gravity, the side start), solved against where the target will be; None: straight at the body.");
         help("ProjectileAimBot", "predict", "Lead the target to where the movement simulation (the one .targets measures) says it will be; off: aim where it stands.");
         help("ProjectileAimBot", "latency-compensation", "Lead by your ping too: the target's position reached you half a ping ago, and the shot reaches the server half a ping from now.");

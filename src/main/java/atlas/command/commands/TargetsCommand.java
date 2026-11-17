@@ -55,6 +55,7 @@ public class TargetsCommand extends Command {
                     + (int) SimTargets.RANGE + " blocks, from now on every time the game starts. &8.targets stats&7 "
                     + "shows the numbers, &8.targets off&7 stops.&r");
         } else if (arg.equals("off")) {
+            SimTargets.saveNow();
             SimTargets.measure(false);
             save(false);
             ChatUtil.sendFormatted("&b[Atlas] &7Measuring is off. " + SimTargets.summary() + "&r");

@@ -16,6 +16,7 @@ public class GodBridgeRhythmTest {
         in.forward = true;
         in.onGround = true;
         in.settled = true;
+        in.canJump = true;
         return in;
     }
 
@@ -79,34 +80,74 @@ public class GodBridgeRhythmTest {
     }
 
     @Test
-    public void aJumpEveryEightBlocksAndAFreshStartAfterTheSetJumps() {
+    public void aJumpEveryEightBlocksAndAFreshStartOnceTheSetJumpsHaveLanded() {
         GodBridgeRhythm r = new GodBridgeRhythm(new Random(5));
         GodBridgeRhythm.Settings s = fixed();
         assertTrue(startTicks(r, s) > 0);
         int jumps = 0;
         int blocks = 0;
         int blocksAtJump = -1;
+        int air = 0;
         boolean restarted = false;
         for (int i = 0; i < 400 && !restarted; i++) {
             if (i % 5 == 0) {
                 r.placed();
                 blocks++;
             }
-            GodBridgeRhythm.Keys k = r.tick(walking(), s);
+            GodBridgeRhythm.Input in = walking();
+            in.onGround = air == 0;
+            air = Math.max(0, air - 1);
+            GodBridgeRhythm.Keys k = r.tick(in, s);
             if (k.jump) {
                 jumps++;
+                air = 10;
                 if (blocksAtJump < 0) {
                     blocksAtJump = blocks;
                 }
             }
             if (k.starting) {
                 restarted = true;
+                assertTrue("on the ground again", in.onGround);
                 assertTrue("held and crouched again", k.hold && k.sneak);
             }
         }
         assertEquals("first jump at the eighth block", 8, blocksAtJump);
         assertTrue("started over", restarted);
-        assertEquals("the third reaching of the count starts over instead of jumping", 2, jumps);
+        assertEquals("as many jumps as gb2-reset-after-jumps, the last included", 3, jumps);
+    }
+
+    @Test
+    public void oneJumpARunStillJumps() {
+        GodBridgeRhythm r = new GodBridgeRhythm(new Random(5));
+        GodBridgeRhythm.Settings s = fixed();
+        s.resetAfterMin = 1;
+        s.resetAfterMax = 1;
+        startTicks(r, s);
+        boolean jumped = false;
+        for (int i = 0; i < 8; i++) {
+            r.placed();
+            jumped |= r.tick(walking(), s).jump;
+        }
+        assertTrue(jumped);
+    }
+
+    @Test
+    public void aJumpThatCannotGoOutStaysDue() {
+        GodBridgeRhythm r = new GodBridgeRhythm(new Random(5));
+        GodBridgeRhythm.Settings s = fixed();
+        startTicks(r, s);
+        for (int i = 0; i < 8; i++) {
+            r.placed();
+            if (i < 7) {
+                r.tick(walking(), s);
+            }
+        }
+        GodBridgeRhythm.Input stopped = walking();
+        stopped.canJump = false;
+        for (int i = 0; i < 4; i++) {
+            assertFalse("not while it cannot", r.tick(stopped, s).jump);
+        }
+        assertTrue("then it goes", r.tick(walking(), s).jump);
     }
 
     @Test

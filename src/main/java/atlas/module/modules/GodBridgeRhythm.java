@@ -8,8 +8,9 @@ import java.util.Random;
  *
  * A run starts standing: the walk keys are held back for a start delay (10-13 ticks), the first few of them crouched,
  * while the look turns round onto the bridge. Then the walk goes, with no side key on a straight run. Every so many
- * blocks (8) a jump goes out, a set number of ticks after the last block (0); after so many jumps (7-8) the run starts
- * over from standing, as the player who lets go and settles again does. A change between a straight and a diagonal run
+ * blocks (8) a jump goes out, a set number of ticks after the last block (0); after so many jumps (7-8), the last of
+ * them included, the run starts over from standing once that jump has landed, as the player who lets go and settles
+ * again does. A jump only goes out on a tick it can (Input.canJump); until then it stays due. A change between a straight and a diagonal run
  * starts it over too. The jump key held by hand is the player's: nothing is done until a little after it is let go.
  *
  * While the keys are held back and the player still slides, the crouch stays on, whatever start-crouch says: the
@@ -26,6 +27,8 @@ final class GodBridgeRhythm {
     /** Ticks crouched at a start: at least the first, at most the second. */
     static final int CROUCH_MIN = 5;
     static final int CROUCH_MAX = 7;
+    /** Ground ticks a start over waits for the last jump to leave the ground; then it starts over anyway. */
+    static final int LANDING_WAIT = 10;
 
     /** The settings, as ranges (a value is drawn in each, ends in any order). */
     static final class Settings {
@@ -53,6 +56,8 @@ final class GodBridgeRhythm {
         boolean settled;
         /** Still moving on the ground with the keys let go. */
         boolean sliding;
+        /** A jump would go out this tick: on the ground, not in water, no stop for a look still turning. */
+        boolean canJump;
     }
 
     /** What to do with this tick's keys. */
@@ -83,6 +88,10 @@ final class GodBridgeRhythm {
     private int jumps;
     private int resetAfter;
     private boolean drawn;
+    /** The last jump of the run went out: start over once it has landed. */
+    private boolean restartDue;
+    private boolean leftGround;
+    private int dueTicks;
 
     GodBridgeRhythm() {
         this(new Random());
@@ -108,6 +117,7 @@ final class GodBridgeRhythm {
         this.blocks = 0;
         this.placedSince = 0;
         this.jumps = 0;
+        this.restartDue = false;
     }
 
     boolean starting() {
@@ -147,22 +157,32 @@ final class GodBridgeRhythm {
             return start(in, s, keys);
         }
         keys.noStrafe = !in.diagonal;
+        if (this.restartDue) {
+            this.leftGround |= !in.onGround;
+            this.dueTicks++;
+            if (in.onGround && (this.leftGround || this.dueTicks > LANDING_WAIT)) {
+                restart(s);
+                return start(in, s, keys);
+            }
+            return keys;
+        }
         if (placed > 0) {
             this.blocks += placed;
             this.sincePlace = 0;
         } else {
             this.sincePlace++;
         }
-        if (this.blocks >= this.jumpAfter && this.sincePlace >= this.jumpDelay && in.onGround) {
+        if (this.blocks >= this.jumpAfter && this.sincePlace >= this.jumpDelay && in.canJump) {
             this.blocks = 0;
             this.jumps++;
             this.jumpAfter = between(s.jumpAfterMin, s.jumpAfterMax, 1);
             this.jumpDelay = between(s.jumpDelayMin, s.jumpDelayMax, 0);
-            if (this.jumps >= this.resetAfter) {
-                restart(s);
-                return start(in, s, keys);
-            }
             keys.jump = true;
+            if (this.jumps >= this.resetAfter) {
+                this.restartDue = true;
+                this.leftGround = false;
+                this.dueTicks = 0;
+            }
         }
         return keys;
     }
@@ -184,6 +204,7 @@ final class GodBridgeRhythm {
     }
 
     private void restart(Settings s) {
+        this.restartDue = false;
         if (!this.starting) {
             this.starting = true;
             draw(s);

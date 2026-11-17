@@ -78,6 +78,8 @@ public class Atlas {
         EventManager.register(new atlas.management.PerfLog());
         EventManager.register(new atlas.management.HitTimer());
         EventManager.register(new atlas.management.LogUploader());
+        /* 2026-11-17: usage sharing, only after the player agreed in the privacy window (management.UsageReporter). */
+        EventManager.register(new atlas.management.UsageReporter());
         /* Other players followed and forecast; holds nothing until something asks (2026-11-13). Before whoever
            asks it for a forecast in the same tick (review, PR #41). */
         EventManager.register(atlas.sim.SimTargets.get());

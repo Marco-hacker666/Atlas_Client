@@ -119,7 +119,31 @@ tasks.withType(org.gradle.jvm.tasks.Jar::class) {
             this["FMLAT"] = "${modid}_at.cfg"
     }
 }
+/*
+ * 2026-11-17: the official build's signing key (atlas.management.BuildSignature). It lives only on the owner's computer
+ * (~/.atlas/build-key.txt), never in the repository: a build without it signs nothing and the relay marks it
+ * unofficial. Masked in the jar so it is not plain text there.
+ */
+val buildKeyFile = file(System.getProperty("user.home") + "/.atlas/build-key.txt")
+val signKeyDir = layout.buildDirectory.dir("generated/atlas-sign")
+val makeSignKey by tasks.registering {
+    outputs.dir(signKeyDir)
+    outputs.upToDateWhen { false }
+    doLast {
+        val out = signKeyDir.get().file("atlas/data/fx.bin").asFile
+        out.parentFile.mkdirs()
+        if (buildKeyFile.isFile) {
+            val key = buildKeyFile.readText().trim().toByteArray(Charsets.UTF_8)
+            val mask = "atlas-fx-mask-v1".toByteArray(Charsets.UTF_8)
+            out.writeBytes(ByteArray(key.size) { i -> (key[i].toInt() xor mask[i % mask.size].toInt()).toByte() })
+        } else {
+            out.delete()
+        }
+    }
+}
 tasks.processResources {
+    dependsOn(makeSignKey)
+    from(signKeyDir)
     inputs.property("version", project.version)
     inputs.property("mcversion", mcVersion)
     inputs.property("modid", modid)

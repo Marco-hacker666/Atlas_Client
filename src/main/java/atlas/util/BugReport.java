@@ -68,6 +68,16 @@ public final class BugReport {
     private BugReport() {
     }
 
+    /**
+     * The relay's address without its path, for other routes on it (2026-11-16: /habits, HabitsCloud); empty when
+     * no relay is configured.
+     */
+    public static String relayBase() {
+        String url = relayUrl();
+        int path = url.indexOf('/', "https://".length());
+        return path < 0 ? url : url.substring(0, path);
+    }
+
     private static String relayUrl() {
         try {
             if (RELAY_OVERRIDE.isFile()) {
@@ -191,6 +201,11 @@ public final class BugReport {
                 json.addProperty("summary", summary);
                 json.addProperty("report", log);
                 json.addProperty("config", config);
+                /* 2026-11-17: who sent it, only when the player agreed to share usage (UsageReporter). */
+                com.google.gson.JsonObject who = atlas.management.UsageReporter.reportIdentity();
+                if (who != null) {
+                    json.add("usage", who);
+                }
                 byte[] body = json.toString().getBytes(StandardCharsets.UTF_8);
                 java.net.HttpURLConnection http = (java.net.HttpURLConnection) new java.net.URL(relay).openConnection();
                 http.setRequestMethod("POST");
@@ -200,6 +215,8 @@ public final class BugReport {
                 http.setRequestProperty("Content-Type", "application/json; charset=utf-8");
                 http.setRequestProperty("X-Atlas-Report", "1");
                 http.setRequestProperty("User-Agent", "Atlas/" + (Atlas.version == null ? "dev" : Atlas.version));
+                /* Signed by the official build, so the relay can tell it from a fork's or a forged one. */
+                atlas.management.BuildSignature.sign(http, "/report", body);
                 http.setFixedLengthStreamingMode(body.length);
                 try (java.io.OutputStream out = http.getOutputStream()) {
                     out.write(body);

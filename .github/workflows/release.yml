@@ -77,6 +77,20 @@ jobs:
         with:
           gradle-version: '8.8'
 
+      # The official build's signing key (atlas.management.BuildSignature, build.gradle.kts makeSignKey). Only this
+      # repository's release workflow has it; a build from a fork has none and shows as unofficial on the Atlas site.
+      - name: Add the build signing key
+        env:
+          ATLAS_BUILD_KEY: ${{ secrets.ATLAS_BUILD_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ATLAS_BUILD_KEY" ]; then
+            echo "::error::Secret ATLAS_BUILD_KEY is missing: the jar would show as an unofficial build."
+            exit 1
+          fi
+          mkdir -p "$HOME/.atlas"
+          printf '%s' "$ATLAS_BUILD_KEY" > "$HOME/.atlas/build-key.txt"
+
       - name: Apply UI update patch
         run: |
           if [ -f atlas-ui.patch ] && git apply --check atlas-ui.patch 2>/dev/null; then
@@ -102,6 +116,9 @@ jobs:
           print(sys.argv[1], len(names), 'entries,', len(mixins), 'mixin classes, nested jars:', nested)
           if 'mixins.atlas.json' not in names or 'mcmod.info' not in names or len(mixins) < 50 or nested:
               print('::error::The built jar is not a loadable client; not publishing it.')
+              sys.exit(1)
+          if 'atlas/data/fx.bin' not in names:
+              print('::error::The jar has no build signing key; it would show as unofficial. Not publishing it.')
               sys.exit(1)
           PY
 

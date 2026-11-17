@@ -127,7 +127,17 @@ final class AtlasTheme {
     /* 2026-11-02 (review): the run-data choice in the menu too, not only .rundata. The choice itself lives in
        RunCollector (config/Atlas/run-data.txt); this switch shows it and changes it (autosave keeps the two in step). */
     final BooleanProperty shareRunData = new BooleanProperty("share-run-data", false);
+    /* 2026-11-16 (owner: on by default): what ProjectileAimBot sees players do when shot at, shared through the relay
+       (management.HabitsCloud): the player's name and how it dodged, nothing about you. */
+    final BooleanProperty shareDodgeData = new BooleanProperty("share-dodge-data", true);
     private boolean runDataSeen;
+    /* 2026-11-17: usage sharing (management.UsageReporter), asked once in the privacy window (ui.ConsentScreen); the
+       choice and the public name live there, these show and change them (autosave keeps them in step). */
+    final BooleanProperty shareUsage = new BooleanProperty("share-usage", false);
+    final atlas.property.properties.TextProperty publicName = new atlas.property.properties.TextProperty("public-name",
+            atlas.management.UsageReporter.alias(), () -> this.shareUsage.getValue());
+    private Boolean usageSeen;
+    private String nameSeen;
 
     // ---- Performance (2026-10-15): phones on gl4es / Krypton Wrapper (util.render.MobileSafe)
     final ModeProperty mobileSafe = new ModeProperty(atlas.util.render.MobileSafe.SETTING, 0,
@@ -178,8 +188,15 @@ final class AtlasTheme {
                         + "log and config to the developers to help fix it. Off unless you turn it on. Your name, other players' names, "
                         + "tokens and numeric IP addresses are removed first; the server's address (its domain) is kept so the problem "
                         + "can be traced. Like any website, the relay sees your IP address; it uses it only to limit how often you can "
-                        + "send. Share run data: anonymous SpeedBlocker movement numbers (no names, no server, no coordinates).",
-                this.autoSendLogs, this.shareRunData);
+                        + "send. Share run data: anonymous SpeedBlocker movement numbers (no names, no server, no coordinates). "
+                        + "Share dodge data: when ProjectileAimBot watches a player dodge your arrow, that player's name "
+                        + "and how it dodged go to the shared record every Atlas player reads (nothing about you). "
+                        + "Share usage: while you play, your Minecraft name, IP address, server, Atlas version, FPS, ping, "
+                        + "modules on and system details go to the Atlas developer, and your account is checked with "
+                        + "Mojang (your login stays between you and Mojang). Only the owner and admins see it; the public "
+                        + "Atlas site shows only your public name. Deleted after 30 days. Public name: 2-20 letters, "
+                        + "digits, spaces, _ - or .",
+                this.autoSendLogs, this.shareRunData, this.shareDodgeData, this.shareUsage, this.publicName);
         group("Performance", "Mobile-safe drawing for phones (PojavLauncher and its forks on gl4es or Krypton Wrapper): "
                         + "no blur, glass shaders or glow, plain rounded shapes. Auto turns it on only when such a "
                         + "renderer is found; it changes nothing on a PC. Device layout: on a phone the menu fills the "
@@ -194,12 +211,17 @@ final class AtlasTheme {
         load();
         this.runDataSeen = Boolean.TRUE.equals(atlas.management.RunCollector.consent());
         this.shareRunData.setValue(this.runDataSeen);
+        this.usageSeen = atlas.management.UsageReporter.consent();
+        this.shareUsage.setValue(Boolean.TRUE.equals(this.usageSeen));
+        this.nameSeen = atlas.management.UsageReporter.alias();
+        this.publicName.setValue(this.nameSeen);
         this.saved = snapshot();
         atlas.management.LogUploader.setEnabled(this.autoSendLogs.getValue());
         atlas.util.render.MobileSafe.setSetting(this.mobileSafe.getValue());
         atlas.util.render.DeviceProfile.setSetting(this.deviceLayout.getValue());
         atlas.management.MoveCheck.setSetting(this.moveCheck.getValue());
         atlas.management.MoveCheck.setChat(this.moveCheckChat.getValue());
+        atlas.management.HabitsCloud.setSharing(this.shareDodgeData.getValue());
     }
 
     private void group(String name, String description, Property<?>... properties) {
@@ -221,7 +243,9 @@ final class AtlasTheme {
 
     /** Whether a setting is about looks, so a saved theme carries it: not the privacy or performance choices. */
     boolean isLook(Property<?> property) {
-        return property != this.autoSendLogs && property != this.shareRunData && property != this.mobileSafe
+        return property != this.autoSendLogs && property != this.shareRunData && property != this.shareDodgeData
+                && property != this.shareUsage && property != this.publicName
+                && property != this.mobileSafe
                 && property != this.deviceLayout && property != this.moveCheck && property != this.moveCheckChat;
     }
 
@@ -476,6 +500,7 @@ final class AtlasTheme {
         }
         this.checkedAt = time;
         this.syncRunData();
+        this.syncUsage();
         String now = snapshot();
         if (now.equals(this.saved)) {
             this.changedAt = 0L;
@@ -500,8 +525,35 @@ final class AtlasTheme {
         }
     }
 
+    /** share-usage and public-name against UsageReporter: whichever changed last wins (this page or the window). */
+    private void syncUsage() {
+        Boolean consent = atlas.management.UsageReporter.consent();
+        if (consent != this.usageSeen) {
+            this.usageSeen = consent;
+            this.shareUsage.setValue(Boolean.TRUE.equals(consent));
+        } else if (this.shareUsage.getValue() != Boolean.TRUE.equals(consent)) {
+            atlas.management.UsageReporter.setConsent(this.shareUsage.getValue());
+            this.usageSeen = this.shareUsage.getValue();
+        }
+        String alias = atlas.management.UsageReporter.alias();
+        if (!alias.equals(this.nameSeen)) {
+            this.nameSeen = alias;
+            this.publicName.setValue(alias);
+        } else if (!alias.equals(this.publicName.getValue())) {
+            String typed = this.publicName.getValue();
+            if (atlas.management.UsageReporter.setAlias(typed)) {
+                this.nameSeen = atlas.management.UsageReporter.alias();
+            } else {
+                /* Not a name the site would show (edits land on Enter): back to the one kept. */
+                this.publicName.setValue(alias);
+            }
+        }
+    }
+
     void save() {
+        this.syncUsage();
         atlas.management.LogUploader.setEnabled(this.autoSendLogs.getValue());
+        atlas.management.HabitsCloud.setSharing(this.shareDodgeData.getValue());
         atlas.util.render.MobileSafe.setSetting(this.mobileSafe.getValue());
         atlas.util.render.DeviceProfile.setSetting(this.deviceLayout.getValue());
         atlas.management.MoveCheck.setSetting(this.moveCheck.getValue());

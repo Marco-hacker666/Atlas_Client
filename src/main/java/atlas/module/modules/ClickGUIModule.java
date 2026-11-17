@@ -75,6 +75,11 @@ public class ClickGUIModule extends Module {
 
     public void openSelectedGui() {
         Minecraft mc = Minecraft.getMinecraft();
+        /* 2026-11-17: the privacy question comes first, once, before any menu (ui.ConsentScreen). */
+        if (atlas.management.UsageReporter.consent() == null && !(mc.currentScreen instanceof atlas.ui.ConsentScreen)) {
+            mc.displayGuiScreen(new atlas.ui.ConsentScreen(this::openSelectedGui));
+            return;
+        }
         GuiScreen screen = getSelectedGui();
         this.switchingGuiStyle = isClickGui(mc.currentScreen);
         try {

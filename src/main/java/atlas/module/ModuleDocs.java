@@ -898,7 +898,7 @@ public final class ModuleDocs {
                 h("其他", "disable-after", "log"));
         g("Scaffold",
                 h("常用", "rotations", "sprint", "tower", "keep-y", "safe-walk", "move-fix", "turn-speed"),
-                h("轉頭", "humanize", "telly-*"),
+                h("轉頭", "humanize", "telly-*", "gb2-*", "moonwalk-*"),
                 h("移動", "ground-motion", "air-motion", "speed-motion", "eagle",
                         "edge-distance", "sneak-delay", "blocks-per-sneak"),
                 h("疊高與高度", "hypixeltower", "keep-y-on-press", "no-keep-y-on-jump-potion"),
@@ -1229,6 +1229,23 @@ public final class ModuleDocs {
         help("Scaffold", "godbridge-trace", "GODBRIDGE：搭橋時每個 tick 寫一行到 config/Atlas/godbridge-*.txt（要開 Logs），用來查為什麼會掉下去。只記錄，不改任何行為。");
         help("Scaffold", "jump-builds-up", "GODBRIDGE：跳的時候橋跟著往上一格（God Bridge 本來的樣子）。關掉：跳起來還是放在起跳那一層。");
         help("Scaffold", "legit-pace", "GODBRIDGE 和 POLAR：用人做得到的速度搭橋。每 3-4.5 秒在邊緣蹲 3-5 tick，不會只蹲 1 tick；放得比 Intave 放置檢查允許的還快時，會先等方塊或不跳（直線不蹲的橋會被它標記）。關：跟以前一樣。");
+        help("Scaffold", "rotations", "轉頭方式。TELLY：衝刺往前跳，看前面；跳到最高點開始往下時才轉身放方塊，落地再轉回前面；高度保持在起跳那層，按住 W 在地上會自動跳。GODBRIDGE2：Augustus 那種 God Bridge，正後方看、不偏 45 度；開始時先站著（前幾 tick 蹲下）等視角轉好再走，每放幾格跳一次，跳幾次後重新開始。MOONWALK：往後搭橋時左右鍵輕輕點，讓路線在方塊中線兩邊小幅擺動，不是一直線。");
+        help("Scaffold", "telly-turn-speed", "TELLY：每 tick 最多轉幾度（往下時轉身、落地時轉回）。135 = 約 2 tick 轉完。");
+        help("Scaffold", "gb2-jump-after-min", "GODBRIDGE2：每放幾格跳一次（最少）。");
+        help("Scaffold", "gb2-jump-after-max", "GODBRIDGE2：每放幾格跳一次（最多），每次在最少和最多之間隨機。");
+        help("Scaffold", "gb2-jump-delay-min", "GODBRIDGE2：放完最後一格後等幾 tick 才跳（最少）。");
+        help("Scaffold", "gb2-jump-delay-max", "GODBRIDGE2：放完最後一格後等幾 tick 才跳（最多）。");
+        help("Scaffold", "gb2-reset-after-jumps-min", "GODBRIDGE2：跳幾次後重新開始（停下、蹲、重新轉好視角）（最少）。");
+        help("Scaffold", "gb2-reset-after-jumps-max", "GODBRIDGE2：跳幾次後重新開始（最多）。");
+        help("Scaffold", "gb2-start-delay-min", "GODBRIDGE2：開始時先站著幾 tick 再走（最少）。");
+        help("Scaffold", "gb2-start-delay-max", "GODBRIDGE2：開始時先站著幾 tick 再走（最多）。");
+        help("Scaffold", "gb2-start-crouch", "GODBRIDGE2：開始時前 5-7 tick 蹲下。關掉也會在還在滑動時蹲，避免滑出邊緣。");
+        help("Scaffold", "moonwalk-width-min", "MOONWALK：離中線最少擺多遠（格）。");
+        help("Scaffold", "moonwalk-width-max", "MOONWALK：離中線最多擺多遠（格），每次轉向重新隨機。上限 0.2。");
+        help("Scaffold", "moonwalk-middle-min", "MOONWALK：中線位置（最少），0.5 = 方塊正中間。");
+        help("Scaffold", "moonwalk-middle-max", "MOONWALK：中線位置（最多），每隔一段時間在兩者之間重新隨機。");
+        help("Scaffold", "moonwalk-redraw-min", "MOONWALK：每隔幾 tick 重新隨機中線（最少）。");
+        help("Scaffold", "moonwalk-redraw-max", "MOONWALK：每隔幾 tick 重新隨機中線（最多）。");
         help("Scaffold", "pause-on-correction", "被伺服器拉回後，等一個來回延遲再放方塊；被退回的方塊也會暫停。避免在錯的位置連續放出 ghost block。");
         help(cl, "pre-aim", "還沒到時機前先把頭轉到大概的位置，等一下轉比較少。");
         help(cl, "counter-knockback", "被打飛時往回走，抵銷一部分擊退。");

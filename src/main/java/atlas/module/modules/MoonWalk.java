@@ -30,6 +30,8 @@ final class MoonWalk {
     static final double WIDTH_CAP = 0.2;
     /** Only a player this near the centre of its row sways: further out, the row may be the next one, so no key. */
     static final double ACTIVE = 0.3;
+    /** A goal is kept this far inside ACTIVE: one tick of side key past a goal carries about 0.085 more. */
+    static final double STOP_MARGIN = 0.12;
 
     static final class Settings {
         double widthMin = 0.05;
@@ -87,16 +89,22 @@ final class MoonWalk {
             return 0.0F;
         }
         double rest = frac + motion * SLIDE;
-        double goal = this.middle + this.dir * this.width;
+        double goal = goal();
         if (this.dir > 0 ? rest >= goal : rest <= goal) {
             this.dir = -this.dir;
             this.width = drawWidth(s);
-            goal = this.middle + this.dir * this.width;
+            goal = goal();
             if (this.dir > 0 ? rest >= goal : rest <= goal) {
                 return 0.0F;
             }
         }
         return (float) (this.dir * Math.signum(left));
+    }
+
+    /** Where this side's turn is: the band's edge, kept inside ACTIVE by STOP_MARGIN so the sway never leaves it. */
+    private double goal() {
+        double reach = ACTIVE - STOP_MARGIN;
+        return clamp(this.middle + this.dir * this.width, 0.5 - reach, 0.5 + reach);
     }
 
     /** The player stopped swaying (off the ground, no W, another mode): the next sway draws afresh. */

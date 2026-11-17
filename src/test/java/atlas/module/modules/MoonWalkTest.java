@@ -77,6 +77,30 @@ public class MoonWalkTest {
     }
 
     @Test
+    public void aMiddleOffToOneSideStillSwaysAndNeverLeavesTheActiveBand() {
+        /* middle 0.3 and width 0.2 would aim at 0.1, past ACTIVE, where it would stop (review, PR #45). */
+        MoonWalk moon = new MoonWalk(new Random(3));
+        MoonWalk.Settings s = new MoonWalk.Settings();
+        s.middleMin = 0.3;
+        s.middleMax = 0.3;
+        s.widthMin = 0.2;
+        s.widthMax = 0.2;
+        double x = 0.5;
+        double motionX = 0.0;
+        int keys = 0;
+        for (int i = 0; i < 400; i++) {
+            float key = moon.strafe(0.0F, x, 0.5, motionX, 0.0, s);
+            if (i > 50 && key != 0.0F) {
+                keys++;
+            }
+            motionX = motionX * FRICTION + key * SIDE_PUSH;
+            x += motionX;
+            assertTrue("inside the active band: " + x, Math.abs(x - 0.5) <= MoonWalk.ACTIVE);
+        }
+        assertTrue("still swaying late on: " + keys, keys > 50);
+    }
+
+    @Test
     public void theMiddleAndWidthStayInsideTheirCaps() {
         MoonWalk moon = new MoonWalk(new Random(1));
         MoonWalk.Settings s = new MoonWalk.Settings();

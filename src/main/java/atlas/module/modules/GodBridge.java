@@ -34,6 +34,9 @@ final class GodBridge {
 
     static final float STRAIGHT_PITCH = 75.7F;
     static final float DIAGONAL_PITCH = 75.6F;
+    /** GODBRIDGE2's look (2026-11-18): straight back along the run, no side; the pitches that look starts from. */
+    static final float BACK_STRAIGHT_PITCH = 75.8F;
+    static final float BACK_DIAGONAL_PITCH = 76.5F;
     /** Per-run pitch, drawn within this of the base. */
     static final float PITCH_SPREAD = 0.4F;
     /** Per-run yaw offset off the 45 degree line: at least the first, at most the second (Intave AngleSnap: 0.08). */
@@ -83,6 +86,8 @@ final class GodBridge {
         boolean paceJump;
         /** Blocks between jumps, 0 for none. */
         int jumpEvery;
+        /** GODBRIDGE2: the look straight back along the run, never 45 degrees to a side, so no side to change. */
+        boolean straightBack;
         long now;
     }
 
@@ -122,6 +127,8 @@ final class GodBridge {
     private float learnedPitch = Float.NaN;
     /** The run's pitch before the air fix moved it; NaN when the air fix has not. */
     private float groundPitch = Float.NaN;
+    /** The look the runs are made with (straightBack); a learned pitch is only kept for the same look. */
+    private boolean straightBack;
 
     GodBridge() {
         this(new Random());
@@ -180,6 +187,11 @@ final class GodBridge {
             return plan;
         }
         float back = Math.round((in.moveYaw + 180.0F) / 45.0F) * 45.0F;
+        if (in.straightBack != this.straightBack) {
+            this.straightBack = in.straightBack;
+            this.learnedPitch = Float.NaN;
+            this.running = false;
+        }
         if (!this.running || Math.abs(MathHelper.wrapAngleTo180_float(back - this.backYaw)) >= 45.0F) {
             start(in, back);
         }
@@ -192,7 +204,7 @@ final class GodBridge {
             }
         }
         boolean diagonal = diagonal(this.backYaw);
-        float yaw = this.backYaw + (diagonal ? 0.0F : this.side * 45.0F) + this.offset + this.driftYaw;
+        float yaw = this.backYaw + (diagonal || this.straightBack ? 0.0F : this.side * 45.0F) + this.offset + this.driftYaw;
         float pitch = this.pitchBase + this.driftPitch;
         /* Continuous with the look sent, so the turn goes the short way. */
         yaw = in.sentYaw + MathHelper.wrapAngleTo180_float(yaw - in.sentYaw);
@@ -233,7 +245,7 @@ final class GodBridge {
         }
 
         if (in.edge && !in.lookPlaces && !fixed && Float.isNaN(in.placePitch) && Float.isNaN(in.aheadPitch) && settled
-                && !diagonal
+                && !diagonal && !this.straightBack
                 && this.ticks - this.lastSwap >= SWAP_TICKS) {
             /* An edge the look cannot place at: the other side (a stop meanwhile, below). */
             this.side = -this.side;
@@ -270,8 +282,10 @@ final class GodBridge {
         this.backYaw = back;
         this.side = sideAt(back, in.x, in.z);
         this.offset = drawOffset();
-        float base = Float.isNaN(this.learnedPitch) ? (diagonal(back) ? DIAGONAL_PITCH : STRAIGHT_PITCH)
-                : this.learnedPitch;
+        float fresh = this.straightBack
+                ? (diagonal(back) ? BACK_DIAGONAL_PITCH : BACK_STRAIGHT_PITCH)
+                : (diagonal(back) ? DIAGONAL_PITCH : STRAIGHT_PITCH);
+        float base = Float.isNaN(this.learnedPitch) ? fresh : this.learnedPitch;
         this.pitchBase = base + (this.random.nextFloat() * 2.0F - 1.0F) * PITCH_SPREAD;
         this.driftYaw = 0.0F;
         this.driftPitch = 0.0F;

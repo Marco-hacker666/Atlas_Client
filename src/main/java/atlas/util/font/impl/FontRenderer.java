@@ -57,6 +57,8 @@ public class FontRenderer extends CharRenderer implements IFont {
     }
 
     public void drawString(String text, double x, double y, int color, boolean shadow) {
+        /* NickHider (2026-11-17): the real name is replaced in every font, not only the game's. */
+        text = atlas.module.modules.NickHider.apply(text);
         ScaledResolution sr = new ScaledResolution(Minecraft.getMinecraft());
 
         if (text == null) return;
@@ -168,6 +170,7 @@ public class FontRenderer extends CharRenderer implements IFont {
     public double getStringWidth(String text) {
         ScaledResolution sr = new ScaledResolution(Minecraft.getMinecraft());
         if (text == null) return 0;
+        text = atlas.module.modules.NickHider.apply(text);
 
         double width = 0;
         CharData[] currentData = charData;

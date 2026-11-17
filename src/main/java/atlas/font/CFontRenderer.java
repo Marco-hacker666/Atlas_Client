@@ -126,6 +126,8 @@ public class CFontRenderer extends CFont {
     }
 
     public float drawString(String text, double x, double y, int color, boolean shadow) {
+        /* NickHider (2026-11-17): the real name is replaced in every font, not only the game's. */
+        text = atlas.module.modules.NickHider.apply(text);
         Minecraft mc = Minecraft.getMinecraft();
         x -= 1;
 
@@ -280,6 +282,7 @@ public class CFontRenderer extends CFont {
         if (text == null) {
             return 0;
         }
+        text = atlas.module.modules.NickHider.apply(text);
         if (useMCustomFont) {
             return Minecraft.getMinecraft().fontRendererObj.getStringWidth(text);
         }

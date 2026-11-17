@@ -127,6 +127,8 @@ public class UFontRenderer extends FontRenderer {
 
     @Override
     public int drawString(String text, float x, float y, int color, boolean dropShadow) {
+        /* NickHider (2026-11-17): the real name is replaced in every font, not only the game's. */
+        text = atlas.module.modules.NickHider.apply(text);
         float densityScale = getDensityScale();
         if (densityScale > 1.0f) {
             return drawHighDensityString(text, x, y, color, dropShadow, densityScale);
@@ -175,6 +177,7 @@ public class UFontRenderer extends FontRenderer {
 
     @Override
     public int getStringWidth(String text) {
+        text = atlas.module.modules.NickHider.apply(text);
         float densityScale = getDensityScale();
         if (densityScale > 1.0f) {
             UFontRenderer renderer = getDensityRenderer(densityScale);
@@ -187,7 +190,7 @@ public class UFontRenderer extends FontRenderer {
     }
 
     public void drawCenteredString(String text, float x, float y, int color) {
-        drawString(text, x - stringCache.getStringWidth(text) / 2f, y, color, false);
+        drawString(text, x - this.getStringWidth(text) / 2f, y, color, false);
     }
 
     public int getHeight() {

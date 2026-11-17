@@ -1288,7 +1288,8 @@ public class HUD extends Module {
     }
 
     private String getCreidaWatermarkText() {
-        String playerName = mc.thePlayer == null ? "Player" : mc.thePlayer.getName();
+        /* NickHider at the source: this text is drawn a letter at a time, which no font can match a name in. */
+        String playerName = NickHider.apply(mc.thePlayer == null ? "Player" : mc.thePlayer.getName());
         String versionText = Atlas.version == null ? "dev" : Atlas.version;
         String time = new SimpleDateFormat("HH:mm:ss").format(new Date());
         return "Atlas | " + versionText + " | " + playerName + " | " + time;

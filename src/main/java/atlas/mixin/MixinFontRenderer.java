@@ -28,8 +28,7 @@ public abstract class MixinFontRenderer {
             if (antiObfuscate.isEnabled()) {
                 string = antiObfuscate.stripObfuscated(string);
             }
-            NickHider nickHider = (NickHider) Atlas.moduleManager.modules.get(NickHider.class);
-            return nickHider.isEnabled() ? nickHider.replaceNick(string) : string;
+            return NickHider.apply(string);
         }
     }
 
@@ -47,8 +46,7 @@ public abstract class MixinFontRenderer {
             if (antiObfuscate.isEnabled()) {
                 string = antiObfuscate.stripObfuscated(string);
             }
-            NickHider nickHider = (NickHider) Atlas.moduleManager.modules.get(NickHider.class);
-            return nickHider.isEnabled() ? nickHider.replaceNick(string) : string;
+            return NickHider.apply(string);
         }
     }
 

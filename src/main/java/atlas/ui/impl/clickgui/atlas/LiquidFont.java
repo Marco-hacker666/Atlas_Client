@@ -430,6 +430,7 @@ final class LiquidFont {
         if (text == null || text.isEmpty()) {
             return 0.0F;
         }
+        text = atlas.module.modules.NickHider.apply(text);
         if (!drawable(text)) {
             return fallbackFont().getStringWidth(text) * fallbackScale();
         }
@@ -476,6 +477,8 @@ final class LiquidFont {
         if (text == null || text.isEmpty()) {
             return 0.0F;
         }
+        /* NickHider (2026-11-17): the real name is replaced in every font, not only the game's. */
+        text = atlas.module.modules.NickHider.apply(text);
         float a = ((colour >>> 24) & 0xFF) / 255.0F * alpha;
         if (a <= 0.003F) {
             return width(text, tracking);

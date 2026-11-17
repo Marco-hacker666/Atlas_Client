@@ -1235,7 +1235,7 @@ public final class ModuleDocs {
         help("Scaffold", "gb2-jump-after-max", "GODBRIDGE2：每放幾格跳一次（最多），每次在最少和最多之間隨機。");
         help("Scaffold", "gb2-jump-delay-min", "GODBRIDGE2：放完最後一格後等幾 tick 才跳（最少）。");
         help("Scaffold", "gb2-jump-delay-max", "GODBRIDGE2：放完最後一格後等幾 tick 才跳（最多）。");
-        help("Scaffold", "gb2-reset-after-jumps-min", "GODBRIDGE2：跳幾次後重新開始（停下、蹲、重新轉好視角）（最少）。");
+        help("Scaffold", "gb2-reset-after-jumps-min", "GODBRIDGE2：跳幾次後重新開始（含最後那一跳，落地後停下、蹲、重新轉好視角）（最少）。");
         help("Scaffold", "gb2-reset-after-jumps-max", "GODBRIDGE2：跳幾次後重新開始（最多）。");
         help("Scaffold", "gb2-start-delay-min", "GODBRIDGE2：開始時先站著幾 tick 再走（最少）。");
         help("Scaffold", "gb2-start-delay-max", "GODBRIDGE2：開始時先站著幾 tick 再走（最多）。");

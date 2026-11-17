@@ -929,7 +929,7 @@ final class ModuleDocsEn {
         help("Scaffold", "gb2-jump-after-max", "GODBRIDGE2: blocks between jumps (most); each drawn between the two.");
         help("Scaffold", "gb2-jump-delay-min", "GODBRIDGE2: ticks after the last block before the jump (least).");
         help("Scaffold", "gb2-jump-delay-max", "GODBRIDGE2: ticks after the last block before the jump (most).");
-        help("Scaffold", "gb2-reset-after-jumps-min", "GODBRIDGE2: jumps before the run starts over (stop, crouch, look round again) (least).");
+        help("Scaffold", "gb2-reset-after-jumps-min", "GODBRIDGE2: jumps in a run, the last included; once it lands the run starts over (stop, crouch, look round again) (least).");
         help("Scaffold", "gb2-reset-after-jumps-max", "GODBRIDGE2: jumps before the run starts over (most).");
         help("Scaffold", "gb2-start-delay-min", "GODBRIDGE2: ticks standing at a start before the walk goes (least).");
         help("Scaffold", "gb2-start-delay-max", "GODBRIDGE2: ticks standing at a start before the walk goes (most).");

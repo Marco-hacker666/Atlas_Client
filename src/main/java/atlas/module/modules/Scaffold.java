@@ -262,7 +262,8 @@ public class Scaffold extends Module {
     private final IntProperty gb2StartDelayMax = new IntProperty("gb2-start-delay-max", 13, 0, 40, this::isGodBridge2Mode);
     private final BooleanProperty gb2StartCrouch = new BooleanProperty("gb2-start-crouch", true, this::isGodBridge2Mode);
     private final GodBridgeRhythm rhythm = new GodBridgeRhythm();
-    private boolean wasGodBridge2;
+    /** The rotations mode last ticked in; -1 after enabling (noteRotationMode). */
+    private int lastRotationMode = -1;
     /* 2026-11-18, MOONWALK (MoonWalk): the sway across the row, in blocks; the middle re-drawn every so many ticks. */
     private final FloatProperty moonWidthMin = new FloatProperty("moonwalk-width-min", 0.05F, 0.0F, 0.2F, this::isMoonWalkMode);
     private final FloatProperty moonWidthMax = new FloatProperty("moonwalk-width-max", 0.1F, 0.0F, 0.2F, this::isMoonWalkMode);
@@ -1635,12 +1636,7 @@ public class Scaffold extends Module {
     @EventTarget
     public void onMoveInput(MoveInputEvent event) {
         if (this.isEnabled()) {
-            /* Into GODBRIDGE2 from another mode: its rhythm starts from standing, with nothing counted (review, PR #45). */
-            boolean gb2 = this.isGodBridge2Mode();
-            if (gb2 != this.wasGodBridge2) {
-                this.wasGodBridge2 = gb2;
-                this.rhythm.reset();
-            }
+            this.noteRotationMode();
             if (this.safeStuckTicks > 0) {
                 mc.thePlayer.movementInput.moveForward = 0.0f;
                 mc.thePlayer.movementInput.moveStrafe = 0.0f;
@@ -2146,7 +2142,25 @@ public class Scaffold extends Module {
     private float tellyForwardYaw;
     private float tellyForwardPitch;
 
+    /**
+     * A change of rotations mode (review, PR #45): GODBRIDGE2's rhythm starts from standing with nothing counted, and
+     * TELLY's kept forward look and return are dropped, so they hold only within one uninterrupted run of a mode.
+     * Called first thing at both stages a mode ticks at (tellyTick, onMoveInput), so neither sees the old state.
+     */
+    private void noteRotationMode() {
+        int mode = this.rotationMode.getValue();
+        if (mode == this.lastRotationMode) {
+            return;
+        }
+        this.lastRotationMode = mode;
+        this.rhythm.reset();
+        this.moonWalk.reset();
+        this.tellyBack = false;
+        this.tellyReturning = false;
+    }
+
     private void tellyTick(UpdateEvent event) {
+        this.noteRotationMode();
         boolean back = TellyBridge.placing(mc.thePlayer.onGround, mc.thePlayer.motionY, MoveUtil.isForwardPressed());
         BlockData target = back ? this.getBlockData() : null;
         float aimYaw;
@@ -2758,6 +2772,7 @@ public class Scaffold extends Module {
         this.moonWalk.reset();
         this.tellyBack = false;
         this.tellyReturning = false;
+        this.lastRotationMode = -1;
         this.runPlan = null;
         this.canRotate = false;
         this.towerTick = 0;

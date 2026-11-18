@@ -3,17 +3,11 @@ package atlas.module;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * The English side of ModuleDocs (2026-10-04, language chosen in Atlas's
- * Appearance page): a description for every module, the hints, and the
- * headings. Kept apart so ModuleDocs stays readable.
- */
 final class ModuleDocsEn {
-
     static final Map<String, String> DESCRIPTIONS = new HashMap<String, String>();
     static final Map<String, String> HELP = new HashMap<String, String>();
     static final Map<String, String> MODULE_HELP = new HashMap<String, String>();
-    /** Chinese heading -> English heading. */
+
     static final Map<String, String> HEADINGS = new HashMap<String, String>();
 
     private ModuleDocsEn() {
@@ -36,7 +30,6 @@ final class ModuleDocsEn {
     }
 
     static {
-        // ------------------------------------------------------------ COMBAT
         d("KillAura", "Attacks targets in range: picks a target, turns to it (several modes, silent or not), clicks at your CPS and can block for you.");
         d("AimAssist", "Nudges your aim toward a nearby target while you attack, like a small hand correction; never clicks by itself.");
         help("AimAssist", "style", "Smooth: the old one (a share of what is left each tick). Regular: every frame, fast when far, easing in. Linear: one steady speed. Lock On: stays on the target. The last three after Slinky.");
@@ -208,9 +201,9 @@ final class ModuleDocsEn {
         help("SpeedBlocker", "ignore-teammates", "Skip teammates; friends are always skipped.");
         help("SpeedBlocker", "retry-cooldown", "A cell that took max-retries clicks is left alone this long: a placement the server ignores (a claim, a region) stays open here and would be retried every tick.");
         d("KBDisplacement", "In fights by hand, silently aims your knockback at nearby hazards (void, lava).");
-        // Ported from OpenSkid (2026-10-05)
+        // Ported from OpenSkid
         d("KeyStrokes", "Shows WASD, space and the mouse buttons (with CPS) on screen. The CPS counts every click that reaches the game, AutoClicker's too. Movable in the HUD editor.");
-        // 2026-11-15: Freecam rewritten (the body stays put and keeps sending its packets; only the camera moves)
+
         d("Freecam", "Flies the camera out of your body to look around. Your body stays where it is and keeps standing still as far as the server sees.");
         help("Freecam", "speed", "How fast the camera flies. Hold sprint to go twice as fast; jump and sneak go up and down.");
         help("Freecam", "camera-interact", "Attack, use and break blocks from the camera. Off: none of these while flying, as from the camera they would reach through walls and from far away, which servers check.");
@@ -311,7 +304,7 @@ final class ModuleDocsEn {
         help("Wtap", "select-hits", "Only after hits that can deal damage (the target is past most of its hurt time).");
         d("AutoGapple", "Eats a golden apple when health falls below a percentage.");
         d("AutoTool", "Switches to the best tool for the block being mined.");
-        // ------------------------------------------------------------ PLAYER
+
         d("Blink", "Holds your outgoing movement and releases it at a pace the server accepts (a teleport-like effect).");
         d("Clutch", "When knocked off a bridge or walking off an edge over the void, turns and places a block to catch you.");
         help("Clutch", "turn-random", "How much the turn speed wanders, every 2-4 ticks (%): when a catch is due only faster, never slower; while looking steeply down the yaw drifts a little too. 0 = off.");
@@ -327,7 +320,7 @@ final class ModuleDocsEn {
         d("AntiFireball", "Turns and hits fireballs flying at you.");
         d("AutoAnduril", "Switches to the Andúril sword at intervals for its speed effect, then back.");
         d("InventoryClicker", "Clicks quickly over inventory slots while the mouse is held and dragged.");
-        // ---------------------------------------------------------- MOVEMENT
+
         d("Fly", "Flight.");
         d("Speed", "Moves faster.");
         d("LongJump", "Jumps further.");
@@ -342,10 +335,10 @@ final class ModuleDocsEn {
         help("NoSlow", "HW Aura Blocks", "Hit-Window: also steer a block an aura or AutoBlock raises (Silent Aura's AutoBlocking, AutoBlock modes), not only your right button.");
         help("NoSlow", "HW Priority", "Hit-Window with Silent Aura's block: Hit = a window opens only with the aura's next click 3+ ticks away and closes a tick before it (no click waits); Block = the aura holds its click while the sword is up.");
         help("HUD", "hud-theme", "How every HUD draws. JELLO: LiquidBounce's JelloBounce theme (black at 45%, soft shadow, rounded cards, flush module list). CLASSIC: each HUD's older drawing.");
-        // Mobile-safe mode (2026-10-15, util.render.MobileSafe): Client Settings > Performance > mobile-safe
+
         help("HUD", "blur", "Blurs the background. Not drawn in mobile-safe mode (Client Settings > Performance > mobile-safe; on by itself on phones running gl4es / Krypton Wrapper).");
         help("HUD", "glow", "A glow behind the background. Not drawn in mobile-safe mode.");
-        // The custom module list (2026-11-14, ui.hud.list).
+
         help("HUD", "interface", "How the module list draws. ATLAS: the list as before (hud-theme picks JELLO or CLASSIC). CREIDA: Creida's list. CUSTOM: drawn from the Custom module list settings -- pick a ready-made style, then tune any part of it.");
         help("HUD", "list-style", "A ready-made style: sets the backgrounds, lines, corners, spacing, text colours and blur at once. Change one of those by hand and it shows CUSTOM (or the style it now equals); colours, order, animation and glow are left alone.");
         help("HUD", "list-color", "Each row's colour. HUD: the HUD's colour. THEME: the Theme module's. STATIC: one colour. GRADIENT, TRIPLE, PALETTE: two, three or four colours down the list. RAINBOW. ASTOLFO. PULSE: the whole list together. FADE: one colour, darker and lighter. CATEGORY: by the module's category. RANDOM: a colour of its own for each module.");
@@ -438,7 +431,7 @@ final class ModuleDocsEn {
         d("MoveFix", "With silent rotations, corrects movement so it matches the rotation the server sees.");
         d("Stasis", "Freezes your momentum for a moment, then lets it go.");
         d("Timer", "Changes the game clock speed (faster or slower overall).");
-        // ------------------------------------------------------------- WORLD
+
         d("Scaffold", "Places blocks under you to bridge: towering, keep-Y and several rotation modes.");
         d("AutoBlockIn", "Walls you in with blocks: the ring around your body first, then the roof.");
         help("AutoBlockIn", "debug", "For troubleshooting: writes each step to config/Atlas/placedebug-*.txt, on a background thread, so frames are not affected. Not needed for normal play.");
@@ -453,7 +446,7 @@ final class ModuleDocsEn {
         d("ChestStealer", "Takes the useful items when a chest opens.");
         d("FastPlace", "Places blocks faster.");
         d("SpeedMine", "Mines faster. BreakSpeed: the tool's own dig speed times multiplier (1.4 is about 40% faster). FinishEarly: ends the dig early; speed 100% is the fastest a vanilla server accepts (70% of vanilla time).");
-        // ------------------------------------------------------------ RENDER
+
         d("ESP", "Draws outlines or glow on other players, visible through walls.");
         d("Chams", "Shows player models through walls.");
         d("NameTags", "Larger, richer name tags: health, distance, gear and enchantments.");
@@ -473,7 +466,7 @@ final class ModuleDocsEn {
         d("TeamHealthDisplay", "Shows teammates' or enemies' health.");
         d("RenderFixes", "Modern chat and scoreboard rendering (rounded, movable).");
         d("AntiDebuff", "Removes blindness and nausea screen effects.");
-        // -------------------------------------------------------------- MISC
+
         d("AntiBot", "Recognises server bots (NPCs, anticheat bots) so other modules ignore them.");
         d("TargetFilter", "One shared answer to who counts as a target (friends, team, bots, invisible, distance) for combat and latency modules.");
         d("MCF", "Middle-click a player to add or remove a friend.");
@@ -488,11 +481,11 @@ final class ModuleDocsEn {
         d("MouseRawInput", "Uses raw mouse input, unaffected by system mouse acceleration.");
         d("ResourceSpoofer", "Answers resource pack requests without loading them and hides modded channels.");
         d("NoRotate", "Keeps your view when the server sets your position.");
-        // ----------------------------------------------------------- EXPLOIT
+
         d("Disabler", "A collection of anticheat bypasses, each for particular servers. Can be detected.");
         d("GhostHand", "Lets the crosshair pass through teammates to what is behind.");
         d("ClientSpoofer", "Changes the client brand reported to the server.");
-        // ------------------------------------------------------------ CLIENT
+
         d("ClickGUIModule", "Click menu style: look, colours and window size.");
         d("ThemeGUI", "Opens the Theme window (every colour and look) on its own key, without the menu. Bind it first: .bind ThemeGUI KEY.");
         help("ClickGUIModule", "glide-accent", "Glide style: the colour of enabled modules, switches and sliders.");
@@ -513,7 +506,7 @@ final class ModuleDocsEn {
         d("LatencyGovernor", "Makes latency-sensitive settings more cautious when the connection gets worse.");
         d("Panic", "One key that switches every behaviour module off and releases anything held back.");
         d("Rotations", "Shared rotation engine settings: speed variation, curved paths and easing near the target.");
-        // -------------------------------------------------------------- LEGIT
+
         d("HUD", "The on-screen module list and interface look (colours, background, blur, glow, fonts).");
         d("Hotbar", "A custom look for the hotbar.");
         d("FPScounter", "Shows FPS on screen.");
@@ -551,6 +544,7 @@ final class ModuleDocsEn {
         help("ProjectileAimBot", "auto-shoot", "Let go of the bow by itself, at shoot-charge or more, the moment the look the server already has would hit. Never on a guess. Off: you let go.");
         help("ProjectileAimBot", "shoot-charge", "Ticks of draw before auto-shoot may let go: 20 is a full draw (most damage and a critical).");
         help("ProjectileAimBot", "redraw", "After auto-shoot, draw again at once while right click is still held (one shot after another). Off: let go and press again for the next one, so letting go just after a shot never looses a weak half-drawn arrow.");
+        help("ProjectileAimBot", "early-let-go", "With redraw on, when you let go of the draw that starts by itself after an auto-shoot before it is full. Cancel: switches to the next slot for a tick and back, so no arrow leaves. Finish: keeps drawing to full and shoots.");
         help("ProjectileAimBot", "charge-random", "auto-shoot waits up to this many ticks past shoot-charge, a new number each shot, so the shots are not all let go on the same tick.");
         help("ProjectileAimBot", "allow-lob", "When a block stops the low arc, aim the high arc over it. Also lets a target behind cover be aimed at when the high arc reaches it.");
         help("ProjectileAimBot", "dodge-aim", "For a target that only moves once it sees the arrow: every way it could get out of the way is simulated (stop, step left or right, back, sprint, turn and sprint, jump), and of the looks that still hit it carrying on, the one that covers the most of them is taken. Aims as before when its ways out are not known. Needs predict.");
@@ -586,7 +580,7 @@ final class ModuleDocsEn {
         d("ArmorHUD", "Shows worn armour and durability.");
         d("EffectsHUD", "Shows active potion effects and their time left.");
         d("AutoRespawn", "Respawns automatically after death.");
-        // ------------------------------------------------------------- THEME
+
         d("Theme", "Theme master switch and main colours; groups can follow it or be coloured on their own.");
         d("PlayerColors", "Theme group: player ESP and 2D ESP colours.");
         d("TracerColors", "Theme group: tracer line and arrow colours.");
@@ -613,7 +607,6 @@ final class ModuleDocsEn {
         help("HUDStyle", "outline-color", "The outline's colour.");
         help("HUDStyle", "outline-opacity", "How strong the outline is.");
 
-        // ========================================================== HEADINGS
         heading("一般", "General");
         heading("Slinky 格擋", "Slinky block");
         heading("Slinky 假動畫", "Slinky fake animation");
@@ -699,7 +692,6 @@ final class ModuleDocsEn {
         heading("HUD 顯示", "HUD");
         heading("背景", "Background");
 
-        // ======================================================= SHARED HELP
         help("move-fix", "Movement fix: with silent rotations, keeps movement in line with the rotation the server sees, avoiding movement flags.");
         help("movefix", "Movement fix: with silent rotations, keeps movement in line with the rotation the server sees, avoiding movement flags.");
         help("swing", "Swing the arm when acting. Vanilla swings on every attack and placement.");
@@ -770,7 +762,6 @@ final class ModuleDocsEn {
         help("switch-back", "Switch back to the previous slot afterwards.");
         help("multi-place", "Place up to four blocks in one tick. Grim flags this (MultiPlace); off by default.");
 
-        // ======================================================= MODULE HELP
         String ka2 = "KillAura2";
         help(ka2, "legit-threat", "When Legit blocking counts as threatened. Look (recommended, after LiquidBounce NextGen): only while an enemy's look actually lands on you within its reach with no wall between, so fewer blocks and fewer broken sprints. Swing: the old rule, you were just hit or the target within 3.6 faces you (within 60 degrees) swinging, which holds nearly the whole fight.");
         help(ka2, "legit-tolerance", "How far your box is grown for the Look test. Larger blocks more readily; 0.3 is NextGen's default.");
@@ -923,8 +914,12 @@ final class ModuleDocsEn {
         help("Scaffold", "jump-every-blocks", "GODBRIDGE: a jump every this many blocks (one more at random), only on a straight run with the look settled and room for it in the pace; POLAR: a jump at this count on top of its ledge jumps. 0 = none.");
         help("Scaffold", "godbridge-trace", "GODBRIDGE: writes a line a tick while bridging to config/Atlas/godbridge-*.txt (needs Logs), to find why it falls. Log only.");
         help("Scaffold", "jump-builds-up", "GODBRIDGE: a jump takes the bridge up one block, as the technique does. Off: blocks stay on the layer the jump left from.");
-        help("Scaffold", "rotations", "How the look turns. TELLY: a sprint jump forward looking forward; the turn round to place only once the jump comes down, and forward again on landing; the layer the jump left from is kept and W on the ground jumps by itself. GODBRIDGE2: a godbridge as Augustus has it, looking straight back, not 45 to a side; a run starts standing (crouched the first ticks) until the look is round, jumps every few blocks and starts over after a few jumps. MOONWALK: bridging backwards with light taps of the side keys, so the path sways a little either side of the row's middle instead of a ruled line.");
+        help("Scaffold", "rotations", "How the look turns. TELLY: a sprint jump forward looking forward; the turn round to place only once the jump comes down, and forward again on landing; the layer the jump left from is kept and W on the ground jumps by itself. GODBRIDGE2: a godbridge as Augustus has it, looking straight back, not 45 to a side; a run starts standing (crouched the first ticks) until the look is round, jumps every few blocks and starts over after a few jumps. MOONWALK: bridging backwards with light taps of the side keys, so the path sways a little either side of the row's middle instead of a ruled line. SNAP-SPEED: SNAP with sprint jumps. The look still turns back to place, but every turn is eased; in the air it never turns forward, it holds the back look between blocks; on the ground take-off tick it turns forward (or 45 off) and the jump waits until the look sent is along the walk, so the sprint jump goes all forward. Movement always follows the server look. See snap-move, snap-takeoff, snap-smooth.");
         help("Scaffold", "telly-turn-speed", "TELLY: most degrees a tick the look turns (back on the way down, forward on landing). 135 = about 2 ticks.");
+        help("Scaffold", "snap-move", "SNAP-SPEED: Jump sprint jumps along the bridge layer by itself while W is held; Ground does not jump (SNAP with eased turns).");
+        help("Scaffold", "snap-takeoff", "SNAP-SPEED take-off look: Forward straight along the walk (fastest, no drift); Diagonal 45 off (W plus a side key, the side alternating each jump), a smaller turn, but half the jump boost goes sideways, about a block of drift a jump.");
+        help("Scaffold", "snap-smooth", "SNAP-SPEED: degrees a tick for small turns; turns over 90 degrees always take two ticks.");
+        help("Scaffold", "snap-trace", "SNAP-SPEED: a line a tick to config/Atlas/snapspeed-*.txt, to find out why a run fell.");
         help("Scaffold", "gb2-jump-after-min", "GODBRIDGE2: blocks between jumps (least).");
         help("Scaffold", "gb2-jump-after-max", "GODBRIDGE2: blocks between jumps (most); each drawn between the two.");
         help("Scaffold", "gb2-jump-delay-min", "GODBRIDGE2: ticks after the last block before the jump (least).");

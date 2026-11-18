@@ -9,33 +9,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * What the menus say about each module and its settings, in one place
- * (2026-10-04, asked for: "每個功能都要做說明", and the settings tidied).
- *
- *   DESCRIPTIONS  a short Chinese description for every registered module,
- *                 shown over the module's own (110 of 161 had none).
- *   GROUPS        for the modules with the longest lists, headings and an
- *                 order: settings are listed under the first heading whose
- *                 patterns match their key ("x*" a prefix, otherwise the
- *                 exact key, case ignored); anything unmatched goes first,
- *                 under "一般". Other modules keep their own order, with
- *                 runs of hud-/alerts-/macro- settings gathered under one
- *                 heading each.
- *   HELP          the hint line for a setting: per module where a key means
- *                 something particular, else a meaning shared by every module
- *                 that uses the same key (range, fov, move-fix, ...).
- *
- * Presentation only: no key changes, so every saved config still loads.
- * Applied once at start-up, after the settings are found (Atlas.java).
- */
 public final class ModuleDocs {
-
     private static final Map<String, String> DESCRIPTIONS = new HashMap<String, String>();
     private static final Map<String, String[][]> GROUPS = new HashMap<String, String[][]>();
     private static final Map<String, String> HELP = new HashMap<String, String>();
     private static final Map<String, String> MODULE_HELP = new HashMap<String, String>();
-    /* Key prefixes gathered under a heading in modules without a GROUPS entry. */
+
     private static final String[][] AUTO = {
             {"HUD 顯示", "hud", "tracker-hud"},
             {"提醒", "alerts"},
@@ -47,12 +26,8 @@ public final class ModuleDocs {
     private ModuleDocs() {
     }
 
-    /* The menu's language: Atlas sets it from its Appearance page each frame. */
     private static volatile boolean english;
 
-    /* 2026-10-22 (owner: "remove the whole Chinese interface"): the menu is English only; the Chinese
-       fonts' ideographs are gone, so Chinese text could not be drawn. The tables below stay as the keys the
-       English side (ModuleDocsEn) is looked up by. */
     public static boolean isEnglish() {
         return true;
     }
@@ -61,7 +36,6 @@ public final class ModuleDocs {
         english = value;
     }
 
-    /** A settings heading in the menu's language. */
     public static String heading(String group) {
         if (group == null || !isEnglish()) {
             return group;
@@ -70,7 +44,7 @@ public final class ModuleDocs {
         if (en != null) {
             return en;
         }
-        /* A heading without its English: never show it in Chinese (it would draw as nothing). */
+
         for (int i = 0; i < group.length(); i++) {
             if (group.charAt(i) >= 0x2E80) {
                 return "Settings";
@@ -79,7 +53,6 @@ public final class ModuleDocs {
         return group;
     }
 
-    /** Sets the description, headings and hints, and returns the settings in menu order. */
     public static List<Property<?>> apply(Module module, List<Property<?>> properties) {
         String key = module.getClass().getSimpleName();
         String description = DESCRIPTIONS.get(key);
@@ -107,8 +80,7 @@ public final class ModuleDocs {
                 property.setHelpEn(helpEn);
             }
         }
-        /* Settings of merged modules (ModuleBundle) keep their own heading and
-           come last, in order. */
+
         List<Property<?>> own = new ArrayList<Property<?>>();
         List<Property<?>> merged = new ArrayList<Property<?>>();
         for (Property<?> property : properties) {
@@ -158,7 +130,7 @@ public final class ModuleDocs {
             }
             cluster.add(property);
         }
-        /* Ungrouped first (a lone match is not a section), then each section. */
+
         List<Property<?>> plain = new ArrayList<Property<?>>();
         List<Property<?>> sections = new ArrayList<Property<?>>();
         for (Map.Entry<String, List<Property<?>>> cluster : clusters.entrySet()) {
@@ -171,7 +143,7 @@ public final class ModuleDocs {
             }
             sections.addAll(cluster.getValue());
         }
-        /* Keep the module's own order among the ungrouped ones. */
+
         List<Property<?>> ordered = new ArrayList<Property<?>>();
         for (Property<?> property : properties) {
             if (plain.contains(property)) {
@@ -191,7 +163,6 @@ public final class ModuleDocs {
         return match(spec, name, false);
     }
 
-    /** The first heading with a pattern for this key; prefixOnly treats every pattern as a prefix. */
     private static int match(String[][] spec, String name, boolean prefixOnly) {
         String key = name.toLowerCase(Locale.ROOT);
         for (int i = 0; i < spec.length; i++) {
@@ -214,7 +185,6 @@ public final class ModuleDocs {
         return -1;
     }
 
-    /** A key with case, dashes, underscores and spaces taken out, for the HELP tables. */
     static String norm(String name) {
         return name.toLowerCase(Locale.ROOT).replace("-", "").replace("_", "").replace(" ", "");
     }
@@ -267,6 +237,7 @@ public final class ModuleDocs {
         help("ProjectileAimBot", "auto-shoot", "拉到 shoot-charge 以上、而且伺服器已經收到的角度會命中時自動放箭。關掉就自己放。");
         help("ProjectileAimBot", "shoot-charge", "自動放箭前至少拉弓幾 tick：20 是滿弓（傷害最高、爆擊）。");
         help("ProjectileAimBot", "redraw", "自動放箭後，右鍵還按著就馬上再拉下一弓（連射）。關：要放開再按才會拉下一弓，射完放開右鍵就不會多射出一支沒拉滿的弱箭。");
+        help("ProjectileAimBot", "early-let-go", "開 redraw 時，自動放箭後自己開始的那一發還沒拉滿就放開：Cancel 切到下一格一個 tick 再切回來，不會射出箭；Finish 繼續拉到滿弓再射。");
         help("ProjectileAimBot", "charge-random", "自動放箭在 shoot-charge 之後再隨機多等最多幾 tick，每箭不同，不會每次都同一 tick 放。");
         help("ProjectileAimBot", "allow-lob", "低彈道會被方塊擋住時改用高拋。");
         help("ProjectileAimBot", "dodge-aim", "對付「看到箭才躲」的人：模擬他能躲的每一種方式（停下、左右、後退、衝刺、轉身衝刺、跳），在還能射中「他照原樣走」的前提下，選能蓋住最多種躲法的瞄準點。不知道他能怎麼躲時照原本的瞄法。需要開 predict。");
@@ -336,7 +307,7 @@ public final class ModuleDocs {
         d("AutoRequeue", "遊戲結束後自動重新排隊。");
         d("ArmorBreaker", "戰鬥中自動切換斧頭以破壞對手護甲。");
         d("AutoReconnect", "被踢出或斷線後自動重新連線到同一個伺服器。");
-        // ------------------------------------------------------------ COMBAT
+
         d("KillAura", "自動攻擊範圍內的目標：選目標、轉頭（多種模式，可靜默）、依 CPS 出手，並可自動格擋。");
         d("AimAssist", "攻擊時把準心輕微往附近目標拉，手感接近真人微調，不會自己出手。");
         help("AimAssist", "style", "Smooth：原本的（每 tick 轉剩下角度的一部分）。Regular：每幀轉，遠快近慢。Linear：固定速度。Lock On：黏住目標。後三種參考 Slinky。");
@@ -468,7 +439,7 @@ public final class ModuleDocs {
         d("InvulnTiming", "算準目標無敵時間結束的時機再出手，並把多餘的攻擊轉給打得動的人。");
         d("KeepRange", "連擊中自動放開前進（S-tap），避免貼太近浪費對手的擊退。");
         d("KBDisplacement", "手動打人時，靜默把擊退方向轉向附近的危險（虛空、岩漿）。");
-        // Ported from OpenSkid (2026-10-05)
+        // Ported from OpenSkid
         d("KeyStrokes", "在畫面上顯示 WASD、空白鍵和滑鼠按鍵（含 CPS）。CPS 會算進每一次送進遊戲的點擊，包括 AutoClicker 的。可在 HUD 編輯器拖曳。");
         d("PotionHUD", "在畫面上列出目前的藥水效果和剩餘時間。可在 HUD 編輯器拖曳。");
         d("InventoryHUD", "在畫面上顯示身上的裝備和快捷欄物品。可在 HUD 編輯器拖曳。");
@@ -598,7 +569,7 @@ public final class ModuleDocs {
         help("Wtap", "select-hits", "只在這一下打得出傷害時才 W-tap（對方大部分無敵時間已過）。");
         d("AutoGapple", "血量低於設定百分比時自動吃金蘋果。");
         d("AutoTool", "挖方塊時自動切到最適合的工具。");
-        // ------------------------------------------------------------ PLAYER
+
         d("Blink", "暫時扣住自己送出的移動封包，之後以伺服器能接受的節奏放出（瞬移般的效果）。");
         d("Clutch", "被打下橋或走到虛空邊緣時，自動轉頭放方塊把自己接住。");
         help("Clutch", "turn-random", "轉頭速度每 2～4 tick 隨機變化的幅度（%）：快來不及接時只會更快、不會更慢；往下看很陡時，左右也會輕微飄動。0 = 關。");
@@ -614,7 +585,7 @@ public final class ModuleDocs {
         d("AntiFireball", "自動轉頭打掉飛向你的火球。");
         d("AutoAnduril", "定時切到 Andúril 劍拿速度效果，再切回原本的物品。");
         d("InventoryClicker", "在背包畫面按住滑鼠拖過格子時，自動快速點擊。");
-        // ---------------------------------------------------------- MOVEMENT
+
         d("Fly", "飛行。");
         d("Speed", "加快移動速度。");
         d("LongJump", "跳得更遠。");
@@ -629,10 +600,10 @@ public final class ModuleDocs {
         help("NoSlow", "HW Aura Blocks", "Hit-Window：也接管 aura 或 AutoBlock 舉的劍（Silent Aura 的 AutoBlocking、AutoBlock 模式），不只你自己按右鍵的格擋。");
         help("NoSlow", "HW Priority", "Hit-Window 接管 Silent Aura 的格擋時誰讓誰：Hit = 只有 aura 下一下至少 3 tick 後才舉劍，並在出手前一 tick 放下（不耽誤出手）；Block = 舉劍時 aura 先不出手。");
         help("HUD", "hud-theme", "所有 HUD 的外觀。JELLO：LiquidBounce JelloBounce 主題（黑 45%、柔和陰影、圓角卡片、模組清單貼齊）。CLASSIC：各 HUD 原本的畫法。");
-        // 手機安全模式（2026-10-15，util.render.MobileSafe）：Client Settings > Performance > mobile-safe
+
         help("HUD", "blur", "背景模糊。手機安全模式（Client Settings > Performance > mobile-safe，手機 gl4es / Krypton Wrapper 自動開啟）下不畫。");
         help("HUD", "glow", "背景光暈。手機安全模式下不畫。");
-        // 自訂模組清單（2026-11-14，ui.hud.list）
+
         help("HUD", "interface", "模組清單的畫法。ATLAS：原本的清單（hud-theme 決定 JELLO 或 CLASSIC）。CREIDA：Creida 的清單。CUSTOM：照「自訂模組清單」的設定畫，先選現成樣式再細調。");
         help("HUD", "list-style", "現成樣式：一次設定背景、線條、圓角、間距、文字顏色和模糊。自己改了其中一項就顯示 CUSTOM（或剛好相同的樣式）；顏色、排序、動畫和光暈不受影響。");
         help("HUD", "list-color", "每一列的顏色。HUD：跟 HUD 的顏色；THEME：跟 Theme 模組；STATIC 單色；GRADIENT 兩色、TRIPLE 三色、PALETTE 四色循環；RAINBOW；ASTOLFO；PULSE 整個清單一起變；FADE 單色明暗；CATEGORY 依模組分類；RANDOM 每個模組固定一色。");
@@ -725,7 +696,7 @@ public final class ModuleDocs {
         d("MoveFix", "靜默轉頭時修正移動方向，讓移動跟伺服器看到的視角一致。");
         d("Stasis", "短暫凍結自己的動量，之後再放開。");
         d("Timer", "改變遊戲時鐘速度（整體加速或減速）。");
-        // ------------------------------------------------------------- WORLD
+
         d("Scaffold", "自動在腳下放方塊搭橋，支援疊高（tower）、保持高度與多種轉頭模式。");
         d("AutoBlockIn", "自動用方塊把自己圍起來：先圍身體一圈，再補屋頂。");
         d("SpeedBlocker", "在衝向你的敵人腳前放方塊，撞掉它的衝刺動量，方便起手連擊；棍戰也好用。");
@@ -751,7 +722,7 @@ public final class ModuleDocs {
         d("ChestStealer", "打開箱子時自動把有用的東西拿走。");
         d("FastPlace", "加快放方塊的速度。");
         d("SpeedMine", "加快挖方塊。BreakSpeed：工具原本的挖掘速度乘上 multiplier（1.4 約快 40%）。FinishEarly：挖到一定進度就提早完成，speed 100% 是原版伺服器能接受的最快（原版時間的 70%）。");
-        // ------------------------------------------------------------ RENDER
+
         d("ESP", "在其他玩家身上畫外框或光暈，隔牆也看得到。");
         d("Chams", "隔牆顯示玩家模型。");
         d("NameTags", "放大並強化名牌：顯示血量、距離、裝備與附魔。");
@@ -771,7 +742,7 @@ public final class ModuleDocs {
         d("TeamHealthDisplay", "顯示隊友或敵人的血量。");
         d("RenderFixes", "較現代的聊天框與計分板外觀（圓角、可移動）。");
         d("AntiDebuff", "移除失明、反胃等畫面效果。");
-        // -------------------------------------------------------------- MISC
+
         d("AntiBot", "辨識伺服器的假人（NPC、反作弊機器人），讓其他模組略過它們。");
         d("TargetFilter", "統一判斷「誰算目標」（好友、隊友、假人、隱身、距離），給戰鬥與延遲類模組共用。");
         d("MCF", "中鍵點玩家加入或移除好友。");
@@ -786,11 +757,11 @@ public final class ModuleDocs {
         d("MouseRawInput", "使用原始滑鼠輸入，不受系統滑鼠加速影響。");
         d("ResourceSpoofer", "回應伺服器的材質包要求但不真的載入，並隱藏模組專用的頻道。");
         d("NoRotate", "伺服器拉回你的位置時，不讓它改掉你的視角。");
-        // ----------------------------------------------------------- EXPLOIT
+
         d("Disabler", "針對特定反作弊的繞過手段集合（多數只對特定伺服器有效，可能被抓）。");
         d("GhostHand", "準心可以穿過隊友，直接點到後面的東西。");
         d("ClientSpoofer", "偽裝回報給伺服器的客戶端品牌。");
-        // ------------------------------------------------------------ CLIENT
+
         d("ClickGUIModule", "點擊選單的樣式設定：外觀、顏色、視窗大小。");
         d("ThemeGUI", "用自己的按鍵打開 Theme 視窗（所有顏色和外觀都在裡面），不用先開選單。先用 .bind ThemeGUI 按鍵 綁定。");
         d("GuiModule", "開啟點擊選單（預設右 Shift）。");
@@ -809,7 +780,7 @@ public final class ModuleDocs {
         d("LatencyGovernor", "網路變差時，自動把對延遲敏感的設定調保守。");
         d("Panic", "一鍵關掉所有功能模組，並放出所有被扣住的封包。");
         d("Rotations", "共用轉頭引擎的參數：速度隨機、弧線路徑、接近目標時減速。");
-        // -------------------------------------------------------------- LEGIT
+
         d("HUD", "畫面上的模組清單與介面外觀（顏色、背景、模糊、光暈、字型）。");
         d("Hotbar", "自訂快捷欄的外觀。");
         d("FPScounter", "在畫面上顯示 FPS。");
@@ -835,7 +806,7 @@ public final class ModuleDocs {
         d("ArmorHUD", "顯示身上的護甲與耐久。");
         d("EffectsHUD", "顯示目前的藥水效果與剩餘時間。");
         d("AutoRespawn", "死亡後自動重生。");
-        // ------------------------------------------------------------- THEME
+
         d("Theme", "主題總開關與主色；各主題群組可以統一或個別上色。");
         d("PlayerColors", "主題群組：玩家 ESP 與 2D ESP 的顏色。");
         d("TracerColors", "主題群組：Tracer 線與箭頭的顏色。");
@@ -862,7 +833,6 @@ public final class ModuleDocs {
         help("HUDStyle", "outline-color", "外框的顏色。");
         help("HUDStyle", "outline-opacity", "外框有多明顯。");
 
-        // ============================================================ GROUPS
         g("KillAura2",
                 h("常用", "mode", "min-cps", "max-cps", "attack-range", "auto-block", "legit-threat", "legit-tolerance", "block-min-ticks", "block-stop-sprint", "block-release", "block-log", "move-fix"),
                 h("目標", "sort", "switch-delay", "scan-extra", "fov", "players", "mobs", "animals", "teams",
@@ -1016,7 +986,6 @@ public final class ModuleDocs {
                         "projectiles", "arrow"),
                 h("固定格子", "*-slot"));
 
-        // ======================================================= SHARED HELP
         help("move-fix", "移動修正：靜默轉頭時讓移動方向跟伺服器看到的視角一致，避免移動類 flag。");
         help("movefix", "移動修正：靜默轉頭時讓移動方向跟伺服器看到的視角一致，避免移動類 flag。");
         help("swing", "動作時揮手（送出揮手動畫）。原版每次攻擊或放方塊都會揮手。");
@@ -1087,7 +1056,6 @@ public final class ModuleDocs {
         help("switch-back", "用完切回原本的格子。");
         help("multi-place", "同一個 tick 最多放 4 格。Grim 會抓（MultiPlace），預設關。");
 
-        // ======================================================= MODULE HELP
         String ka2 = "KillAura2";
         help(ka2, "legit-threat", "Legit 格擋什麼時候算「有危險」。Look（建議，參考 LiquidBounce NextGen）：有敵人的準心真的對著你（他的視線在攻擊距離內打到你、中間沒有牆）才舉劍，擋得少、衝刺斷得少。Swing：舊的判斷，你剛被打，或對方在 3.6 格內面向你（60 度內）在揮手；打架時幾乎一直成立。");
         help(ka2, "legit-tolerance", "Look 判斷時把你的身體放大幾格。越大越容易舉劍；0.3 是 NextGen 的預設。");
@@ -1229,8 +1197,12 @@ public final class ModuleDocs {
         help("Scaffold", "godbridge-trace", "GODBRIDGE：搭橋時每個 tick 寫一行到 config/Atlas/godbridge-*.txt（要開 Logs），用來查為什麼會掉下去。只記錄，不改任何行為。");
         help("Scaffold", "jump-builds-up", "GODBRIDGE：跳的時候橋跟著往上一格（God Bridge 本來的樣子）。關掉：跳起來還是放在起跳那一層。");
         help("Scaffold", "legit-pace", "GODBRIDGE 和 POLAR：用人做得到的速度搭橋。每 3-4.5 秒在邊緣蹲 3-5 tick，不會只蹲 1 tick；放得比 Intave 放置檢查允許的還快時，會先等方塊或不跳（直線不蹲的橋會被它標記）。關：跟以前一樣。");
-        help("Scaffold", "rotations", "轉頭方式。TELLY：衝刺往前跳，看前面；跳到最高點開始往下時才轉身放方塊，落地再轉回前面；高度保持在起跳那層，按住 W 在地上會自動跳。GODBRIDGE2：Augustus 那種 God Bridge，正後方看、不偏 45 度；開始時先站著（前幾 tick 蹲下）等視角轉好再走，每放幾格跳一次，跳幾次後重新開始。MOONWALK：往後搭橋時左右鍵輕輕點，讓路線在方塊中線兩邊小幅擺動，不是一直線。");
+        help("Scaffold", "rotations", "轉頭方式。TELLY：衝刺往前跳，看前面；跳到最高點開始往下時才轉身放方塊，落地再轉回前面；高度保持在起跳那層，按住 W 在地上會自動跳。GODBRIDGE2：Augustus 那種 God Bridge，正後方看、不偏 45 度；開始時先站著（前幾 tick 蹲下）等視角轉好再走，每放幾格跳一次，跳幾次後重新開始。MOONWALK：往後搭橋時左右鍵輕輕點，讓路線在方塊中線兩邊小幅擺動，不是一直線。 SNAP-SPEED：以 SNAP 為基底再加上衝刺跳。要放方塊時一樣轉回去放，但轉頭是平滑的；在空中不會轉回前方，放完一格就維持在後方等下一格；在地上起跳那一 tick 轉到前方（或斜 45 度），等視角對好才起跳，衝刺跳的速度全往前。移動一律跟著伺服器視角修正。看 snap-move、snap-takeoff、snap-smooth。");
         help("Scaffold", "telly-turn-speed", "TELLY：每 tick 最多轉幾度（往下時轉身、落地時轉回）。135 = 約 2 tick 轉完。");
+        help("Scaffold", "snap-move", "SNAP-SPEED：Jump 按住 W 沿著橋的那一層自動衝刺跳；Ground 不跳（跟 SNAP 一樣，只是轉頭平滑）。");
+        help("Scaffold", "snap-takeoff", "SNAP-SPEED 起跳時的視角：Forward 正前方（最快、不會偏）；Diagonal 斜 45 度（W 加側鍵，每跳換邊），轉頭比較小，但跳躍的加速有一半往側邊，每跳大約偏一格。");
+        help("Scaffold", "snap-smooth", "SNAP-SPEED 小轉頭每 tick 最多轉幾度；超過 90 度的大轉頭固定分兩 tick 完成。");
+        help("Scaffold", "snap-trace", "SNAP-SPEED 每 tick 寫一行到 config/Atlas/snapspeed-*.txt，掉下去時可以拿來查原因。");
         help("Scaffold", "gb2-jump-after-min", "GODBRIDGE2：每放幾格跳一次（最少）。");
         help("Scaffold", "gb2-jump-after-max", "GODBRIDGE2：每放幾格跳一次（最多），每次在最少和最多之間隨機。");
         help("Scaffold", "gb2-jump-delay-min", "GODBRIDGE2：放完最後一格後等幾 tick 才跳（最少）。");

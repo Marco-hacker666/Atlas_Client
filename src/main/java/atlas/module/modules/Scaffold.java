@@ -57,9 +57,22 @@ public class Scaffold extends Module {
     private static final int ROTATION_WEIRD_TELLY = 13;
     private static final int ROTATION_GODBRIDGE2 = 14;
     private static final int ROTATION_MOONWALK = 15;
-    /* polar.json's GodBridge technique (LiquidBounce): the Mode index is also
-       the ledge action the decision returns ({@link #polarLedgeAction}).
-       Modes = [Jump], ForceSneakBelowCount = 5, SneakTime = 1..1. */
+
+    private static final int ROTATION_SNAP_SPEED = 16;
+
+    private int snapSide = 0;
+
+    private int snapBackSide = 1;
+
+    private float snapLastYaw = Float.NaN;
+
+    private final SnapBridge.YawWindow snapYaw = new SnapBridge.YawWindow();
+
+    private boolean snapWasGround = true;
+
+    private boolean snapAligned = true;
+    private java.io.File snapTraceFile;
+
     private static final int POLAR_JUMP = 0;
     private static final int POLAR_SNEAK = 1;
     private static final int POLAR_STOP_INPUT = 2;
@@ -83,8 +96,7 @@ public class Scaffold extends Module {
             0.90625,
             0.96875
     };
-    /* S3 (2026-10-07): aim points stay off the outer 15 % of a face, as
-       LiquidBounce's trimFace does. */
+
     private static final double[] aimOffsets = new double[]{
             0.15625, 0.21875, 0.28125, 0.34375, 0.40625, 0.46875, 0.53125,
             0.59375, 0.65625, 0.71875, 0.78125, 0.84375
@@ -118,17 +130,12 @@ public class Scaffold extends Module {
     private int threeFmcPlaceCooldown = 0;
     private float lastSnapPlaceYaw = Float.NaN;
     private float lastSnapPlacePitch = Float.NaN;
-    public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2", "POLAR", "TELLY", "SPEED-TELLY", "WEIRD-TELLY", "GODBRIDGE2", "MOONWALK"})
-            /* 2026-10-31 (owner's consolidation): SIDEWAYS and 3FMC retired (indices kept); a config naming one gets
-               GODBRIDGE. SNAP and SNAP2 came back 2026-11-01 (owner: "put Scaffold snap back"), SNAP2 hidden as before. */
+    public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2", "POLAR", "TELLY", "SPEED-TELLY", "WEIRD-TELLY", "GODBRIDGE2", "MOONWALK", "SNAP-SPEED"})
+
             .retire("GODBRIDGE", "SIDEWAYS", "3FMC")
-            /* 2026-11-04 (owner: "delete Telly, keep Speed Telly"): index 11 stayed taken; the name SPEED-TELLY had
-               before 2026-10-13 still gets it. 2026-11-06 (owner: "bring speed telly back, call the current one weird
-               telly"): WEIRD-TELLY goes on the end; both run on Clutch, only the jump differs. 2026-11-18 (owner: "a
-               Telly like Augustus's, replacing ours"): index 11 is TELLY again, TellyBridge's; GODBRIDGE2 and MOONWALK
-               go on the end. */
+
             .alias("B4", "SPEED-TELLY")
-            /* 2026-10-08: fewer modes in the menu; the rest still load from old configs. */
+
             .hide("BACKWARDS", "SIDEWAYS", "SMOOTH", "Hypixel", "3FMC", "SNAP2")
             .alias("GODBIRGDE", "GODBRIDGE");
     public final FloatProperty tellystartrotationminspeed = new FloatProperty("telly-start-rotation-min-speed", 90.0F, 1.0F, 180.0F, () -> this.keepY.getValue() == 3 || this.keepY.getValue() == 4);
@@ -147,8 +154,7 @@ public class Scaffold extends Module {
     public final ModeProperty keepY = new ModeProperty("keep-y", 0, new String[]{"NONE", "VANILLA", "EXTRA", "TELLY", "EXTRATELLY"});
     public final BooleanProperty keepYonPress = new BooleanProperty("keep-y-on-press", false, () -> this.keepY.getValue() != 0);
     public final BooleanProperty disableWhileJumpActive = new BooleanProperty("no-keep-y-on-jump-potion", false, () -> this.keepY.getValue() != 0);
-    /* Off by default (2026-10-04): up to four blocks in one flying window is
-       exactly what Grim's MultiPlace flags. */
+
     public final BooleanProperty multiplace = new BooleanProperty("multi-place", false);
     public final BooleanProperty safeWalk = new BooleanProperty("safe-walk", true);
     public final BooleanProperty swing = new BooleanProperty("swing", true);
@@ -163,37 +169,21 @@ public class Scaffold extends Module {
     private long eagleLastSneakTime = 0L;
     private int eagleBlocksPlaced = 0;
 
-    /* ---- Polar: the full GodBridge technique (LiquidBounce polar.json) -----
-       Rotations alone are not a Godbridge; the part that keeps the player on
-       the block edge is the ledge action. When the next step has no floor and
-       the block cannot be placed, LiquidBounce's ScaffoldGodBridgeTechnique
-       picks an action (jump / sneak / stop input / step back) so the player
-       does not fall off. polar.json runs it with:
-         Modes = [Jump], ForceSneakBelowCount = 5, SneakTime = 1..1
-       i.e. normally JUMP, but SNEAK when fewer than 5 blocks remain. */
     private final IntProperty polarForceSneakBelowCount = new IntProperty("polar-force-sneak-below-count", 5, 0, 20, this::polarShown);
     private final IntProperty polarSneakTime = new IntProperty("polar-sneak-time", 1, 1, 10, this::polarShown);
-    /* polar.json's Modes = [Jump]. A single choice, as the client's other mode
-       settings are; the ledge decision reads it, so Sneak, StopInput and
-       Backwards can be picked without a rebuild. */
+
     private final ModeProperty polarModes = new ModeProperty("polar-modes", POLAR_JUMP,
             new String[]{"Jump", "Sneak", "StopInput", "Backwards"},
             this::polarShown);
-    /* 2026-11-07 (owner: "stack seven, then jump, as LiquidBounce"): a jump every so many blocks. LiquidBounce has no
-       such count: it jumps at a ledge it cannot place at, which reads as a rhythm. 0 leaves only the ledge action. */
+
     private final IntProperty jumpEveryBlocks = new IntProperty("jump-every-blocks", 7, 0, 20, this::godBridgeShown);
-    /* 2026-11-11 (owner: GODBRIDGE falls now and then, with or without a turn): a line a tick while a run is on, to
-       config/Atlas/godbridge-*.txt (needs Logs). Log only. */
+
     private final BooleanProperty godBridgeTrace = new BooleanProperty("godbridge-trace", true, this::isRunMode);
     private java.io.File godBridgeTraceFile;
     private int lastPlacedTick = -1000;
-    /* 2026-11-07: placement timing a human bridge has (PlacePace): a crouch of 3-5 ticks at an edge every 3-4.5 s,
-       no 1-tick crouches, no click or jump that would put the Speed or Sneak averages of Intave PlacementAnalysis under
-       their limits. Off: GODBRIDGE and POLAR exactly as before. */
+
     public final BooleanProperty legitPace = new BooleanProperty("legit-pace", true, this::godBridgeShown);
-    /* 2026-11-11 (owner: "god bridge jumps every 6-8 blocks; it jumped, but the blocks did not go up with it"): a
-       GODBRIDGE jump takes the bridge up a block, as the technique does. Off: the 2026-11-07 behaviour, the layer
-       the jump left from is kept. */
+
     public final BooleanProperty jumpBuildsUp = new BooleanProperty("jump-builds-up", true, this::isRunMode);
     private final PlacePace pace = new PlacePace();
     private boolean paceWasOnGround;
@@ -208,31 +198,12 @@ public class Scaffold extends Module {
     public final ModeProperty espColor = new ModeProperty("outline-color", 0, new String[]{"Default", "HUD"}, () -> this.espOutline.getValue());
     private final Map<BlockPos, Long> espHighlight = new HashMap<>();
 
-    /* ---- Clutch's discipline, applied to Scaffold (2026-10-06) ----------
-       Players reported flags, ghost blocks, setbacks and refused blocks.
-       Clutch already does what fixes those (see its header):
-       - the click is the one the sent look makes, decided after every module
-         has set this tick's rotation (Priority.LOWEST), and clicks whatever
-         that look actually hits, if the block goes where it is wanted;
-       - no C08 for a placement the game itself would refuse (a C08 goes out
-         whatever onPlayerRightClick answers, and the server may then place a
-         block the client does not have: a ghost);
-       - a setback or a refused block pauses clicking for a round trip;
-       - the look turns at a limited, humanised speed (LiquidBounce's
-         RotationsValueGroup does the same) instead of snapping, and never
-         repeats the yaw step of the last placement (Grim DuplicateRotPlace). */
     private static final int[] TURNING_MODES = {1, 2, 3, 4, 5, 6, ROTATION_MOONWALK};
     public final IntProperty turnSpeed = new IntProperty("turn-speed", 80, 10, 180, this::turnLimited);
-    /* Hidden since 2026-10-31: the speed wander and bow are the shared engine's, set in the Rotations module
-       for every module on it. Kept so saved configs still load. */
+
     public final BooleanProperty humanize = new BooleanProperty("humanize", true, () -> false);
     private final atlas.humanize.Humanizer human = new atlas.humanize.Humanizer(atlas.humanize.Humanizer.CONSUMER_SCAFFOLD);
-    /* 2026-10-17 (a player: "your scaffold rotations need randomization"):
-       SNAP and the fixed-target modes aimed at the same yaw and pitch for every
-       placement (exactly back, pitch 85). The aim now wanders within
-       rotation-random degrees (pitch half that), smoothly, toward a new random
-       goal every few ticks -- and only where the look still puts the block
-       where it is wanted (lookHit); otherwise the exact aim is used. */
+
     public final FloatProperty rotationRandom = new FloatProperty("rotation-random", 2.5F, 0.0F, 8.0F,
             () -> this.rotationMode.getValue() != 0);
     private float wanderYaw;
@@ -241,17 +212,29 @@ public class Scaffold extends Module {
     private float wanderGoalPitch;
     private int wanderTicks;
     public final BooleanProperty pauseOnCorrection = new BooleanProperty("pause-on-correction", true);
-    /* SPEED-TELLY (2026-11-04): walking forward jumps by itself. */
+
     public final BooleanProperty tellyAutoJump = new BooleanProperty("telly-auto-jump", true, this::isSpeedTellyMode);
-    /* 2026-11-06: sprint up the jump and turn near the top, when there is time for it. Off: turn from the first tick. */
+
     public final BooleanProperty tellyLateTurn = new BooleanProperty("telly-late-turn", true, this::isSpeedTellyMode);
-    /* 2026-11-06, WEIRD-TELLY: degrees off the view a jump goes from, sides in turn. 45 drifted about 1.2 blocks a jump. */
+
     public final IntProperty tellyJumpAngle = new IntProperty("telly-jump-offset", 8, 0, 30, this::isWeirdTellyMode);
-    /* 2026-11-18, TELLY (TellyBridge): degrees a tick the look turns, back at the top of a jump and forward on landing.
-       135: the turn round takes two ticks of the six a sprint jump falls for. */
+
     public final IntProperty tellyTurnSpeed = new IntProperty("telly-turn-speed", 135, 30, 180,
             () -> this.rotationMode.getValue() == ROTATION_TELLY);
-    /* 2026-11-18, GODBRIDGE2 (GodBridgeRhythm): the run's rhythm, each a range drawn from (ends in any order). */
+
+    public final ModeProperty snapMove = new ModeProperty("snap-move", SnapBridge.JUMP, new String[]{"Jump", "Ground"},
+            () -> this.rotationMode.getValue() == ROTATION_SNAP_SPEED);
+
+    public final ModeProperty snapTakeOff = new ModeProperty("snap-takeoff", SnapBridge.TAKEOFF_FORWARD,
+            new String[]{"Forward", "Diagonal"},
+            () -> this.rotationMode.getValue() == ROTATION_SNAP_SPEED && this.snapMove.getValue() == SnapBridge.JUMP);
+
+    public final IntProperty snapSmooth = new IntProperty("snap-smooth", 45, 15, 180,
+            () -> this.rotationMode.getValue() == ROTATION_SNAP_SPEED);
+
+    public final BooleanProperty snapTrace = new BooleanProperty("snap-trace", true,
+            () -> this.rotationMode.getValue() == ROTATION_SNAP_SPEED);
+
     private final IntProperty gb2JumpAfterMin = new IntProperty("gb2-jump-after-min", 8, 1, 30, this::isGodBridge2Mode);
     private final IntProperty gb2JumpAfterMax = new IntProperty("gb2-jump-after-max", 8, 1, 30, this::isGodBridge2Mode);
     private final IntProperty gb2JumpDelayMin = new IntProperty("gb2-jump-delay-min", 0, 0, 10, this::isGodBridge2Mode);
@@ -262,11 +245,11 @@ public class Scaffold extends Module {
     private final IntProperty gb2StartDelayMax = new IntProperty("gb2-start-delay-max", 13, 0, 40, this::isGodBridge2Mode);
     private final BooleanProperty gb2StartCrouch = new BooleanProperty("gb2-start-crouch", true, this::isGodBridge2Mode);
     private final GodBridgeRhythm rhythm = new GodBridgeRhythm();
-    /** The rotations mode last ticked in; -1 after enabling (noteRotationMode). */
+
     private int lastRotationMode = -1;
-    /** The player entity last ticked with (noteRotationMode); a new one starts a new run. */
+
     private Object lastPlayer;
-    /* 2026-11-18, MOONWALK (MoonWalk): the sway across the row, in blocks; the middle re-drawn every so many ticks. */
+
     private final FloatProperty moonWidthMin = new FloatProperty("moonwalk-width-min", 0.05F, 0.0F, 0.2F, this::isMoonWalkMode);
     private final FloatProperty moonWidthMax = new FloatProperty("moonwalk-width-max", 0.1F, 0.0F, 0.2F, this::isMoonWalkMode);
     private final FloatProperty moonMiddleMin = new FloatProperty("moonwalk-middle-min", 0.5F, 0.3F, 0.7F, this::isMoonWalkMode);
@@ -282,7 +265,7 @@ public class Scaffold extends Module {
     private final Map<String, Integer> failedFaces = new HashMap<String, Integer>();
     private int refusalsAt = -1000;
     private int recentRefusals = 0;
-    /* This tick's plan, made at HIGH, clicked at LOWEST. */
+
     private boolean planReady = false;
     private BlockData planData = null;
     private Vec3 planHitVec = null;
@@ -291,6 +274,9 @@ public class Scaffold extends Module {
     private boolean planThreeFmc = false;
 
     private boolean shouldStopSprint() {
+        if (this.isSnapSpeedMode()) {
+            return false;
+        }
         if (this.isThreeFmcMode() && !this.isThreeFmcTellyMode()) {
             return true;
         }
@@ -303,10 +289,6 @@ public class Scaffold extends Module {
         }
     }
 
-    /**
-     * The aim with this placement's wander added: a smooth drift toward a goal
-     * drawn every 4-9 ticks within rotation-random (yaw) and half of it (pitch).
-     */
     private float[] wander(float yaw, float pitch) {
         float range = this.rotationRandom.getValue();
         if (--this.wanderTicks <= 0) {
@@ -320,17 +302,6 @@ public class Scaffold extends Module {
         return new float[]{yaw + this.wanderYaw, MathHelper.clamp_float(pitch + this.wanderPitch, -90.0F, 90.0F)};
     }
 
-    /*
-     * 2026-10-31: the turn is the shared engine's (RotationHelper). This module works out the look each mode
-     * wants and asks for it; the engine turns there as Clutch does (speeding up from rest; speed wander and bow
-     * with the Rotations module on), on the mouse grid from the look the server has, with Grim's DuplicateRotPlace
-     * guard, turns the keys for SILENT, and hands the look back once this stops asking (switched off, or a tick it
-     * does not turn). That replaces this module's humanTurn (a 70-degree cap and a three-tick ease-in, earlier the
-     * same day; the engine's acceleration is the ease-in now), its own grid and guard, and handBack on switching
-     * off. In the turning modes turn-speed is the engine's cap, on each axis.
-     */
-
-    /** move-fix as the engine's movement yaw: NONE the camera's, SILENT the look's with the keys turned, REAL the look's. */
     private int moveMode() {
         switch (this.moveFix.getValue()) {
             case 0:
@@ -352,7 +323,6 @@ public class Scaffold extends Module {
         return false;
     }
 
-    /** A round trip in ticks: how long anything the server says takes to be answered. */
     private int roundTripTicks() {
         int ping = Ping.own();
         return ping <= 0 ? 4 : MathHelper.clamp_int((ping + 49) / 50, 2, 8);
@@ -374,7 +344,6 @@ public class Scaffold extends Module {
         return true;
     }
 
-    /** Blocks the server took back: pause for a round trip, longer if it keeps happening. */
     private void drainRefusals() {
         BlockPos pos;
         while ((pos = this.refused.poll()) != null) {
@@ -399,17 +368,10 @@ public class Scaffold extends Module {
         }
     }
 
-    /**
-     * Where the sent look lands, if a click there is one this module wants:
-     * the planned cell, or another cell of the same layer under the player
-     * (where they are, or will be after this tick's motion). Clutch's post()
-     * rule: click what the look hits, not what was planned.
-     */
     private MovingObjectPosition lookHit(BlockData plan, float yaw, float pitch) {
         return this.lookHit(plan, yaw, pitch, 0.0, 0.0);
     }
 
-    /** {@link #lookHit(BlockData, float, float)} from where the player would be, moved this far: the next step's. */
     private MovingObjectPosition lookHit(BlockData plan, float yaw, float pitch, double movedX, double movedZ) {
         MovingObjectPosition mop;
         if (movedX == 0.0 && movedZ == 0.0) {
@@ -526,14 +488,8 @@ public class Scaffold extends Module {
         return enumFacing;
     }
 
-    /**
-     * 2026-11-07 (owner: "it still stacks upward"): a GodBridge jump is to cross a gap, not to climb, so in the air the
-     * block goes on the layer the jump left from. Keep-y itself is not used for this: it brings its own auto jump. The jump
-     * key held by hand still builds up.
-     */
     private boolean godBridgeHoldsLayer() {
         if (this.isRunMode() && this.jumpBuildsUp.getValue()) {
-            /* The block goes under the feet wherever they are: a block up once the jump is a block high. */
             return false;
         }
         return (this.lbGodBridge() || this.isGodBridge2Mode()) && !mc.thePlayer.onGround
@@ -544,7 +500,6 @@ public class Scaffold extends Module {
         return this.getBlockData(0.0, 0.0);
     }
 
-    /** The block to place from, for the column this far from the player. */
     private BlockData getBlockData(double aheadX, double aheadZ) {
         int startY = MathHelper.floor_double(mc.thePlayer.posY);
         boolean holdLayer = (this.stage != 0 || this.godBridgeHoldsLayer()) && !this.shouldKeepY;
@@ -600,16 +555,11 @@ public class Scaffold extends Module {
             return;
         }
         if (this.pauseTicks > 0 || this.faceFailed(blockPos, enumFacing)) {
-            /* Waiting out a setback or a refused block: every click sent now is
-               judged from a position or against a block the client does not have. */
             return;
         }
         if (ItemUtil.isHoldingBlock() && this.blockCount > 0) {
             ItemStack held = mc.thePlayer.inventory.getCurrentItem();
-            /* A C08 goes out whatever onPlayerRightClick answers. When the game
-               would not place here (the cell is taken, or the block would be
-               inside an entity), the server may place it anyway from where it
-               has the player: a block the client does not have. */
+
             if (held == null || !(held.getItem() instanceof ItemBlock)
                     || !((ItemBlock) held.getItem()).canPlaceBlockOnSide(mc.theWorld, blockPos, enumFacing, mc.thePlayer, held)) {
                 return;
@@ -796,10 +746,12 @@ public class Scaffold extends Module {
 
     public Scaffold() {
         super("Scaffold", false);
-        /* 2026-11-04 SPEED-TELLY (owner: Clutch held on F, walking forward and jumping, is a speed telly; make that a
-           Scaffold mode). Clutch's catch does the whole job, with Clutch's settings. Scaffold stays on, for its key, its
-           HUD entry and its block counter; the rest of it stands aside. */
+
         this.pauseWhen(this::isSpeedTellyMode);
+    }
+
+    private boolean isSnapSpeedMode() {
+        return this.rotationMode.getValue() == ROTATION_SNAP_SPEED;
     }
 
     private boolean isSpeedTellyMode() {
@@ -811,7 +763,6 @@ public class Scaffold extends Module {
         return mode == ROTATION_GODBRIDGE || mode == ROTATION_POLAR;
     }
 
-    /** GODBRIDGE and GODBRIDGE2: GodBridge's run (2026-11-18: GODBRIDGE2 is the same run, looking straight back). */
     private boolean isRunMode() {
         int mode = this.rotationMode.getValue();
         return mode == ROTATION_GODBRIDGE || mode == ROTATION_GODBRIDGE2;
@@ -825,7 +776,6 @@ public class Scaffold extends Module {
         return this.rotationMode.getValue() == ROTATION_MOONWALK;
     }
 
-    /* 2026-11-08: GODBRIDGE has its own flow (GodBridge); the LiquidBounce ledge settings are POLAR's. */
     private boolean polarShown() {
         return this.rotationMode.getValue() == ROTATION_POLAR;
     }
@@ -834,37 +784,24 @@ public class Scaffold extends Module {
         return this.legitPace.getValue() && this.lbGodBridge();
     }
 
-
     private boolean isWeirdTellyMode() {
         return this.rotationMode.getValue() == ROTATION_WEIRD_TELLY;
     }
 
-    /** On, in WEIRD-TELLY: jumps go from off to the side of the view. */
     public boolean isWeirdTelly() {
         return this.isEnabled() && this.isWeirdTellyMode();
     }
 
-    /** On, in SPEED-TELLY: Clutch treats this as its hold key being down. */
     public boolean isSpeedTelly() {
         return this.isEnabled() && this.isSpeedTellyMode();
     }
 
-    /**
-     * SPEED-TELLY with keep-y set, on the terms any keep-y here has: Clutch then stays on the layer stood on. A jump
-     * straight up is left out by Clutch itself (plainJump), so towering in place still works.
-     */
     public boolean isSpeedTellyKeepY() {
         return this.isSpeedTelly() && this.keepY.getValue() != 0
                 && (!this.keepYonPress.getValue() || PlayerUtil.isUsingItem())
                 && (!this.disableWhileJumpActive.getValue() || !mc.thePlayer.isPotionActive(Potion.jump));
     }
 
-    /*
-     * SPEED-TELLY's auto jump: the jump key itself is held down while W is, so to everything that reads it this is the
-     * player holding it. Setting movementInput.jump alone jumped, but Clutch's snap-on-jump reads the key, and without it
-     * the look did not come back for the next jump (owner: "with auto jump on it has no effect").
-     * whenDisabled: it runs while the rest of this module is paused, and lets go when the module goes off.
-     */
     @EventTarget(whenDisabled = true)
     public void onTellyTick(TickEvent event) {
         if (event.getType() != EventType.PRE) {
@@ -885,7 +822,6 @@ public class Scaffold extends Module {
         }
     }
 
-    /** The crouches and jumps the server sees, for PlacePace; runs while the module is paused too. */
     private void trackPace() {
         long now = System.currentTimeMillis();
         if (mc.thePlayer.isSneaking()) {
@@ -898,10 +834,6 @@ public class Scaffold extends Module {
         this.paceWasOnGround = onGround;
     }
 
-    /**
-     * What this client places, as the server gets it: the placement books for legit-pace, from every placement whoever
-     * made it (Clutch's telly included). Runs while paused.
-     */
     @EventTarget(value = Priority.LOWEST, whenDisabled = true)
     public void onPaceSend(PacketEvent event) {
         if (!this.isEnabled() || event.getType() != EventType.SEND || event.isCancelled() || mc.thePlayer == null
@@ -933,7 +865,6 @@ public class Scaffold extends Module {
         }
     }
 
-    /** SPEED-TELLY runs on Clutch: switched on for it if it was off, and off again afterwards. */
     private void syncClutch() {
         Module clutch = Atlas.moduleManager == null ? null : Atlas.moduleManager.getModule(Clutch.class);
         if (clutch == null) {
@@ -951,8 +882,6 @@ public class Scaffold extends Module {
     @Override
     public void verifyValue(String name) {
         if ("rotations".equals(name)) {
-            /* Here too, not only when a mode ticks: SPEED-TELLY and WEIRD-TELLY pause Scaffold's handlers, so a pass
-               through them would not be seen there (review, PR #45). */
             this.noteRotationMode();
         }
         if ("rotations".equals(name) && this.isEnabled()) {
@@ -1024,7 +953,8 @@ public class Scaffold extends Module {
                     this.stage++;
                 }
                 if (this.stage == 0
-                        && (this.keepY.getValue() != 0 || this.rotationMode.getValue() == ROTATION_TELLY)
+                        && (this.keepY.getValue() != 0 || this.rotationMode.getValue() == ROTATION_TELLY
+                        || this.isSnapSpeedMode() && SnapBridge.autoJump(this.snapMove.getValue(), true))
                         && (!(Boolean) this.keepYonPress.getValue() || PlayerUtil.isUsingItem())
                         && (!this.disableWhileJumpActive.getValue() || !mc.thePlayer.isPotionActive(Potion.jump))
                         && !mc.gameSettings.keyBindJump.isKeyDown()) {
@@ -1034,9 +964,7 @@ public class Scaffold extends Module {
                 this.shouldKeepY = false;
                 this.towering = false;
             }
-            /* A plan is this tick's or none: a tick the run does not make one (no block to place, canPlace false)
-               must not stop the walk on the last one's stop (review, PR #45). GODBRIDGE2's rhythm and the walk-on
-               forecast rest on such ticks too; neither has anything to act on without a plan. */
+
             this.runPlan = null;
             if (this.canPlace()) {
                 ItemStack stack = mc.thePlayer.getHeldItem();
@@ -1074,7 +1002,8 @@ public class Scaffold extends Module {
                 float diagonalYaw = this.isDiagonal(currentYaw)
                         ? yawDiffTo180
                         : RotationUtil.wrapAngleDiff(currentYaw - 135.0F * ((currentYaw + 180.0F) % 90.0F < 45.0F ? 1.0F : -1.0F), event.getYaw());
-                boolean snapMode = this.rotationMode.getValue() == ROTATION_SNAP || this.rotationMode.getValue() == ROTATION_SNAP2;
+                boolean snapMode = this.rotationMode.getValue() == ROTATION_SNAP || this.rotationMode.getValue() == ROTATION_SNAP2
+                        || this.isSnapSpeedMode();
                 boolean threeFmcMode = this.rotationMode.getValue() == ROTATION_THREE_FMC;
                 boolean threeFmcTelly = this.isThreeFmcTellyMode();
                 this.snapRotating = false;
@@ -1120,7 +1049,7 @@ public class Scaffold extends Module {
                             }
                             break;
                         case 6:
-                            //idk what to put here so imma just do the same as sideways for now
+
                             if (this.yaw == -180.0F && this.pitch == 0.0F) {
                                 this.yaw = RotationUtil.quantizeAngle(diagonalYaw);
                                 this.pitch = RotationUtil.quantizeAngle(85.0F);
@@ -1130,6 +1059,7 @@ public class Scaffold extends Module {
                             break;
                         case ROTATION_SNAP:
                         case ROTATION_SNAP2:
+                        case ROTATION_SNAP_SPEED:
                             this.yaw = RotationUtil.quantizeAngle(yawDiffTo180);
                             this.pitch = RotationUtil.quantizeAngle(85.0F);
                             break;
@@ -1142,9 +1072,17 @@ public class Scaffold extends Module {
                     }
                 }
                 BlockData blockData = this.getBlockData();
-                /* The aim is measured from the look already sent. */
+
                 float refYaw = event.getYaw();
                 float refPitch = event.getPitch();
+                if (this.isSnapSpeedMode()) {
+                    if (this.snapSide == 0) {
+                        this.snapSide = this.paceRandom.nextBoolean() ? 1 : -1;
+                        this.snapBackSide = this.paceRandom.nextBoolean() ? 1 : -1;
+                    }
+                    refYaw = RotationUtil.wrapAngleDiff(SnapBridge.backDiagonal(currentYaw, this.snapBackSide),
+                            event.getYaw());
+                }
                 float aimDiff = Float.MAX_VALUE;
                 Vec3 hitVec = null;
                 if (blockData != null) {
@@ -1186,9 +1124,6 @@ public class Scaffold extends Module {
                                         && mop.typeOfHit == MovingObjectType.BLOCK
                                         && mop.getBlockPos().equals(blockData.blockPos())
                                         && mop.sideHit == blockData.facing()) {
-                                    /* S3: the least turn from the look the server already has
-                                       (it was from the last target), so the aim stays put --
-                                       LiquidBounce's NearestRotation / Stabilized. */
                                     float totalDiff = Math.abs(MathHelper.wrapAngleTo180_float(rotations[0] - refYaw))
                                             + Math.abs(rotations[1] - refPitch);
                                     if (bestYaw == -180.0F && bestPitch == 0.0F || totalDiff < bestDiff) {
@@ -1264,7 +1199,8 @@ public class Scaffold extends Module {
                 }
                 float placeYaw = this.yaw;
                 float placePitch = this.pitch;
-                if (this.rotationMode.getValue() != 0 && (!snapMode || this.snapRotating || towerRotating)) {
+                if (this.rotationMode.getValue() != 0 && (!snapMode || this.snapRotating || towerRotating
+                        || this.isSnapSpeedMode())) {
                     float targetYaw = this.yaw;
                     float targetPitch = this.pitch;
                     if (this.rotationRandom.getValue() > 0.0F && blockData != null && !towerRotating) {
@@ -1292,27 +1228,15 @@ public class Scaffold extends Module {
                         this.rotationTick = 3;
                         this.towering = true;
                     }
-                    /* On the mouse grid from what the server was last sent
-                       (RotationEngine): the modes above round to a fixed
-                       0.0096, which is no one's sensitivity. The click is then
-                       re-aimed along the rotation actually sent, so the face
-                       and the point it claims are the ones that rotation hits. */
+
                     if (this.turnLimited() && !towerRotating && blockData != null
                             && this.lookHit(blockData, event.getYaw(), event.getPitch()) != null) {
-                        /* S3: the look the server already has puts a block where
-                           it is wanted -- keep it. No turn: the click is made with
-                           the very look the server knows, and the aim does not
-                           wander from block to block. */
                         targetYaw = event.getYaw();
                         targetPitch = event.getPitch();
                     }
-                    /* The shared engine turns (in the turning modes at most turn-speed a tick on each axis --
-                       LiquidBounce: RotationsValueGroup), keeps the grid and the DuplicateRotPlace guard. */
+
                     float cap = this.turnLimited() && !towerRotating ? this.turnSpeed.getValue() : RotationHelper.NO_LIMIT;
                     if (!snapMode) {
-                        /* 2026-11-05 (owner): Humanization's aim error on the way to a block, none within HumanTurn.SETTLED
-                           of it. Kept only while the look still lands on the face, as the wander above, so an overshoot
-                           never costs a placement. A snap has one tick and is left exact. */
                         float[] aimed = atlas.humanize.HumanTurn.apply(this.human, event.getYaw(), event.getPitch(),
                                 targetYaw, targetPitch);
                         if (blockData == null || this.lookHit(blockData, aimed[0], aimed[1]) != null) {
@@ -1320,11 +1244,66 @@ public class Scaffold extends Module {
                             targetPitch = aimed[1];
                         }
                     }
-                    /* A snap lands in the tick it is made: the click waits only snapDelay ticks for it. */
-                    float[] onGrid = RotationHelper.request(this, targetYaw, targetPitch, 3, this.moveMode(), false, cap,
-                            snapMode ? SNAP_STEP : MIN_STEP);
+                    int moveYaw = this.moveMode();
+                    float minStep = snapMode ? SNAP_STEP : MIN_STEP;
+                    float walkYaw = currentYaw;
+                    boolean takeOff = false;
+                    if (this.isSnapSpeedMode() && !towerRotating) {
+                        moveYaw = RotationHelper.MOVE_FIX;
+                        boolean onGround = mc.thePlayer.onGround;
+
+                        float lastStep = Float.isNaN(this.snapLastYaw) ? 0.0F
+                                : Math.abs(MathHelper.wrapAngleTo180_float(event.getYaw() - this.snapLastYaw));
+                        this.snapLastYaw = event.getYaw();
+                        this.snapYaw.add(lastStep);
+                        if (onGround && !this.snapWasGround) {
+                            this.snapSide = -this.snapSide;
+                        }
+                        this.snapWasGround = onGround;
+                        boolean walking = MoveUtil.isForwardPressed();
+                        takeOff = SnapBridge.forward(this.snapMove.getValue(), onGround, walking);
+
+                        boolean preTurn = !onGround && !this.snapRotating
+                                && SnapBridge.autoJump(this.snapMove.getValue(), walking)
+                                && SnapBridge.landingSoon(mc.thePlayer.posY, mc.thePlayer.motionY, this.startY,
+                                SnapBridge.PRE_TURN_TICKS);
+                        float ahead = SnapBridge.takeOffYaw(this.snapTakeOff.getValue(), walkYaw, this.snapSide);
+                        if (takeOff || preTurn || onGround && !this.snapRotating) {
+                            targetYaw = RotationUtil.wrapAngleDiff(ahead, event.getYaw());
+                            targetPitch = mc.thePlayer.rotationPitch;
+                        } else if (!this.snapRotating) {
+                            float back = RotationUtil.wrapAngleDiff(SnapBridge.backDiagonal(walkYaw, this.snapBackSide),
+                                    event.getYaw());
+                            if (Math.abs(MathHelper.wrapAngleTo180_float(back - event.getYaw())) > SnapBridge.HOLD_SLACK) {
+                                targetYaw = back;
+                                targetPitch = SnapBridge.HOLD_PITCH;
+                            } else {
+                                targetYaw = event.getYaw();
+                                targetPitch = event.getPitch();
+                            }
+                        }
+                        float turn = Math.abs(MathHelper.wrapAngleTo180_float(targetYaw - event.getYaw()));
+                        float limit;
+                        if (takeOff) {
+                            limit = RotationHelper.NO_LIMIT;
+                        } else if (preTurn) {
+                            limit = SnapBridge.PRE_TURN_STEP;
+                        } else {
+                            limit = SnapBridge.smoothCap(turn, this.snapSmooth.getValue());
+                        }
+
+                        cap = limit;
+                        minStep = takeOff ? SNAP_STEP : limit >= SnapBridge.BIG_TURN_STEP ? limit : RotationHelper.ACCEL;
+                    }
+
+                    float[] onGrid = RotationHelper.request(this, targetYaw, targetPitch, 3, moveYaw, false, cap,
+                            minStep);
+                    if (this.isSnapSpeedMode()) {
+                        float[] sent = onGrid != null ? onGrid : new float[]{event.getYaw(), event.getPitch()};
+                        this.snapAligned = SnapBridge.aligned(sent[0], walkYaw);
+                        this.snapSpeedTrace(blockData, targetYaw, targetPitch, sent, takeOff, cap);
+                    }
                     if (onGrid == null) {
-                        /* A higher priority has the look this tick. */
                         onGrid = RotationEngine.quantize(event.getYaw(), event.getPitch(), targetYaw, targetPitch);
                     }
                     targetYaw = onGrid[0];
@@ -1332,16 +1311,10 @@ public class Scaffold extends Module {
                     placeYaw = targetYaw;
                     placePitch = targetPitch;
                     if (this.moveFix.getModeString().equals("REAL")) {
-                        /* REAL: the camera turns as well, spread over this tick's frames by
-                           RotationManager; the mouse still works (not forced). Movement
-                           follows it like a real head turn, so no strafe fix (onMoveInput
-                           only fixes SILENT). */
                         Atlas.rotationManager.setRotation(targetYaw, targetPitch, 3, false);
                     }
                 }
-                /* The click is made at LOWEST (onUpdateClick), once every
-                   module has set this tick's rotation: the look checked is
-                   then the one the movement packet will really carry. */
+
                 this.planData = blockData;
                 this.planHitVec = hitVec;
                 this.planSnapCanPlace = snapCanPlace;
@@ -1352,12 +1325,6 @@ public class Scaffold extends Module {
         }
     }
 
-
-    /**
-     * The click for this tick's plan, after every module has set the rotation
-     * (Priority.LOWEST): the look checked is the one the movement packet after
-     * it will carry. Clutch does the same in post().
-     */
     @EventTarget(Priority.LOWEST)
     public void onUpdateClick(UpdateEvent event) {
         if (!this.isEnabled() || event.getType() != EventType.PRE || !this.planReady) {
@@ -1369,19 +1336,7 @@ public class Scaffold extends Module {
         boolean snapCanPlace = this.planSnapCanPlace;
         boolean snapMode = this.planSnapMode;
         boolean threeFmcMode = this.planThreeFmc;
-        /* The look this tick's movement packet carries -- ours, or a
-           higher-priority module's, or the camera's when no mode turned
-           this tick. The click must be one that look makes: the face it
-           names and the point it claims, where the ray actually lands.
-           Until 2026-10-04 only 3FMC checked; every other mode kept the
-           planned hitVec when the sent look missed the face (towering,
-           a telly clamp, a snap that did not rotate) and clicked anyway,
-           which the server judges against the look it has -- Grim
-           RotationPlace, or the block undone (49 Scaffold REJECTs in the
-           flag logs). NONE never turns, so it is left as it was.
-           Since 2026-10-06 this runs at LOWEST, after every module's
-           rotation, and the click is wherever that look lands if the block
-           goes somewhere wanted (lookHit), as Clutch's post() does. */
+
         float[] packet = RotationHelper.packetLook(event);
         float sentYaw = packet[0];
         float sentPitch = packet[1];
@@ -1393,9 +1348,6 @@ public class Scaffold extends Module {
         if (blockData != null && hitVec != null && this.paceOn() && mc.thePlayer.onGround
                 && this.paceHolds(along != null ? along.getBlockPos() : blockData.blockPos(),
                 along != null ? along.sideHit : blockData.facing(), sentYaw)) {
-            /* legit-pace: this block now would be faster than a human bridge is allowed. On the ground only, where the
-               edge crouch holds the player (in GODBRIDGE the fall guard's stop, never a crouch); in the air a block
-               late is a fall. */
             hitVec = null;
         }
         if (blockData != null && hitVec != null && snapCanPlace && this.rotationTick <= 0) {
@@ -1413,8 +1365,7 @@ public class Scaffold extends Module {
                     if (blockData == null) {
                         break;
                     }
-                    /* Along the sent look, not this.yaw: that one may be
-                       a clamp or a quantisation away from what went out. */
+
                     MovingObjectPosition mop = this.rotationMode.getValue() != 0
                             ? this.getPlacementMop(blockData, sentYaw, sentPitch)
                             : RotationUtil.rayTrace(this.yaw, this.pitch, mc.playerController.getBlockReachDistance(), 1.0F);
@@ -1424,10 +1375,6 @@ public class Scaffold extends Module {
                             && mop.sideHit == blockData.facing()) {
                         this.place(blockData.blockPos(), blockData.facing(), mop.hitVec);
                     } else {
-                        /* The rotation that would reach this one is
-                           never sent: the server would judge the click
-                           against the rotation it has, which misses.
-                           Wait for a tick that aims at it. */
                         break;
                     }
                 }
@@ -1441,10 +1388,7 @@ public class Scaffold extends Module {
                 int playerBlockY = MathHelper.floor_double(mc.thePlayer.posY);
                 int playerBlockZ = MathHelper.floor_double(mc.thePlayer.posZ);
                 BlockPos belowPlayer = new BlockPos(playerBlockX, playerBlockY - 1, playerBlockZ);
-                /* Only a click the sent look makes (2026-10-04): the
-                   face is tower EXTRA's, the hit point where that look
-                   lands on it. BlockUtil.getHitVec placed a point on the
-                   face whatever the look was. NONE keeps the old click. */
+
                 if (this.rotationMode.getValue() != 0) {
                     MovingObjectPosition towerMop = this.getPlacementMop(
                             new BlockData(belowPlayer, this.targetFacing), sentYaw, sentPitch);
@@ -1479,7 +1423,7 @@ public class Scaffold extends Module {
         if (!this.isEnabled() || event.getType() != EventType.RECEIVE) {
             return;
         }
-        /* Network thread: only hand things over. */
+
         Packet<?> packet = event.getPacket();
         if (packet instanceof S08PacketPlayerPosLook) {
             this.correctionPending = true;
@@ -1658,30 +1602,24 @@ public class Scaffold extends Module {
             this.applyPolarLedgeInput();
             this.applyGodBridgeInput();
             this.quietThreeFmcMovement();
-            /* SILENT's keys are turned by the shared engine (RotationHelper). */
-            if (mc.thePlayer.onGround && this.stage > 0 && MoveUtil.isForwardPressed()) {
+
+            if (mc.thePlayer.onGround && this.stage > 0 && MoveUtil.isForwardPressed()
+                    && (!this.isSnapSpeedMode() || this.snapAligned)) {
                 mc.thePlayer.movementInput.jump = true;
             }
             this.applyMoonWalkInput();
             if (this.isRunMode()) {
-                /* GODBRIDGE never crouches (2026-11-08, owner: "god bridge is defined by NOT crouching"). The last
-                   guard is a stop instead, as late as it can be: the walk keys are let go only when one more tick of
-                   walking and the slide after it would leave the box with no floor, and friction holds the player on the
-                   block. Not at the early edge test the crouch used: the god bridge look places only with the feet well
-                   over the edge, so stopping there would never place. eagle is not used here. */
                 if (this.safeWalk.getValue() && this.godBridgeWouldFall() && !this.godBridgePlacesAhead()) {
                     mc.thePlayer.movementInput.moveForward = 0.0F;
                     mc.thePlayer.movementInput.moveStrafe = 0.0F;
                 }
                 return;
             }
-            /* TELLY walks off the edge in a sprint jump on purpose: no crouch there while W is held (2026-11-18). */
-            boolean tellyWalk = this.rotationMode.getValue() == ROTATION_TELLY && MoveUtil.isForwardPressed();
+
+            boolean tellyWalk = (this.rotationMode.getValue() == ROTATION_TELLY
+                    || this.isSnapSpeedMode() && this.snapMove.getValue() == SnapBridge.JUMP)
+                    && MoveUtil.isForwardPressed();
             if (this.safeWalk.getValue() && !tellyWalk && !mc.thePlayer.movementInput.sneak && this.edgeSneak(true)) {
-                /* S1 (2026-10-07): the edge is held by a real crouch, the way
-                   Vape's Legit/EdgeSneak and LiquidBounce's Ledge do it, and
-                   vanilla's own sneak rule then keeps the player on the block.
-                   Scaled as vanilla scales a held sneak key. */
                 mc.thePlayer.movementInput.sneak = true;
                 mc.thePlayer.movementInput.moveForward *= 0.3F;
                 mc.thePlayer.movementInput.moveStrafe *= 0.3F;
@@ -1739,39 +1677,21 @@ public class Scaffold extends Module {
         }
     }
 
-    /** Until when the edge crouch is held after the edge is left (Vape's "sneak delay"). */
     private long edgeSneakUntil = 0L;
 
-    /*
-     * 2026-10-31 (owner: "GodBridge does not look like GodBridge, use LiquidBounce"; asked: the fixed look and
-     * LiquidBounce's jump or sneak at the ledge, not a turn to aim; diagonal straight back as LiquidBounce): GODBRIDGE
-     * is now what POLAR already was -- LiquidBounce's GodBridge technique whole. The look never leaves the fixed one
-     * (S4d's re-aim is gone), and when it cannot place for the next step at the edge, the ledge action (polar-modes,
-     * polar-force-sneak-below-count, polar-sneak-time) jumps or sneaks.
-     */
-    /* 2026-10-31: a turn from rest may be this big (the engine's own is 35), as before the move onto the engine:
-       a GodBridge side switch (about 90 degrees) or a change of direction has to land within a tick or two, or the
-       block is not placed in time. */
     private static final float MIN_STEP = 70.0F;
-    /** SNAP / SNAP2: any turn in one tick (the engine's acceleration does not apply to a snap). */
+
     private static final float SNAP_STEP = 360.0F;
 
     private boolean lbGodBridge() {
         return this.godBridgeShown();
     }
 
-    /** GodBridge: the look of this run (2026-11-07). */
     private final GodBridgeLook godBridge = new GodBridgeLook();
-    /** GODBRIDGE (2026-11-08): the run, and this tick's plan for the input stage. */
+
     private final GodBridge run = new GodBridge();
     private GodBridge.Plan runPlan;
 
-    /**
-     * GODBRIDGE, a tick (2026-11-08): the block for where the player will be next tick; GodBridge plans the look, the
-     * crouch, the jump and the click from what is read here; the look goes through RotationHelper (whole mouse counts
-     * from the look the server has, DuplicateRotPlace); the click is onUpdateClick's, along the look really sent, and
-     * only on a tick the plan clicks. legit-pace's books say when a crouch is due and whether a jump has room.
-     */
     private void godBridgeRunTick(UpdateEvent event) {
         BlockData target = this.getBlockData(mc.thePlayer.motionX, mc.thePlayer.motionZ);
         boolean forward = MoveUtil.isForwardPressed();
@@ -1793,18 +1713,16 @@ public class Scaffold extends Module {
             in.placePitch = this.godBridgePlacePitch(target, this.run.lookYaw(), this.run.lookPitch());
         }
         if (in.onGround && forward && this.run.running() && !in.lookPlaces && Float.isNaN(in.placePitch)) {
-            /* Nothing places from here yet: the pitch that will, from the next step, so the look is on its way. */
             double[] step = this.godBridgeNextStep(false);
             BlockData ahead = this.getBlockData(step[0], step[1]);
             if (ahead != null) {
                 in.aheadPitch = this.godBridgePlacePitch(ahead, this.run.lookYaw(), this.run.lookPitch(), step[0], step[1]);
             }
         }
-        /* No crouch in GODBRIDGE (2026-11-08): the pace is kept with jumps, the next block forecast one gap ahead. */
+
         in.paceJump = paced && this.pace.jumpWanted(now, this.pace.lastGap(230L), event.getYaw(), this.speedLevel());
         in.jumpEvery = this.jumpEveryBlocks.getValue();
         if (this.isGodBridge2Mode()) {
-            /* GODBRIDGE2: the look straight back, and the jumps are GodBridgeRhythm's (applyRhythm). */
             in.straightBack = true;
             in.paceJump = false;
             in.jumpEvery = 0;
@@ -1832,10 +1750,6 @@ public class Scaffold extends Module {
         this.planReady = true;
     }
 
-    /**
-     * One trace line: where the player is and how it moves, the block wanted, what the look can do from here, the plan,
-     * and how long since a block went down. Only while W is held or a run is on.
-     */
     private void godBridgeTrace(GodBridge.Input in, GodBridge.Plan plan, BlockData target, UpdateEvent event) {
         if (!this.godBridgeTrace.getValue() || !in.forward && !this.run.running()) {
             return;
@@ -1859,16 +1773,10 @@ public class Scaffold extends Module {
                 plan.jump ? " JUMP" : "", plan.click ? " click" : "", this.tick - this.lastPlacedTick));
     }
 
-    /** At this yaw, the pitch nearest {@code from} (within 8, 68 to 86) whose ray places the target from here; NaN for none. */
     private float godBridgePlacePitch(BlockData target, float yaw, float from) {
         return this.godBridgePlacePitch(target, yaw, from, 0.0, 0.0);
     }
 
-    /**
-     * The same from where the player would be, moved this far. A pitch that still hits with the look a little off
-     * (GODBRIDGE_AIM_MARGIN either way) comes first; only when the window is too narrow for that, the nearest that
-     * hits at all.
-     */
     private float godBridgePlacePitch(BlockData target, float yaw, float from, double movedX, double movedZ) {
         float firm = this.godBridgeScanPitch(target, yaw, from, movedX, movedZ, true);
         return Float.isNaN(firm) ? this.godBridgeScanPitch(target, yaw, from, movedX, movedZ, false) : firm;
@@ -1897,12 +1805,6 @@ public class Scaffold extends Module {
                 : this.lookHit(target, yaw, pitch, movedX, movedZ) != null;
     }
 
-    /**
-     * 2026-11-11 (trace godbridge-20261111-224209: t64 and t82 clicked with "places y" and placed nothing, then fell):
-     * the pitch picked was the nearest that hits, the very edge of the window, and the look sent is the planned one
-     * snapped to whole mouse counts (-134.2 went out as -134.1). So a look counts as placing only if it still hits
-     * with the yaw and the pitch each GODBRIDGE_AIM_MARGIN off either way.
-     */
     private boolean godBridgeHitsFirmly(BlockData target, float yaw, float pitch, double movedX, double movedZ) {
         float m = GODBRIDGE_AIM_MARGIN;
         return this.lookHit(target, yaw, pitch, movedX, movedZ) != null
@@ -1912,16 +1814,8 @@ public class Scaffold extends Module {
                 && this.lookHit(target, yaw + m, pitch, movedX, movedZ) != null;
     }
 
-    /**
-     * Where one more tick of walking carries the player, {dx, dz}. {@code atMoveInput}: asked at the input stage
-     * (this tick's keys are in movementInput) rather than at the run tick before it (the keys held are used).
-     */
     private double[] godBridgeNextStep(boolean atMoveInput) {
         if (SimPlayer.supported(mc.thePlayer)) {
-            /* 2026-11-11: by the movement simulation (atlas.sim) -- the game's own tick, with the sprint, a speed
-               potion, ice and whatever is in the way. Asked at the run tick the keys are the ones held; asked at the
-               input stage they are this tick's, as the modules before left them. No jump: the forecast is of the
-               walk. */
             SimPlayer.Snapshot now = SimPlayer.snapshot(mc.thePlayer,
                     atMoveInput ? PlayerSim.Stage.INPUT : PlayerSim.Stage.START);
             now.input.jump = false;
@@ -1930,18 +1824,11 @@ public class Scaffold extends Module {
             now.sim.tick(now.world, now.input);
             return new double[]{now.sim.x() - x, now.sim.z() - z};
         }
-        /* Where the simulation does not go (water, a ladder, a cobweb...): the estimate from before it. */
+
         double radians = Math.toRadians(this.getCurrentYaw());
         return new double[]{mc.thePlayer.motionX - Math.sin(radians) * 0.1, mc.thePlayer.motionZ + Math.cos(radians) * 0.1};
     }
 
-    /**
-     * GODBRIDGE's fall guard (2026-11-11, by atlas.sim): walking this tick and then letting the keys go, does the
-     * player end off the floor? The same question {@link #wouldFallOnNextStep} asks, answered by running the game's
-     * move instead of a flat-ground estimate: the stride is the real one (a speed potion, ice, a block in the way),
-     * and so is the slide. The box is taken in by 0.02 a side and a floor less than a block below still counts, as
-     * before.
-     */
     private boolean godBridgeWouldFall() {
         if (!SimPlayer.supported(mc.thePlayer)) {
             return this.wouldFallOnNextStep();
@@ -1953,16 +1840,7 @@ public class Scaffold extends Module {
         return !PlayerSim.stopsOnFloor(now.sim, now.world, now.input, 0.02, 0.99);
     }
 
-    /**
-     * GODBRIDGE, 2026-11-11 (owner: slow, a stop at every block): whether the walk may go on although the fall guard
-     * would stop it -- the next step still has floor under the box, and from there the run's look, with a pitch it
-     * can reach by then, places the block that step needs. Then the block goes down next tick and there is nothing to
-     * stop for. Not while the look still turns onto the run's, and not when legit-pace would hold that block: those
-     * keep the stop.
-     */
     private boolean godBridgePlacesAhead() {
-        /* A walk-on with no block down within two ticks: something the forecast cannot see refused it. No walk-on for
-           a second, so the guard keeps its full stopping distance while whatever it was lasts (review, PR #35). */
         if (this.walkOnSince >= 0 && this.tick - this.walkOnSince > 2) {
             this.walkOnSince = -1;
             this.walkOnBlockedUntil = this.tick + 20;
@@ -1992,13 +1870,9 @@ public class Scaffold extends Module {
         }
         BlockData target = this.getBlockData(step[0], step[1]);
         if (target == null) {
-            /* Nothing to place there, and the guard has already said the walk and its slide end off the floor (ice,
-               a long slide): a floor under one step is no proof of stopping on it (review, PR #36). */
             return false;
         }
-        /* Walking on past the guard is only safe if the block really goes down next tick: once past it, a stop is too
-           late (the guard's own test is "walk this tick, then slide"). So every reason place() would refuse is checked
-           here, and the look must place over a spread of step lengths, not only the one forecast (review, PR #35). */
+
         if (!ItemUtil.isHoldingBlock() || this.blockCount <= 0 || this.pauseTicks > 0 || !this.canPlace()) {
             return false;
         }
@@ -2006,13 +1880,12 @@ public class Scaffold extends Module {
         if (Float.isNaN(pitch) || Math.abs(pitch - this.run.lookPitch()) > GodBridge.PITCH_FIX_MAX) {
             return false;
         }
-        /* The click next tick is wherever that look lands (lookHit may give another cell of the layer than the one
-           planned), so that block and face are the ones checked (review, PR #36). */
+
         MovingObjectPosition hit = this.lookHit(target, this.run.lookYaw(), pitch, step[0], step[1]);
         if (hit == null || this.faceFailed(hit.getBlockPos(), hit.sideHit)) {
             return false;
         }
-        /* The same game check place() makes: a cell that is taken, or a block that would land in an entity. */
+
         ItemStack held = mc.thePlayer.inventory.getCurrentItem();
         if (held == null || !(held.getItem() instanceof ItemBlock) || !((ItemBlock) held.getItem())
                 .canPlaceBlockOnSide(mc.theWorld, hit.getBlockPos(), hit.sideHit, mc.thePlayer, held)) {
@@ -2030,27 +1903,18 @@ public class Scaffold extends Module {
         return true;
     }
 
-    /**
-     * A longer step the forecast pitch must place from too: the walk next tick is not known to the hundredth, and a
-     * longer one is the one that falls. (A shorter one leaves the player further back on the block.) In a model of
-     * the walk with one block in twenty failing at random, this cut falls from about 34 to under 1 per 200 s, for
-     * about 3.5 blocks a second instead of 4.
-     */
     private static final double[] AHEAD_SPREAD = {1.15};
 
     private static final int GODBRIDGE_PITCH_STEPS = 64;
     private static final float GODBRIDGE_PITCH_STEP = 0.25F;
     private static final float GODBRIDGE_PITCH_MIN = 68.0F;
     private static final float GODBRIDGE_PITCH_MAX = 86.0F;
-    /** Degrees a look may be off and still place: more than a mouse count's snap at usual sensitivities. */
+
     private static final float GODBRIDGE_AIM_MARGIN = 0.3F;
 
-    /** GODBRIDGE's crouch and jump, at the input stage, so vanilla acts on them. */
     private void applyGodBridgeInput() {
         GodBridge.Plan plan = this.runPlan;
         if (plan == null && this.isGodBridge2Mode() && !MoveUtil.isForwardPressed()) {
-            /* No plan this tick (nothing to place): the rhythm does not tick, but a let-go of the walk keys must still
-               start it over, so the next press stands and crouches first, as one with a plan would (review, PR #45). */
             this.rhythm.reset();
         }
         if (!this.isRunMode() || plan == null) {
@@ -2069,13 +1933,8 @@ public class Scaffold extends Module {
         }
     }
 
-    /** Slower than this (blocks a tick) on the ground, a slide has stopped. */
     private static final double SLIDE_STOPPED = 0.03;
 
-    /**
-     * GODBRIDGE2's keys at the input stage (2026-11-18): GodBridgeRhythm's start, side key, crouch and jumps, and
-     * GODBRIDGE's stop at an edge the look is still turning at. The fall guard after this (onMoveInput) is GODBRIDGE's.
-     */
     private void applyRhythm(GodBridge.Plan plan) {
         MovementInput keys = mc.thePlayer.movementInput;
         GodBridgeRhythm.Input in = new GodBridgeRhythm.Input();
@@ -2086,7 +1945,7 @@ public class Scaffold extends Module {
         in.settled = plan.look && plan.maxTurn >= 180.0F;
         double speed = Math.hypot(mc.thePlayer.motionX, mc.thePlayer.motionZ);
         in.sliding = mc.thePlayer.onGround && speed > SLIDE_STOPPED;
-        /* The same test the jump below is made on, so a jump the stop would drop stays due (review, PR #45). */
+
         in.canJump = !plan.stop && mc.thePlayer.onGround && !mc.thePlayer.isInWater();
         GodBridgeRhythm.Keys out = this.rhythm.tick(in, this.rhythmSettings());
         if (out.hold || plan.stop) {
@@ -2094,7 +1953,6 @@ public class Scaffold extends Module {
             keys.moveStrafe = 0.0F;
         }
         if (out.noStrafe && keys.moveForward != 0.0F) {
-            /* Only beside W: a walk on a side key alone is that key, and taking it would stop the walk. */
             keys.moveStrafe = 0.0F;
         }
         if (out.sneak && !keys.sneak) {
@@ -2121,10 +1979,6 @@ public class Scaffold extends Module {
         return s;
     }
 
-    /**
-     * MOONWALK's side key (2026-11-18, MoonWalk): on the ground, W held and no side key of the player's, on a straight
-     * run. Anything else leaves the keys as they are and the next sway starts afresh.
-     */
     private void applyMoonWalkInput() {
         if (!this.isMoonWalkMode()) {
             return;
@@ -2146,27 +2000,15 @@ public class Scaffold extends Module {
                 mc.thePlayer.motionX, mc.thePlayer.motionZ, s);
     }
 
-    /**
-     * TELLY, a tick (2026-11-18, TellyBridge): the look forward with the walk on the ground and on the way up, so the
-     * jump is a plain sprint jump; from the top of it the look back to the block wanted, on the layer the jump left from
-     * (keep-y's stage, which also jumps on the ground while W is held). The turn either way is capped at
-     * telly-turn-speed. The click is onUpdateClick's, along the look really sent, so a look still on its way places
-     * nothing.
-     */
     private boolean tellyBack;
-    /** Package-private for RetiredModesTest's regression test only. */
+
     boolean tellyReturning;
     private float tellyForwardYaw;
     private float tellyForwardPitch;
 
-    /**
-     * A change of rotations mode (review, PR #45): GODBRIDGE2's rhythm starts from standing with nothing counted, and
-     * TELLY's kept forward look and return are dropped, so they hold only within one uninterrupted run of a mode.
-     * Called first thing at both stages a mode ticks at (tellyTick, onMoveInput), so neither sees the old state.
-     */
     void noteRotationMode() {
         int mode = this.rotationMode.getValue();
-        /* A new player entity (respawn, another world) is a new run too: the forward look kept is the dead one's. */
+
         Object player = mc == null ? null : mc.thePlayer;
         if (mode == this.lastRotationMode && player == this.lastPlayer) {
             return;
@@ -2188,8 +2030,6 @@ public class Scaffold extends Module {
         Vec3 hitVec = null;
         boolean real = this.moveFix.getModeString().equals("REAL");
         if (back && !this.tellyBack) {
-            /* The forward look, kept: under REAL the camera turns back with the placing look (review, PR #45). A
-               look still on its way forward is not the forward one: the one kept stays. */
             if (!this.tellyReturning) {
                 this.tellyForwardYaw = mc.thePlayer.rotationYaw;
                 this.tellyForwardPitch = mc.thePlayer.rotationPitch;
@@ -2208,7 +2048,6 @@ public class Scaffold extends Module {
                 hitVec = mop != null ? mop.hitVec : null;
             }
         } else if (this.tellyReturning && real) {
-            /* Under REAL the camera is the placing look now: back to the forward one kept, then the camera's again. */
             aimYaw = RotationUtil.wrapAngleDiff(this.tellyForwardYaw, event.getYaw());
             aimPitch = this.tellyForwardPitch;
             if (Math.abs(MathHelper.wrapAngleTo180_float(event.getYaw() - this.tellyForwardYaw)) < 1.0F
@@ -2237,10 +2076,30 @@ public class Scaffold extends Module {
         this.planReady = true;
     }
 
-    /**
-     * TELLY's aim: of the points on the face wanted whose ray from here places there, the one nearest the look the
-     * server has, so the turn back is as short as it can be; null for none.
-     */
+    private void snapSpeedTrace(BlockData target, float wantYaw, float wantPitch, float[] sent, boolean takeOff, float cap) {
+        if (!this.snapTrace.getValue() || !MoveUtil.isForwardPressed()) {
+            return;
+        }
+        if (this.snapTraceFile == null) {
+            this.snapTraceFile = new java.io.File("./config/Atlas/",
+                    "snapspeed-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmmss").format(new java.util.Date()) + ".txt");
+        }
+        String cell = target == null ? "-" : target.blockPos().offset(target.facing()).getX() + ","
+                + target.blockPos().offset(target.facing()).getY() + "," + target.blockPos().offset(target.facing()).getZ()
+                + " " + target.facing().getName();
+        AsyncLog.append(this.snapTraceFile, String.format(
+                "%s t%d pos %.3f %.3f %.3f v %.3f %.3f %.3f %s%s | tgt %s snap %s | walk %.1f want %.1f/%.1f sent %.1f/%.1f"
+                        + " cap %.0f%s%s | rot5s %.0f | layer %d stage %d | placed %dt ago",
+                new java.text.SimpleDateFormat("HH:mm:ss.SSS").format(new java.util.Date()), this.tick,
+                mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ, mc.thePlayer.motionX, mc.thePlayer.motionY,
+                mc.thePlayer.motionZ, mc.thePlayer.onGround ? "ground" : "air", mc.thePlayer.isSprinting() ? " sprint" : "",
+                cell, this.snapRotating ? "y" : "n", MathHelper.wrapAngleTo180_float(this.getCurrentYaw()),
+                MathHelper.wrapAngleTo180_float(wantYaw), wantPitch, MathHelper.wrapAngleTo180_float(sent[0]), sent[1],
+                cap, takeOff ? " TAKEOFF" : "", this.snapAligned ? "" : " not-aligned", this.snapYaw.sum(),
+                this.startY, this.stage,
+                this.tick - this.lastPlacedTick));
+    }
+
     private float[] tellyAim(BlockData target, float baseYaw, float basePitch, float refYaw, float refPitch) {
         double[] xs = aimOffsets;
         double[] ys = aimOffsets;
@@ -2291,14 +2150,6 @@ public class Scaffold extends Module {
         return best;
     }
 
-    /**
-     * S4 (2026-10-07): LiquidBounce GodBridge's look
-     * (ScaffoldGodBridgeTechnique.getRotations). Facing back along the walk,
-     * rounded to 45 degrees. Straight: 45 degrees off it, to the side of the
-     * row the player is on (swapped when leaning off the block with air
-     * ahead), pitch 75.7. Diagonal: straight back, pitch 75.6. No keys: the
-     * corner of the aimed side, pitch 75.
-     */
     private float[] godBridgeRotation(float aimYaw) {
         if (!MoveUtil.isForwardPressed()) {
             this.godBridge.release();
@@ -2308,13 +2159,6 @@ public class Scaffold extends Module {
         return this.godBridge.look(this.getCurrentYaw(), mc.thePlayer.posX, mc.thePlayer.posZ);
     }
 
-    /**
-     * GODBRIDGE and POLAR, a tick of them (2026-11-07, owner: "redo all of it"), in LiquidBounce's order, none of the other
-     * modes' state: the block for where the player will be next tick; the look, fixed by the walk and sent whether or not
-     * a block is due, so it is ready at the edge; the ledge; then the click at LOWEST, along whatever look really went
-     * out (onUpdateClick, lookHit), or none. The look is never aimed at the block and takes no wander or aim error: a
-     * godbridge is a look held still.
-     */
     private void godBridgeTick(UpdateEvent event) {
         BlockData target = this.getBlockData(mc.thePlayer.motionX, mc.thePlayer.motionZ);
         boolean forward = MoveUtil.isForwardPressed();
@@ -2334,7 +2178,7 @@ public class Scaffold extends Module {
             this.canRotate = true;
         }
         this.planData = target;
-        /* A placeholder: onUpdateClick replaces it with where the sent look lands, or clicks nothing. */
+
         this.planHitVec = target == null ? null : new Vec3(target.blockPos()).addVector(0.5, 0.5, 0.5);
         this.planSnapCanPlace = true;
         this.planSnapMode = false;
@@ -2342,14 +2186,6 @@ public class Scaffold extends Module {
         this.planReady = true;
     }
 
-    /**
-     * Whether to crouch for the edge this tick. Vape's test: on the ground,
-     * the player's box shrunk by 0.2 a side and moved by this tick's motion
-     * and one block down touches nothing -- the next step has no floor. Once
-     * off the edge the crouch is kept for a random 100-200 ms, so it does not
-     * flicker on and off at the rim.
-     */
-    /** {@code atMoveInput}: asked at MoveInputEvent (this tick's keys); else between ticks (UpdateEvent PRE). */
     private boolean edgeSneak(boolean atMoveInput) {
         if (!mc.thePlayer.onGround || mc.thePlayer.capabilities.isFlying) {
             this.edgeSneakUntil = 0L;
@@ -2363,19 +2199,11 @@ public class Scaffold extends Module {
         return now < this.edgeSneakUntil;
     }
 
-    /**
-     * Vape's test with no hold: the box shrunk by 0.2 a side, moved by this tick's motion and one block down, touches
-     * nothing. 2026-11-12 (owner: the simulation by default): where the simulation goes, the step is the game's own
-     * (this tick's keys, sprint, speed, ice, what is in the way) instead of only the motion carried in, and the floor
-     * is looked for where that step ends, with the same 0.2 a side.
-     */
     private boolean floorlessNextStep(boolean atMoveInput) {
         if (!mc.thePlayer.onGround || mc.thePlayer.capabilities.isFlying) {
             return false;
         }
         if (SimPlayer.supported(mc.thePlayer)) {
-            /* By the stage asked from (review, PR #38): inside the tick the keys are movementInput's and the water's
-               push is in; between ticks (POLAR's and GODBRIDGE's run, at UpdateEvent PRE) the keys are the ones held. */
             SimPlayer.Snapshot now = SimPlayer.snapshot(mc.thePlayer,
                     atMoveInput ? PlayerSim.Stage.INPUT : PlayerSim.Stage.START);
             now.input.jump = false;
@@ -2387,11 +2215,6 @@ public class Scaffold extends Module {
         return mc.theWorld.getCollidingBoundingBoxes(mc.thePlayer, next).isEmpty();
     }
 
-    /**
-     * GODBRIDGE's fall guard: whether walking on one more tick and then letting go would carry the player's box past
-     * any floor. Ground friction keeps 0.546 of the motion a tick, so letting go slides about 1.2 times the motion
-     * after the step; the step is this motion plus one tick of walking input (0.098 a tick at walk speed).
-     */
     private boolean wouldFallOnNextStep() {
         if (!mc.thePlayer.onGround || mc.thePlayer.capabilities.isFlying) {
             return false;
@@ -2416,27 +2239,11 @@ public class Scaffold extends Module {
         return mc.theWorld.getCollidingBoundingBoxes(mc.thePlayer, next).isEmpty();
     }
 
-    /** The Speed potion level as PlacePace reads it (the amplifier: the stricter of Intave's two readings). */
     private int speedLevel() {
         PotionEffect speed = mc.thePlayer.getActivePotionEffect(Potion.moveSpeed);
         return speed == null ? 0 : speed.getAmplifier();
     }
 
-    /**
-     * Polar / GodBridge ledge decision, run once per tick from onUpdate.
-     *
-     * Mirrors LiquidBounce's ScaffoldGodBridgeTechnique.ledge(): when the next
-     * step has no floor (the {@link #edgeSneak()} test is the same "no floor one
-     * block down" check that clipLedged uses) the player is about to walk off,
-     * so we choose an action that holds the edge. With polar.json's config that
-     * is normally a jump, but a sneak when fewer than
-     * {@link #polarForceSneakBelowCount} blocks remain. The chosen action is
-     * stored and applied at the input stage by {@link #applyPolarLedgeInput()}.
-     *
-     * The rules themselves are {@link #polarLedgeAction}, which has no client
-     * in it and so can be tested; this method only reads the live state and
-     * stores the action for {@link #applyPolarLedgeInput()}.
-     */
     private void updatePolarLedge(BlockData blockData, float[] godBridgeLook) {
         if (!this.lbGodBridge()) {
             this.polarLedgeSneakTicks = 0;
@@ -2446,7 +2253,7 @@ public class Scaffold extends Module {
             this.blocksSinceJump = 0;
             return;
         }
-        // A pending sneak keeps its tick budget until it runs out.
+
         if (this.polarLedgeSneakTicks > 0) {
             this.polarLedgeStopInput = false;
             this.polarLedgeStepBack = false;
@@ -2459,8 +2266,7 @@ public class Scaffold extends Module {
         boolean onGround = mc.thePlayer.onGround;
         boolean forward = MoveUtil.isForwardPressed();
         boolean hasTarget = blockData != null && godBridgeLook != null;
-        /* edgeSneak() moves the safe-walk timer, so it is only asked while
-           actually bridging -- the same order as before. */
+
         boolean onEdge = onGround && forward && hasTarget && this.edgeSneak(false);
         boolean canPlaceFromLook = hasTarget
                 && this.lookHit(blockData, godBridgeLook[0], godBridgeLook[1]) != null;
@@ -2509,11 +2315,6 @@ public class Scaffold extends Module {
         }
     }
 
-    /**
-     * legit-pace on the ledge action (2026-11-07): a crouch that is due is taken here, at an edge, where a player
-     * crouches; and a jump that would put the next 750 ms under Intave's 300 ms a block becomes a crouch, which also
-     * keeps the player on the edge. Other actions are left as they were.
-     */
     static int pacedLedgeAction(int action, boolean roomForJump, boolean sneakDueAtEdge) {
         if (action == POLAR_JUMP && !roomForJump) {
             return POLAR_SNEAK;
@@ -2524,7 +2325,6 @@ public class Scaffold extends Module {
         return action;
     }
 
-    /** Whether a block clicked on this face now would break the PlacePace books, as the server will judge it. */
     private boolean paceHolds(BlockPos support, EnumFacing side, float yaw) {
         BlockPos cell = support.offset(side);
         int neighbours = 0;
@@ -2537,37 +2337,14 @@ public class Scaffold extends Module {
                 cell.getX(), cell.getY(), cell.getZ());
         PotionEffect speed = mc.thePlayer.getActivePotionEffect(Potion.moveSpeed);
         return this.pace.wouldFlag(System.currentTimeMillis(), yaw, under, cell.getY() == support.getY(), neighbours,
-                /* The lower of the two readings of Intave's level (amplifier or amplifier + 1): the stricter limit. */
+
                 speed == null ? 0 : speed.getAmplifier());
     }
 
-    /** Enough blocks since the last jump, on the ground, and a jump that does not go high enough to miss the layer. */
     static boolean jumpDue(int placed, int every, boolean onGround, int jumpBoostAmplifier) {
         return every > 0 && placed >= every && onGround && jumpApexHeight(jumpBoostAmplifier) < 2.0;
     }
 
-    /**
-     * LiquidBounce's ScaffoldGodBridgeTechnique.ledge as a decision with no
-     * client in it, so its rules can be tested. Returns the ledge action to
-     * take ({@link #POLAR_JUMP}, {@link #POLAR_SNEAK}, {@link
-     * #POLAR_STOP_INPUT}, {@link #POLAR_BACKWARDS}) or {@link #LEDGE_NONE}.
-     *
-     * LiquidBounce's conditions, in its order:
-     * - only on the ground, walking forward, with a target to place and about
-     *   to leave the floor (its clipLedged snapshot of the next tick);
-     * - not at all while the look already places the block
-     *   (targetFulfillsRequirements && isValidCrosshairTarget -> NO_LEDGE).
-     *   While that look hits, the block goes down and the player never really
-     *   leaves the floor, so there is nothing to jump for: this is why polar
-     *   jumps at some edges rather than at every block, and why a diagonal --
-     *   whose straight-back look rarely hits the side block -- is exactly the
-     *   case that gets the jump or the sneak;
-     * - SNEAK below forceSneakBelowCount blocks, otherwise the configured mode;
-     * - and a jump that would carry two blocks (Jump Boost) becomes a sneak
-     *   instead (jumpApexHeight() >= 2).
-     *
-     * @param jumpBoostAmplifier the player's Jump Boost amplifier, or -1 for none
-     */
     static int polarLedgeAction(boolean onGround, boolean forwardPressed, boolean hasTarget,
             boolean onEdge, boolean canPlaceFromLook, int blockCount, int forceSneakBelowCount,
             int configuredMode, int jumpBoostAmplifier) {
@@ -2584,13 +2361,6 @@ public class Scaffold extends Module {
         return mode;
     }
 
-    /**
-     * How high a jump reaches, LiquidBounce's jumpApexHeight(): the jump
-     * velocity -- 0.42, plus 0.1 a level of Jump Boost (EntityLivingBase.jump)
-     * -- stepped down by gravity and air drag, summed while it still rises.
-     *
-     * @param jumpBoostAmplifier the player's Jump Boost amplifier, or -1 for none
-     */
     static double jumpApexHeight(int jumpBoostAmplifier) {
         double motion = 0.42 + (jumpBoostAmplifier >= 0 ? 0.1 * (jumpBoostAmplifier + 1) : 0.0);
         double height = 0.0;
@@ -2601,19 +2371,11 @@ public class Scaffold extends Module {
         return height;
     }
 
-    /** The player's Jump Boost level, or -1 when they have none. */
     private int jumpBoostAmplifier() {
         PotionEffect jumpBoost = mc.thePlayer.getActivePotionEffect(Potion.jump);
         return jumpBoost == null ? -1 : jumpBoost.getAmplifier();
     }
 
-    /**
-     * Applies the ledge action chosen by {@link #updatePolarLedge(BlockData,
-     * float[])} at the movement-input stage, so vanilla itself acts on it.
-     * SNEAK is a real crouch (which vanilla slows and, with safe-walk, keeps on
-     * the block); JUMP triggers a vanilla jump; the stop-input / step-back
-     * actions zero the player's movement so no block is walked off.
-     */
     private void applyPolarLedgeInput() {
         if (!this.lbGodBridge()) {
             return;
@@ -2635,28 +2397,17 @@ public class Scaffold extends Module {
             mc.thePlayer.movementInput.moveForward *= -0.5F;
         }
         if (this.polarLedgeJump && mc.thePlayer.onGround && !mc.thePlayer.isInWater()) {
-            // Let vanilla's onLivingUpdate perform the jump exactly once, the
-            // same way keep-y/tower does (see onMoveInput). Calling jump()
-            // directly here would leave jumpTicks at 0, so a held jump key
-            // would fire a second jump in the same update -> double height.
             mc.thePlayer.movementInput.jump = true;
         }
     }
 
     @EventTarget
     public void onSafeWalk(SafeWalkEvent event) {
-        /* S1 (2026-10-07): no silent clamp. Until now safe-walk stopped the
-           player at the edge without crouching -- a stop Grim's movement
-           simulation cannot produce, so every such edge was a "Simulation"
-           and a disputed onGround ("GroundSpoof claimed true"), measured
-           2026-10-06. The edge is now held by a real crouch (onMoveInput),
-           and a crouching player keeps to the edge by vanilla's own rule. */
         if (this.isEnabled() && this.safeWalk.getValue() && mc.thePlayer.isSneaking()) {
             event.setSafeWalk(true);
         }
     }
 
-    /* Runs while SPEED-TELLY has the rest of this module paused. */
     @EventTarget(whenDisabled = true)
     public void onRender(Render2DEvent event) {
         if (this.isEnabled()) {
@@ -2775,6 +2526,13 @@ public class Scaffold extends Module {
 
     @Override
     public void onEnabled() {
+        this.snapSide = 0;
+        this.snapWasGround = true;
+        this.snapAligned = true;
+        this.snapTraceFile = null;
+        this.snapLastYaw = Float.NaN;
+        this.snapYaw.clear();
+
         this.walkOnSince = -1;
         this.walkOnBlockedUntil = 0;
         if (mc.thePlayer != null) {
@@ -2828,11 +2586,18 @@ public class Scaffold extends Module {
 
     @Override
     public void onDisabled() {
+        this.snapSide = 0;
+        this.snapWasGround = true;
+        this.snapAligned = true;
+        this.snapTraceFile = null;
+        this.snapLastYaw = Float.NaN;
+        this.snapYaw.clear();
+
         this.syncClutch();
         if (mc.thePlayer != null && this.lastSlot != -1 && !this.isSpeedTellyMode()) {
             mc.thePlayer.inventory.currentItem = this.lastSlot;
         }
-        /* The shared engine hands the look back to the camera by itself once this stops asking. */
+
         Atlas.blinkManager.setBlinkState(false, BlinkModules.SCAFFOLD);
         if (this.safeStuckActive && mc.thePlayer != null) {
             mc.thePlayer.motionX = this.savedMotionX;

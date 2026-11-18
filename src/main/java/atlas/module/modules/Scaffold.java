@@ -264,6 +264,8 @@ public class Scaffold extends Module {
     private final GodBridgeRhythm rhythm = new GodBridgeRhythm();
     /** The rotations mode last ticked in; -1 after enabling (noteRotationMode). */
     private int lastRotationMode = -1;
+    /** The player entity last ticked with (noteRotationMode); a new one starts a new run. */
+    private Object lastPlayer;
     /* 2026-11-18, MOONWALK (MoonWalk): the sway across the row, in blocks; the middle re-drawn every so many ticks. */
     private final FloatProperty moonWidthMin = new FloatProperty("moonwalk-width-min", 0.05F, 0.0F, 0.2F, this::isMoonWalkMode);
     private final FloatProperty moonWidthMax = new FloatProperty("moonwalk-width-max", 0.1F, 0.0F, 0.2F, this::isMoonWalkMode);
@@ -948,6 +950,11 @@ public class Scaffold extends Module {
 
     @Override
     public void verifyValue(String name) {
+        if ("rotations".equals(name)) {
+            /* Here too, not only when a mode ticks: SPEED-TELLY and WEIRD-TELLY pause Scaffold's handlers, so a pass
+               through them would not be seen there (review, PR #45). */
+            this.noteRotationMode();
+        }
         if ("rotations".equals(name) && this.isEnabled()) {
             this.syncClutch();
         }
@@ -2147,7 +2154,8 @@ public class Scaffold extends Module {
      * nothing.
      */
     private boolean tellyBack;
-    private boolean tellyReturning;
+    /** Package-private for RetiredModesTest's regression test only. */
+    boolean tellyReturning;
     private float tellyForwardYaw;
     private float tellyForwardPitch;
 
@@ -2156,12 +2164,15 @@ public class Scaffold extends Module {
      * TELLY's kept forward look and return are dropped, so they hold only within one uninterrupted run of a mode.
      * Called first thing at both stages a mode ticks at (tellyTick, onMoveInput), so neither sees the old state.
      */
-    private void noteRotationMode() {
+    void noteRotationMode() {
         int mode = this.rotationMode.getValue();
-        if (mode == this.lastRotationMode) {
+        /* A new player entity (respawn, another world) is a new run too: the forward look kept is the dead one's. */
+        Object player = mc == null ? null : mc.thePlayer;
+        if (mode == this.lastRotationMode && player == this.lastPlayer) {
             return;
         }
         this.lastRotationMode = mode;
+        this.lastPlayer = player;
         this.rhythm.reset();
         this.moonWalk.reset();
         this.tellyBack = false;

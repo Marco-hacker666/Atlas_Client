@@ -65,6 +65,25 @@ public class RetiredModesTest {
         assertTrue(java.util.Arrays.asList(scaffold.rotationMode.visibleModes()).contains("TELLY"));
     }
 
+    /**
+     * Review, PR #45: TELLY to SPEED-TELLY (whose run pauses Scaffold's handlers) and back drops TELLY's kept return,
+     * seen through verifyValue alone.
+     */
+    @Test
+    public void aPassThroughSpeedTellyDropsTellysReturn() {
+        Scaffold scaffold = new Scaffold();
+        assertTrue(scaffold.rotationMode.parseString("TELLY"));
+        scaffold.verifyValue("rotations");
+        scaffold.tellyReturning = true;
+        scaffold.noteRotationMode();
+        assertTrue("same mode, same player: kept", scaffold.tellyReturning);
+        assertTrue(scaffold.rotationMode.parseString("SPEED-TELLY"));
+        scaffold.verifyValue("rotations");
+        assertTrue(scaffold.rotationMode.parseString("TELLY"));
+        scaffold.verifyValue("rotations");
+        assertFalse("dropped on the way through", scaffold.tellyReturning);
+    }
+
     /** 2026-11-18: GODBRIDGE2 and MOONWALK on the end, in the menu; GODBRIDGE keeps its index. */
     @Test
     public void godBridge2AndMoonWalkAreAddedAtTheEnd() {

@@ -2041,6 +2041,11 @@ public class Scaffold extends Module {
     /** GODBRIDGE's crouch and jump, at the input stage, so vanilla acts on them. */
     private void applyGodBridgeInput() {
         GodBridge.Plan plan = this.runPlan;
+        if (plan == null && this.isGodBridge2Mode() && !MoveUtil.isForwardPressed()) {
+            /* No plan this tick (nothing to place): the rhythm does not tick, but a let-go of the walk keys must still
+               start it over, so the next press stands and crouches first, as one with a plan would (review, PR #45). */
+            this.rhythm.reset();
+        }
         if (!this.isRunMode() || plan == null) {
             return;
         }

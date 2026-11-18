@@ -12,13 +12,6 @@ import org.lwjgl.input.Keyboard;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * The privacy question (2026-11-17), shown over the game the first time the ClickGUI is opened, before the menu.
- * Step one says plainly what usage sharing sends, who sees it and for how long, and asks; "Don't share" weighs the
- * same as "Agree". Step two (after Agree) lets the player pick the name the public Atlas site shows instead of the
- * Minecraft name. Escape on step one leaves it unanswered (asked again next time); nothing is sent until there is a
- * yes. Escape on step two keeps the suggested name.
- */
 public final class ConsentScreen extends GuiScreen {
     private static final int ACCENT = 0x7C9CFF;
     private static final String TITLE = "Share usage with the Atlas developer?";
@@ -27,12 +20,16 @@ public final class ConsentScreen extends GuiScreen {
                     + "unless you agree."};
     private static final String[] SENT = {
             "Your Minecraft name and UUID (checked with Mojang; your login never leaves you and Mojang)",
-            "The server you play on (never your IP address or location)",
+            "The server you play on",
+            "Your IP address and rough location (city, country): seen by the Atlas owner only",
             "Atlas version, FPS, ping and the modules you have on",
             "Your system: OS, Java, memory, graphics card, screen",
+            "Your mod list (names, versions) and resource packs",
+            "Anticheat alerts, Atlas debug logs and crash reports from your game",
             "Bug reports you send will show they came from you"};
     private static final String[] OUTRO = {
-            "Only the Atlas owner and admins can see it; the public Atlas site shows only a name you pick. Deleted "
+            "Only the Atlas owner and admins can see it (the IP and location: the owner only); the public Atlas site "
+                    + "shows only a name you pick. Deleted "
                     + "after 30 days. Change it any time in Client Settings > Privacy."};
     private static final String NAME_TITLE = "Pick your public name";
     private static final String[] NAME_TEXT = {
@@ -56,7 +53,6 @@ public final class ConsentScreen extends GuiScreen {
     private float buttonW;
     private float fieldY;
 
-    /** @param after what to open once the player has answered (the ClickGUI) */
     public ConsentScreen(Runnable after) {
         this.after = after;
     }
@@ -72,7 +68,6 @@ public final class ConsentScreen extends GuiScreen {
         this.field(100);
     }
 
-    /** The name box at this width (its width is fixed once made): made again, text and focus kept, when it changes. */
     private void field(int width) {
         if (this.name != null && this.name.getWidth() == width) {
             return;
@@ -264,7 +259,7 @@ public final class ConsentScreen extends GuiScreen {
         if (this.step == 0) {
             UsageReporter.setConsent(false);
         }
-        /* Step two: the suggested name stays (it is already the one kept). */
+
         this.done();
     }
 
@@ -275,8 +270,6 @@ public final class ConsentScreen extends GuiScreen {
             this.mc.displayGuiScreen(null);
         }
     }
-
-    // ---- text ----------------------------------------------------------------
 
     private static List<String> wrap(String[] paragraphs, float width, FontRenderer font, boolean ttf) {
         List<String> out = new ArrayList<String>();

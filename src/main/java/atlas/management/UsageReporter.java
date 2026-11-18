@@ -23,29 +23,13 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Usage sharing (2026-11-17, owner: "a website where I can see who uses my client: IP, server, player name, and who
- * sent which report; the ClickGUI asks every player first").
- *
- * Nothing is sent until the player has said yes in the privacy window (ConsentScreen, shown the first time the
- * ClickGUI opens) or turned on Client Settings > Privacy > Share usage. Said no, nothing about this player ever leaves.
- *
- * While it is yes and the player is in a world: "start" when it joins (a new random session id for each server),
- * "beat" every 45 seconds, "stop" when it leaves or the game closes. Each carries the player's name and UUID, the
- * server's address, the Atlas version, FPS, ping, the modules turned on and the client's details (system, Java,
- * memory, graphics, screen, menu style) and the name the player chose for the public site. The relay keeps it 30 days;
- * the public site shows only the chosen name, the owner and admins the rest. No page shows the player's IP address or
- * location (owner, 2026-11-17); the relay uses the address only to stop abuse.
- *
- * Proof (2026-11-17, owner: "make sure it is my client and nobody can fake the data"): every message is signed by
- * the official build (BuildSignature); at the start of a session the relay hands out a one-off server id and the
- * client tells Mojang it joins it, so the relay can ask Mojang whether this player really owns the account (the
- * access token goes only to Mojang, as on any server join).
- */
 public final class UsageReporter {
     private static final File CONSENT_FILE = new File("./config/Atlas/usage-consent.txt");
+
+    private static final String YES = "yes3";
+    public static final int CONSENT_VERSION = 3;
     private static final File NAME_FILE = new File("./config/Atlas/usage-name.txt");
-    /** What the relay accepts as a public name (it checks again): letters of any script, digits, space _ - . */
+
     private static final java.util.regex.Pattern ALIAS = java.util.regex.Pattern.compile("[\\p{L}\\p{N}_ .-]{2,20}");
     private static volatile String alias;
     private static final long BEAT_MS = 45_000L;
@@ -58,12 +42,14 @@ public final class UsageReporter {
 
     private static volatile String state;
     private static volatile boolean stateRead;
-    /** The session now open, or null; its server, and when it last beat. */
+
     private static volatile String sid;
     private static volatile String sessionPlayer = "";
     private static String server;
     private static long lastBeat;
-    /** Read once on the game's thread (the GL strings need it). */
+
+    private static long lastDiag;
+
     private static String gpu = "";
     private static String glVersion = "";
 
@@ -73,17 +59,14 @@ public final class UsageReporter {
         Runtime.getRuntime().addShutdownHook(new Thread(UsageReporter::stopNow, "Atlas usage stop"));
     }
 
-    // ---- the choice ------------------------------------------------------
-
-    /** TRUE yes, FALSE no, null while the player has not answered. */
     public static Boolean consent() {
         String s = state();
-        return "yes".equals(s) ? Boolean.TRUE : "no".equals(s) ? Boolean.FALSE : null;
+        return YES.equals(s) ? Boolean.TRUE : "no".equals(s) ? Boolean.FALSE : null;
     }
 
     public static void setConsent(boolean yes) {
         synchronized (UsageReporter.class) {
-            state = yes ? "yes" : "no";
+            state = yes ? YES : "no";
             stateRead = true;
             try {
                 File dir = CONSENT_FILE.getParentFile();
@@ -96,7 +79,6 @@ public final class UsageReporter {
             }
         }
         if (!yes) {
-            /* Turned off mid-session: the open session is closed at once and nothing more is sent. */
             stopNow();
         }
     }
@@ -119,7 +101,6 @@ public final class UsageReporter {
         return state;
     }
 
-    /** The name shown on the public site; a random "Pilot-1234" until the player picks one. */
     public static String alias() {
         if (alias == null) {
             synchronized (UsageReporter.class) {
@@ -144,12 +125,11 @@ public final class UsageReporter {
         if (name == null || !ALIAS.matcher(name.trim()).matches()) {
             return false;
         }
-        /* Names that pass for staff are refused here and by the relay. */
+
         return !name.toLowerCase(java.util.Locale.ROOT)
                 .matches(".*(admin|owner|staff|moder|develop|official|support|atlas\\s*team).*");
     }
 
-    /** Keeps the chosen name; false when it is not one the site would show. */
     public static boolean setAlias(String name) {
         if (!validAlias(name)) {
             return false;
@@ -167,7 +147,6 @@ public final class UsageReporter {
         return true;
     }
 
-    /** What a bug report adds about who sent it: only with yes, else null. */
     public static JsonObject reportIdentity() {
         if (!Boolean.TRUE.equals(consent())) {
             return null;
@@ -175,6 +154,7 @@ public final class UsageReporter {
         Minecraft mc = Minecraft.getMinecraft();
         JsonObject o = new JsonObject();
         o.addProperty("consent", true);
+        o.addProperty("consent_v", CONSENT_VERSION);
         String player = mc.getSession() != null ? mc.getSession().getUsername() : "";
         o.addProperty("player", player);
         if (sid != null) {
@@ -184,8 +164,6 @@ public final class UsageReporter {
         o.addProperty("version", version());
         return o;
     }
-
-    // ---- the session -------------------------------------------------------
 
     @EventTarget
     public void onTick(TickEvent event) {
@@ -216,26 +194,36 @@ public final class UsageReporter {
             sid = UUID.randomUUID().toString();
             server = now;
             lastBeat = ms;
+            lastDiag = ms;
             final JsonObject start = this.payload("start");
             final String open = sid;
             final String player = sessionPlayer;
-            /* The account proof first (challenge, then Mojang), then the start, all on the one worker in order. */
+            final String environment = DiagReporter.environment(this.mc);
+
             WORKER.execute(() -> {
                 JsonObject proof = this.prove(open, player);
                 if (proof != null) {
                     start.add("proof", proof);
                 }
                 post(start);
+                DiagReporter.sessionStart(open, player, environment);
             });
         } else if (ms - lastBeat >= BEAT_MS) {
             lastBeat = ms;
             send("beat", this.payload("beat"));
+            if (ms - lastDiag >= DiagReporter.EVERY_MS) {
+                lastDiag = ms;
+                final String open = sid;
+                final String player = sessionPlayer;
+                WORKER.execute(() -> DiagReporter.logs(open, player));
+            }
         }
     }
 
     private JsonObject payload(String event) {
         JsonObject o = new JsonObject();
         o.addProperty("event", event);
+        o.addProperty("consent_v", CONSENT_VERSION);
         o.addProperty("sid", sid);
         String player = this.mc.getSession() != null ? this.mc.getSession().getUsername() : "";
         sessionPlayer = player;
@@ -260,7 +248,7 @@ public final class UsageReporter {
             }
         }
         o.add("modules", modules);
-        /* Every message carries them: memory and the menu style change while playing. */
+
         o.add("details", this.details());
         return o;
     }
@@ -285,7 +273,6 @@ public final class UsageReporter {
             d.addProperty("forge", net.minecraftforge.common.ForgeVersion.getVersion());
             d.addProperty("mods", net.minecraftforge.fml.common.Loader.instance().getModList().size());
         } catch (Throwable ignored) {
-            // Not under Forge.
         }
         try {
             atlas.module.modules.ClickGUIModule gui = Atlas.moduleManager == null ? null
@@ -295,16 +282,11 @@ public final class UsageReporter {
                 d.addProperty("menu style", gui.style.getModeString());
             }
         } catch (Throwable ignored) {
-            // Not known.
         }
         d.addProperty("phone", atlas.util.render.MobileSafe.active());
         return d;
     }
 
-    /**
-     * Step one and two of the account proof: the relay's one-off server id, then Mojang told that this account joins
-     * it (as the game does when it joins a server). Null when it could not be done (offline account, no answer).
-     */
     private JsonObject prove(String open, String player) {
         String base = atlas.util.BugReport.relayBase();
         if (base.isEmpty() || open == null) {
@@ -324,9 +306,7 @@ public final class UsageReporter {
             if (this.mc.getSession() == null) {
                 return null;
             }
-            /* The id Mojang is told is worked out here, never taken from the relay (red-team, 2026-11-17): an id
-               handed out by a relay that was broken into could be the hash of a real server's login, and telling
-               Mojang we join it would log this player into that server. Nothing can make one equal this text's. */
+
             String serverId = proofId(open, player, t);
             this.mc.getSessionService().joinServer(this.mc.getSession().getProfile(), this.mc.getSession().getToken(),
                     serverId);
@@ -334,12 +314,10 @@ public final class UsageReporter {
             proof.addProperty("t", t);
             return proof;
         } catch (Throwable t) {
-            /* An offline account, or Mojang not answering: the session is marked unverified, nothing else. */
             return null;
         }
     }
 
-    /** SHA-1 of the public "atlas-proof" text for this session, player and relay time (the relay works out the same). */
     static String proofId(String sid, String player, long t) throws Exception {
         String text = "atlas-proof\n" + sid + "\n" + player.toLowerCase(java.util.Locale.ROOT) + "\n" + t;
         byte[] d = java.security.MessageDigest.getInstance("SHA-1").digest(text.getBytes(StandardCharsets.UTF_8));
@@ -350,9 +328,6 @@ public final class UsageReporter {
         return sb.toString();
     }
 
-    // ---- sending -----------------------------------------------------------
-
-    /** Closes the open session at once (leaving, saying no, or the game closing). */
     private static void stopNow() {
         String open = sid;
         if (open == null) {
@@ -365,9 +340,10 @@ public final class UsageReporter {
         o.addProperty("sid", open);
         o.addProperty("player", sessionPlayer.isEmpty() ? "-" : sessionPlayer);
         if (Thread.currentThread().getName().equals("Atlas usage stop")) {
-            /* The game is closing: no worker will run after this, so it goes from here. */
             post(o);
         } else {
+            final String player = sessionPlayer;
+            WORKER.execute(() -> DiagReporter.logs(open, player));
             send("stop", o);
         }
     }
@@ -383,7 +359,13 @@ public final class UsageReporter {
         }
     }
 
-    /** One signed POST; the answer's body on 200, else null. */
+    static void postDiag(JsonObject body) {
+        String base = atlas.util.BugReport.relayBase();
+        if (!base.isEmpty()) {
+            request(base + "/usage/diag", "/usage/diag", body);
+        }
+    }
+
     private static String request(String url, String path, JsonObject body) {
         try {
             byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
@@ -415,12 +397,9 @@ public final class UsageReporter {
             c.disconnect();
             return text;
         } catch (Exception ignored) {
-            // Not sent: the next beat carries the same.
             return null;
         }
     }
-
-    // ---- what is read --------------------------------------------------------
 
     private static String serverName(Minecraft mc) {
         if (mc.isSingleplayer()) {

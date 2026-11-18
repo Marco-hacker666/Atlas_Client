@@ -1027,6 +1027,10 @@ public class Scaffold extends Module {
                 this.shouldKeepY = false;
                 this.towering = false;
             }
+            /* A plan is this tick's or none: a tick the run does not make one (no block to place, canPlace false)
+               must not stop the walk on the last one's stop (review, PR #45). GODBRIDGE2's rhythm and the walk-on
+               forecast rest on such ticks too; neither has anything to act on without a plan. */
+            this.runPlan = null;
             if (this.canPlace()) {
                 ItemStack stack = mc.thePlayer.getHeldItem();
                 int count = ItemUtil.isBlock(stack) ? stack.stackSize : 0;

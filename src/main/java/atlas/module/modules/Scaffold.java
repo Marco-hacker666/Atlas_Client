@@ -52,8 +52,11 @@ public class Scaffold extends Module {
     private static final int ROTATION_THREE_FMC = 8;
     private static final int ROTATION_SNAP2 = 9;
     private static final int ROTATION_POLAR = 10;
+    private static final int ROTATION_TELLY = 11;
     private static final int ROTATION_SPEED_TELLY = 12;
     private static final int ROTATION_WEIRD_TELLY = 13;
+    private static final int ROTATION_GODBRIDGE2 = 14;
+    private static final int ROTATION_MOONWALK = 15;
     /* polar.json's GodBridge technique (LiquidBounce): the Mode index is also
        the ledge action the decision returns ({@link #polarLedgeAction}).
        Modes = [Jump], ForceSneakBelowCount = 5, SneakTime = 1..1. */
@@ -115,14 +118,15 @@ public class Scaffold extends Module {
     private int threeFmcPlaceCooldown = 0;
     private float lastSnapPlaceYaw = Float.NaN;
     private float lastSnapPlacePitch = Float.NaN;
-    public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2", "POLAR", "TELLY", "SPEED-TELLY", "WEIRD-TELLY"})
+    public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2", "POLAR", "TELLY", "SPEED-TELLY", "WEIRD-TELLY", "GODBRIDGE2", "MOONWALK"})
             /* 2026-10-31 (owner's consolidation): SIDEWAYS and 3FMC retired (indices kept); a config naming one gets
                GODBRIDGE. SNAP and SNAP2 came back 2026-11-01 (owner: "put Scaffold snap back"), SNAP2 hidden as before. */
             .retire("GODBRIDGE", "SIDEWAYS", "3FMC")
-            /* 2026-11-04 (owner: "delete Telly, keep Speed Telly"): index 11 stays taken; a config naming it, or the
-               name it had before 2026-10-13, gets SPEED-TELLY. 2026-11-06 (owner: "bring speed telly back, call the
-               current one weird telly"): WEIRD-TELLY goes on the end; both run on Clutch, only the jump differs. */
-            .retire("SPEED-TELLY", "TELLY")
+            /* 2026-11-04 (owner: "delete Telly, keep Speed Telly"): index 11 stayed taken; the name SPEED-TELLY had
+               before 2026-10-13 still gets it. 2026-11-06 (owner: "bring speed telly back, call the current one weird
+               telly"): WEIRD-TELLY goes on the end; both run on Clutch, only the jump differs. 2026-11-18 (owner: "a
+               Telly like Augustus's, replacing ours"): index 11 is TELLY again, TellyBridge's; GODBRIDGE2 and MOONWALK
+               go on the end. */
             .alias("B4", "SPEED-TELLY")
             /* 2026-10-08: fewer modes in the menu; the rest still load from old configs. */
             .hide("BACKWARDS", "SIDEWAYS", "SMOOTH", "Hypixel", "3FMC", "SNAP2")
@@ -180,8 +184,7 @@ public class Scaffold extends Module {
     private final IntProperty jumpEveryBlocks = new IntProperty("jump-every-blocks", 7, 0, 20, this::godBridgeShown);
     /* 2026-11-11 (owner: GODBRIDGE falls now and then, with or without a turn): a line a tick while a run is on, to
        config/Atlas/godbridge-*.txt (needs Logs). Log only. */
-    private final BooleanProperty godBridgeTrace = new BooleanProperty("godbridge-trace", true,
-            () -> this.rotationMode.getValue() == ROTATION_GODBRIDGE);
+    private final BooleanProperty godBridgeTrace = new BooleanProperty("godbridge-trace", true, this::isRunMode);
     private java.io.File godBridgeTraceFile;
     private int lastPlacedTick = -1000;
     /* 2026-11-07: placement timing a human bridge has (PlacePace): a crouch of 3-5 ticks at an edge every 3-4.5 s,
@@ -191,8 +194,7 @@ public class Scaffold extends Module {
     /* 2026-11-11 (owner: "god bridge jumps every 6-8 blocks; it jumped, but the blocks did not go up with it"): a
        GODBRIDGE jump takes the bridge up a block, as the technique does. Off: the 2026-11-07 behaviour, the layer
        the jump left from is kept. */
-    public final BooleanProperty jumpBuildsUp = new BooleanProperty("jump-builds-up", true,
-            () -> this.rotationMode.getValue() == ROTATION_GODBRIDGE);
+    public final BooleanProperty jumpBuildsUp = new BooleanProperty("jump-builds-up", true, this::isRunMode);
     private final PlacePace pace = new PlacePace();
     private boolean paceWasOnGround;
     private long nextSneakEvery = 3500L;
@@ -219,7 +221,7 @@ public class Scaffold extends Module {
        - the look turns at a limited, humanised speed (LiquidBounce's
          RotationsValueGroup does the same) instead of snapping, and never
          repeats the yaw step of the last placement (Grim DuplicateRotPlace). */
-    private static final int[] TURNING_MODES = {1, 2, 3, 4, 5, 6};
+    private static final int[] TURNING_MODES = {1, 2, 3, 4, 5, 6, ROTATION_MOONWALK};
     public final IntProperty turnSpeed = new IntProperty("turn-speed", 80, 10, 180, this::turnLimited);
     /* Hidden since 2026-10-31: the speed wander and bow are the shared engine's, set in the Rotations module
        for every module on it. Kept so saved configs still load. */
@@ -245,6 +247,33 @@ public class Scaffold extends Module {
     public final BooleanProperty tellyLateTurn = new BooleanProperty("telly-late-turn", true, this::isSpeedTellyMode);
     /* 2026-11-06, WEIRD-TELLY: degrees off the view a jump goes from, sides in turn. 45 drifted about 1.2 blocks a jump. */
     public final IntProperty tellyJumpAngle = new IntProperty("telly-jump-offset", 8, 0, 30, this::isWeirdTellyMode);
+    /* 2026-11-18, TELLY (TellyBridge): degrees a tick the look turns, back at the top of a jump and forward on landing.
+       135: the turn round takes two ticks of the six a sprint jump falls for. */
+    public final IntProperty tellyTurnSpeed = new IntProperty("telly-turn-speed", 135, 30, 180,
+            () -> this.rotationMode.getValue() == ROTATION_TELLY);
+    /* 2026-11-18, GODBRIDGE2 (GodBridgeRhythm): the run's rhythm, each a range drawn from (ends in any order). */
+    private final IntProperty gb2JumpAfterMin = new IntProperty("gb2-jump-after-min", 8, 1, 30, this::isGodBridge2Mode);
+    private final IntProperty gb2JumpAfterMax = new IntProperty("gb2-jump-after-max", 8, 1, 30, this::isGodBridge2Mode);
+    private final IntProperty gb2JumpDelayMin = new IntProperty("gb2-jump-delay-min", 0, 0, 10, this::isGodBridge2Mode);
+    private final IntProperty gb2JumpDelayMax = new IntProperty("gb2-jump-delay-max", 0, 0, 10, this::isGodBridge2Mode);
+    private final IntProperty gb2ResetAfterMin = new IntProperty("gb2-reset-after-jumps-min", 7, 1, 30, this::isGodBridge2Mode);
+    private final IntProperty gb2ResetAfterMax = new IntProperty("gb2-reset-after-jumps-max", 8, 1, 30, this::isGodBridge2Mode);
+    private final IntProperty gb2StartDelayMin = new IntProperty("gb2-start-delay-min", 10, 0, 40, this::isGodBridge2Mode);
+    private final IntProperty gb2StartDelayMax = new IntProperty("gb2-start-delay-max", 13, 0, 40, this::isGodBridge2Mode);
+    private final BooleanProperty gb2StartCrouch = new BooleanProperty("gb2-start-crouch", true, this::isGodBridge2Mode);
+    private final GodBridgeRhythm rhythm = new GodBridgeRhythm();
+    /** The rotations mode last ticked in; -1 after enabling (noteRotationMode). */
+    private int lastRotationMode = -1;
+    /** The player entity last ticked with (noteRotationMode); a new one starts a new run. */
+    private Object lastPlayer;
+    /* 2026-11-18, MOONWALK (MoonWalk): the sway across the row, in blocks; the middle re-drawn every so many ticks. */
+    private final FloatProperty moonWidthMin = new FloatProperty("moonwalk-width-min", 0.05F, 0.0F, 0.2F, this::isMoonWalkMode);
+    private final FloatProperty moonWidthMax = new FloatProperty("moonwalk-width-max", 0.1F, 0.0F, 0.2F, this::isMoonWalkMode);
+    private final FloatProperty moonMiddleMin = new FloatProperty("moonwalk-middle-min", 0.5F, 0.3F, 0.7F, this::isMoonWalkMode);
+    private final FloatProperty moonMiddleMax = new FloatProperty("moonwalk-middle-max", 0.5F, 0.3F, 0.7F, this::isMoonWalkMode);
+    private final IntProperty moonRedrawMin = new IntProperty("moonwalk-redraw-min", 15, 1, 40, this::isMoonWalkMode);
+    private final IntProperty moonRedrawMax = new IntProperty("moonwalk-redraw-max", 30, 1, 40, this::isMoonWalkMode);
+    private final MoonWalk moonWalk = new MoonWalk();
     private int tick = 0;
     private int pauseTicks = 0;
     private volatile boolean correctionPending = false;
@@ -268,7 +297,8 @@ public class Scaffold extends Module {
         if (this.isTowering()) {
             return false;
         } else {
-            boolean stage = this.keepY.getValue() == 1 || this.keepY.getValue() == 2 || this.keepY.getValue() == 4;
+            boolean stage = this.keepY.getValue() == 1 || this.keepY.getValue() == 2 || this.keepY.getValue() == 4
+                    || this.rotationMode.getValue() == ROTATION_TELLY;
             return (!stage || this.stage <= 0) && this.sprintMode.getValue() == 0;
         }
     }
@@ -502,11 +532,12 @@ public class Scaffold extends Module {
      * key held by hand still builds up.
      */
     private boolean godBridgeHoldsLayer() {
-        if (this.rotationMode.getValue() == ROTATION_GODBRIDGE && this.jumpBuildsUp.getValue()) {
+        if (this.isRunMode() && this.jumpBuildsUp.getValue()) {
             /* The block goes under the feet wherever they are: a block up once the jump is a block high. */
             return false;
         }
-        return this.lbGodBridge() && !mc.thePlayer.onGround && !mc.gameSettings.keyBindJump.isKeyDown();
+        return (this.lbGodBridge() || this.isGodBridge2Mode()) && !mc.thePlayer.onGround
+                && !mc.gameSettings.keyBindJump.isKeyDown();
     }
 
     private BlockData getBlockData() {
@@ -601,8 +632,11 @@ public class Scaffold extends Module {
                 this.markPlaced(blockPos.offset(enumFacing));
                 this.eagleBlocksPlaced++;
                 this.blocksSinceJump++;
-                if (this.rotationMode.getValue() == ROTATION_GODBRIDGE) {
+                if (this.isRunMode()) {
                     this.run.placed();
+                }
+                if (this.isGodBridge2Mode()) {
+                    this.rhythm.placed();
                 }
                 if (this.swing.getValue()) {
                     mc.thePlayer.swingItem();
@@ -777,6 +811,20 @@ public class Scaffold extends Module {
         return mode == ROTATION_GODBRIDGE || mode == ROTATION_POLAR;
     }
 
+    /** GODBRIDGE and GODBRIDGE2: GodBridge's run (2026-11-18: GODBRIDGE2 is the same run, looking straight back). */
+    private boolean isRunMode() {
+        int mode = this.rotationMode.getValue();
+        return mode == ROTATION_GODBRIDGE || mode == ROTATION_GODBRIDGE2;
+    }
+
+    private boolean isGodBridge2Mode() {
+        return this.rotationMode.getValue() == ROTATION_GODBRIDGE2;
+    }
+
+    private boolean isMoonWalkMode() {
+        return this.rotationMode.getValue() == ROTATION_MOONWALK;
+    }
+
     /* 2026-11-08: GODBRIDGE has its own flow (GodBridge); the LiquidBounce ledge settings are POLAR's. */
     private boolean polarShown() {
         return this.rotationMode.getValue() == ROTATION_POLAR;
@@ -902,6 +950,11 @@ public class Scaffold extends Module {
 
     @Override
     public void verifyValue(String name) {
+        if ("rotations".equals(name)) {
+            /* Here too, not only when a mode ticks: SPEED-TELLY and WEIRD-TELLY pause Scaffold's handlers, so a pass
+               through them would not be seen there (review, PR #45). */
+            this.noteRotationMode();
+        }
         if ("rotations".equals(name) && this.isEnabled()) {
             this.syncClutch();
         }
@@ -971,7 +1024,7 @@ public class Scaffold extends Module {
                     this.stage++;
                 }
                 if (this.stage == 0
-                        && this.keepY.getValue() != 0
+                        && (this.keepY.getValue() != 0 || this.rotationMode.getValue() == ROTATION_TELLY)
                         && (!(Boolean) this.keepYonPress.getValue() || PlayerUtil.isUsingItem())
                         && (!this.disableWhileJumpActive.getValue() || !mc.thePlayer.isPotionActive(Potion.jump))
                         && !mc.gameSettings.keyBindJump.isKeyDown()) {
@@ -981,6 +1034,10 @@ public class Scaffold extends Module {
                 this.shouldKeepY = false;
                 this.towering = false;
             }
+            /* A plan is this tick's or none: a tick the run does not make one (no block to place, canPlace false)
+               must not stop the walk on the last one's stop (review, PR #45). GODBRIDGE2's rhythm and the walk-on
+               forecast rest on such ticks too; neither has anything to act on without a plan. */
+            this.runPlan = null;
             if (this.canPlace()) {
                 ItemStack stack = mc.thePlayer.getHeldItem();
                 int count = ItemUtil.isBlock(stack) ? stack.stackSize : 0;
@@ -1000,8 +1057,12 @@ public class Scaffold extends Module {
                         }
                     }
                 }
-                if (this.rotationMode.getValue() == ROTATION_GODBRIDGE) {
+                if (this.isRunMode()) {
                     this.godBridgeRunTick(event);
+                    return;
+                }
+                if (this.rotationMode.getValue() == ROTATION_TELLY) {
+                    this.tellyTick(event);
                     return;
                 }
                 if (this.lbGodBridge()) {
@@ -1028,6 +1089,7 @@ public class Scaffold extends Module {
                             }
                             break;
                         case 2:
+                        case ROTATION_MOONWALK:
                             if (this.yaw == -180.0F && this.pitch == 0.0F) {
                                 this.yaw = RotationUtil.quantizeAngle(yawDiffTo180);
                                 this.pitch = RotationUtil.quantizeAngle(85.0F);
@@ -1193,6 +1255,7 @@ public class Scaffold extends Module {
                 if (this.canRotate && MoveUtil.isForwardPressed() && Math.abs(MathHelper.wrapAngleTo180_float(yawDiffTo180 - this.yaw)) < 90.0F) {
                     switch (this.rotationMode.getValue()) {
                         case 2:
+                        case ROTATION_MOONWALK:
                             this.yaw = RotationUtil.quantizeAngle(yawDiffTo180);
                             break;
                         case 3:
@@ -1584,6 +1647,7 @@ public class Scaffold extends Module {
     @EventTarget
     public void onMoveInput(MoveInputEvent event) {
         if (this.isEnabled()) {
+            this.noteRotationMode();
             if (this.safeStuckTicks > 0) {
                 mc.thePlayer.movementInput.moveForward = 0.0f;
                 mc.thePlayer.movementInput.moveStrafe = 0.0f;
@@ -1598,7 +1662,8 @@ public class Scaffold extends Module {
             if (mc.thePlayer.onGround && this.stage > 0 && MoveUtil.isForwardPressed()) {
                 mc.thePlayer.movementInput.jump = true;
             }
-            if (this.rotationMode.getValue() == ROTATION_GODBRIDGE) {
+            this.applyMoonWalkInput();
+            if (this.isRunMode()) {
                 /* GODBRIDGE never crouches (2026-11-08, owner: "god bridge is defined by NOT crouching"). The last
                    guard is a stop instead, as late as it can be: the walk keys are let go only when one more tick of
                    walking and the slide after it would leave the box with no floor, and friction holds the player on the
@@ -1610,7 +1675,9 @@ public class Scaffold extends Module {
                 }
                 return;
             }
-            if (this.safeWalk.getValue() && !mc.thePlayer.movementInput.sneak && this.edgeSneak(true)) {
+            /* TELLY walks off the edge in a sprint jump on purpose: no crouch there while W is held (2026-11-18). */
+            boolean tellyWalk = this.rotationMode.getValue() == ROTATION_TELLY && MoveUtil.isForwardPressed();
+            if (this.safeWalk.getValue() && !tellyWalk && !mc.thePlayer.movementInput.sneak && this.edgeSneak(true)) {
                 /* S1 (2026-10-07): the edge is held by a real crouch, the way
                    Vape's Legit/EdgeSneak and LiquidBounce's Ledge do it, and
                    vanilla's own sneak rule then keeps the player on the block.
@@ -1736,6 +1803,12 @@ public class Scaffold extends Module {
         /* No crouch in GODBRIDGE (2026-11-08): the pace is kept with jumps, the next block forecast one gap ahead. */
         in.paceJump = paced && this.pace.jumpWanted(now, this.pace.lastGap(230L), event.getYaw(), this.speedLevel());
         in.jumpEvery = this.jumpEveryBlocks.getValue();
+        if (this.isGodBridge2Mode()) {
+            /* GODBRIDGE2: the look straight back, and the jumps are GodBridgeRhythm's (applyRhythm). */
+            in.straightBack = true;
+            in.paceJump = false;
+            in.jumpEvery = 0;
+        }
         in.now = now;
         GodBridge.Plan plan = this.run.tick(in);
         this.runPlan = plan;
@@ -1975,7 +2048,16 @@ public class Scaffold extends Module {
     /** GODBRIDGE's crouch and jump, at the input stage, so vanilla acts on them. */
     private void applyGodBridgeInput() {
         GodBridge.Plan plan = this.runPlan;
-        if (this.rotationMode.getValue() != ROTATION_GODBRIDGE || plan == null) {
+        if (plan == null && this.isGodBridge2Mode() && !MoveUtil.isForwardPressed()) {
+            /* No plan this tick (nothing to place): the rhythm does not tick, but a let-go of the walk keys must still
+               start it over, so the next press stands and crouches first, as one with a plan would (review, PR #45). */
+            this.rhythm.reset();
+        }
+        if (!this.isRunMode() || plan == null) {
+            return;
+        }
+        if (this.rotationMode.getValue() == ROTATION_GODBRIDGE2) {
+            this.applyRhythm(plan);
             return;
         }
         if (plan.stop) {
@@ -1985,6 +2067,228 @@ public class Scaffold extends Module {
         if (plan.jump && !plan.stop && mc.thePlayer.onGround && !mc.thePlayer.isInWater()) {
             mc.thePlayer.movementInput.jump = true;
         }
+    }
+
+    /** Slower than this (blocks a tick) on the ground, a slide has stopped. */
+    private static final double SLIDE_STOPPED = 0.03;
+
+    /**
+     * GODBRIDGE2's keys at the input stage (2026-11-18): GodBridgeRhythm's start, side key, crouch and jumps, and
+     * GODBRIDGE's stop at an edge the look is still turning at. The fall guard after this (onMoveInput) is GODBRIDGE's.
+     */
+    private void applyRhythm(GodBridge.Plan plan) {
+        MovementInput keys = mc.thePlayer.movementInput;
+        GodBridgeRhythm.Input in = new GodBridgeRhythm.Input();
+        in.forward = MoveUtil.isForwardPressed();
+        in.jumpKey = mc.gameSettings.keyBindJump.isKeyDown();
+        in.onGround = mc.thePlayer.onGround;
+        in.diagonal = GodBridge.diagonal(Math.round((this.getCurrentYaw() + 180.0F) / 45.0F) * 45.0F);
+        in.settled = plan.look && plan.maxTurn >= 180.0F;
+        double speed = Math.hypot(mc.thePlayer.motionX, mc.thePlayer.motionZ);
+        in.sliding = mc.thePlayer.onGround && speed > SLIDE_STOPPED;
+        /* The same test the jump below is made on, so a jump the stop would drop stays due (review, PR #45). */
+        in.canJump = !plan.stop && mc.thePlayer.onGround && !mc.thePlayer.isInWater();
+        GodBridgeRhythm.Keys out = this.rhythm.tick(in, this.rhythmSettings());
+        if (out.hold || plan.stop) {
+            keys.moveForward = 0.0F;
+            keys.moveStrafe = 0.0F;
+        }
+        if (out.noStrafe && keys.moveForward != 0.0F) {
+            /* Only beside W: a walk on a side key alone is that key, and taking it would stop the walk. */
+            keys.moveStrafe = 0.0F;
+        }
+        if (out.sneak && !keys.sneak) {
+            keys.sneak = true;
+            keys.moveForward *= 0.3F;
+            keys.moveStrafe *= 0.3F;
+        }
+        if (out.jump && !out.hold && !plan.stop && mc.thePlayer.onGround && !mc.thePlayer.isInWater()) {
+            keys.jump = true;
+        }
+    }
+
+    private GodBridgeRhythm.Settings rhythmSettings() {
+        GodBridgeRhythm.Settings s = new GodBridgeRhythm.Settings();
+        s.jumpAfterMin = this.gb2JumpAfterMin.getValue();
+        s.jumpAfterMax = this.gb2JumpAfterMax.getValue();
+        s.jumpDelayMin = this.gb2JumpDelayMin.getValue();
+        s.jumpDelayMax = this.gb2JumpDelayMax.getValue();
+        s.resetAfterMin = this.gb2ResetAfterMin.getValue();
+        s.resetAfterMax = this.gb2ResetAfterMax.getValue();
+        s.startDelayMin = this.gb2StartDelayMin.getValue();
+        s.startDelayMax = this.gb2StartDelayMax.getValue();
+        s.startCrouch = this.gb2StartCrouch.getValue();
+        return s;
+    }
+
+    /**
+     * MOONWALK's side key (2026-11-18, MoonWalk): on the ground, W held and no side key of the player's, on a straight
+     * run. Anything else leaves the keys as they are and the next sway starts afresh.
+     */
+    private void applyMoonWalkInput() {
+        if (!this.isMoonWalkMode()) {
+            return;
+        }
+        MovementInput keys = mc.thePlayer.movementInput;
+        if (!mc.thePlayer.onGround || keys.moveForward <= 0.0F || keys.moveStrafe != 0.0F || keys.sneak || keys.jump
+                || mc.thePlayer.isInWater()) {
+            this.moonWalk.reset();
+            return;
+        }
+        MoonWalk.Settings s = new MoonWalk.Settings();
+        s.widthMin = this.moonWidthMin.getValue();
+        s.widthMax = this.moonWidthMax.getValue();
+        s.middleMin = this.moonMiddleMin.getValue();
+        s.middleMax = this.moonMiddleMax.getValue();
+        s.redrawMin = this.moonRedrawMin.getValue();
+        s.redrawMax = this.moonRedrawMax.getValue();
+        keys.moveStrafe = this.moonWalk.strafe(mc.thePlayer.rotationYaw, mc.thePlayer.posX, mc.thePlayer.posZ,
+                mc.thePlayer.motionX, mc.thePlayer.motionZ, s);
+    }
+
+    /**
+     * TELLY, a tick (2026-11-18, TellyBridge): the look forward with the walk on the ground and on the way up, so the
+     * jump is a plain sprint jump; from the top of it the look back to the block wanted, on the layer the jump left from
+     * (keep-y's stage, which also jumps on the ground while W is held). The turn either way is capped at
+     * telly-turn-speed. The click is onUpdateClick's, along the look really sent, so a look still on its way places
+     * nothing.
+     */
+    private boolean tellyBack;
+    /** Package-private for RetiredModesTest's regression test only. */
+    boolean tellyReturning;
+    private float tellyForwardYaw;
+    private float tellyForwardPitch;
+
+    /**
+     * A change of rotations mode (review, PR #45): GODBRIDGE2's rhythm starts from standing with nothing counted, and
+     * TELLY's kept forward look and return are dropped, so they hold only within one uninterrupted run of a mode.
+     * Called first thing at both stages a mode ticks at (tellyTick, onMoveInput), so neither sees the old state.
+     */
+    void noteRotationMode() {
+        int mode = this.rotationMode.getValue();
+        /* A new player entity (respawn, another world) is a new run too: the forward look kept is the dead one's. */
+        Object player = mc == null ? null : mc.thePlayer;
+        if (mode == this.lastRotationMode && player == this.lastPlayer) {
+            return;
+        }
+        this.lastRotationMode = mode;
+        this.lastPlayer = player;
+        this.rhythm.reset();
+        this.moonWalk.reset();
+        this.tellyBack = false;
+        this.tellyReturning = false;
+    }
+
+    private void tellyTick(UpdateEvent event) {
+        this.noteRotationMode();
+        boolean back = TellyBridge.placing(mc.thePlayer.onGround, mc.thePlayer.motionY, MoveUtil.isForwardPressed());
+        BlockData target = back ? this.getBlockData() : null;
+        float aimYaw;
+        float aimPitch;
+        Vec3 hitVec = null;
+        boolean real = this.moveFix.getModeString().equals("REAL");
+        if (back && !this.tellyBack) {
+            /* The forward look, kept: under REAL the camera turns back with the placing look (review, PR #45). A
+               look still on its way forward is not the forward one: the one kept stays. */
+            if (!this.tellyReturning) {
+                this.tellyForwardYaw = mc.thePlayer.rotationYaw;
+                this.tellyForwardPitch = mc.thePlayer.rotationPitch;
+            }
+            this.tellyReturning = real;
+        }
+        this.tellyBack = back;
+        if (back) {
+            aimYaw = RotationUtil.wrapAngleDiff(this.getCurrentYaw() - 180.0F, event.getYaw());
+            aimPitch = 80.0F;
+            float[] aim = target == null ? null : this.tellyAim(target, aimYaw, aimPitch, event.getYaw(), event.getPitch());
+            if (aim != null) {
+                aimYaw = aim[0];
+                aimPitch = aim[1];
+                MovingObjectPosition mop = this.lookHit(target, aimYaw, aimPitch);
+                hitVec = mop != null ? mop.hitVec : null;
+            }
+        } else if (this.tellyReturning && real) {
+            /* Under REAL the camera is the placing look now: back to the forward one kept, then the camera's again. */
+            aimYaw = RotationUtil.wrapAngleDiff(this.tellyForwardYaw, event.getYaw());
+            aimPitch = this.tellyForwardPitch;
+            if (Math.abs(MathHelper.wrapAngleTo180_float(event.getYaw() - this.tellyForwardYaw)) < 1.0F
+                    && Math.abs(event.getPitch() - this.tellyForwardPitch) < 1.0F) {
+                this.tellyReturning = false;
+            }
+        } else {
+            this.tellyReturning = false;
+            aimYaw = mc.thePlayer.rotationYaw;
+            aimPitch = mc.thePlayer.rotationPitch;
+        }
+        float cap = this.tellyTurnSpeed.getValue();
+        float[] sent = RotationHelper.request(this, aimYaw, aimPitch, 3, this.moveMode(), false, cap,
+                Math.min(MIN_STEP, cap));
+        if (sent != null && this.moveFix.getModeString().equals("REAL")) {
+            Atlas.rotationManager.setRotation(sent[0], sent[1], 3, false);
+        }
+        this.yaw = aimYaw;
+        this.pitch = aimPitch;
+        this.canRotate = true;
+        this.planData = target;
+        this.planHitVec = hitVec;
+        this.planSnapCanPlace = true;
+        this.planSnapMode = false;
+        this.planThreeFmc = false;
+        this.planReady = true;
+    }
+
+    /**
+     * TELLY's aim: of the points on the face wanted whose ray from here places there, the one nearest the look the
+     * server has, so the turn back is as short as it can be; null for none.
+     */
+    private float[] tellyAim(BlockData target, float baseYaw, float basePitch, float refYaw, float refPitch) {
+        double[] xs = aimOffsets;
+        double[] ys = aimOffsets;
+        double[] zs = aimOffsets;
+        switch (target.facing()) {
+            case NORTH:
+                zs = new double[]{0.0};
+                break;
+            case EAST:
+                xs = new double[]{1.0};
+                break;
+            case SOUTH:
+                zs = new double[]{1.0};
+                break;
+            case WEST:
+                xs = new double[]{0.0};
+                break;
+            case DOWN:
+                ys = new double[]{0.0};
+                break;
+            default:
+                ys = new double[]{1.0};
+        }
+        float[] best = null;
+        float bestDiff = Float.MAX_VALUE;
+        BlockPos pos = target.blockPos();
+        for (double dx : xs) {
+            for (double dy : ys) {
+                for (double dz : zs) {
+                    double relX = pos.getX() + dx - mc.thePlayer.posX;
+                    double relY = pos.getY() + dy - mc.thePlayer.posY - mc.thePlayer.getEyeHeight();
+                    double relZ = pos.getZ() + dz - mc.thePlayer.posZ;
+                    float[] r = RotationUtil.getRotationsTo(relX, relY, relZ, baseYaw, basePitch);
+                    MovingObjectPosition mop = RotationUtil.rayTrace(r[0], r[1],
+                            mc.playerController.getBlockReachDistance(), 1.0F);
+                    if (mop == null || mop.typeOfHit != MovingObjectType.BLOCK || !pos.equals(mop.getBlockPos())
+                            || mop.sideHit != target.facing()) {
+                        continue;
+                    }
+                    float diff = Math.abs(MathHelper.wrapAngleTo180_float(r[0] - refYaw)) + Math.abs(r[1] - refPitch);
+                    if (diff < bestDiff) {
+                        bestDiff = diff;
+                        best = r;
+                    }
+                }
+            }
+        }
+        return best;
     }
 
     /**
@@ -2484,6 +2788,11 @@ public class Scaffold extends Module {
         this.pitch = 0.0F;
         this.godBridge.release();
         this.run.release();
+        this.rhythm.reset();
+        this.moonWalk.reset();
+        this.tellyBack = false;
+        this.tellyReturning = false;
+        this.lastRotationMode = -1;
         this.runPlan = null;
         this.canRotate = false;
         this.towerTick = 0;

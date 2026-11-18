@@ -50,15 +50,52 @@ public class RetiredModesTest {
         assertFalse("its switch is this mode's", scaffold.tellyAutoJump.isVisible());
     }
 
-    /** 2026-11-04 (owner: "delete Telly, keep Speed Telly"): gone from the menu; old configs load SPEED-TELLY. */
+    /**
+     * 2026-11-04 (owner: "delete Telly, keep Speed Telly"): B4 still loads SPEED-TELLY. 2026-11-18 (owner: "a Telly like
+     * Augustus's, replacing ours"): TELLY is a mode again, at its old index, in the menu.
+     */
     @Test
-    public void scaffoldTellyLoadsAsSpeedTelly() {
+    public void tellyIsBackAndB4StillLoadsAsSpeedTelly() {
         Scaffold scaffold = new Scaffold();
-        for (String old : new String[]{"TELLY", "B4"}) {
-            assertTrue(scaffold.rotationMode.parseString(old));
-            assertEquals("SPEED-TELLY", scaffold.rotationMode.getModeString());
-        }
-        assertFalse(java.util.Arrays.asList(scaffold.rotationMode.visibleModes()).contains("TELLY"));
+        assertTrue(scaffold.rotationMode.parseString("B4"));
+        assertEquals("SPEED-TELLY", scaffold.rotationMode.getModeString());
+        assertTrue(scaffold.rotationMode.parseString("TELLY"));
+        assertEquals("TELLY", scaffold.rotationMode.getModeString());
+        assertEquals(11, (int) scaffold.rotationMode.getValue());
+        assertTrue(java.util.Arrays.asList(scaffold.rotationMode.visibleModes()).contains("TELLY"));
+    }
+
+    /**
+     * Review, PR #45: TELLY to SPEED-TELLY (whose run pauses Scaffold's handlers) and back drops TELLY's kept return,
+     * seen through verifyValue alone.
+     */
+    @Test
+    public void aPassThroughSpeedTellyDropsTellysReturn() {
+        Scaffold scaffold = new Scaffold();
+        assertTrue(scaffold.rotationMode.parseString("TELLY"));
+        scaffold.verifyValue("rotations");
+        scaffold.tellyReturning = true;
+        scaffold.noteRotationMode();
+        assertTrue("same mode, same player: kept", scaffold.tellyReturning);
+        assertTrue(scaffold.rotationMode.parseString("SPEED-TELLY"));
+        scaffold.verifyValue("rotations");
+        assertTrue(scaffold.rotationMode.parseString("TELLY"));
+        scaffold.verifyValue("rotations");
+        assertFalse("dropped on the way through", scaffold.tellyReturning);
+    }
+
+    /** 2026-11-18: GODBRIDGE2 and MOONWALK on the end, in the menu; GODBRIDGE keeps its index. */
+    @Test
+    public void godBridge2AndMoonWalkAreAddedAtTheEnd() {
+        Scaffold scaffold = new Scaffold();
+        assertTrue(scaffold.rotationMode.parseString("GODBRIDGE2"));
+        assertEquals(14, (int) scaffold.rotationMode.getValue());
+        assertTrue(scaffold.rotationMode.parseString("MOONWALK"));
+        assertEquals(15, (int) scaffold.rotationMode.getValue());
+        assertTrue(scaffold.rotationMode.parseString("GODBRIDGE"));
+        assertEquals(4, (int) scaffold.rotationMode.getValue());
+        java.util.List<String> menu = java.util.Arrays.asList(scaffold.rotationMode.visibleModes());
+        assertTrue(menu.contains("GODBRIDGE2") && menu.contains("MOONWALK"));
     }
 
     /** 2026-11-06 (owner): the angled jump is a mode of its own, on the end; only it shows the angle. */

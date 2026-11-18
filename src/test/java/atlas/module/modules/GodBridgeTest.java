@@ -79,6 +79,26 @@ public class GodBridgeTest {
     }
 
     @Test
+    public void straightBackLooksAlongTheRunAndNeverSwapsSide() {
+        /* GODBRIDGE2 (2026-11-18): the run's look straight back, off the grid by its offset only. */
+        Sim sim = new Sim();
+        GodBridge.Plan plan = null;
+        for (int i = 0; i < 200; i++) {
+            GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
+            in.straightBack = true;
+            in.edge = i % 7 == 0;
+            in.lookPlaces = false;
+            plan = sim.step(in);
+            if (i > 40) {
+                float fromBack = Math.abs(MathHelper.wrapAngleTo180_float(plan.yaw - 180.0F));
+                assertTrue("straight back: " + fromBack, fromBack < GodBridge.OFFSET_MAX + 2 * GodBridge.DRIFT_MAX + 0.01F);
+                assertFalse("never on the grid", TellyLane.onGrid(plan.yaw));
+            }
+        }
+        assertEquals(GodBridge.BACK_STRAIGHT_PITCH, plan.pitch, GodBridge.PITCH_SPREAD + GodBridge.DRIFT_MAX);
+    }
+
+    @Test
     public void theTurnRoundTakesSeveralTicksAndThenTheLookHoldsStill() {
         Sim sim = new Sim();
         int ticksToSettle = -1;

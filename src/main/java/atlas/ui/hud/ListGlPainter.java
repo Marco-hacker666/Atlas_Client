@@ -6,17 +6,11 @@ import atlas.util.RenderUtil;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.GlStateManager;
 
-/**
- * Draws a module list (atlas.ui.hud.list) in the game (2026-11-14): rectangles with RenderUtil -- the rounded ones
- * through its shader -- and text in the HUD's font. It keeps track of whether it is drawing shapes or text, so the
- * GL state is switched only between the two. Call {@link #finish} when done.
- */
 public final class ListGlPainter implements ListPainter {
     private static final int NONE = 0;
     private static final int SHAPES = 1;
     private static final int TEXT = 2;
 
-    /** Null: the game's own font. */
     private final CFontRenderer font;
     private final FontRenderer gameFont;
     private int state = NONE;
@@ -35,7 +29,7 @@ public final class ListGlPainter implements ListPainter {
         if (radius > 0.0F && corners != 0) {
             RenderUtil.drawRoundedRect(x1, y1, x2 - x1, y2 - y1, radius, argb, (corners & TOP_LEFT) != 0,
                     (corners & TOP_RIGHT) != 0, (corners & BOTTOM_LEFT) != 0, (corners & BOTTOM_RIGHT) != 0);
-            /* The shader leaves a state of its own: set this one again before the next shape. */
+
             this.state = NONE;
         } else {
             RenderUtil.drawRect(x1, y1, x2, y2, argb);
@@ -65,7 +59,6 @@ public final class ListGlPainter implements ListPainter {
         }
     }
 
-    /** Leaves the state RenderUtil.disableRenderState leaves, which the rest of the HUD expects. */
     public void finish() {
         RenderUtil.disableRenderState();
         GlStateManager.resetColor();

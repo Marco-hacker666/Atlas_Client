@@ -28,8 +28,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-// Upstream author's note (translated): this ChestAura was taken from another client (Moshui), not from Eternity;
-// the ChestAura in Eternity was contributed by the same author.
 public class ChestAura extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final DecimalFormat df = new DecimalFormat("0.0");
@@ -149,11 +147,6 @@ public class ChestAura extends Module {
             float yaw = (float) (Math.atan2(z, x) * 180.0 / Math.PI) - 90.0f;
             float pitch = (float) -(Math.atan2(y, dist) * 180.0 / Math.PI);
 
-            /* 2026-10-31: the look goes through the shared engine (RotationHelper), which turns it as a hand
-               does -- it used to jump onto the chest in one tick -- turns the keys for Silent and hands the
-               look back when this stops asking. The chest is opened only along the look the engine returns,
-               the one this tick's packet carries, at the point and face that look meets; before, it was
-               clicked at once, on its top face at a corner, whatever the look. */
             float[] look = RotationHelper.request(this, yaw, pitch, 1, this.moveMode(), false, RotationHelper.NO_LIMIT);
             if (look == null) {
                 return;
@@ -172,7 +165,6 @@ public class ChestAura extends Module {
         }
     }
 
-    /** Move Fix as the engine's movement yaw: None the camera's, Silent the look's with the keys turned, Strict the look's. */
     private int moveMode() {
         switch (this.moveFix.getValue()) {
             case 0:
@@ -184,7 +176,6 @@ public class ChestAura extends Module {
         }
     }
 
-    /** Where the look's line meets the chest within range (through other blocks with Through Walls), or null. */
     private MovingObjectPosition lookOnChest(float[] look, BlockPos pos) {
         Vec3 eye = mc.thePlayer.getPositionEyes(1.0F);
         Vec3 dir = RotationEngine.direction(look[0], look[1]);

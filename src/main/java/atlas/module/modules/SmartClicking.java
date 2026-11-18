@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): limits click speed with CPS control, jitter
-// and an optional break-chance gate.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.util.Objects;
 
 import atlas.event.EventTarget;

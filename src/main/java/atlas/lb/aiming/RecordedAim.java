@@ -2,30 +2,11 @@ package atlas.lb.aiming;
 
 import java.util.Random;
 
-/**
- * AngleSmooth "Recorded" (2026-11-10, owner: "AI rotations, as Augustus
- * has"): turns the way you turned. Augustus's AI rotations are recordings of
- * the player's own aim played back by the aura; this is Atlas's version,
- * built on the Recorder's aim files (AimLibrary). No code taken.
- *
- * Each tick, the error now (how far the look is off the goal) is matched to
- * a recorded tick with a similar error, and that tick's turn is used --
- * scaled by how much bigger or smaller the error is now (0.6 to 1.6 times),
- * and mirrored when the target is on the other side. Once a recorded run is
- * picked it is followed tick by tick while its errors stay within
- * {@code follow} degrees of the live ones, so the turn keeps the shape your
- * hand gave it (the speed-up, the slow-down, the small corrections) instead
- * of being stitched from unrelated ticks. Small errors copy the recorded
- * turn as it was: that is the tremor and drift of a hand on target.
- *
- * With no recordings (or nothing near), {@code fallback} turns instead.
- */
 public final class RecordedAim extends AngleSmooth {
-    /** How far, degrees, a run's error may drift from the live one before a new run is picked. */
     public float follow = 4.0F;
-    /** 0..1: how much of each recorded turn is used (1 = all of it). */
+
     public float strength = 1.0F;
-    /** Use ticks recorded while Silent Aura was on (record-with-aura). */
+
     public boolean useAuraData = true;
     public AngleSmooth fallback = new Tracking();
 
@@ -38,11 +19,6 @@ public final class RecordedAim extends AngleSmooth {
         this.run = -1;
     }
 
-    /**
-     * A line the Recorder just wrote (AimFeed). Client thread. Rows that came
-     * in while the files were still being read are in the old library and are
-     * read again from the file next time.
-     */
     public void addLive(String line) {
         this.library.addLive(line);
     }
@@ -68,7 +44,6 @@ public final class RecordedAim extends AngleSmooth {
         return new Rotation(current.yaw + turn[0], Rotation.clamp(current.pitch + turn[1], -90.0F, 90.0F));
     }
 
-    /** The next tick of the run being followed, while it still fits; else -1. */
     private int continued(AimLibrary lib, float[] error) {
         if (this.run < 0 || this.run >= lib.size()) {
             return -1;
@@ -86,7 +61,6 @@ public final class RecordedAim extends AngleSmooth {
         return dy * dy + dp * dp <= this.follow * this.follow ? next : -1;
     }
 
-    /** A recorded tick's turn applied to the error now: mirrored to its side, scaled to its size. */
     static float[] turnFor(AimLibrary.Sample s, float[] error, float strength) {
         boolean mirror = Math.abs(s.errYaw) > 0.3F && Math.abs(error[0]) > 0.3F
                 && Math.signum(s.errYaw) != Math.signum(error[0]);

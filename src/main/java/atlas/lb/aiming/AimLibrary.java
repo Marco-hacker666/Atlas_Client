@@ -11,36 +11,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Your own aim, read back from the Recorder's aim-*.csv files (2026-11-10,
- * for AngleSmooth "Recorded"). Each usable tick becomes a sample: how far
- * your look was off the target (err_yaw, err_pitch) and how far your hand
- * turned by the next tick. Consecutive ticks on the same target keep their
- * order, so a turn can be replayed as the run it was.
- *
- * A tick is used only when the next row is the very next tick on the same
- * target and neither was marked as assisted (bit 4: the look moved by
- * something other than the mouse; bit 8: a module that changes aim, clicks or
- * movement was on). Turns over 60 degrees in a tick are dropped as camera
- * snaps, not aim.
- *
- * Ticks recorded while Silent Aura was on (bit 16, record-with-aura) are
- * kept but marked: the camera was still your hand, but a hand that knows the
- * aura is hitting tends to aim less carefully, so Recorded can leave them
- * out (includeAura). Rows also arrive live from the Recorder (addLive), so a
- * recording made while playing is used at once.
- */
 public final class AimLibrary {
-
-    /** One recorded tick. */
     public static final class Sample {
         public final float errYaw;
         public final float errPitch;
         public final float turnYaw;
         public final float turnPitch;
-        /** Index of the next tick of the same run, or -1. */
+
         public final int next;
-        /** Recorded while Silent Aura was on. */
+
         public final boolean aura;
 
         Sample(float errYaw, float errPitch, float turnYaw, float turnPitch, int next) {
@@ -62,22 +41,22 @@ public final class AimLibrary {
     }
 
     static final int ASSIST_NOT_OWN = 4 | 8;
-    /** The Recorder's bit for a tick recorded while Silent Aura was on (record-with-aura). */
+
     public static final int ASSIST_AURA = 16;
-    /** Whether ticks recorded with the aura on are used; set by Recorded every tick. */
+
     public volatile boolean includeAura = true;
     private Reader live;
     static final float SNAP = 60.0F;
-    /** Bucket size of the lookup grid, degrees. */
+
     static final float CELL = 2.0F;
-    /* About 2.7 hours of fighting, some 15 MB. */
+
     public static final int MAX_SAMPLES = 200000;
-    /** The Recorder's aim columns, for live rows that arrive without their file's header. */
+
     public static final String AIM_HEADER = "tick,target,yaw,pitch,err_yaw,err_pitch,dist,tx,ty,tz,px,py,pz,"
             + "t_ground,p_ground,t_hurt,p_hurt,swings,attacks,attack_key,ping,assist";
 
     private final List<Sample> samples = new ArrayList<Sample>();
-    /** Samples by grid cell of (|err_yaw|, err_pitch); yaw is mirrored so left and right share data. */
+
     private final Map<Long, List<Integer>> grid = new HashMap<Long, List<Integer>>();
 
     public int size() {
@@ -88,14 +67,13 @@ public final class AimLibrary {
         return this.samples.get(index);
     }
 
-    /** The aim-*.csv files in {@code dir}, newest first, up to MAX_SAMPLES samples (so the newest are kept). */
     public static AimLibrary load(File dir) {
         AimLibrary library = new AimLibrary();
         File[] files = dir == null ? null : dir.listFiles();
         if (files == null) {
             return library;
         }
-        /* Names carry the start time (aim-yyyyMMdd-HHmmss.csv), so reverse name order is newest first. */
+
         Arrays.sort(files, java.util.Collections.reverseOrder());
         for (File file : files) {
             String name = file.getName();
@@ -120,7 +98,6 @@ public final class AimLibrary {
         return library;
     }
 
-    /** Adds one recording's lines (header and comment lines are skipped). */
     public void add(List<String> lines) {
         Reader reader = new Reader();
         for (String line : lines) {
@@ -128,22 +105,14 @@ public final class AimLibrary {
         }
     }
 
-    /**
-     * One line as the Recorder writes it, while it writes it: a header (which
-     * starts a new recording) or a row. Runs carry on across calls. Client
-     * thread, the same one Recorded reads from.
-     */
     public void addLive(String line) {
         if (this.live == null) {
-            /* The Recorder may have started before this library existed (Recorded was picked, or the files were
-               read, after it wrote its header): its rows have the standard columns. */
             this.live = new Reader();
             this.live.line(AIM_HEADER);
         }
         this.live.line(line);
     }
 
-    /** Reads rows into samples, remembering the last row so consecutive ticks link into runs. */
     private final class Reader {
         private Map<String, Integer> column;
         private float[] last;
@@ -231,12 +200,6 @@ public final class AimLibrary {
         list.add(sample);
     }
 
-    /**
-     * A recorded tick whose error looked like this one (yaw mirrored), picked
-     * at random among the nearest few so the same error does not always
-     * replay the same tick. -1 when the library has nothing within 12
-     * degrees.
-     */
     public int nearest(float errYaw, float errPitch, java.util.Random random) {
         if (this.samples.isEmpty()) {
             return -1;
@@ -277,7 +240,7 @@ public final class AimLibrary {
                     }
                 }
             }
-            /* Anything found within this ring is as near as the next ring could give, near enough. */
+
             if (best[0] >= 0 && ring >= 1) {
                 break;
             }

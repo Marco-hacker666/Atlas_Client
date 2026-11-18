@@ -7,26 +7,7 @@ import java.io.File;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * The master switch for the diagnostic logs (2026-10-20, owner: "too many
- * logs -- one switch, keep only flags normally, delete old ones").
- *
- * Every module that keeps a session log (clutch-, places-, hits-, fights-,
- * fakelag-, perf-, speedmine-, stuck-, lagrange-, timerrange-, bednuker-,
- * noslow-...) writes it through AsyncLog, off the game thread, so the cost
- * was never frames; it was volume: 521 files and 28 MB in config/Atlas in
- * five days, clutch and places logs 0.5-1.5 MB a session each.
- *
- * Off (the default): only flags-*.txt is written -- FlagDetector's record of
- * corrections, which is what a lagback is looked into from. On: every
- * session log, for a test. Either way, at startup session logs older than
- * keep-days are deleted. The fixed-name diagnostics (gui-perf.txt, the
- * fingerprint's servers.txt, adaptive.txt, autotune.txt) are written only
- * while on, never deleted. Settings and learned data (default.json,
- * server-profiles.csv, hud-anchors.txt...) are never touched.
- */
 public class Logs extends Module {
-    /** "clutch-20261020-191450.txt": a module's session log, named by when it began. */
     private static final Pattern SESSION_LOG = Pattern.compile("^([a-z0-9]+(?:-[a-z0-9]+)*)-(\\d{8})-(\\d{6})\\.txt$");
     private static final File DIR = new File("./config/Atlas/");
     private static volatile boolean full;
@@ -51,13 +32,11 @@ public class Logs extends Module {
         full = false;
     }
 
-    /** A session log's module prefix ("clutch"), or null for any other file. */
     static String sessionPrefix(String name) {
         Matcher m = SESSION_LOG.matcher(name);
         return m.matches() ? m.group(1) : null;
     }
 
-    /** Whether a log line for this file may be written now. */
     public static boolean allows(File file) {
         if (file == null || full) {
             return true;
@@ -67,11 +46,10 @@ public class Logs extends Module {
         if (prefix != null) {
             return "flags".equals(prefix);
         }
-        /* Diagnostics under fixed names: the menu's frame times, the server fingerprint and tuning logs. */
+
         return !FIXED_DIAGNOSTICS.contains(name);
     }
 
-    /** Deletes session logs older than the given number of days, on a thread of its own. */
     public static void cleanOld(final int days) {
         Thread thread = new Thread(() -> {
             File[] files = DIR.listFiles();
@@ -89,8 +67,7 @@ public class Logs extends Module {
             if (deleted > 0) {
                 System.out.println("[Atlas] Logs: deleted " + deleted + " log(s) older than " + days + " day(s)");
             }
-            /* 2026-10-30 (audit): the fixed-name diagnostics are appended to for good; past FIXED_MAX_BYTES the
-               file becomes <name>.old (one generation kept) and starts again. */
+
             for (String name : FIXED_DIAGNOSTICS) {
                 File file = new File(DIR, name);
                 if (file.isFile() && file.length() > FIXED_MAX_BYTES) {
@@ -98,7 +75,6 @@ public class Logs extends Module {
                         java.nio.file.Files.move(file.toPath(), new File(DIR, name + ".old").toPath(),
                                 java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                     } catch (java.io.IOException ignored) {
-                        // In use or locked: tried again next start.
                     }
                 }
             }

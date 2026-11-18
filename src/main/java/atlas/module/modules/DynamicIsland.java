@@ -21,24 +21,24 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.network.NetworkPlayerInfo;
 
-public class DynamicIsland extends Module { // nah bro i took 2 hour just to did this shit
+public class DynamicIsland extends Module {
     private boolean showScaffold = false;
     private long scaffoldTime = 0;
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final ColorProperty textColor = new ColorProperty("AccentColor", new Color(255, 30, 0).getRGB());
     public final BooleanProperty enableGlow = new BooleanProperty("Glow", true);
-    /* Added with the HUD editor (2026-10-05): drag it there, or set it here. 0 keeps the original place. */
+
     public final IntProperty offsetX = new IntProperty("offset-x", 0, -1000, 1000);
     public final IntProperty offsetY = new IntProperty("offset-y", 0, -1000, 1000);
-    /* 2026-11-09: every HUD element can be resized and have its panel switched off. */
+
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
     public final BooleanProperty background = new BooleanProperty("background", true);
 
     private final int bgAlpha = 130;
     private final float radius = 8f;
 
-    public DynamicIsland() { // credit: Horaizion
+    public DynamicIsland() {
         super("DynamicIsland", true, false);
     }
 
@@ -67,9 +67,7 @@ public class DynamicIsland extends Module { // nah bro i took 2 hour just to did
 
         float x = sr.getScaledWidth() / 2f - width / 2f + this.offsetX.getValue();
         float y = 8f + this.offsetY.getValue();
-        /* Resized about its top centre. Everything below is drawn through the
-           transform: the glow is a texture, the rounded fills are UV shaders
-           and the blur masks whatever is drawn, so all of it follows. */
+
         float s = this.scale.getValue();
         float pivotX = x + width / 2f;
         float[] area = HudLayout.scaledRect(pivotX, y, s, x, y, width, height);
@@ -85,9 +83,7 @@ public class DynamicIsland extends Module { // nah bro i took 2 hour just to did
 
     private void draw(CFontRenderer fr, float x, float y, float width, float height, String username, int ping,
                       String server, int fps) {
-        // Glassmorphism Blur Pass
         if (!this.background.getValue()) {
-            /* No panel: the text only. */
         } else if (HudPanel.active()) {
             HudPanel.panel(x, y, x + width, y + height);
         } else {
@@ -137,7 +133,6 @@ public class DynamicIsland extends Module { // nah bro i took 2 hour just to did
 
         Color accent = new Color(this.textColor.getValue());
 
-        // ── Drop shadow (dark, offset downward) ──
         GlowUtils.drawGlow(
                 x + 2f, y + 4f,
                 w, h,
@@ -145,21 +140,18 @@ public class DynamicIsland extends Module { // nah bro i took 2 hour just to did
                 new Color(0, 0, 0, 120));
 
         if (this.enableGlow.getValue()) {
-            // ── Outer bloom – large, faint ──
             GlowUtils.drawGlow(
                     x, y,
                     w, h,
                     90,
                     new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 35));
 
-            // ── Mid bloom – medium, moderate ──
             GlowUtils.drawGlow(
                     x, y,
                     w, h,
                     55,
                     new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 70));
 
-            // ── Inner bloom – tight, vibrant ──
             GlowUtils.drawGlow(
                     x, y,
                     w, h,

@@ -10,9 +10,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** Value ownership: base plus overrides, only the base saved (plan step 7, 2026-09-28). */
 public class PropertyOverrideTest {
-
     @After
     public void notLoading() {
         Config.loading = false;
@@ -82,7 +80,7 @@ public class PropertyOverrideTest {
         p.override(Property.Source.GOVERNOR, "LatencyGovernor", 80);
         assertEquals(Integer.valueOf(80), p.getValue());
         assertEquals("LatencyGovernor", p.getSourceOwner());
-        /* Releasing the top reveals the next one down, not the base. */
+
         p.release("LatencyGovernor");
         assertEquals(Integer.valueOf(230), p.getValue());
         p.release("AutoTune");
@@ -115,8 +113,6 @@ public class PropertyOverrideTest {
 
     @Test
     public void thePlayerChangingTheValueWhileGovernedChangesTheBase() {
-        /* Also what a profile load does mid-trial: the loaded value is the
-           base, and stays when the trial ends (F-09). */
         IntProperty p = delay();
         p.setValue(200);
         p.override(Property.Source.GOVERNOR, "LatencyGovernor", 80);

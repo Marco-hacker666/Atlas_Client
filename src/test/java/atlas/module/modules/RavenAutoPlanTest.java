@@ -8,14 +8,11 @@ import java.util.Set;
 
 import static org.junit.Assert.*;
 
-/** raven-auto-human's block timing (2026-11-08). */
 public class RavenAutoPlanTest {
-
     private static final int PIKA_PING = 230;
 
     @Test
     public void facingIsMeasuredFromTheEnemysLook() {
-        /* Yaw 0 looks toward +Z. This player straight ahead on +Z. */
         assertEquals(0.0, RavenAutoPlan.facingDeg(0.0F, 0.0, 3.0), 1e-6);
         assertEquals(180.0, RavenAutoPlan.facingDeg(180.0F, 0.0, 3.0), 1e-6);
         assertEquals(90.0, RavenAutoPlan.facingDeg(90.0F, 0.0, 3.0), 1e-6);

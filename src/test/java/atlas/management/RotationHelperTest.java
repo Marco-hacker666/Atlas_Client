@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** The shared server look's turn limit (2026-10-31). */
 public class RotationHelperTest {
-
     @Test
     public void aSmallTurnGoesAllTheWay() {
         float[] r = RotationHelper.limitTurn(10.0F, 5.0F, 30.0F, 15.0F, 90.0F);

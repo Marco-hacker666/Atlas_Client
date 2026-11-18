@@ -9,18 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
-/**
- * The distance field lookup must survive the renderer a subclass (PR #5
- * review). Vanilla declares thirdPersonDistance on EntityRenderer, and
- * OptiFine and shaders builds run a subclass of it, so a lookup that only asks
- * getDeclaredField on one class cannot be trusted -- it misses an inherited
- * field and silently returns null, which leaves the camera distance alone.
- *
- * The parent/child pair here stands in for that hierarchy; the game classes are
- * not reachable from a unit test.
- */
 public class ViewClipFieldLookupTest {
-
     @SuppressWarnings("unused")
     private static class ParentRenderer {
         private float thirdPersonDistance = 4.0F;

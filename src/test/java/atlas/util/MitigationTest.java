@@ -4,35 +4,30 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** The vanilla damage floor and the mitigation check built on it (2026-10-04). */
 public class MitigationTest {
-
     private static final long WINDOW = 500L;
 
     @Test
     public void vanillaDamageMatchesTheGame() {
-        /* Diamond sword (7), no armour: 8. */
         assertEquals(8.0F, DamageModel.expected(7.0F, 0, 0, 0, false, 0, 0)[0], 1.0E-4F);
-        /* Iron sword, Sharpness I, crit: (1+6)*1.5+1.25 = 11.75. */
+
         assertEquals(11.75F, DamageModel.expected(6.0F, 1, 0, 0, true, 0, 0)[0], 1.0E-4F);
-        /* Full iron armour (15 points): 8 * 10/25 = 3.2. */
+
         assertEquals(3.2F, DamageModel.expected(7.0F, 0, 0, 0, false, 15, 0)[0], 1.0E-4F);
-        /* Strength I: (1+7) * 2.3 = 18.4. */
+
         assertEquals(18.4F, DamageModel.expected(7.0F, 0, 1, 0, false, 0, 0)[0], 1.0E-3F);
     }
 
     @Test
     public void protectionIsARange() {
-        /* Protection II: floor((6+4)/3*0.75) = 2 a piece, 8 for four. */
         assertEquals(2, DamageModel.protectionPoints(2));
         assertEquals(0, DamageModel.protectionPoints(0));
         float[] range = DamageModel.expected(7.0F, 0, 0, 0, false, 0, 8);
-        /* raw 8: 4..8 points, 16%..32% off 8. */
+
         assertEquals(8.0F * 17 / 25.0F, range[0], 1.0E-4F);
         assertEquals(8.0F * 21 / 25.0F, range[1], 1.0E-4F);
     }
 
-    /** One hit on target 1 that should take at least expected and takes dealt. */
     private static DamageWatch.Hit hit(DamageWatch watch, long[] now, float[] health, float expected, float dealt) {
         DamageWatch.Hit result = null;
         now[0] += 50L;
@@ -41,9 +36,7 @@ public class MitigationTest {
         now[0] += 50L;
         watch.tick(1, health[0], 10, now[0], WINDOW);
         health[0] -= dealt;
-        /* Long enough for a score reading to settle too (SETTLE_TICKS_SCORE 24):
-           until 2026-10-13 only 10 ticks, so with precision set no hit ever
-           resolved and the whole-number test passed without testing anything. */
+
         for (int t = 9; t >= -20; t--) {
             now[0] += 50L;
             DamageWatch.Hit h = watch.tick(1, health[0], Math.max(0, t), now[0], WINDOW);
@@ -80,7 +73,7 @@ public class MitigationTest {
         watch.setPrecision(1.0F);
         long[] now = {10_000L};
         float[] health = {20.0F};
-        /* 3.6 of 6 (limit 3.9): low with exact health, not with a score that may be off. */
+
         for (int i = 0; i < 4; i++) {
             hit(watch, now, health, 6.0F, 3.6F);
         }
@@ -94,7 +87,6 @@ public class MitigationTest {
 
     @Test
     public void halfTheDamageIsMitigationEvenWithWholeNumberHealth() {
-        /* The owner's case: about 4 expected, 2 taken, health from the score. */
         DamageWatch watch = new DamageWatch();
         watch.setPrecision(1.0F);
         long[] now = {10_000L};
@@ -107,7 +99,6 @@ public class MitigationTest {
 
     @Test
     public void ordinaryHitsAreNotMitigation() {
-        /* At or a little under the vanilla floor (protection rolls, rounding): not called. */
         DamageWatch watch = new DamageWatch();
         watch.setPrecision(1.0F);
         long[] now = {10_000L};

@@ -3,15 +3,6 @@ package atlas.script;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Raven bS 17's rule for classes a script declares (2026-11-03): a script is the body of a class, so a class it
- * declares is an inner class, and Java 8 lets no inner class hold an enum or an interface. bS 17 makes such a
- * class static (and every class around one), and so does this -- by inserting "static " before its "class",
- * which keeps the lines where they are. Written for Atlas from that description.
- *
- * Strings, characters and comments are skipped; "X.class" is no declaration; a class inside a method is left
- * alone (a local class cannot be static).
- */
 final class NestedTypes {
     private NestedTypes() {
     }
@@ -88,7 +79,6 @@ final class NestedTypes {
         return type.becomesStatic;
     }
 
-    /** Which type each one sits in, directly; a member is one declared in the script's body or a member's. */
     private static void nest(List<Type> types) {
         for (Type type : types) {
             Type around = null;
@@ -139,7 +129,6 @@ final class NestedTypes {
         return out;
     }
 
-    /** The "{" that opens the type's body, at its own depth; -1 when a ";" comes first. */
     private static int body(List<Token> tokens, int keyword) {
         int depth = tokens.get(keyword).depth;
         int parentheses = 0;
@@ -194,7 +183,6 @@ final class NestedTypes {
         return false;
     }
 
-    /** Words and the symbols that matter, with the brace depth each is at ("{" and "}" at the outer one). */
     private static List<Token> tokenize(String source) {
         List<Token> out = new ArrayList<Token>();
         int depth = 0;

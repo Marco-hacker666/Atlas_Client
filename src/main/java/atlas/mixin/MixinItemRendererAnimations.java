@@ -1,5 +1,3 @@
-// not rat bro XD
-// Original logic by syuto/animations-1.6, integrated into Uzi
 package atlas.mixin;
 
 import atlas.config.AnimationConfig;
@@ -25,7 +23,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @SideOnly(Side.CLIENT)
 @Mixin(value = ItemRenderer.class, priority = 999)
 public abstract class MixinItemRendererAnimations {
-
     private float spin = 0.0F;
     private float delay = 0.0F;
     private long lastUpdateTime = System.currentTimeMillis();
@@ -48,7 +45,6 @@ public abstract class MixinItemRendererAnimations {
                     ordinal = 2)
     )
     private void skipTransform(ItemRenderer instance, float f1, float f2) {
-        // Suppressed — animations replaces this below
     }
 
     @Inject(
@@ -77,9 +73,6 @@ public abstract class MixinItemRendererAnimations {
                 AnimationConfig.getBlockPosZ()
         );
 
-        // NOTE: using if-else instead of switch to avoid generating a synthetic
-        // MixinItemRendererAnimations$1 class that the mixin system incorrectly
-        // tries to load as a mixin (causing NoSuchFieldError on $SwitchMap).
         AnimationMode m = AnimationConfig.getMode();
         if (m == AnimationMode.EXHIBITION) {
             GL11.glTranslated(0.0D, -0.1D, 0.0D);

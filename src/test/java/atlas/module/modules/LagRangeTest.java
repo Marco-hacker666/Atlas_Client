@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-/** LagRange's let-out (2026-10-18). */
 public class LagRangeTest {
-
     @Test
     public void holdingStartsAtTheFullDelayAtOnce() {
         assertEquals(3, LagRange.nextDelay(0, 3, true));

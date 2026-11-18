@@ -11,26 +11,7 @@ import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-/**
- * Swaps the client jar after the game has closed.
- *
- * A running Minecraft holds its mod jars open, and on Windows an open file
- * cannot be moved or replaced. So the game, while quitting, copies this one
- * class out of the jar into atlas-update/installer/ and starts it as its own
- * small Java process. It waits for the game to let go of the old jar, moves
- * the old jar into atlas-update/backup/, and moves the new one into the mods
- * folder. If the second move fails, the old jar is put back, so the mods
- * folder is never left without a client.
- *
- * Self-contained on purpose: it runs outside the game, from a copy of this
- * class file alone, so it may use nothing but the JDK. No inner classes, no
- * lambdas, no other the client classes, Java 8.
- *
- * Arguments: currentJar newJar backupDir logFile
- */
 public final class UpdateInstaller {
-
-    /** How long to wait for the game to release the old jar. */
     static long waitMillis = 120000L;
     static long retryMillis = 500L;
 
@@ -57,7 +38,6 @@ public final class UpdateInstaller {
         System.exit(code);
     }
 
-    /** Returns 0 on success. Never leaves the mods folder without a jar. */
     static int install(File current, File update, File backupDir, PrintWriter log) throws InterruptedException {
         log("installing " + update + " in place of " + current, log);
         if (!update.isFile()) {
@@ -77,9 +57,6 @@ public final class UpdateInstaller {
         String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date());
         File backup = new File(backupDir, stamp + "-" + current.getName());
 
-        /* Step 1: move the old jar out. This is the step that fails while the
-           game is still running on Windows, so it is retried until the game
-           has exited. */
         long deadline = System.currentTimeMillis() + waitMillis;
         IOException last = null;
         boolean moved = false;
@@ -99,7 +76,6 @@ public final class UpdateInstaller {
         }
         log("old jar moved to " + backup, log);
 
-        /* Step 2: put the new jar in. On failure, restore the old one. */
         try {
             Files.move(update.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
@@ -117,13 +93,12 @@ public final class UpdateInstaller {
         return 0;
     }
 
-    /** Keeps the newest few backups, so updates do not fill the disk. */
     static void pruneBackups(File backupDir, int keep, PrintWriter log) {
         File[] files = backupDir.listFiles();
         if (files == null || files.length <= keep) {
             return;
         }
-        java.util.Arrays.sort(files); // names start with a timestamp: oldest first
+        java.util.Arrays.sort(files);
         for (int i = 0; i < files.length - keep; i++) {
             if (files[i].isFile() && files[i].getName().endsWith(".jar") && files[i].delete()) {
                 log("removed old backup " + files[i].getName(), log);

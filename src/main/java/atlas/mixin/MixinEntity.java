@@ -77,12 +77,7 @@ public abstract class MixinEntity {
         if (!((Entity) ((Object) this) instanceof EntityPlayerSP)) {
             return;
         }
-        /* This is the single place mouse movement becomes body rotation, so it
-           is the only place free look has to intervene: the deltas go to the
-           camera and never reach the fields the movement packet is built from.
-           Anything downstream -- the yaw sent to the server, the head other
-           players see, where attacks are aimed -- is therefore untouched. */
-        /* 2026-11-15: Freecam -- the mouse turns the camera, never the body. */
+
         if (atlas.module.modules.Freecam.camera() != null) {
             atlas.module.modules.Freecam.turn(yawDelta, pitchDelta);
             callbackInfo.cancel();
@@ -99,7 +94,6 @@ public abstract class MixinEntity {
         }
     }
 
-    /* 2026-11-03 (full check): Raven's onPlayerMove -- what this player is about to move by, as Raven fires it. */
     @Inject(
             method = {"moveEntity"},
             at = {@At("HEAD")}

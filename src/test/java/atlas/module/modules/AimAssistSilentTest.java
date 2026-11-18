@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** AimAssist SILENT's turn, Raven bS's smoothRotation (2026-10-31). */
 public class AimAssistSilentTest {
-
     @Test
     public void speedThirtyIsThereAtOnce() {
         float[] r = AimAssist.ravenSmooth(0.0F, 0.0F, 120.0F, 20.0F, 30, 50);

@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): fires a short burst of drag-style clicks on
-// enable, then switches itself off.
+// Ported from OpenSkid (GPL-3.0)
+
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.events.TickEvent;

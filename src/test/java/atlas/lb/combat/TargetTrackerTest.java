@@ -7,9 +7,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
-/** The LiquidBounce target tracker port (2026-10-24). */
 public class TargetTrackerTest {
-
     private static TargetTracker.Candidate<String> c(String name, boolean player, float health, double dist, double cos, int hurt) {
         return new TargetTracker.Candidate<String>(name, player, !player, health, dist * dist, cos, hurt, 0);
     }

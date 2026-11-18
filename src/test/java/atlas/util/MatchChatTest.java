@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-/** Lines taken from the logs of the servers actually played (2026-10-04). */
 public class MatchChatTest {
-
     @Test
     public void startsAreRecognised() {
         assertEquals(MatchChat.Kind.START, MatchChat.classify("                             MATCH START!", "asd3b1", null));
@@ -36,7 +34,7 @@ public class MatchChatTest {
         assertEquals(MatchChat.Kind.LOSS, MatchChat.classify("                Player1   Opponent1 WINNER!", "Player1", null));
         assertEquals(MatchChat.Kind.LOSS, MatchChat.classify("         Player1   [VIP+] Opponent3 WINNER!", "Player1", null));
         assertEquals(MatchChat.Kind.NONE, MatchChat.classify("   a WINNER!  b", "Player1", null));
-        /* A name that merely ends with this one is someone else. */
+
         assertEquals(MatchChat.Kind.LOSS, MatchChat.classify("   xx_bob WINNER!  bob", "bob", null));
     }
 

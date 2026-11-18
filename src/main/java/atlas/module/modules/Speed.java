@@ -32,8 +32,7 @@ public class Speed extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"default", "legit", "polar", "vulcan", "grimac", "intave", "blocksmc", "hypixel", "hypixel-low", "matrix", "strafe", "vanilla"})
-            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
-               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+
             .hide("vulcan", "blocksmc", "hypixel", "hypixel-low", "matrix");
 
     public final FloatProperty multiplier = new FloatProperty("multiplier", 1.0F, 0.0F, 10.0F);
@@ -265,7 +264,7 @@ public class Speed extends Module {
         }
     }
 
-    // Ported from Miau PolarSpeed.java: air-tick motion multipliers plus a small sink on tick 5.
+    // Ported from Miau PolarSpeed.java
     private void runPolar(StrafeEvent event) {
         if (mc.thePlayer.onGround) {
             if (MoveUtil.isForwardPressed()) {
@@ -282,7 +281,7 @@ public class Speed extends Module {
         }
     }
 
-    // Ported from Miau VulcanSpeed.java and Raven VulcanSpeed.java: hop then timed motion cut.
+    // Ported from Miau VulcanSpeed.java and Raven VulcanSpeed.java
     private void runVulcan(StrafeEvent event) {
         if (mc.thePlayer.onGround) {
             speedOffTicks = 0;
@@ -308,7 +307,7 @@ public class Speed extends Module {
         }
     }
 
-    // Ported from Raven GrimACSpeed.java: entity-proximity push adapted to 1.8.9 motion.
+    // Ported from Raven GrimACSpeed.java
     private void runGrimAC(StrafeEvent event) {
         if (!MoveUtil.isForwardPressed()) return;
         AxisAlignedBB playerBox = mc.thePlayer.getEntityBoundingBox().expand(1.0, 1.0, 1.0);
@@ -330,7 +329,7 @@ public class Speed extends Module {
         }
     }
 
-    // Ported from Raven IntaveSpeed.java: ground hop plus tiny air multipliers while sprinting.
+    // Ported from Raven IntaveSpeed.java
     private void runIntave(StrafeEvent event) {
         if (mc.thePlayer.onGround) {
             if (MoveUtil.isForwardPressed()) {
@@ -346,7 +345,7 @@ public class Speed extends Module {
         }
     }
 
-    // Ported from Raven BlocksMCSpeed.java: boost on hop then friction decay per air tick.
+    // Ported from Raven BlocksMCSpeed.java
     private void runBlocksMC(StrafeEvent event) {
         double base = MoveUtil.getAllowedHorizontalDistance();
         boolean potionActive = mc.thePlayer.isPotionActive(Potion.moveSpeed);
@@ -427,11 +426,7 @@ public class Speed extends Module {
         vulcanJumped = false;
         blocksmcSpeed = 0.0;
         blocksmcReset = true;
-        /* Not gated on thePlayer (2026-10-11): the game's Timer outlives a
-           world, so disabling Speed while disconnected used to leave
-           timerSpeed where the module had put it, and the next server ran at
-           that speed until Speed touched it again. Timer, Criticals and Fly
-           already reset unconditionally. */
+
         net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
         if (timer != null && timer.timerSpeed != 1.0F) {
             atlas.util.TimerControl.release(this);

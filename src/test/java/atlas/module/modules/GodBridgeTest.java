@@ -9,12 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * GODBRIDGE rewritten (2026-11-08), with no crouch (second 2026-11-08 change): GodBridge's plan, tick by tick, with the world as Scaffold would read it. A run
- * walks south (camera yaw 0, keys W), so the back is north (180) and the look 135 or -135.
- */
 public class GodBridgeTest {
-
     private static GodBridge.Input walking(long now, float sentYaw, float sentPitch) {
         GodBridge.Input in = new GodBridge.Input();
         in.x = 0.5;
@@ -31,7 +26,6 @@ public class GodBridgeTest {
         return in;
     }
 
-    /** Runs the plan as the server would get it: the look follows at most maxTurn a tick. */
     private static final class Sim {
         final GodBridge bridge = new GodBridge(new Random(11));
         float yaw = 0.0F;
@@ -80,7 +74,6 @@ public class GodBridgeTest {
 
     @Test
     public void straightBackLooksAlongTheRunAndNeverSwapsSide() {
-        /* GODBRIDGE2 (2026-11-18): the run's look straight back, off the grid by its offset only. */
         Sim sim = new Sim();
         GodBridge.Plan plan = null;
         for (int i = 0; i < 200; i++) {
@@ -116,7 +109,6 @@ public class GodBridgeTest {
 
     @Test
     public void neverACrouchAndNoStopOnceTheLookIsThere() {
-        /* The plan has no crouch to give (no sneak field since 2026-11-08); a stop only while turning at an edge. */
         Sim sim = new Sim();
         int stops = 0;
         for (int i = 0; i < 200; i++) {
@@ -144,7 +136,6 @@ public class GodBridgeTest {
         assertTrue(plan.maxTurn <= GodBridge.TURN_STEP);
     }
 
-    /** 2026-11-08 (owner: "change the pitch"): at an edge, the pitch that places from here, same side, no stop. */
     @Test
     public void anEdgeTheLookMissesTakesThePitchThatPlacesAndKeepsTheSide() {
         Sim sim = new Sim();
@@ -204,7 +195,6 @@ public class GodBridgeTest {
         assertEquals(learned, plan.pitch, GodBridge.PITCH_SPREAD + GodBridge.DRIFT_MAX);
     }
 
-    /** 2026-11-10 (owner: "the jump places no block"): in the air the pitch that places is taken, faster, not learned. */
     @Test
     public void inTheAirThePlacingPitchIsTakenAndNotLearned() {
         Sim sim = new Sim();
@@ -308,7 +298,7 @@ public class GodBridgeTest {
     public void thePaceAsksForAJumpBeforeAWalkSpeedBlockWithNoCrouch() {
         PlacePace pace = new PlacePace();
         long t = 10000L;
-        /* Ten blocks, so the first gap (from time 0, as the server counts it) is out of the last 8. */
+
         for (int i = 0; i < 10; i++) {
             pace.placed(t, true, true, 1, 0, 64, i);
             t += 230L;
@@ -333,7 +323,7 @@ public class GodBridgeTest {
             t += 520L;
         }
         assertTrue(pace.jumpWanted(t, 520L, 135.0F, 0));
-        /* A block with the feet high in the jump: not under the player, so the Sneak part starts again. */
+
         pace.placed(t + 300L, false, true, 1, 0, 64, 40);
         assertFalse(pace.jumpWanted(t + 520L, 520L, 135.0F, 0));
     }
@@ -395,7 +385,6 @@ public class GodBridgeTest {
 
     @Test
     public void aBlockThatCanGoBeforeTheEdgeTakesItsPitchAndIsClicked() {
-        /* 2026-11-11: not at the edge (edge false), the look misses, a pitch three degrees off places: taken, clicked. */
         Sim sim = settledRun();
         GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
         in.lookPlaces = false;
@@ -408,7 +397,6 @@ public class GodBridgeTest {
 
     @Test
     public void thePitchIsOnItsWayATickBeforeTheBlockCanGo() {
-        /* Nothing places from here; from the next step a pitch nine degrees off will. Six now, the rest then. */
         Sim sim = settledRun();
         float start = sim.pitch;
         GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
@@ -427,8 +415,6 @@ public class GodBridgeTest {
 
     @Test
     public void theLeadTurnStartsWhileTheColumnUnderTheFeetIsFilled() {
-        /* Review, PR #35: nothing to place under the feet (hasTarget false), the next step's block needs a pitch nine
-           degrees off: the turn still starts now. */
         Sim sim = settledRun();
         float start = sim.pitch;
         GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);

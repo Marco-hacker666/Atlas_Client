@@ -127,7 +127,6 @@ public class UFontRenderer extends FontRenderer {
 
     @Override
     public int drawString(String text, float x, float y, int color, boolean dropShadow) {
-        /* NickHider (2026-11-17): the real name is replaced in every font, not only the game's. */
         text = atlas.module.modules.NickHider.apply(text);
         float densityScale = getDensityScale();
         if (densityScale > 1.0f) {

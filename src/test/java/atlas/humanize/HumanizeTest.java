@@ -11,9 +11,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/** The humanization engine (2026-10-25). */
 public class HumanizeTest {
-
     @Test
     public void humanTurnLeavesTheLookAloneWhenOffOrClose() {
         Humanizer off = new Humanizer(Humanizer.CONSUMER_SCAFFOLD, new Random(1L));
@@ -26,7 +24,6 @@ public class HumanizeTest {
         assertEquals(11.0F, close[1], 0.0F);
     }
 
-    /** A settled tick has to end the turn, or the next one rolls no overshoot and the look turns exactly. */
     @Test
     public void aSettledTickLetsTheNextTurnRollAgain() {
         boolean[] on = new boolean[Humanizer.CONSUMERS];
@@ -74,7 +71,6 @@ public class HumanizeTest {
         return s;
     }
 
-    /** Clicks every 80 ms for {@code clicks}; the share that landed. */
     private static double run(Accuracy accuracy, HumanProfile p, Accuracy.Situation s, int clicks) {
         long now = 0L;
         int hits = 0;
@@ -229,8 +225,8 @@ public class HumanizeTest {
         long first = reaction.lastDrawn();
         assertTrue(first >= 180 && first <= 320);
         assertTrue(reaction.ready(7, first, p));
-        reaction.ready(Integer.MIN_VALUE, 1000L, p); // lost
-        reaction.ready(7, 2000L, p); // back within 3 s
+        reaction.ready(Integer.MIN_VALUE, 1000L, p);
+        reaction.ready(7, 2000L, p);
         assertEquals(Reaction.KIND_REACQUIRE, reaction.lastKind());
         assertTrue(reaction.lastDrawn() >= 120 && reaction.lastDrawn() <= 220);
         reaction.ready(8, 3000L, p);
@@ -253,7 +249,7 @@ public class HumanizeTest {
         assertTrue(first.overshot);
         assertTrue("overshoot " + first.yaw, first.yaw >= 60 * 0.05 - 2.0 && first.yaw <= 60 * 0.15 + 2.0);
         AimError.Adjust next = error.tick(p, 50.0F, 0.0F, 0.0F);
-        assertFalse(next.overshot); // only at the start of a turn
+        assertFalse(next.overshot);
         double sum = 0;
         int lapses = 0;
         HumanProfile calm = new HumanProfile();
@@ -273,7 +269,7 @@ public class HumanizeTest {
         }
         double rms = Math.sqrt(sum / 20000);
         assertTrue("tremor rms " + rms, rms > 0.3 && rms < 1.0);
-        // 20 % a second over 1000 s (less the ticks spent lapsing): about 150-200
+
         assertTrue("lapses " + lapses, lapses > 100 && lapses < 260);
     }
 

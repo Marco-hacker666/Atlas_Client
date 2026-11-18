@@ -52,9 +52,6 @@ public class Refill extends Module {
     }
 
     public static boolean isHotbarFull() {
-        /* The hotbar is inventory slots 0-8. This used to run 0..36 inclusive,
-           i.e. most of the main inventory plus the first armour slot, so any
-           empty backpack slot made a full hotbar look like it had room. */
         for (int i = 0; i < 9; ++i) {
             ItemStack itemstack = mc.thePlayer.inventory.getStackInSlot(i);
             if (itemstack == null) {

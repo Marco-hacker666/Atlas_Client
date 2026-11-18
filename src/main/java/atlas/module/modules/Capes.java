@@ -110,14 +110,6 @@ public class Capes extends Module {
 
         final String[] builtinCapes = getBuiltinCapes().toArray(new String[0]);
 
-        /* Names and textures are now added together, so index N of one is
-           always index N of the other. The names used to be filled by file
-           index while textures were only added on success, so one unreadable
-           or non-.png file shifted every later cape onto the wrong name (and
-           left null names in the list). ImageIO.read also returns null rather
-           than throwing for content it cannot decode, and only IOException
-           was caught -- that null went into DynamicTexture and threw, from the
-           constructor on startup as well as from the reload button. */
         List<String> names = new ArrayList<>();
         LOADED_CAPES.clear();
 

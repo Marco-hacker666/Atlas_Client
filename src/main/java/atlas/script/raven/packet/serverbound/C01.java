@@ -3,7 +3,6 @@ package atlas.script.raven.packet.serverbound;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C01PacketChatMessage;
 
-/** A chat message or command the player sends. */
 public class C01 extends CPacket {
     public String message;
 

@@ -4,7 +4,6 @@ import atlas.script.raven.model.ItemStack;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S04PacketEntityEquipment;
 
-/** What an entity holds or wears: slot 0 held, 1 boots .. 4 helmet. */
 public class S04 extends SPacket {
     public int entityId;
     public int slot;

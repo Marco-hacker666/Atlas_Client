@@ -30,7 +30,6 @@ public abstract class MixinEntityPlayer extends MixinEntityLivingBase {
             }
             double kept = keepSprint.hitMotionForAxis();
             if (kept != speed && (Object) this instanceof net.minecraft.client.entity.EntityPlayerSP) {
-                /* A change no listener makes: said here, so the self check's line names it (2026-11-12). */
                 atlas.util.ActionWatch.silent(keepSprint.getName(), "hit");
             }
             return kept;

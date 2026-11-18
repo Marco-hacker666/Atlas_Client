@@ -9,9 +9,7 @@ import java.util.List;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** KnockbackDelay's delay line and ramp (2026-10-27): in order, no bursts, latency-shaped. */
 public class DelayLineTest {
-
     @Test
     public void dueInOrderAndStopsAtTheFirstNotDue() {
         DelayLine<Integer> line = new DelayLine<Integer>();
@@ -19,7 +17,7 @@ public class DelayLineTest {
         line.add(2, 30);
         line.add(3, 10);
         assertEquals(Arrays.asList(1), line.due(100, 100));
-        // 3 is due by its own arrival but waits behind 2: never out of order.
+
         assertEquals(Arrays.asList(), line.due(120, 100));
         assertEquals(Arrays.asList(2, 3), line.due(130, 100));
         assertTrue(line.isEmpty());
@@ -67,12 +65,6 @@ public class DelayLineTest {
         assertTrue("it wanders: " + min + ".." + max, max - min > 5.0);
     }
 
-    /**
-     * A connection at 20 packets a tick, the delay ramping from 100 ms to
-     * nothing at 10 ms a tick: no tick lets out more than the arrivals of a
-     * tick and a quarter (a stop is a slow catch-up, never a burst), and the
-     * order is kept.
-     */
     @Test
     public void rampingDownLetsTheQueueOutWithoutABurst() {
         DelayLine<Integer> line = new DelayLine<Integer>();

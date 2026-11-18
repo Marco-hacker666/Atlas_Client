@@ -12,10 +12,6 @@ import java.net.URL;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Raven script API: a picture from a URL (or a file path) for render.image (2026-11-02). Downloaded on a thread of
- * its own; the texture is made on the client thread when it arrives. With cached, the same URL is downloaded once.
- */
 public class Image {
     private static final Map<String, Image> CACHE = new ConcurrentHashMap<String, Image>();
 
@@ -75,12 +71,9 @@ public class Image {
                 this.loaded = true;
             });
         } catch (Exception ignored) {
-            // Not loaded: render.image draws nothing for it.
         }
     }
 
-    /** {width, height} in pixels. */
-    /** Its size on the GUI, as Raven gives it: pixels over the GUI scale (whole numbers). */
     public float[] getDimensions() {
         int scale = new net.minecraft.client.gui.ScaledResolution(net.minecraft.client.Minecraft.getMinecraft())
                 .getScaleFactor();

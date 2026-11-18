@@ -29,7 +29,7 @@ public class DelayManager {
     public DelayModules delayModule = DelayModules.NONE;
     public long delay = 0L;
     public Deque<Packet<INetHandlerPlayClient>> delayedPacket = new ConcurrentLinkedDeque<>();
-    /** When the current hold began (PacketHolds). */
+
     private volatile long since;
 
     public DelayManager() {
@@ -47,15 +47,11 @@ public class DelayManager {
                 return moduleName(DelayManager.this.delayModule);
             }
 
-            /* BedNuker holds for as long as a bed takes to break, which has
-               no fixed bound: only an owner switched off ends it. Held with
-               no owner at all, they are orphans and go at once. */
             @Override
             public long ceilingMs() {
                 return DelayManager.this.delayModule == DelayModules.NONE ? 0L : -1L;
             }
 
-            /* What setDelayState(false) does, without assuming a connection. */
             @Override
             public void expire() {
                 DelayManager.this.delayModule = DelayModules.NONE;
@@ -64,7 +60,6 @@ public class DelayManager {
         });
     }
 
-    /** The module holding under this name; null for NONE. */
     static String moduleName(DelayModules module) {
         switch (module) {
             case VELOCITY:
@@ -81,10 +76,6 @@ public class DelayManager {
             return false;
         }
         if (Arbiter.catching()) {
-            /* F-27: a catch had every other holder let go, but not this one --
-               incoming packets kept being held while a fall was being caught.
-               Held ones go now (in order, ahead of this packet), and nothing
-               more is held until the catch is over. */
             if (!this.delayedPacket.isEmpty()) {
                 releaseDelayed();
                 Arbiter.yielded(this.delayModule.name());
@@ -114,11 +105,9 @@ public class DelayManager {
         }
     }
 
-    /** Processes everything held, in order (a catch; see shouldDelay). */
     private void releaseDelayed() {
         Minecraft minecraft = Minecraft.getMinecraft();
         if (minecraft == null || minecraft.getNetHandler() == null) {
-            /* Nothing to process them on. */
             this.delayedPacket.clear();
             return;
         }
@@ -127,7 +116,6 @@ public class DelayManager {
             try {
                 packet.processPacket(Minecraft.getMinecraft().getNetHandler());
             } catch (net.minecraft.network.ThreadQuickExitException ignored) {
-                // Rescheduled onto the client thread, in order: the normal path.
             }
         }
     }
@@ -142,9 +130,6 @@ public class DelayManager {
                 return true;
             }
             if (Minecraft.getMinecraft().getNetHandler() == null) {
-                /* 2026-10-26 (review): disconnected with packets still held -- they belong to a connection
-                   that is gone. processPacket(null) threw a NullPointerException here (releaseDelayed already
-                   checked for this). */
                 this.delayedPacket.clear();
                 return false;
             }
@@ -157,9 +142,6 @@ public class DelayManager {
                 try {
                     packet.processPacket(Minecraft.getMinecraft().getNetHandler());
                 } catch (net.minecraft.network.ThreadQuickExitException ignored) {
-                    /* Off the client thread vanilla reschedules each packet, in
-                       order, and throws this. Uncaught it ended the loop after
-                       the first packet and left the rest queued. */
                 }
             }
         }

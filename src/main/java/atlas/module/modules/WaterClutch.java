@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): water-bucket MLG clutch, standalone and
-// separate from the client's own Clutch rework (untouched).
+// Ported from OpenSkid (GPL-3.0)
+
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.events.UpdateEvent;

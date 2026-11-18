@@ -1,9 +1,7 @@
 package atlas.config.online;
 
 // Ported from OpenSkid (GPL-3.0), itself adapted from the MiauMinus
-// online-config concept.
-// Fetches raw JSON text only. Fetched data is parsed as data and applied per
-// property by OnlineConfigApplier. It is never executed as code.
+
 public final class OnlineConfigFetcher {
     private static final int CONNECT_TIMEOUT_MS = 6000;
     private static final int READ_TIMEOUT_MS = 8000;
@@ -31,13 +29,11 @@ public final class OnlineConfigFetcher {
     }
 
     private static String fetchUrl(String url) throws java.io.IOException {
-        /* 2026-10-30 (audit): https only -- over http anyone on the way can rewrite the config. */
         if (!url.toLowerCase(java.util.Locale.ROOT).startsWith("https://")) {
             throw new java.io.IOException("Only https:// addresses are allowed");
         }
         java.net.URLConnection connection = new java.net.URL(url).openConnection();
         if (connection instanceof java.net.HttpURLConnection) {
-            /* A redirect from https to http is not followed by Java anyway; one to another https host is fine. */
             ((java.net.HttpURLConnection) connection).setInstanceFollowRedirects(true);
         }
         connection.setConnectTimeout(CONNECT_TIMEOUT_MS);

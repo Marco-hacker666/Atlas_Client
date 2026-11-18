@@ -7,27 +7,6 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-/**
- * Silent Aura's Rhythm block, written down while it runs (2026-10-27): the
- * numbers that say whether it blocks more than half the hits taken without
- * costing damage dealt. config/Atlas/rhythm-[stamp].txt (Rhythm-Log).
- *
- *  - TAKEN: each hit taken, its damage (health and absorption before the
- *    hurt showed against three ticks after) and the block the server most
- *    likely had when it landed: our use/release packets reach the server half
- *    a round trip after they leave and the hurt comes back the other half, so
- *    the server judged the hit against the sword as the client had it about a
- *    round trip earlier (two neighbouring ticks: both up B, both down O, else ?).
- *    On Pika a blocked hit does half the damage after armour, so the damage
- *    column checks the guess.
- *  - HIT: each attack on the target, whether it was due; LAND when its hurt
- *    came back (and how many ticks later), NOSHOW when it did not.
- *  - LAG: each Rhythm-Lag hold, its ticks and the movement it held.
- *  - SUMMARY also counts the movement ticks the server judged with the sword
- *    up, how many were unslowed (FreeRaise) and the longest unslowed run --
- *    Grim's NoSlow flags at two in a row, so it must stay at 1.
- *  - SUMMARY each minute of fighting and when Rhythm stops.
- */
 final class RhythmLog {
     private static final File LOG_DIR = new File("./config/Atlas/");
     private static final SimpleDateFormat FILE_STAMP = new SimpleDateFormat("yyyyMMdd-HHmmss");
@@ -38,7 +17,7 @@ final class RhythmLog {
 
     private File file;
     private boolean started;
-    /** Sword up at the start of each tick (what the packets sent before it left the server with). */
+
     private final boolean[] upAt = new boolean[HISTORY];
     private final float[] hpAt = new float[HISTORY];
     private final boolean[] seen = new boolean[HISTORY];
@@ -131,7 +110,6 @@ final class RhythmLog {
             this.pingCount++;
         }
 
-        /* A hit taken: hurt rose to 10 this tick. */
         if (this.takenAt >= 0 && tick - this.takenAt >= READ_DAMAGE_AFTER) {
             finishTaken(hp);
         }
@@ -150,8 +128,6 @@ final class RhythmLog {
         }
         this.lastSelfHurt = selfHurt;
 
-        /* Our attack's hurt coming back. A tick without a target (the aura's HurtTime filter drops one for the
-           tick its hurt is 10: the 10-27 log's NOSHOW on every hit) keeps what is known about it. */
         if (targetId < 0) {
             if (this.hitAt >= 0 && tick - this.hitAt > rtt + 3) {
                 write(String.format(Locale.ROOT, "NOSHOW after %dt (rtt %d)", tick - this.hitAt, rtt));
@@ -185,7 +161,6 @@ final class RhythmLog {
         }
     }
 
-    /** An attack on the target left; {@code due}: the window's damaging one. */
     void attack(int tick, String name, int targetHurt, int wait, int rtt, boolean due) {
         this.attacks++;
         if (due) {
@@ -197,7 +172,6 @@ final class RhythmLog {
                 due ? "due" : "early"));
     }
 
-    /** A movement tick the server judged with the sword up; {@code unslowed}: FreeRaise moved it at full speed. */
     void usingTick(boolean unslowed) {
         this.usingTicks++;
         if (unslowed) {
@@ -209,7 +183,6 @@ final class RhythmLog {
         }
     }
 
-    /** A Rhythm-Lag hold ended. */
     void hold(int ticks, int moves, int packets, String why) {
         this.holds++;
         this.holdTicks += ticks;
@@ -253,7 +226,6 @@ final class RhythmLog {
         this.takenAt = -1;
     }
 
-    /** B / O / ? from the sword as the client had it one round trip before {@code tick} (and the tick after). */
     private String serverBlock(int tick, int rtt) {
         int a = tick - rtt;
         int b = tick - rtt + 1;

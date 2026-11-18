@@ -64,7 +64,6 @@ public class ESP extends Module {
         }
     }
 
-    /** The colour, themed by the Players group unless a friend or a marked target (those colours say who someone is). */
     private Color getEntityColor(EntityPlayer entityPlayer) {
         Color own = this.ownEntityColor(entityPlayer);
         if (TeamUtil.isFriend(entityPlayer) || TeamUtil.isTarget(entityPlayer)) {
@@ -117,16 +116,11 @@ public class ESP extends Module {
         if (this.framebuffer != null) {
             this.framebuffer.deleteFramebuffer();
         }
-        /* Mobile-safe: OUTLINE never draws, so no framebuffer is kept (made again on use). */
+
         this.framebuffer = atlas.util.render.MobileSafe.active()
                 ? null : new Framebuffer(mc.displayWidth, mc.displayHeight, false);
     }
 
-    /**
-     * The mode drawn this frame. OUTLINE renders every player again into an
-     * extra framebuffer through a shader; in mobile-safe mode (gl4es /
-     * Krypton Wrapper, 2026-10-15) it draws as 3D boxes instead.
-     */
     private int drawMode() {
         int value = this.mode.getValue();
         return value == 3 && atlas.util.render.MobileSafe.active() ? 2 : value;
@@ -223,7 +217,7 @@ public class ESP extends Module {
                     }
                     if (this.drawMode() == 4) {
                         Color color = this.getEntityColor(player);
-                        // is it me or this fucking line looks cursed
+
                         RenderUtil.drawCornerESP(player, color.getRed() / 255.0F, color.getGreen() / 255.0F, color.getBlue() / 255.0F);
                     }
                     if (this.drawMode() == 5) {
@@ -256,6 +250,5 @@ public class ESP extends Module {
         }
     }
 
-    /* Merged modules (2026-10-11, ModuleBundle). */
     public final atlas.module.ModuleBundle mobsMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.MobESP(), "mobs", "Mobs", false);
 }

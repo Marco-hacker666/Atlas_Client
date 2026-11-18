@@ -102,16 +102,8 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * The base of a Raven script (2026-11-02): Raven bS's script API under its names -- client, world, modules,
- * gl, config, render (blur, bloom), inventory, keybinds, util and bridge -- written for Atlas (Raven bS publishes
- * no licence, so none of its code is used; the names and what they do are matched). A script is compiled as the
- * body of a subclass (ScriptSource), so it calls these as Raven scripts do: client.print(...), world.getEntities().
- *
- * Where Raven has its own machinery Atlas's is used: a look a script asks for goes through the shared rotation
- * engine (RotationHelper, at ScriptManager.PRIORITY), friends and enemies are Atlas's lists, modules are Atlas's
- * (Raven's names for them where they differ), settings are real menu settings.
- */
+// Raven bS's script API under its names -- client, world, modules, gl, config, render (blur, bloom), inventory, keybinds, util and bridge -- written for Atlas ...
+
 public class RavenScript {
     private static final Minecraft mc = Minecraft.getMinecraft();
     public static final Bridge bridge = new Bridge();
@@ -121,14 +113,12 @@ public class RavenScript {
         return thread;
     });
     private static final Random RANDOM = new Random();
-    /* A hook on the network thread can land here too. */
+
     private static final Map<String, Field> FIELDS = new java.util.concurrent.ConcurrentHashMap<String, Field>();
 
-    /** Raven refreshes its name-to-module table here. Atlas looks a module up when it is asked for: nothing to do. */
     public static void reloadModules() {
     }
 
-    /** A private field of the game's, by its SRG name in the game and its MCP name in development. */
     static Object field(Object owner, Class<?> type, String srg, String mcp) {
         try {
             String key = type.getName() + "#" + mcp;
@@ -156,7 +146,6 @@ public class RavenScript {
                 field.set(owner, value);
             }
         } catch (Exception ignored) {
-            // Left as it was.
         }
     }
 
@@ -168,7 +157,6 @@ public class RavenScript {
         }
     }
 
-    /** {yaw, pitch} from the eyes to a point. */
     static float[] rotationsTo(double x, double y, double z) {
         double dx = x - mc.thePlayer.posX;
         double dy = y - (mc.thePlayer.posY + mc.thePlayer.getEyeHeight());
@@ -180,7 +168,6 @@ public class RavenScript {
                 MathHelper.clamp_float(pitch, -90.0F, 90.0F)};
     }
 
-    // =====================================================================
     public static class client {
         public static boolean allowFlying() {
             return mc.thePlayer.capabilities.allowFlying;
@@ -190,7 +177,6 @@ public class RavenScript {
             mc.thePlayer.removePotionEffectClient(id);
         }
 
-        /** Raven's account number; here a fixed number per Minecraft account. */
         public static int getUID() {
             return Math.abs(mc.getSession().getPlayerID().hashCode());
         }
@@ -223,7 +209,6 @@ public class RavenScript {
             return Atlas.targetManager.isFriend(username);
         }
 
-        /** Runs off the client thread (HTTP, files, sleeps); the world is not to be touched from there. */
         public static void async(final Runnable method) {
             ASYNC.submit(() -> {
                 try {
@@ -238,12 +223,10 @@ public class RavenScript {
             return Minecraft.getDebugFPS();
         }
 
-        /** Sends a chat line (or command) as the player. */
         public static void chat(String message) {
             mc.thePlayer.sendChatMessage(message);
         }
 
-        /** A line in the player's own chat, '&' codes coloured. */
         public static void print(String string) {
             ChatUtil.sendRaw(util.color(string == null ? "null" : string));
         }
@@ -256,7 +239,6 @@ public class RavenScript {
             print(String.valueOf(object));
         }
 
-        /** Facing a diagonal (within 15 degrees of one). */
         public static boolean isDiagonal() {
             float yaw = ((MathHelper.wrapAngleTo180_float(mc.thePlayer.rotationYaw) % 90.0F) + 90.0F) % 90.0F;
             return Math.abs(yaw - 45.0F) < 15.0F;
@@ -270,9 +252,6 @@ public class RavenScript {
             return mc.thePlayer.capabilities.isCreativeMode;
         }
 
-        /** Handled as if it had just arrived, with no receive event -- as Raven does it, so a script can hold a packet
-         *  in onPacketReceived and let it go later without being shown it again. A packet that came in is handled
-         *  as it came; one the script made, as its fields say. */
         public static void processPacket(SPacket packet) {
             processPacketNoEvent(packet);
         }
@@ -309,7 +288,6 @@ public class RavenScript {
             return mc.thePlayer.capabilities.isFlying;
         }
 
-        /** Swings and attacks, as a left click on it would. */
         public static void attack(Entity entity) {
             if (entity == null || entity.entity == null) {
                 return;
@@ -330,7 +308,6 @@ public class RavenScript {
             mc.thePlayer.capabilities.isFlying = flying;
         }
 
-        /** The jump key of this tick's movement. */
         public static void setJump(boolean jump) {
             mc.thePlayer.movementInput.jump = jump;
         }
@@ -349,7 +326,6 @@ public class RavenScript {
             return progress instanceof Float ? (Float) progress : 0.0F;
         }
 
-        /** Leaves the server (or the world), back to the menus. */
         public static void disconnect() {
             mc.addScheduledTask(() -> {
                 boolean single = mc.isIntegratedServerRunning();
@@ -385,7 +361,6 @@ public class RavenScript {
             return Runtime.getRuntime().maxMemory();
         }
 
-        /** {name, description} of each resource pack in use. */
         public static List<String[]> getResourcePacks() {
             List<String[]> out = new ArrayList<String[]>();
             for (ResourcePackRepository.Entry entry : mc.getResourcePackRepository().getRepositoryEntries()) {
@@ -414,7 +389,6 @@ public class RavenScript {
             return mc.thePlayer.getItemInUseDuration();
         }
 
-        /** A line in the game's log. */
         public static void log(final Object obj) {
             System.out.println("[Atlas script] " + obj);
         }
@@ -423,7 +397,6 @@ public class RavenScript {
             mc.thePlayer.setSneaking(sneak);
         }
 
-        /** The sneak key of this tick's movement. */
         public static void setSneak(boolean sneak) {
             mc.thePlayer.movementInput.sneak = sneak;
         }
@@ -444,7 +417,6 @@ public class RavenScript {
             return new Vec3(mc.thePlayer.motionX, mc.thePlayer.motionY, mc.thePlayer.motionZ);
         }
 
-        /** Waits; on the client thread the game waits too (use client.async). */
         public static void sleep(long ms) {
             try {
                 Thread.sleep(ms);
@@ -487,7 +459,6 @@ public class RavenScript {
             }
         }
 
-        /** The open screen's class name, "" in game. */
         public static String getScreen() {
             return mc.currentScreen == null ? "" : mc.currentScreen.getClass().getSimpleName();
         }
@@ -526,7 +497,6 @@ public class RavenScript {
             mc.thePlayer.motionZ = z;
         }
 
-        /** Horizontal speed in blocks a tick, in the direction the keys move. */
         public static void setSpeed(double speed) {
             atlas.util.MoveUtil.setSpeed(speed);
         }
@@ -539,7 +509,6 @@ public class RavenScript {
             mc.thePlayer.movementInput.moveStrafe = strafe;
         }
 
-        /** "" in singleplayer. */
         public static String getServerIP() {
             if (mc.getCurrentServerData() == null || mc.isSingleplayer()) {
                 return "";
@@ -547,13 +516,11 @@ public class RavenScript {
             return mc.getCurrentServerData().serverIP;
         }
 
-        /** {scaled width, scaled height, scale factor}. */
         public static int[] getDisplaySize() {
             ScaledResolution resolution = new ScaledResolution(mc);
             return new int[]{resolution.getScaledWidth(), resolution.getScaledHeight(), resolution.getScaleFactor()};
         }
 
-        /** The direction the server sees the player face: the state's yaw. */
         public static float getServerDirection(PlayerState state) {
             return state.yaw;
         }
@@ -562,7 +529,6 @@ public class RavenScript {
             return raycastBlock(distance, mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
         }
 
-        /** {Vec3 block, Vec3 hit inside it (0..1), side name}, or null. */
         public static Object[] raycastBlock(final double distance, final float yaw, final float pitch) {
             net.minecraft.util.Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
             net.minecraft.util.Vec3 look = look(yaw, pitch);
@@ -580,10 +546,6 @@ public class RavenScript {
             return raycastEntity(distance, mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
         }
 
-        /**
-         * {Entity, Vec3 hit relative to it, squared distance}, or null: the nearest living entity the look meets
-         * within the distance, blocks in between counted.
-         */
         public static Object[] raycastEntity(final double distance, final float yaw, final float pitch) {
             net.minecraft.util.Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
             net.minecraft.util.Vec3 look = look(yaw, pitch);
@@ -641,13 +603,11 @@ public class RavenScript {
                     facing(side), mc.thePlayer, stack.itemStack);
         }
 
-        /** Right-clicks the face of the block with what is held, at hitVec (world position). */
         public static boolean placeBlock(Vec3 targetPos, String side, Vec3 hitVec) {
             return mc.playerController.onPlayerRightClick(mc.thePlayer, mc.theWorld, mc.thePlayer.getHeldItem(),
                     Vec3.getBlockPos(targetPos), facing(side), Vec3.getVec3(hitVec));
         }
 
-        /** While a script's look is held, the movement keys turn with it. */
         public static void enableMovementFix() {
             RavenHooks.movementFix = true;
         }
@@ -664,7 +624,6 @@ public class RavenScript {
             return RavenHooks.appliedYaw != null || RavenHooks.appliedPitch != null;
         }
 
-        /** The look the server gets this tick (asked again every tick it should hold). */
         public static void setRotations(float yaw, float pitch) {
             RavenHooks.wantedYaw = yaw;
             RavenHooks.wantedPitch = pitch;
@@ -678,7 +637,6 @@ public class RavenScript {
             RavenHooks.wantedPitch = pitch;
         }
 
-        /** The look scripts held last tick, null when none. */
         public static Float getServerYaw() {
             return RavenHooks.appliedYaw;
         }
@@ -704,7 +662,6 @@ public class RavenScript {
         }
     }
 
-    // =====================================================================
     public static class world {
         public static Block getBlockAt(int x, int y, int z) {
             return new Block(x, y, z);
@@ -749,7 +706,6 @@ public class RavenScript {
             return out;
         }
 
-        /** The sidebar, title first, then its lines top to bottom; null when there is none. */
         public static List<String> getScoreboard() {
             if (mc.theWorld == null) {
                 return null;
@@ -790,7 +746,6 @@ public class RavenScript {
             return text instanceof IChatComponent ? ((IChatComponent) text).getFormattedText() : "";
         }
 
-        /** Each scoreboard team's members. */
         public static Map<String, List<String>> getTeams() {
             Map<String, List<String>> out = new LinkedHashMap<String, List<String>>();
             if (mc.theWorld == null) {
@@ -812,11 +767,6 @@ public class RavenScript {
         }
     }
 
-    // =====================================================================
-    /**
-     * This script's settings, and other modules. moduleName is a script's name (scriptName for its own) or a
-     * module's; Raven's names for Atlas's modules (BedAura, AntiKnockback ...) find them too.
-     */
     public static class modules {
         private static final Map<String, String> ALIASES = new HashMap<String, String>();
 
@@ -855,11 +805,6 @@ public class RavenScript {
             return module;
         }
 
-        /* 2026-11-04 (owner: LEGITTELLY "does nothing, only shakes the head"). Raven's SafeWalk has a Sneak setting that
-           crouches at edges; here that is BridgeAssist, a module of its own. A script turning SafeWalk off for a run
-           ("Disable SafeWalk") means both: with BridgeAssist still crouching, client.isSneak() stays true at the
-           edge, so the run never starts and the player cannot walk off. BridgeAssist is paused for it rather than
-           switched off, so nothing of this reaches the player's config; the dispatcher lets go when no script is on. */
         private static boolean isSafeWalk(String moduleName) {
             return "safewalk".equals(moduleName.replace(" ", "").toLowerCase(Locale.ROOT));
         }
@@ -907,7 +852,6 @@ public class RavenScript {
             return module != null && module.isHidden();
         }
 
-        /** Silent Aura's target, or null. */
         public Entity getKillAuraTarget() {
             Module aura = Atlas.moduleManager.getModule(atlas.module.modules.KillAura.class);
             if (aura == null || !aura.isEnabled()) {
@@ -916,7 +860,6 @@ public class RavenScript {
             return Entity.convert(((atlas.module.modules.KillAura) aura).getTarget());
         }
 
-        /** Each setting as shown, with its value. */
         public Map<String, Object> getSettings(String name) {
             Map<String, Object> out = new LinkedHashMap<String, Object>();
             Module module = find(name);
@@ -939,7 +882,6 @@ public class RavenScript {
             return list == null ? new ArrayList<Property<?>>() : list;
         }
 
-        /** Category name to module names, scripts under "Scripts". */
         public Map<String, List<String>> getCategories() {
             Map<String, List<String>> out = new LinkedHashMap<String, List<String>>();
             for (Category category : Category.values()) {
@@ -959,13 +901,11 @@ public class RavenScript {
             return out;
         }
 
-        /** The bed BedNuker is breaking, or null. */
         public Vec3 getBedAuraPosition() {
             atlas.module.modules.BedNuker nuker = bedNuker();
             return nuker == null ? null : Vec3.convert(nuker.getTargetBed());
         }
 
-        /** {progress 0..1, 0}. */
         public float[] getBedAuraProgress() {
             atlas.module.modules.BedNuker nuker = bedNuker();
             return new float[]{nuker == null ? 0.0F : nuker.getBreakProgress(), 0.0F};
@@ -981,7 +921,6 @@ public class RavenScript {
             return scaffold != null && scaffold.isEnabled();
         }
 
-        /** Scaffold on, a tower mode picked, and jump held. */
         public boolean isTowering() {
             Module module = Atlas.moduleManager.getModule(atlas.module.modules.Scaffold.class);
             if (module == null || !module.isEnabled()) {
@@ -991,13 +930,10 @@ public class RavenScript {
             return scaffold.tower.getValue() != 0 && mc.gameSettings.keyBindJump.isKeyDown();
         }
 
-        // ---- this script's settings ----
-
         public void registerGroup(String name) {
             ScriptSettings.group(this.self(), name);
         }
 
-        /** A line of text over the settings that follow (a heading in the menu). */
         public void registerDescription(String description) {
             ScriptSettings.group(this.self(), description);
         }
@@ -1042,7 +978,6 @@ public class RavenScript {
             this.registerSlider(name, suffix, defaultValue, minimum, maximum, interval);
         }
 
-        /** A choice of one of the strings; getSlider reads its index. */
         public void registerSlider(String name, int defaultValue, String[] stringArray) {
             this.registerSlider(name, "", defaultValue, stringArray);
         }
@@ -1086,13 +1021,10 @@ public class RavenScript {
             return Math.max(0, Math.min(255, value));
         }
 
-        // ---- reading and changing settings, any module's ----
-
         private static Property<?> setting(String moduleName, String name) {
             return ScriptSettings.find(find(moduleName), name);
         }
 
-        /** ARGB. */
         public int getColor(String moduleName, String name) {
             Property<?> colour = setting(moduleName, name);
             if (colour == null || !(colour.getValue() instanceof Integer)) {
@@ -1129,7 +1061,6 @@ public class RavenScript {
             return button != null && Boolean.TRUE.equals(button.getValue());
         }
 
-        /** A slider's value (rounded to its step), or a choice's index. */
         public double getSlider(String moduleName, String name) {
             Property<?> slider = setting(moduleName, name);
             if (slider == null) {
@@ -1173,8 +1104,6 @@ public class RavenScript {
         }
     }
 
-    // =====================================================================
-    /** Thin OpenGL calls for drawing in onRenderTick / onRenderWorld. */
     public static class gl {
         private static void toggle(int cap, boolean on) {
             if (on) {
@@ -1196,7 +1125,6 @@ public class RavenScript {
             GL11.glBegin(mode);
         }
 
-        /** Only switches blending: the blend function stays what it was (as in Raven). */
         public static void blend(boolean blend) {
             if (blend) {
                 GlStateManager.enableBlend();
@@ -1249,7 +1177,6 @@ public class RavenScript {
             }
         }
 
-        /** bS 16: GlStateManager's colour cache only (bS 17 also sets white, Raven17Script). */
         public static void resetColor() {
             GlStateManager.resetColor();
         }
@@ -1294,7 +1221,6 @@ public class RavenScript {
             GlStateManager.scale(x, y, z);
         }
 
-        /** In window pixels, from the bottom left, as OpenGL takes them. */
         public static void scissor(int x, int y, int width, int height) {
             GL11.glScissor(x, y, width, height);
         }
@@ -1324,8 +1250,6 @@ public class RavenScript {
         }
     }
 
-    // =====================================================================
-    /** Strings kept between games for every script: config/Atlas/scripts/config.json. */
     public static class config {
         private static final File FILE = new File(ScriptManager.ROOT, "config.json");
         private static JsonObject values;
@@ -1342,7 +1266,6 @@ public class RavenScript {
                         }
                     }
                 } catch (Exception ignored) {
-                    // Unreadable: start empty.
                 }
             }
             return values;
@@ -1368,15 +1291,12 @@ public class RavenScript {
             }
         }
 
-        /** The value, or null. */
         public static synchronized String get(final String key) {
             JsonObject all = values();
             return key != null && all.has(key) && all.get(key).isJsonPrimitive() ? all.get(key).getAsString() : null;
         }
     }
 
-    // =====================================================================
-    /** Drawing: the 3D calls in onRenderWorld, the 2D ones in onRenderTick. Colours are ARGB. */
     public static class render {
         private static final FloatBuffer SCREEN = BufferUtils.createFloatBuffer(3);
 
@@ -1385,7 +1305,6 @@ public class RavenScript {
                     (color >>> 24) / 255.0F};
         }
 
-        /** A box in world coordinates already offset by the viewer. */
         private static void box(AxisAlignedBB box, int color, boolean outline, boolean shade) {
             float[] c = argb(color);
             GlStateManager.pushMatrix();
@@ -1418,7 +1337,6 @@ public class RavenScript {
             atlas.util.RenderUtil.renderBlock(new BlockPos(x, y, z), color, outline, shade);
         }
 
-        /** Its box where it is drawn this frame. */
         public static void entity(Entity en, int color, float partialTicks, boolean outline, boolean shade) {
             net.minecraft.entity.Entity entity = en.entity;
             double x = entity.lastTickPosX + (entity.posX - entity.lastTickPosX) * partialTicks - entity.posX
@@ -1440,7 +1358,6 @@ public class RavenScript {
             mc.getItemRenderer().resetEquippedProgress();
         }
 
-        /** A line from the eyes to its middle. */
         public static void tracer(Entity entity, float lineWidth, int color, float partialTicks) {
             net.minecraft.entity.Entity target = entity.entity;
             double x = target.lastTickPosX + (target.posX - target.lastTickPosX) * partialTicks - mc.getRenderManager().viewerPosX;
@@ -1453,7 +1370,6 @@ public class RavenScript {
             lineRelative(eyes.xCoord, eyes.yCoord + mc.thePlayer.getEyeHeight(), eyes.zCoord, x, y, z, lineWidth, color);
         }
 
-        /** An empty screen: the mouse is free and the game paused for input. */
         public static void showGui() {
             mc.displayGuiScreen(new GuiScreen() {
             });
@@ -1491,10 +1407,6 @@ public class RavenScript {
             tessellator.draw();
         }
 
-        /**
-         * A world point on the screen: {x, y} in GUI coordinates at that scale factor, z the depth (0..1 in front).
-         * Uses the view of the last world frame; null before the first.
-         */
         public static Vec3 worldToScreen(double x, double y, double z, int scaleFactor, float partialTicks) {
             if (!RavenHooks.matrices) {
                 return null;
@@ -1514,7 +1426,6 @@ public class RavenScript {
             atlas.util.RenderUtil.drawRoundedRect(startX, startY, endX - startX, endY - startY, radius, color);
         }
 
-        /** Left colour to right colour. */
         public static void gradientRect(float startX, float startY, float endX, float endY, int leftColor, int rightColor) {
             gradientRect(startX, startY, endX, endY, leftColor, leftColor, rightColor, rightColor);
         }
@@ -1543,20 +1454,16 @@ public class RavenScript {
             buffer.pos(x, y, 0.0).color(color >> 16 & 0xFF, color >> 8 & 0xFF, color & 0xFF, color >>> 24).endVertex();
         }
 
-        /** The player model's look as drawn: {yaw, pitch}. */
         public static double[] getRotations() {
             return new double[]{mc.getRenderManager().playerViewY, mc.getRenderManager().playerViewX};
         }
 
-        /** Where the camera looks: {yaw, pitch}, turned round in the front third-person view. */
         public static double[] getCameraRotations() {
             net.minecraft.entity.Entity view = mc.getRenderViewEntity() == null ? mc.thePlayer : mc.getRenderViewEntity();
             boolean front = mc.gameSettings.thirdPersonView == 2;
             return new double[]{view.rotationYaw + (front ? 180.0F : 0.0F), front ? -view.rotationPitch : view.rotationPitch};
         }
 
-        /** As Raven measures: the game's width, plus one for every character after a bold code (which Raven never
-         *  ends there, not even at a colour or reset code). */
         public static int getFontWidth(String text) {
             int extra = 0;
             boolean bold = false;
@@ -1574,7 +1481,6 @@ public class RavenScript {
             return mc.fontRendererObj.FONT_HEIGHT;
         }
 
-        /** Where the world is drawn from this frame. */
         public static Vec3 getPosition() {
             return new Vec3(mc.getRenderManager().viewerPosX, mc.getRenderManager().viewerPosY,
                     mc.getRenderManager().viewerPosZ);
@@ -1592,7 +1498,6 @@ public class RavenScript {
             GlStateManager.popMatrix();
         }
 
-        /** Text facing the camera at a world position, like a name tag. */
         public static void text3d(String text, Vec3 position, float scale, boolean shadow, boolean depth,
                                   boolean background, int color) {
             double x = position.x - mc.getRenderManager().viewerPosX;
@@ -1681,7 +1586,6 @@ public class RavenScript {
             GlStateManager.popMatrix();
         }
 
-        /** Whether it is in the camera's view this frame. */
         public static boolean isInView(Entity en) {
             Frustum frustum = new Frustum();
             frustum.setPosition(mc.getRenderManager().viewerPosX, mc.getRenderManager().viewerPosY,
@@ -1689,7 +1593,6 @@ public class RavenScript {
             return frustum.isBoundingBoxInFrustum(en.entity.getEntityBoundingBox());
         }
 
-        /** prepare(), draw the shapes to blur behind (in onRenderTick), apply(passes, radius). */
         public static class blur {
             private static Framebuffer mask;
 
@@ -1707,7 +1610,6 @@ public class RavenScript {
             }
         }
 
-        /** prepare(), draw the shapes that glow, apply(passes, radius). */
         public static class bloom {
             private static Framebuffer source;
 
@@ -1726,7 +1628,6 @@ public class RavenScript {
         }
     }
 
-    // =====================================================================
     public static class inventory {
         public static int getSlot() {
             return mc.thePlayer.inventory.currentItem;
@@ -1738,12 +1639,10 @@ public class RavenScript {
             }
         }
 
-        /** A click in the open window (the inventory when none is open). */
         public static void click(int slot, int button, int mode) {
             mc.playerController.windowClick(mc.thePlayer.openContainer.windowId, slot, button, mode, mc.thePlayer);
         }
 
-        /** The open book's pages, as text. */
         public static List<String> getBookContents() {
             List<String> out = new ArrayList<String>();
             if (!(mc.currentScreen instanceof GuiScreenBook)) {
@@ -1765,7 +1664,6 @@ public class RavenScript {
             return out;
         }
 
-        /** The open chest's name, "" when none. */
         public static String getChest() {
             if (mc.thePlayer.openContainer instanceof ContainerChest) {
                 return ((ContainerChest) mc.thePlayer.openContainer).getLowerChestInventory().getDisplayName()
@@ -1774,7 +1672,6 @@ public class RavenScript {
             return "";
         }
 
-        /** The open window's name (a chest's, a creative tab's ...), "" when none. */
         public static String getContainer() {
             if (mc.currentScreen instanceof GuiContainerCreative) {
                 CreativeTabs tab = CreativeTabs.creativeTabArray[((GuiContainerCreative) mc.currentScreen).getSelectedTabIndex()];
@@ -1795,7 +1692,6 @@ public class RavenScript {
             return mc.thePlayer.inventory.getSizeInventory();
         }
 
-        /** -1 when no chest is open. */
         public static int getChestSize() {
             if (mc.thePlayer.openContainer instanceof ContainerChest) {
                 return ((ContainerChest) mc.thePlayer.openContainer).getLowerChestInventory().getSizeInventory();
@@ -1815,7 +1711,6 @@ public class RavenScript {
             return null;
         }
 
-        /** The 2x2 crafting grid of the inventory (0..3). */
         public static ItemStack getStackInCraftingSlot(int slot) {
             ContainerPlayer container = (ContainerPlayer) mc.thePlayer.inventoryContainer;
             return slot >= 0 && slot < 4 ? ItemStack.convert(container.craftMatrix.getStackInSlot(slot)) : null;
@@ -1826,18 +1721,12 @@ public class RavenScript {
             return ItemStack.convert(container.craftResult.getStackInSlot(0));
         }
 
-        /** Opens the inventory, as the key does. */
         public static void open() {
             mc.getNetHandler().addToSendQueue(new C16PacketClientStatus(C16PacketClientStatus.EnumState.OPEN_INVENTORY_ACHIEVEMENT));
             mc.displayGuiScreen(new GuiInventory(mc.thePlayer));
         }
     }
 
-    // =====================================================================
-    /**
-     * Keys by the game's key binding names without "key.": forward, back, left, right, jump, sneak, sprint,
-     * attack, use, drop, inventory, chat, playerlist, pickItem, command, hotbar.1 .. hotbar.9 ...
-     */
     public static class keybinds {
         private static KeyBinding binding(String key) {
             if (key == null) {
@@ -1852,7 +1741,6 @@ public class RavenScript {
             return null;
         }
 
-        /** The mouse in window pixels, from the bottom left. */
         public static int[] getMousePosition() {
             return new int[]{Mouse.getX(), Mouse.getY()};
         }
@@ -1869,7 +1757,6 @@ public class RavenScript {
             }
         }
 
-        /** One press of it, as a tap of the key gives. */
         public static void onTick(final String key) {
             KeyBinding binding = binding(key);
             if (binding != null) {
@@ -1877,13 +1764,11 @@ public class RavenScript {
             }
         }
 
-        /** The key it is bound to, -1 for none. */
         public static int getKeyCode(final String key) {
             KeyBinding binding = binding(key);
             return binding == null ? -1 : binding.getKeyCode();
         }
 
-        /** A key's code from its name ("R", "LSHIFT" ...). */
         public static int getKeyIndex(String key) {
             return Keyboard.getKeyIndex(key == null ? "" : key.toUpperCase(Locale.ROOT));
         }
@@ -1904,33 +1789,27 @@ public class RavenScript {
             ((IAccessorMinecraft) mc).callClickMouse();
         }
 
-        /** The wheel's movement since the last call. */
         public static int getScroll() {
             return Mouse.getDWheel();
         }
     }
 
-    // =====================================================================
     public static class util {
         public static final String colorSymbol = "§";
 
-        /** '&' colour codes to Minecraft's: as in Raven, every '&' becomes the section sign. */
         public static String color(String message) {
             return message == null ? "" : message.replace("&", colorSymbol);
         }
 
-        /** Without colour codes. */
         public static String strip(String string) {
             return string == null ? "" : string.replaceAll("(?i)§[0-9a-fk-or]", "");
         }
 
-        /** Half up, to {@code decimals} places (below zero: to tens, hundreds ...). */
         public static double round(double value, int decimals) {
             double scale = Math.pow(10.0, decimals);
             return Math.round(value * scale) / scale;
         }
 
-        /** min..max, both included. */
         public static int randomInt(int min, int max) {
             int low = Math.min(min, max);
             int high = Math.max(min, max);

@@ -531,8 +531,7 @@ public class BedwarUtils extends Module {
             this.marcoDelay = new IntProperty("macro-delay", 1, 1, 10,
                     () -> BedwarUtils.this.bedTracker.getValue()
                             && (this.marco.getValue() || this.marcoOnPreal.getValue()));
-            /* "tracker-" (2026-09-28): the module's own HUD settings have the
-               plain names, and the config keeps one value per name. */
+
             this.hud = new BooleanProperty("tracker-hud", true, BedwarUtils.this.bedTracker::getValue);
             this.hudPosX = new ModeProperty("hud-position-x", 0, new String[] { "LEFT", "MIDDLE", "RIGHT" },
                     () -> BedwarUtils.this.bedTracker.getValue() && this.hud.getValue());
@@ -848,8 +847,6 @@ public class BedwarUtils extends Module {
         }
     }
 
-
-    /* Merged modules (2026-10-11, ModuleBundle). */
     public final atlas.module.ModuleBundle bedwarsMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.BedWars(), "bedwars", "BedWars info", false);
     public final atlas.module.ModuleBundle bedAlertMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.BedProximityAlert(), "bed-alert", "Bed alert", false);
 }

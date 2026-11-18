@@ -10,9 +10,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** The self check against moves made by the simulation itself: a real input fits, a pushed or turned move does not. */
 public class SelfCheckTest {
-
     private static final double RESTING_FALL = -0.0784000015258789;
 
     private static final class Flat implements PlayerSim.World {
@@ -55,7 +53,6 @@ public class SelfCheckTest {
         return in;
     }
 
-    /** Runs {@code ticks} of the input from standing, checking each against the check; returns the worst offset. */
     private static double worst(PlayerSim.Input in, int ticks, String expectedKeys) {
         PlayerSim sim = standing();
         double worst = 0.0;
@@ -114,13 +111,12 @@ public class SelfCheckTest {
         }
         PlayerSim before = sim.copy();
         sim.tick(WORLD, in);
-        /* 22.5 degrees off: between two of the eight directions the keys give. */
+
         SelfCheck.Result result = SelfCheck.check(before, WORLD, 22.5F, sim.sprinting, false, sim.x(), sim.y(),
                 sim.z());
         assertTrue("moved by another yaw: " + result.offset, result.offset > SelfCheck.OFF);
     }
 
-    /** 2026-11-12 (owner: "just sprint-jumping and it reports"): a sprint started this tick counts at once on the ground. */
     @Test
     public void theTickASprintStartsFits() {
         PlayerSim sim = standing();
@@ -145,7 +141,6 @@ public class SelfCheckTest {
         assertEquals(0.0, worst(keys(0.0F, 0.0F, 0.0F, false, false, false), 10, "none"), 1.0E-9);
     }
 
-    /** Ten ticks of sprinting at yaw 0, the state then. */
     private static PlayerSim sprintingAlong() {
         PlayerSim sim = standing();
         PlayerSim.Input in = keys(0.0F, 1.0F, 0.0F, false, false, true);
@@ -157,7 +152,6 @@ public class SelfCheckTest {
 
     @Test
     public void sprintingSidewaysDoesNotFit() {
-        /* Omni-sprint (2026-11-12, after GrimAC): the sprint kept with only a side key, as a module forcing it does. */
         PlayerSim sim = sprintingAlong();
         PlayerSim before = sim.copy();
         sim.sprinting = true;
@@ -198,7 +192,7 @@ public class SelfCheckTest {
         SelfCheck.Result result = SelfCheck.check(before, WORLD, 0.0F, true, false, sim.x(), sim.y(), sim.z(), extra);
         assertEquals(0.0, result.offset, 1.0E-9);
         assertTrue(result.velocity);
-        /* Offered but not taken (a velocity module cancelled it): the plain move still fits, without kb. */
+
         PlayerSim plain = before.copy();
         plain.tick(WORLD, keys(0.0F, 1.0F, 0.0F, false, false, true));
         SelfCheck.Result ignored = SelfCheck.check(before, WORLD, 0.0F, true, false, plain.x(), plain.y(), plain.z(), extra);
@@ -208,7 +202,6 @@ public class SelfCheckTest {
 
     @Test
     public void knockbackIntoAWallStillCountsAsTaken() {
-        /* Review, PR #38: a push the wall stops ends where the plain move ends; the check must not call it ignored. */
         PlayerSim before = standing();
         double[] kb = {-0.4, 0.0, 0.0};
         PlayerSim.World walled = new PlayerSim.World() {
@@ -244,8 +237,6 @@ public class SelfCheckTest {
 
     @Test
     public void aJumpInsideTheClientsOwnJumpDelayStillFits() {
-        /* The ten ticks between jumps are counted by the client only (letting the key go clears them): a jump on
-           any tick on the ground is one a server allows, so it must not be reported. */
         PlayerSim before = standing();
         before.jumpTicks = 6;
         PlayerSim jumped = before.copy();
@@ -260,7 +251,6 @@ public class SelfCheckTest {
 
     @Test
     public void anExplosionBeforeTheKnockbackIsLostWithIt() {
-        /* Review, PR #38: explosion A, knockback V, explosion B in one window end as V + B, not V + A + B. */
         PlayerSim before = standing();
         double[] a = {0.3, 0.0, 0.0};
         double[] v = {0.0, 0.2, 0.25};
@@ -281,8 +271,6 @@ public class SelfCheckTest {
         assertTrue(result.velocity && result.explosion);
     }
 
-    /* The look check (2026-11-16, on the simulation instead of MoveModel's flat ground). */
-
     @Test
     public void theLookCheckFitsTheYawTheMoveWasMadeAtAndNotOneFarOff() {
         PlayerSim.Input in = keys(37.0F, 1.0F, 0.0F, false, false, true);
@@ -293,13 +281,13 @@ public class SelfCheckTest {
         PlayerSim before = sim.copy();
         sim.tick(WORLD, in);
         SelfCheck.Result atSent = SelfCheck.check(before, WORLD, 37.0F, true, false, sim.x(), sim.y(), sim.z());
-        /* The camera where the move was made, the packet 22 degrees off: a module turned the look alone. */
+
         double[] turned = SelfCheck.lookErrors(before, WORLD,
                 SelfCheck.check(before, WORLD, 59.0F, true, false, sim.x(), sim.y(), sim.z()), 59.0F, 37.0F, true,
                 false, sim.x(), sim.y(), sim.z(), null);
         assertTrue("look " + turned[0], turned[0] > 0.02);
         assertEquals(0.0, turned[1], 1.0E-9);
-        /* The same yaw both ways: the answer given is used, not worked out again. */
+
         double[] same = SelfCheck.lookErrors(before, WORLD, atSent, 37.0F, 37.0F + 360.0F, true, false, sim.x(),
                 sim.y(), sim.z(), null);
         assertEquals(atSent.offset, same[0], 0.0);
@@ -309,7 +297,6 @@ public class SelfCheckTest {
 
     @Test
     public void theLookCheckCoversAMoveIntoAWall() {
-        /* The flat model left every tick against a wall out; the simulation knows the wall. */
         PlayerSim.World walled = new PlayerSim.World() {
             private final AxisAlignedBB ground = new AxisAlignedBB(-100, -1, -100, 100, 0, 100);
             private final AxisAlignedBB wall = new AxisAlignedBB(3, 0, -100, 4, 3, 100);
@@ -339,14 +326,13 @@ public class SelfCheckTest {
         assertTrue(sim.collidedHorizontally);
         PlayerSim before = sim.copy();
         sim.tick(walled, in);
-        /* The sprint the server has: the wall stops it. */
+
         SelfCheck.Result atSent = SelfCheck.check(before, walled, -60.0F, sim.sprinting, false, sim.x(), sim.y(),
                 sim.z());
         double[] errors = SelfCheck.lookErrors(before, walled, atSent, -60.0F, -38.0F, sim.sprinting, false, sim.x(),
                 sim.y(), sim.z(), null);
         assertEquals(0.0, errors[0], 1.0E-9);
-        /* 22 degrees off, between two key directions: no keys slide along the wall as fast. (A right angle off
-           would fit: W at one yaw is A at the other.) */
+
         assertTrue("camera " + errors[1], errors[1] > 0.005);
     }
 }

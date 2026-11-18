@@ -5,26 +5,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-/**
- * Which point of a target's box to aim at (2026-10-24, LiquidBounce NextGen
- * port, GPL-3.0; aiming/point/PointTracker.kt, its exempts and processors,
- * and projectPointsOnBox / PlaneSection.castPointsOnUniformly).
- *
- * Points are cast onto the box uniformly as seen from the eyes; the nearest
- * one not exempted (head / body / feet parts, the area around the nearest
- * point) is taken, then the Delay, Lazy and Gaussian processors may hold it
- * or offset it. Boxes are {minX, minY, minZ, maxX, maxY, maxZ}; vectors
- * {x, y, z}. No game state: the module passes the predicted, inflated box.
- */
+// Which point of a target's box to aim at (LiquidBounce NextGen port, GPL-3.0)
+
 public final class PointTracker {
     public static final int PART_HEAD = 1;
     public static final int PART_BODY = 2;
     public static final int PART_FEET = 4;
     private static final int MAX_POINTS = 128;
 
-    /** ExemptBoxParts, as PART_* flags. */
     public int exemptParts;
-    /** ExemptBestHitVector. */
+
     public boolean exemptBest;
     public float exemptBestVertical = 0.2F;
     public float exemptBestHorizontal = 0.1F;
@@ -62,7 +52,6 @@ public final class PointTracker {
         this.random = random;
     }
 
-    /** The point to aim at and the box it belongs to. */
     public static final class Point {
         public final double[] pos;
         public final double[] box;
@@ -181,10 +170,6 @@ public final class PointTracker {
         return point;
     }
 
-    /*
-     * LiquidBounce's Gaussian offset. Its "Dynamic" group never applies there
-     * (it tests the point, not an entity, for a hurt time), so it is left out.
-     */
     private static final double STDDEV_Z = 0.24453708645460387;
     private static final double MEAN_X = 0.00942273861037109;
     private static final double STDDEV_X = 0.23319837528201348;
@@ -222,14 +207,6 @@ public final class PointTracker {
         return new Point(nearestPoint(movedBox, moved), movedBox);
     }
 
-    // ---- geometry -------------------------------------------------------
-
-    /**
-     * Points spread uniformly over the box as seen from {@code eye}: a frame
-     * between the eye and the box, its corners the box's vertices projected
-     * onto it, a grid cast through it and each ray clipped against the box.
-     * Null when the eye is inside the box.
-     */
     static List<double[]> projectPointsOnBox(double[] eye, double[] box, int maxPoints) {
         if (inside(box, eye)) {
             return null;
@@ -288,7 +265,6 @@ public final class PointTracker {
         return out;
     }
 
-    /** {step along dir2, step along dir1}, as PlaneSection.getFairStepSide. */
     private static double[] fairSteps(double[] dir1, double[] dir2, int n) {
         boolean zero1 = length(dir1) < 1.0E-7;
         boolean zero2 = length(dir2) < 1.0E-7;
@@ -302,7 +278,6 @@ public final class PointTracker {
         return zero1 ? new double[]{1.0, 2.0 / n} : new double[]{2.0 / n, 1.0};
     }
 
-    /** The first point where the segment from {@code a} to {@code b} enters the box, or null. */
     static double[] clip(double[] box, double[] a, double[] b) {
         double tMin = 0.0;
         double tMax = 1.0;
@@ -386,7 +361,6 @@ public final class PointTracker {
         return l < 1.0E-12 ? new double[]{0, 0, 0} : scale(a, 1.0 / l);
     }
 
-    /** a + (b - a) * t, as Vec3.lerp. */
     private static double[] lerp(double[] a, double[] b, double t) {
         return add(a, scale(sub(b, a), t));
     }

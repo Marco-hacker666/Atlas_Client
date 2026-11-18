@@ -19,12 +19,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
-/*
- * This file is derived from https://github.com/ksyzov/AccountManager.
- * Originally licensed under the GNU LGPL.
- *
- * This modified version is licensed under the GNU GPL v3.
- */
+// Originally licensed under the GNU LGPL.
+
 public class GuiMicrosoftAuth extends GuiScreen {
     private final GuiScreen previousScreen;
     private final String state;
@@ -200,11 +196,11 @@ public class GuiMicrosoftAuth extends GuiScreen {
 
         if (button.enabled) {
             switch (button.id) {
-                case 0: { // Open
+                case 0: {
                     SystemUtils.openWebLink(MicrosoftAuth.getMSAuthLink(state));
                 }
                 break;
-                case 1: { // Cancel
+                case 1: {
                     mc.displayGuiScreen(new GuiAccountManager(previousScreen));
                 }
                 break;

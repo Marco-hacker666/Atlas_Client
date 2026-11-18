@@ -12,12 +12,8 @@ import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.util.Session;
 import org.lwjgl.input.Keyboard;
 
-/*
- * This file is derived from https://github.com/ksyzov/AccountManager.
- * Originally licensed under the GNU LGPL.
- *
- * This modified version is licensed under the GNU GPL v3.
- */
+// Originally licensed under the GNU LGPL.
+
 public class GuiCrackedLogin extends GuiScreen {
     private final GuiScreen previousScreen;
 
@@ -37,7 +33,7 @@ public class GuiCrackedLogin extends GuiScreen {
         usernameField = new GuiTextField(
                 1, mc.fontRendererObj, sr.getScaledWidth() / 2 - 100, sr.getScaledHeight() / 2, 200, 20
         );
-        // Minecraft usernames are at most 16 characters.
+
         usernameField.setMaxStringLength(16);
         usernameField.setFocused(true);
 
@@ -79,13 +75,11 @@ public class GuiCrackedLogin extends GuiScreen {
         if (button.id == 998) {
             String username = usernameField.getText().trim();
 
-            // Standard Minecraft username rules: 3-16 chars, letters/digits/underscore.
             if (!username.matches("^\\w{3,16}$")) {
                 status = "&cInvalid username (3-16 letters, digits or _).&r";
                 return;
             }
 
-            // Re-use an existing cracked entry instead of creating duplicates.
             boolean exists = false;
             for (Account account : AccountManager.accounts) {
                 if (account.isCracked() && account.getUsername().equalsIgnoreCase(username)) {

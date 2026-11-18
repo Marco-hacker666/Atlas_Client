@@ -5,9 +5,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** Account tokens are kept encrypted (2026-11-01). */
 public class TokenVaultTest {
-
     @Test
     public void aTokenComesBackAsItWas() {
         String token = "M.C123_BAY.-CRt0kEn!*";

@@ -11,28 +11,11 @@ import org.lwjgl.opengl.GL11;
 
 import java.util.Random;
 
-/**
- * The space behind the Atlas window, in the style of the Atlas banner
- * (2026-10-06): drifting, twinkling stars, comets, and a ringed planet in the
- * lower right.
- *
- * Second version, after "it looks fake and nothing moves": the planet is no
- * longer built from rounded rectangles. Its disc is rendered per pixel every
- * ~40 ms into a small texture -- a sphere lit from the upper left, with a soft
- * terminator, atmosphere scattering on the rim, a highlight, and banded clouds
- * that rotate (faster at the equator than at the poles). The rings are smooth
- * triangle strips with a density profile (gaps included), and dust in them
- * orbits at Keplerian speed. Comet tails and the glint are tapered strips, so
- * there are no overlapping round caps to show up as beads.
- *
- * Drawn in screen space, after the world dim and before the window.
- */
 final class Cosmos {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final long EPOCH = System.nanoTime();
     private static final Random RANDOM = new Random();
 
-    // ---- stars ---------------------------------------------------------
     private static final int MAX_STARS = 170;
     private static final float[] STAR_X = new float[MAX_STARS];
     private static final float[] STAR_Y = new float[MAX_STARS];
@@ -41,7 +24,6 @@ final class Cosmos {
     private static final float[] STAR_SPEED = new float[MAX_STARS];
     private static final boolean[] STAR_TINTED = new boolean[MAX_STARS];
 
-    // ---- comets --------------------------------------------------------
     private static final int COMETS = 3;
     private static final float[] COMET_START = new float[COMETS];
     private static final float[] COMET_NEXT = new float[COMETS];
@@ -51,19 +33,16 @@ final class Cosmos {
     private static final float[] COMET_SPEED = new float[COMETS];
     private static final float COMET_LIFE = 1.9F;
 
-    // ---- ring dust -----------------------------------------------------
     private static final int DUST = 170;
     private static final float[] DUST_T = new float[DUST];
     private static final float[] DUST_A = new float[DUST];
     private static final float[] DUST_SIZE = new float[DUST];
     private static final float[] DUST_PHASE = new float[DUST];
 
-    // ---- planet --------------------------------------------------------
-    /** The cloud map: longitude across, latitude down, values 0..1. */
     private static final int MAP_W = 512;
     private static final int MAP_H = 256;
     private static float[] map;
-    /** The rendered disc. */
+
     private static final int SIZE = 160;
     private static DynamicTexture disc;
     private static ResourceLocation discLocation;
@@ -78,7 +57,6 @@ final class Cosmos {
     private static final float TILT_SIN = (float) Math.sin(TILT);
 
     static {
-        /* A fixed seed, so the sky is the same every time the menu opens. */
         Random fixed = new Random(0x41544C4153L);
         for (int i = 0; i < MAX_STARS; i++) {
             STAR_X[i] = fixed.nextFloat();
@@ -94,7 +72,6 @@ final class Cosmos {
             COMET_NEXT[i] = 0.4F + i * 1.1F;
         }
         for (int i = 0; i < DUST; i++) {
-            /* More dust where the ring is dense. */
             float t;
             do {
                 t = fixed.nextFloat();
@@ -109,17 +86,11 @@ final class Cosmos {
     private Cosmos() {
     }
 
-    /**
-     * @param accent  the colour of the planet's bands, the rings and tinted stars
-     * @param density 0..1, how many of the stars are shown
-     * @param alpha   the menu's fade
-     */
     static void draw(float width, float height, int accent, float density, boolean comets, boolean planet,
                      float alpha) {
         float time = (System.nanoTime() - EPOCH) / 1.0E9F;
         int rgb = accent & 0x00FFFFFF;
 
-        /* A faint wash of the accent from below, where the planet is. */
         Liquid.rect(0, height * 0.45F, width, height, 0.0F, 0x00000000, colour(rgb, 0.08F * alpha));
 
         drawStars(time, width, height, rgb, density, alpha);
@@ -131,15 +102,13 @@ final class Cosmos {
         }
     }
 
-    // ---- stars -----------------------------------------------------------
-
     private static void drawStars(float time, float width, float height, int rgb, float density, float alpha) {
         int count = Math.round(MAX_STARS * Math.max(0.0F, Math.min(1.0F, density)));
         for (int i = 0; i < count; i++) {
             float wave = 0.5F + 0.5F * (float) Math.sin(time * STAR_SPEED[i] + STAR_PHASE[i]);
             float twinkle = 0.35F + 0.65F * wave * wave;
             int base = STAR_TINTED[i] ? rgb : 0xFFFFFF;
-            /* A slow drift to the left; nearer (bigger) stars drift faster. */
+
             float x = STAR_X[i] - time * 0.0025F * STAR_R[i];
             x = (x - (float) Math.floor(x)) * width;
             float y = STAR_Y[i] * height;
@@ -151,15 +120,13 @@ final class Cosmos {
         }
     }
 
-    // ---- comets ----------------------------------------------------------
-
     private static void drawComets(float time, float width, float height, int rgb, float alpha) {
         for (int i = 0; i < COMETS; i++) {
             if (COMET_START[i] < 0.0F) {
                 if (time < COMET_NEXT[i]) {
                     continue;
                 }
-                /* From somewhere along the top or the right edge, heading down and to the left. */
+
                 COMET_START[i] = time;
                 if (RANDOM.nextBoolean()) {
                     COMET_X[i] = 0.35F + RANDOM.nextFloat() * 0.7F;
@@ -186,7 +153,6 @@ final class Cosmos {
             float hy = COMET_Y[i] * height + dy * travelled;
             float tail = 0.16F * scale;
 
-            /* The tail: one strip that narrows and fades, white at the head into the accent. */
             begin();
             WorldRenderer buffer = Tessellator.getInstance().getWorldRenderer();
             buffer.begin(GL11.GL_TRIANGLE_STRIP, DefaultVertexFormats.POSITION_COLOR);
@@ -209,15 +175,12 @@ final class Cosmos {
         }
     }
 
-    // ---- the planet ------------------------------------------------------
-
     private static void drawPlanet(float time, float width, float height, int rgb, float alpha) {
         float r = Math.min(width, height) * 0.13F;
         float cx = width - r * 2.0F;
         float cy = height - r * 1.65F;
         float breathe = 0.88F + 0.12F * (float) Math.sin(time * 0.7F);
 
-        /* Halo: soft layers of the accent, strongest on the lit side. */
         Liquid.shadow(cx - r, cy - r, cx + r, cy + r, r, r * 1.8F, colour(rgb, 0.07F * breathe * alpha), 0.0F);
         Liquid.shadow(cx - r * 1.04F, cy - r * 1.04F, cx + r * 0.9F, cy + r * 0.9F, r, r * 0.7F,
                 colour(rgb, 0.14F * breathe * alpha), 0.0F);
@@ -248,11 +211,9 @@ final class Cosmos {
         drawDust(time, cx, cy, r, false, rgb, alpha);
         drawMoon(time, cx, cy, r, rgb, alpha);
 
-        /* A glint on the lit limb, like a lens catching it. */
         float glint = (0.7F + 0.3F * (float) Math.sin(time * 1.3F)) * alpha;
         sparkle(cx - r * 0.66F, cy - r * 0.70F, r * 0.42F, rgb, glint);
 
-        /* A small, far planet in the upper left. */
         float fr = r * 0.18F;
         float fx = width * 0.09F;
         float fy = height * 0.16F;
@@ -261,7 +222,6 @@ final class Cosmos {
         Liquid.rectH(fx - fr, fy - fr, fx + fr, fy + fr, fr, colour(0x000000, 0.0F), colour(0x000000, 0.6F * alpha));
     }
 
-    /** Renders the lit, rotating sphere into the disc texture, at most 25 times a second. */
     private static void renderDisc(float time, int rgb) {
         if (disc == null) {
             try {
@@ -284,7 +244,7 @@ final class Cosmos {
         float ar = ((rgb >> 16) & 0xFF) / 255.0F;
         float ag = ((rgb >> 8) & 0xFF) / 255.0F;
         float ab = (rgb & 0xFF) / 255.0F;
-        /* Light from the upper left and a little in front; screen y points down. */
+
         float lx = -0.62F;
         float ly = -0.55F;
         float lz = 0.56F;
@@ -306,11 +266,10 @@ final class Cosmos {
                 float coverage = Math.min(1.0F, edge);
                 float z = (float) Math.sqrt(Math.max(0.0F, 1.0F - d2));
 
-                /* Into the planet's own frame, tilted like its rings. */
                 float bx = x * TILT_COS + y * TILT_SIN;
                 float by = -x * TILT_SIN + y * TILT_COS;
                 float lat = (float) Math.asin(Math.max(-1.0F, Math.min(1.0F, by)));
-                /* Differential rotation: the equator turns faster than the poles. */
+
                 float spin = time * (0.05F + 0.025F * (float) Math.cos(lat * 2.0F))
                         + 0.04F * (float) Math.sin(lat * 7.0F + time * 0.3F);
                 float lon = (float) Math.atan2(bx, z) + spin;
@@ -337,7 +296,6 @@ final class Cosmos {
         disc.updateDynamicTexture();
     }
 
-    /** Deep near-black for the dark belts, the accent (a little muted) for the bright zones. */
     private static void buildPalette(int rgb) {
         paletteFor = rgb;
         float ar = ((rgb >> 16) & 0xFF) / 255.0F;
@@ -366,7 +324,6 @@ final class Cosmos {
         }
     }
 
-    /** Turbulent bands: latitude stripes, warped by noise that wraps around the planet. */
     private static void buildMap() {
         if (map != null) {
             return;
@@ -388,9 +345,6 @@ final class Cosmos {
         map = out;
     }
 
-    // ---- rings and dust --------------------------------------------------
-
-    /** How dense the ring is across its width, t = 0 at the inner edge: bands, two gaps, soft edges. */
     private static float ringDensity(float t) {
         if (t < 0.0F || t > 1.0F) {
             return 0.0F;
@@ -415,7 +369,6 @@ final class Cosmos {
         return r * 2.25F;
     }
 
-    /** The far (upper) or near half of the rings as smooth strips, brighter on the lit left. */
     private static void drawRings(float time, float cx, float cy, float r, boolean far, int rgb, float alpha) {
         float inner = ringInner(r);
         float outer = ringOuter(r);
@@ -423,7 +376,7 @@ final class Cosmos {
         int slices = 34;
         int steps = 90;
         float from = far ? (float) Math.PI : 0.0F;
-        /* A slow shimmer travelling round the ring. */
+
         float shimmerAt = time * 0.25F;
         begin();
         WorldRenderer buffer = Tessellator.getInstance().getWorldRenderer();
@@ -440,7 +393,7 @@ final class Cosmos {
                 double a = from + Math.PI * i / steps;
                 float light = 0.25F + 0.75F * (float) (0.5 - 0.5 * Math.cos(a));
                 float shimmer = 0.85F + 0.15F * (float) Math.cos(a * 3.0 - shimmerAt * 6.0 + t0 * 4.0);
-                /* Behind the planet's night side the rings lie in its shadow. */
+
                 float shadow = 1.0F;
                 if (!far) {
                     float sx = (float) Math.cos(a);
@@ -462,7 +415,6 @@ final class Cosmos {
         vertex(buffer, cx + ex * TILT_COS - ey * TILT_SIN, cy + ex * TILT_SIN + ey * TILT_COS, c, a);
     }
 
-    /** Specks in the rings, orbiting faster near the planet (Kepler), twinkling as they turn. */
     private static void drawDust(float time, float cx, float cy, float r, boolean far, int rgb, float alpha) {
         float inner = ringInner(r);
         float outer = ringOuter(r);
@@ -495,7 +447,6 @@ final class Cosmos {
         end();
     }
 
-    /** A small grey moon outside the rings, lit like the planet; hidden while it is behind it. */
     private static void drawMoon(float time, float cx, float cy, float r, int rgb, float alpha) {
         float angle = time * 0.16F + 2.2F;
         float radius = ringOuter(r) * 1.12F;
@@ -512,7 +463,6 @@ final class Cosmos {
         Liquid.rectH(x - mr, y - mr, x + mr, y + mr, mr, colour(0x000000, 0.0F), colour(0x000000, 0.72F * alpha));
     }
 
-    /** A four-pointed glint: tapered rays that fade from a bright core, and a soft glow. */
     private static void sparkle(float x, float y, float size, int rgb, float alpha) {
         Liquid.shadow(x - 1.5F, y - 1.5F, x + 1.5F, y + 1.5F, 1.5F, size * 0.30F, colour(rgb, 0.45F * alpha), 0.0F);
         begin();
@@ -532,8 +482,6 @@ final class Cosmos {
         end();
         Liquid.dot(x, y, 1.4F, colour(0xFFFFFF, alpha));
     }
-
-    // ---- plain GL for the strips ----------------------------------------
 
     private static void begin() {
         GlStateManager.disableTexture2D();
@@ -555,8 +503,6 @@ final class Cosmos {
         int alpha = Math.max(0, Math.min(255, Math.round(a * Liquid.alpha * 255.0F)));
         buffer.pos(x, y, 0.0D).color((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF, alpha).endVertex();
     }
-
-    // ---- maths -----------------------------------------------------------
 
     private static float smooth(float t) {
         t = Math.max(0.0F, Math.min(1.0F, t));

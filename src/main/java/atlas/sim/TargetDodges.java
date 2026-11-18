@@ -4,29 +4,17 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Where another player can get to if it changes what it is doing (2026-11-16, owner: "some only move once they see
- * the arrow leave, and then it misses"). A forecast says where a player goes if it carries on; nobody can know what
- * it will do instead, but the simulation knows how far each thing it could do takes it: the ways out of an arrow's
- * path are few, and each is run here as the game would run it, walls, friction and the jump's push included.
- *
- * Every path goes on as the forecast does for {@code after} moves (the time the player needs to see the shot and
- * react) and then by one of {@link #WAYS}. A way never sneaks or holds an item back: the player is taken to let go
- * of both to get away, which is the faster of the two.
- */
 public final class TargetDodges {
-
-    /** One way to get out of the way. */
     public static final class Way {
         public final String name;
-        /** The keys, -1 to 1; ignored with {@link #keep}. */
+
         final int forward;
         final int strafe;
-        /** Degrees the player turns before it goes; negative is to its left. */
+
         final float turn;
         final boolean sprint;
         final boolean jump;
-        /** The keys and the sprint stay as they are; only the jump is added. */
+
         final boolean keep;
 
         Way(String name, int forward, int strafe, float turn, boolean sprint, boolean jump, boolean keep) {
@@ -40,10 +28,6 @@ public final class TargetDodges {
         }
     }
 
-    /**
-     * Letting go of the keys, a step to either side, back, a sprint forward, a turn to either side and a sprint, a
-     * jump as it goes, and the sprint-jumps, which are the farthest a player gets in a few ticks.
-     */
     public static final Way[] WAYS = {
             new Way("stop", 0, 0, 0.0F, false, false, false),
             new Way("left", 0, 1, 0.0F, false, false, false),
@@ -60,20 +44,13 @@ public final class TargetDodges {
     private TargetDodges() {
     }
 
-    /**
-     * A path for each of {@link #WAYS}, in that order, each {@code moves} moves from the last position the server
-     * sent, as {@link TargetTrack#forecast} counts them. Empty when the track cannot be run on (not locked).
-     *
-     * @param after the moves the player goes on as forecast before it changes
-     */
     public static List<TargetForecast> paths(TargetTrack track, PlayerSim.World world, int moves, int after) {
         PlayerSim start = track == null ? null : track.runStart();
         if (start == null || moves < 1) {
             return Collections.emptyList();
         }
         PlayerSim.Input before = track.runInput();
-        /* Keys let go a moment ago: the forecast is the middle of a stop and a tap, and so is each way here, so
-           that every path is the forecast until the player reacts (review, PR #43). */
+
         PlayerSim.Input tap = track.runTapInput();
         List<TargetForecast> out = runAll(start, world, moves, after, before, track.runYaw(), track.yawRate());
         if (tap != null) {
@@ -89,11 +66,6 @@ public final class TargetDodges {
         return out;
     }
 
-    /**
-     * The same for a player that has sent no position for a while, which means it stands still: from rest in the
-     * cell the server last named, facing {@code yaw}; index 0 is now. Empty before the first position, or when the
-     * player was not on ground.
-     */
     public static List<TargetForecast> pathsAtRest(TargetTrack track, PlayerSim.World world, int moves, int after,
                                                    float yaw) {
         PlayerSim start = track == null ? null : track.restStart(world);
@@ -103,10 +75,6 @@ public final class TargetDodges {
         return runAll(start, world, moves, after, new PlayerSim.Input(), yaw, 0.0F);
     }
 
-    /**
-     * Every way's path, as {@link #run} gives each (2026-11-16): the moves before the player reacts are the same for
-     * all of them, so they are run once and each way goes on from a copy of where they end.
-     */
     static List<TargetForecast> runAll(PlayerSim start, PlayerSim.World world, int moves, int after,
                                        PlayerSim.Input before, float yaw, float yawRate) {
         after = Math.max(0, after);
@@ -143,7 +111,6 @@ public final class TargetDodges {
         return out;
     }
 
-    /** The keys of before, at this yaw. */
     private static void hold(PlayerSim.Input in, PlayerSim.Input before, float yaw) {
         in.forward = before.forward;
         in.strafe = before.strafe;
@@ -153,7 +120,6 @@ public final class TargetDodges {
         in.yaw = yaw;
     }
 
-    /** The way's keys, at the yaw it turned to. */
     private static void change(PlayerSim.Input in, PlayerSim.Input before, Way way, float yaw) {
         if (way.keep) {
             hold(in, before, yaw);
@@ -168,10 +134,6 @@ public final class TargetDodges {
         }
     }
 
-    /**
-     * One path: {@code before} held, turning on by {@code yawRate} a move, for {@code after} moves, then the way.
-     * {@link #runAll} gives the same for every way at once; this one is kept as the plain form of it.
-     */
     static TargetForecast run(PlayerSim start, PlayerSim.World world, int moves, int after, PlayerSim.Input before,
                               float yaw, float yawRate, Way way) {
         PlayerSim sim = start.copy();
@@ -180,7 +142,7 @@ public final class TargetDodges {
         out.confidence = 1.0;
         set(out, 0, sim);
         after = Math.max(0, after);
-        /* The yaw it has when it changes; it turns once and then goes straight. */
+
         float changedYaw = yaw + yawRate * (float) Math.min(after, moves) + way.turn;
         PlayerSim.Input in = new PlayerSim.Input();
         for (int i = 1; i <= moves; i++) {

@@ -18,10 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Raven script API: an entity (2026-11-02). One wrapper per entity while the world lasts, so scripts may compare
- * them with == and key maps on them; {@link #entity} is the game's.
- */
 public class Entity {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final Map<Integer, Entity> CACHE = new ConcurrentHashMap<Integer, Entity>();
@@ -56,13 +52,10 @@ public class Entity {
         return cached;
     }
 
-    /** Forgets the entities that have left the world, so a long stay in one world does not keep every arrow and
-     *  dropped item (2026-11-03). A wrapper a script still holds keeps working. */
     public static void prune() {
         CACHE.values().removeIf(wrapper -> wrapper.entity == null || wrapper.entity.isDead);
     }
 
-    /** A new world: entity ids start over. */
     public static void clearCache() {
         CACHE.clear();
     }
@@ -87,8 +80,6 @@ public class Entity {
         return this.entity.getDistanceSq(position.x, position.y, position.z);
     }
 
-    /** As Raven measures it (2026-11-03): down the column under its centre to the first block that is neither
-     *  replaceable nor a liquid, from the feet, less one; 0 on the ground, -2 with nothing under it. */
     public double distanceToGround() {
         if (this.entity.onGround) {
             return 0.0;
@@ -113,7 +104,6 @@ public class Entity {
         return held != null && held.getItem() instanceof ItemBlock;
     }
 
-    /** A sword or a stick: what Raven counts as a weapon with its settings as they come. */
     public boolean isHoldingWeapon() {
         net.minecraft.item.ItemStack held = this.heldStack();
         return held != null && (held.getItem() instanceof ItemSword || held.getItem() == Items.stick);
@@ -123,7 +113,6 @@ public class Entity {
         return this.isLiving ? this.living().getHeldItem() : null;
     }
 
-    /** -1 for what does not live (here and below, as in Raven). */
     public float getAbsorption() {
         return this.isLiving ? this.living().getAbsorptionAmount() : -1.0F;
     }
@@ -132,7 +121,6 @@ public class Entity {
         return new Vec3(new BlockPos(this.entity));
     }
 
-    /** Without colour codes; a dropped item's own name. */
     public String getDisplayName() {
         if (this.entity instanceof net.minecraft.entity.item.EntityItem) {
             return ((net.minecraft.entity.item.EntityItem) this.entity).getEntityItem().getDisplayName();
@@ -148,7 +136,6 @@ public class Entity {
         return convert(this.entity.riddenByEntity);
     }
 
-    /** Where the server last put it, in the packets' own units (32 to a block), as Raven gives it. */
     public Vec3 getServerPosition() {
         return new Vec3(this.entity.serverPosX, this.entity.serverPosY, this.entity.serverPosZ);
     }
@@ -173,7 +160,6 @@ public class Entity {
         return this.entity.getCustomNameTag();
     }
 
-    /** Blocks a second, from the last tick's move. */
     public double getBPS() {
         if (!this.isLiving) {
             return 0.0;
@@ -211,7 +197,6 @@ public class Entity {
         return this.entity.isBurning();
     }
 
-    /** What it holds; for a dropped item, the item itself (as in Raven). */
     public ItemStack getHeldItem() {
         if (this.entity instanceof net.minecraft.entity.item.EntityItem) {
             return ItemStack.convert(((net.minecraft.entity.item.EntityItem) this.entity).getEntityItem());
@@ -223,7 +208,6 @@ public class Entity {
         return this.isLiving ? this.living().hurtTime : -1;
     }
 
-    /** Using an item with food in hand (as Raven: a potion is not food). */
     public boolean isConsuming() {
         if (!this.isPlayer || !this.player().isUsingItem()) {
             return false;
@@ -244,7 +228,6 @@ public class Entity {
         return this.isLiving ? this.living().maxHurtTime : -1;
     }
 
-    /** A dropped item's registry name without "minecraft:" (as Raven gives it), else the entity's name. */
     public String getName() {
         if (this.entity instanceof net.minecraft.entity.item.EntityItem) {
             net.minecraft.item.ItemStack item = ((net.minecraft.entity.item.EntityItem) this.entity).getEntityItem();
@@ -272,7 +255,6 @@ public class Entity {
         return new Vec3(this.entity.posX, this.entity.posY, this.entity.posZ);
     }
 
-    /** {id, name, amplifier, duration} for each active effect. */
     public List<Object[]> getPotionEffects() {
         List<Object[]> out = new ArrayList<Object[]>();
         if (!this.isLiving) {
@@ -284,13 +266,11 @@ public class Entity {
         return out;
     }
 
-    /** 0 boots .. 3 helmet. */
     public ItemStack getArmorInSlot(final int slot) {
         return this.isPlayer && slot >= 0 && slot <= 3 ? ItemStack.convert(this.player().inventory.armorInventory[slot])
                 : null;
     }
 
-    /** Horizontal speed, blocks a tick (its motion). */
     public double getSpeed() {
         return Math.sqrt(this.entity.motionX * this.entity.motionX + this.entity.motionZ * this.entity.motionZ);
     }
@@ -327,7 +307,6 @@ public class Entity {
         return this.isPlayer && this.player().capabilities.isCreativeMode;
     }
 
-    /** A player: as the game set it this tick. Anything else: touching a block at its sides (Raven's test). */
     public boolean isCollided() {
         if (!this.isPlayer) {
             return mc.theWorld.checkBlockCollision(this.entity.getEntityBoundingBox().expand(0.05, 0.0, 0.05));
@@ -343,14 +322,10 @@ public class Entity {
         return this.entity.isCollidedVertically;
     }
 
-    /** Removed, or in its death animation (as Raven has it). */
     public boolean isDead() {
         return this.entity.isDead || this.isLiving && this.living().deathTime > 0;
     }
 
-    // ---- bS 17 ----
-
-    /** An item entity's stack size, else the held stack's; -1 for none. */
     public int getStackSize() {
         if (this.entity instanceof net.minecraft.entity.item.EntityItem) {
             net.minecraft.item.ItemStack item = ((net.minecraft.entity.item.EntityItem) this.entity).getEntityItem();
@@ -386,7 +361,6 @@ public class Entity {
         }
     }
 
-    /** There over that many ticks, as the game moves entities the server moves. */
     public void moveTo(double x, double y, double z, float yaw, float pitch, int interpolationTicks) {
         if (interpolationTicks <= 0) {
             this.moveTo(x, y, z, yaw, pitch);
@@ -427,13 +401,10 @@ public class Entity {
         return this.entity.isInLava();
     }
 
-    /** For a fishing hook: the player holding the rod. */
     public Entity getFisher() {
         return this.entity instanceof EntityFishHook ? convert(((EntityFishHook) this.entity).angler) : null;
     }
 
-    /** Raven's test: its box overlaps a liquid or a block (Entity.isOffsetPositionInLiquid, which says the
-     *  opposite of its name). */
     public boolean isInLiquid() {
         return !this.entity.isOffsetPositionInLiquid(0.0, 0.0, 0.0);
     }
@@ -442,7 +413,6 @@ public class Entity {
         return this.isLiving && this.living().isOnLadder();
     }
 
-    /** Standing where a little more of its own motion takes it off the block. */
     public boolean isOnEdge() {
         return mc.theWorld.getCollidingBoundingBoxes(this.entity, this.entity.getEntityBoundingBox()
                 .offset(this.entity.motionX / 3.0, -1.0, this.entity.motionZ / 3.0)).isEmpty();

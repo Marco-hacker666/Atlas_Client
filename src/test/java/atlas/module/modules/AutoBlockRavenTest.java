@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** AutoBlock's Raven mode keeps Raven bS's millisecond-to-tick rules (2026-10-31). */
 public class AutoBlockRavenTest {
-
     @Test
     public void millisecondsRoundUpToTicks() {
         assertEquals(0, AutoBlockRaven.msToTicks(0));

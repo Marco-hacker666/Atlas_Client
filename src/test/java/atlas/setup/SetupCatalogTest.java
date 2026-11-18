@@ -8,12 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Pins the catalog so a broken entry (missing link, wrong section, a URL that
- * moved) is caught here rather than by a user whose download silently fails.
- */
 public class SetupCatalogTest {
-
     @Test
     public void everyEntryIsComplete() {
         for (SetupEntry entry : SetupCatalog.all()) {
@@ -29,14 +24,13 @@ public class SetupCatalogTest {
         assertFalse(mods.isEmpty());
         for (SetupEntry entry : mods) {
             assertEquals(entry.fileName, SetupEntry.Section.MODS, entry.section);
-            /* OptiFine comes from optifine.net's own download page (2026-10-11). */
+
             assertEquals(entry.fileName, "OptiFine".equals(entry.displayName())
                     ? SetupEntry.Source.OPTIFINE : SetupEntry.Source.DIRECT, entry.source);
             assertTrue(entry.fileName, entry.fileName.endsWith(".jar"));
         }
     }
 
-    /** 2026-10-11: official sources only, each pinned to its file's SHA-1. */
     @Test
     public void optiFineIsOfficialAndPinnedAndOneConfigIsGone() {
         boolean optifine = false;
@@ -93,10 +87,6 @@ public class SetupCatalogTest {
         return out;
     }
 
-    /**
-     * The CurseForge API link OpenSkid shipped now returns 404; the entry must
-     * stay on a host that still serves the file.
-     */
     @Test
     public void controllingPointsAtAWorkingHost() {
         for (SetupEntry entry : SetupCatalog.mods()) {

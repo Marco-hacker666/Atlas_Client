@@ -12,7 +12,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class KillAuraCheck {
-
     private final Map<String, Long> lastAttackTime = new HashMap<>();
     private final Map<String, Integer> consecutiveHeadshots = new HashMap<>();
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -27,21 +26,18 @@ public class KillAuraCheck {
                 if (player == mc.thePlayer) continue;
 
                 if (hasNearbyPlayerTarget(player, world)) {
-                    // Check swing progress (attack patterns)
                     boolean isAttacking = (player.swingProgress > 0 && player.prevSwingProgress == 0);
 
                     if (isAttacking) {
                         long lastAttack = lastAttackTime.getOrDefault(player.getName(), currentTick);
                         long timeSinceLastAttack = currentTick - lastAttack;
 
-                        // Flag if attacks are too consistent (perfect timing)
                         if (timeSinceLastAttack > 0 && timeSinceLastAttack < 3) {
                             CheatFlags.receiveSignal(player.getName(), "KillAura");
                         }
 
                         lastAttackTime.put(player.getName(), currentTick);
 
-                        // Check 2: Multiple consecutive attacks without moving
                         int headshots = consecutiveHeadshots.getOrDefault(player.getName(), 0);
                         headshots++;
                         consecutiveHeadshots.put(player.getName(), headshots);

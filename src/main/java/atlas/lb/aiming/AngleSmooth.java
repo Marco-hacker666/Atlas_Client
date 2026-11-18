@@ -2,37 +2,28 @@ package atlas.lb.aiming;
 
 import java.util.Random;
 
-/**
- * How far one tick turns from the current rotation toward the target
- * (2026-10-24, LiquidBounce NextGen port, GPL-3.0; anglesmooth/AngleSmooth.kt,
- * FactorAngleSmooth.kt and the modes in anglesmooth/impl). Settings are plain
- * fields the module copies its values into.
- */
+// How far one tick turns from the current rotation toward the target (LiquidBounce NextGen port, GPL-3.0)
+
 public abstract class AngleSmooth {
     protected static final Random RANDOM = new Random();
 
     public abstract Rotation process(SmoothContext context, Rotation current, Rotation target);
 
-    /** Ticks until the target is reached at the slowest settings. */
     public abstract int calculateTicks(SmoothContext context, Rotation current, Rotation target);
 
-    /** A uniform value in [min, max] (Kotlin's ClosedFloatingPointRange.random()). */
     protected static float between(float min, float max) {
         float low = Math.min(min, max);
         float high = Math.max(min, max);
         return low + RANDOM.nextFloat() * (high - low);
     }
 
-    /** A uniform int in [min, max] inclusive (Kotlin's IntRange.random()). */
     protected static int between(int min, int max) {
         int low = Math.min(min, max);
         int high = Math.max(min, max);
         return low + RANDOM.nextInt(high - low + 1);
     }
 
-    /** Smoothers that limit each tick's turn by a horizontal and a vertical factor. */
     public abstract static class Factor extends AngleSmooth {
-        /** {horizontal, vertical} for this step; not live = the slowest. */
         protected abstract float[] factors(SmoothContext context, Rotation current, Rotation target);
 
         @Override
@@ -55,7 +46,6 @@ public abstract class AngleSmooth {
         }
     }
 
-    /** Does not turn at all (LiquidBounce's None, used beside its neural-network mode). */
     public static final class None extends AngleSmooth {
         @Override
         public Rotation process(SmoothContext context, Rotation current, Rotation target) {
@@ -68,7 +58,6 @@ public abstract class AngleSmooth {
         }
     }
 
-    /** A turn speed drawn each tick from a range, degrees a tick. */
     public static final class Linear extends Factor {
         public float horizontalMin = 180.0F;
         public float horizontalMax = 180.0F;
@@ -84,7 +73,6 @@ public abstract class AngleSmooth {
         }
     }
 
-    /** Turn speed scaled by a sigmoid of the remaining angle (LiquidBounce marks it deprecated for Interpolation). */
     public static final class Sigmoid extends Factor {
         public float horizontalMin = 180.0F;
         public float horizontalMax = 180.0F;
@@ -109,7 +97,6 @@ public abstract class AngleSmooth {
         }
     }
 
-    /** Sigmoid for small angles, a Bezier ease for large ones, as a share of what is left (LiquidBounce's Interpolation). */
     public static final class Interpolation extends Factor {
         public int horizontalMin = 80;
         public int horizontalMax = 85;
@@ -143,7 +130,7 @@ public abstract class AngleSmooth {
             float v = (live ? between(this.verticalMin, this.verticalMax) : Math.min(this.verticalMin, this.verticalMax)) / 100.0F;
             float hf = factor(Math.abs(d[0]), Rotation.clamp(h, 0.0F, 1.0F), directionChange);
             float vf = factor(Math.abs(d[1]), Rotation.clamp(v, 0.0F, 1.0F), directionChange);
-            /* Times the difference, which steps around towardsLinear's straight line. */
+
             return new float[]{hf * Math.abs(d[0]), vf * Math.abs(d[1])};
         }
 
@@ -156,23 +143,13 @@ public abstract class AngleSmooth {
         }
     }
 
-    /**
-     * Atlas's own AimAssist "Smooth" turn (2026-10-25, owner: "the aura is not
-     * human enough -- use our aim assist's smooth"), the same arithmetic as
-     * AimAssist.onTick with RotationUtil.getRotations: a delta within the dead
-     * zone (1 degree) is no turn; otherwise it is shrunk by the smoothing
-     * share, (0.5 + 0.5 * (1 - (smoothing +- 0.1))), quantised to 0.0096, and
-     * a fraction 0.1 * speed of that is taken this tick -- horizontally 1.6
-     * times more (up to all of it) while strafing toward the target. The
-     * module copies AimAssist's own values in every tick.
-     */
     public static final class AimAssist extends AngleSmooth {
         public float horizontalSpeed = 3.0F;
         public float verticalSpeed = 0.0F;
-        /** 0..1 (AimAssist's smoothing percentage / 100). */
+
         public float smoothing = 0.5F;
         public boolean strafeIncrease = true;
-        /** This tick: the sign of the walk keys' strafe (1 left, -1 right, 0 none); the module sets it. */
+
         public int strafeSide;
         public float deadZone = 1.0F;
 
@@ -195,8 +172,6 @@ public abstract class AngleSmooth {
             float pitchTarget = quantize(current.pitch + shrink(Rotation.clamp(d[1], -180.0F, 180.0F), random));
             float yawStep = 0.1F * Math.min(Math.abs(this.horizontalSpeed), 10.0F);
             if (this.strafeIncrease && this.strafeSide != 0 && Math.signum(d[0]) == this.strafeSide) {
-                /* AimAssist's rule, as written there: side > 0 && strafe > 0 || side < 0 && strafe < 0
-                   (moveStrafe > 0 is left; a positive yaw delta is a target to the right). */
                 yawStep = Math.min(1.0F, yawStep * 1.6F);
             }
             float pitchStep = 0.1F * Math.min(Math.abs(this.verticalSpeed), 10.0F);
@@ -225,34 +200,13 @@ public abstract class AngleSmooth {
         }
     }
 
-    /**
-     * Atlas's tracking turn (2026-10-26, owner: "the aura lags a strafing
-     * target"): a proportional-integral turn with the target's own angular
-     * speed fed forward. A plain "a share of what is left" turn always trails
-     * a target that keeps moving by about speed / share; the feed-forward term
-     * moves with the target instead, and the leaky integral takes out what is
-     * still left over. Per axis, per tick:
-     *
-     *   e    = target - current                       (wrapped)
-     *   ff   = ff * 0.6 + (target - lastTarget) * 0.4  (the target's speed, smoothed)
-     *   I    = I * leak + e
-     *   step = kp * e + ki * I + kf * ff
-     *
-     * kp halves once the error is inside the on-target zone (a hand eases off
-     * once it is on), the step shrinks under 0.8 blocks of distance, never
-     * passes the target by more than the feed-forward carries it, and is
-     * capped at a random max turn. Each new target draws its own gains,
-     * within +-gainVariance, so no two engagements turn quite alike. A jump
-     * of the goal by more than 30 degrees in a tick (a new target, a release
-     * back to the camera) starts the memory over.
-     */
     public static final class Tracking extends AngleSmooth {
         public float yawP = 0.35F;
         public float pitchP = 0.25F;
         public float integral = 0.04F;
         public float leak = 0.8F;
         public float feedForward = 0.9F;
-        /** 0..1: each gain is drawn in [1 - v, 1 + v] times its setting for every new target. */
+
         public float gainVariance = 0.2F;
         public float onTargetZone = 1.5F;
         public float maxYawMin = 30.0F;
@@ -267,7 +221,6 @@ public abstract class AngleSmooth {
         private final float[] gain = {1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F};
         private boolean started;
 
-        /** A new target: new gains, no memory of the last one. */
         public void reseed() {
             this.started = false;
         }
@@ -281,7 +234,6 @@ public abstract class AngleSmooth {
             this.started = true;
         }
 
-        /** One axis: {@code axis} 0 yaw, 1 pitch; gains [kp, ki, kf] at gain[axis * 3 ..]. */
         private float axis(int axis, float error, float targetSpeed, double distance, float maxTurn) {
             this.ff[axis] = this.ff[axis] * 0.6F + targetSpeed * 0.4F;
             this.sum[axis] = Rotation.clamp(this.sum[axis] * this.leak + error, -INTEGRAL_LIMIT, INTEGRAL_LIMIT);
@@ -294,7 +246,7 @@ public abstract class AngleSmooth {
             if (distance > 0.0 && distance < 0.8) {
                 step *= (float) (distance / 0.8);
             }
-            /* Lead a moving target, but do not fly past a still one. */
+
             float limit = Math.abs(error) + Math.abs(carried);
             step = Rotation.clamp(step, -limit, limit);
             return Rotation.clamp(step, -maxTurn, maxTurn);
@@ -327,7 +279,6 @@ public abstract class AngleSmooth {
 
         @Override
         public int calculateTicks(SmoothContext context, Rotation current, Rotation target) {
-            /* On a copy, so the estimate leaves the live memory alone. */
             Tracking estimate = new Tracking();
             estimate.yawP = this.yawP;
             estimate.pitchP = this.pitchP;
@@ -350,7 +301,6 @@ public abstract class AngleSmooth {
         }
     }
 
-    /** Turn rate that accelerates from the last tick's, with error terms (LiquidBounce's Acceleration). */
     public static final class Acceleration extends AngleSmooth {
         public float yawAccelMin = 20.0F;
         public float yawAccelMax = 25.0F;
@@ -433,7 +383,7 @@ public abstract class AngleSmooth {
 
         private static float acceleration(float diff, float prevDiff, float min, float max, float deceleration) {
             float change = Rotation.angleDifference(diff, prevDiff);
-            /* Kotlin's coerceIn throws on an empty range; an inverted one here only means a large distance term. */
+
             float low = Math.min(min, max);
             float high = Math.max(min, max);
             return Rotation.clamp(change, low, high) * deceleration;

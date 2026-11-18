@@ -12,7 +12,6 @@ import org.spongepowered.asm.mixin.Overwrite;
 
 @Mixin(BlockLilyPad.class)
 public abstract class MixinBlockLilyPad extends BlockBush {
-
   /**
    * @author FlorianMichael
    * @reason 1.9+ lily pad collision shape

@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): builds straight upward quickly with many
-// modes, and its Tunnel mode mines forward with a stuck/back/turn engine.
+// Ported from OpenSkid (GPL-3.0)
+
 import atlas.Atlas;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
@@ -32,8 +32,7 @@ public class Tower extends Module {
             "JumpSprint", "Hypixel", "HypixelFastVertical", "HypixelJumpSprint", "BlocksMC",
             "AAC339", "AAC364", "Vulcan", "Vulcan290", "Pulldown", "Tunnel"
     })
-            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
-               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+
             .hide("MotionTP", "Packet", "Teleport", "Hypixel", "HypixelFastVertical", "HypixelJumpSprint", "BlocksMC", "AAC339", "AAC364", "Vulcan", "Vulcan290", "Tunnel");
 
     public final FloatProperty vanillaSpeed = new FloatProperty("vanilla-speed", 0.95F, 0.5F, 1.0F, () -> this.mode.getValue() == 0);
@@ -64,8 +63,7 @@ public class Tower extends Module {
     public final IntProperty tunnelBackTicks = new IntProperty("tunnel-back-ticks", 10, 0, 40, () -> this.mode.getValue() == 17);
     public final IntProperty tunnelMineDelay = new IntProperty("tunnel-mine-delay", 0, 0, 20, () -> this.mode.getValue() == 17);
     public final FloatProperty tunnelMotion = new FloatProperty("tunnel-motion", 1.0F, 0.1F, 2.0F, () -> this.mode.getValue() == 17);
-    /* Slave rule: Tower owns vertical motion when enabled and Scaffold must not
-       tower then. With slave-to-scaffold on, Tower instead yields to Scaffold. */
+
     public final BooleanProperty slaveToScaffold = new BooleanProperty("slave-to-scaffold", true);
 
     private int towerTicks;

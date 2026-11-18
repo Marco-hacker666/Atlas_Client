@@ -10,8 +10,7 @@ import java.util.stream.Collectors;
 
 public abstract class PlayerFileManager {
     public static Minecraft mc = Minecraft.getMinecraft();
-    /* 2026-10-31 (audit): copy-on-write -- isFriend is asked from packet handlers on the network thread while
-       .friend add/remove change the list on the client thread. */
+
     public final java.util.concurrent.CopyOnWriteArrayList<String> players;
     public File file;
     public Color color;
@@ -32,7 +31,7 @@ public abstract class PlayerFileManager {
                 System.err.println("Error creating file: " + e.getMessage());
             }
         }
-        /* UTF-8, and blank lines are not names (each used to load as a friend called ""). */
+
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file),
                 java.nio.charset.StandardCharsets.UTF_8))) {
             List<String> read = reader.lines().map(String::trim).filter(line -> !line.isEmpty())
@@ -44,7 +43,6 @@ public abstract class PlayerFileManager {
         }
     }
 
-    /** Written whole to a temporary file and moved into place, as Config.save does. */
     public void save() {
         File temp = new File(file.getAbsoluteFile().getParentFile(), file.getName() + ".tmp");
         try {
@@ -91,7 +89,6 @@ public abstract class PlayerFileManager {
         return string != null && this.players.stream().anyMatch(string2 -> string2.equalsIgnoreCase(string));
     }
 
-    /** A copy: the list itself changes under .friend add/remove. */
     public ArrayList<String> getPlayers() {
         return new ArrayList<>(this.players);
     }

@@ -1,11 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): marks the block you will land on while
-// falling, with a distance readout.
-//
-// Substitution: OpenSkid's RenderUtil.drawCircle has no counterpart in the client's
-// RenderUtil, so the CIRCLE marker is drawn here as a GL line loop in the same
-// render-state bracket; the BOX marker uses the client's drawBlockBoundingBox.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.util.Locale;
 
 import atlas.event.EventTarget;
@@ -111,7 +107,6 @@ public class FallIndicator extends Module {
         RenderUtil.disableRenderState();
     }
 
-    /** A ring on the ground plane, the marker OpenSkid's drawCircle drew. */
     private static void drawRing(double centerX, double centerY, double centerZ, double radius,
                                  int segments, int red, int green, int blue, float alpha) {
         GlStateManager.disableTexture2D();

@@ -17,13 +17,7 @@ import java.util.Map;
 
 import static org.junit.Assert.*;
 
-/**
- * No module has two settings with one name (2026-09-28 full check): the
- * config keys a module's settings by name, so a clash saves one over the
- * other. Every module class that can be built outside the game is checked.
- */
 public class AllSettingNamesTest {
-
     @Test
     public void everyModuleThatBuildsHasUniqueSettingNames() throws Exception {
         File dir = new File("build/classes/java/main/atlas/module/modules");
@@ -62,8 +56,6 @@ public class AllSettingNamesTest {
                     settings.addAll(((PropertyGroup) value).properties());
                 }
                 for (Property<?> property : settings) {
-                    /* Exact names: config keys are case-sensitive, so "color" and
-                       "Color" (TargetHUD) are two keys, not a clash. */
                     String key = property.getName();
                     String previous = seen.put(key, field.getName());
                     if (previous != null) {

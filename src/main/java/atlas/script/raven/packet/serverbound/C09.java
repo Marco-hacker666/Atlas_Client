@@ -3,7 +3,6 @@ package atlas.script.raven.packet.serverbound;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C09PacketHeldItemChange;
 
-/** The hotbar slot held (0..8). */
 public class C09 extends CPacket {
     public int slot;
 

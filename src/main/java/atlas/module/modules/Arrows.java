@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): off-screen directional arrows to nearby
-// players with distance labels.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.util.ArrayList;
 import java.util.List;
 

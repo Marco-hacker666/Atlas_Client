@@ -7,12 +7,7 @@ import java.util.Random;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * MOONWALK's sway (2026-11-18), on the ground walk of 1.8: each tick the side key adds 0.1 * 0.98 / sqrt(2) across
- * the row with W held too (both keys, normalised), and the ground keeps 0.546 of the motion.
- */
 public class MoonWalkTest {
-
     private static final double FRICTION = 0.546;
     private static final double SIDE_PUSH = 0.098 / Math.sqrt(2.0);
 
@@ -27,7 +22,6 @@ public class MoonWalkTest {
         int turns = 0;
         float last = 0.0F;
         for (int i = 0; i < 400; i++) {
-            /* Yaw 0 walks south (+z); a side key of +1 (left) goes +x there. */
             float key = moon.strafe(0.0F, x, 0.5, motionX, 0.0, s);
             assertTrue("a key, never a fraction: " + key, key == 0.0F || key == 1.0F || key == -1.0F);
             if (key != 0.0F && last != 0.0F && key != last) {
@@ -48,7 +42,6 @@ public class MoonWalkTest {
 
     @Test
     public void walkingWestTheKeyFollowsTheCamera() {
-        /* Yaw 90 walks west (-x); left (+1) goes -z there... sin(90) = 1, so +z. Either way the sway stays in z. */
         MoonWalk moon = new MoonWalk(new Random(7));
         MoonWalk.Settings s = new MoonWalk.Settings();
         double z = 0.5;
@@ -78,7 +71,6 @@ public class MoonWalkTest {
 
     @Test
     public void aMiddleOffToOneSideStillSwaysAndNeverLeavesTheActiveBand() {
-        /* middle 0.3 and width 0.2 would aim at 0.1, past ACTIVE, where it would stop (review, PR #45). */
         MoonWalk moon = new MoonWalk(new Random(3));
         MoonWalk.Settings s = new MoonWalk.Settings();
         s.middleMin = 0.3;

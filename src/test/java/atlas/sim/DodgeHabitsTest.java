@@ -6,8 +6,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class DodgeHabitsTest {
-
-    /** {x, z} a tick: standing until {@code at}, then going (vx, vz) a tick. */
     private static double[][] path(int ticks, int at, double vx, double vz) {
         double[][] out = new double[ticks][];
         double x = 0.0;

@@ -19,12 +19,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
-/*
- * This file is derived from https://github.com/ksyzov/AccountManager.
- * Originally licensed under the GNU LGPL.
- *
- * This modified version is licensed under the GNU GPL v3.
- */
+// Originally licensed under the GNU LGPL.
+
 public class GuiAccountManager extends GuiScreen {
     private final GuiScreen previousScreen;
 
@@ -51,19 +47,16 @@ public class GuiAccountManager extends GuiScreen {
         AccountManager.load();
         Keyboard.enableRepeatEvents(true);
 
-        // Two rows of four buttons centred under the account list.
         final int bw = 72, gap = 3;
         final int x0 = width / 2 - (bw * 4 + gap * 3) / 2;
         final int c0 = x0, c1 = x0 + (bw + gap), c2 = x0 + (bw + gap) * 2, c3 = x0 + (bw + gap) * 3;
         final int row1 = height - 52, row2 = height - 28;
 
-        // Row 1: account actions + Microsoft sign-in methods.
         buttonList.add(loginButton = new GuiButton(0, c0, row1, bw, 20, "Login"));
         buttonList.add(new GuiButton(1, c1, row1, bw, 20, "Add"));
         buttonList.add(new GuiButton(5, c2, row1, bw, 20, "Add Token"));
         buttonList.add(new GuiButton(4, c3, row1, bw, 20, "Session"));
 
-        // Row 2: delete + the new Cracked / Cookie sign-in methods + cancel.
         buttonList.add(deleteButton = new GuiButton(2, c0, row2, bw, 20, "Delete"));
         buttonList.add(new GuiButton(6, c1, row2, bw, 20, "Cracked"));
         buttonList.add(new GuiButton(7, c2, row2, bw, 20, "Cookie"));
@@ -186,11 +179,10 @@ public class GuiAccountManager extends GuiScreen {
 
         if (button.enabled) {
             switch (button.id) {
-                case 0: { // Login
+                case 0: {
                     if (task == null || task.isDone()) {
                         Account account = AccountManager.accounts.get(selectedAccount);
 
-                        // Cracked accounts log in offline, without any network request.
                         if (account.isCracked()) {
                             SessionManager.set(SessionManager.offline(account.getUsername()));
                             notification = new Notification(TextFormatting.translate(String.format(
@@ -281,11 +273,11 @@ public class GuiAccountManager extends GuiScreen {
                     }
                 }
                 break;
-                case 1: { // Add
+                case 1: {
                     mc.displayGuiScreen(new GuiMicrosoftAuth(previousScreen));
                 }
                 break;
-                case 2: { // Delete
+                case 2: {
                     if (selectedAccount > -1 && selectedAccount < AccountManager.accounts.size()) {
                         AccountManager.accounts.remove(selectedAccount);
                         AccountManager.save();
@@ -294,7 +286,7 @@ public class GuiAccountManager extends GuiScreen {
                     }
                 }
                 break;
-                case 3: { // Cancel
+                case 3: {
                     mc.displayGuiScreen(previousScreen);
                 }
                 break;
@@ -306,11 +298,11 @@ public class GuiAccountManager extends GuiScreen {
                     mc.displayGuiScreen(new GuiAddToken(this));
                 }
                 break;
-                case 6:{ // Cracked
+                case 6:{
                     mc.displayGuiScreen(new GuiCrackedLogin(this));
                 }
                 break;
-                case 7:{ // Cookie
+                case 7:{
                     mc.displayGuiScreen(new GuiCookieLogin(this));
                 }
                 break;
@@ -388,8 +380,6 @@ public class GuiAccountManager extends GuiScreen {
                     fr, username, x + 2, y + 2, -1
             );
 
-            // Tag each entry with its account type so the three login methods
-            // are distinguishable at a glance.
             String tag;
             if (account.isCracked()) {
                 tag = "&8[&cCracked&8]";
@@ -403,8 +393,6 @@ public class GuiAccountManager extends GuiScreen {
                     fr, tag, x + 2 + fr.getStringWidth(username) + 4, y + 2, -1
             );
 
-            // Ban tracking is online-server specific; it does not apply to
-            // offline cracked accounts.
             if (account.isCracked()) {
                 return;
             }

@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** The 2026-10-31 consolidation: retired modes leave the menus and old configs load the kept ones. */
 public class RetiredModesTest {
-
     @Test
     public void velocityKeepsFourModesAndDelayIsTheFormerLag() {
         Velocity velocity = new Velocity();
@@ -34,7 +32,6 @@ public class RetiredModesTest {
         }
     }
 
-    /** 2026-11-04 (owner): SPEED-TELLY is in the menu; it went on the end, so saved configs keep their indices. */
     @Test
     public void scaffoldSpeedTellyIsAddedAtTheEnd() {
         Scaffold scaffold = new Scaffold();
@@ -50,10 +47,6 @@ public class RetiredModesTest {
         assertFalse("its switch is this mode's", scaffold.tellyAutoJump.isVisible());
     }
 
-    /**
-     * 2026-11-04 (owner: "delete Telly, keep Speed Telly"): B4 still loads SPEED-TELLY. 2026-11-18 (owner: "a Telly like
-     * Augustus's, replacing ours"): TELLY is a mode again, at its old index, in the menu.
-     */
     @Test
     public void tellyIsBackAndB4StillLoadsAsSpeedTelly() {
         Scaffold scaffold = new Scaffold();
@@ -65,10 +58,6 @@ public class RetiredModesTest {
         assertTrue(java.util.Arrays.asList(scaffold.rotationMode.visibleModes()).contains("TELLY"));
     }
 
-    /**
-     * Review, PR #45: TELLY to SPEED-TELLY (whose run pauses Scaffold's handlers) and back drops TELLY's kept return,
-     * seen through verifyValue alone.
-     */
     @Test
     public void aPassThroughSpeedTellyDropsTellysReturn() {
         Scaffold scaffold = new Scaffold();
@@ -84,7 +73,6 @@ public class RetiredModesTest {
         assertFalse("dropped on the way through", scaffold.tellyReturning);
     }
 
-    /** 2026-11-18: GODBRIDGE2 and MOONWALK on the end, in the menu; GODBRIDGE keeps its index. */
     @Test
     public void godBridge2AndMoonWalkAreAddedAtTheEnd() {
         Scaffold scaffold = new Scaffold();
@@ -98,7 +86,6 @@ public class RetiredModesTest {
         assertTrue(menu.contains("GODBRIDGE2") && menu.contains("MOONWALK"));
     }
 
-    /** 2026-11-06 (owner): the angled jump is a mode of its own, on the end; only it shows the angle. */
     @Test
     public void weirdTellyIsAddedAtTheEnd() {
         Scaffold scaffold = new Scaffold();
@@ -112,7 +99,6 @@ public class RetiredModesTest {
         assertFalse(scaffold.tellyJumpAngle.isVisible());
     }
 
-    /** 2026-11-01 (owner): SNAP is back in the menu; SNAP2 loads as itself again, hidden as before. */
     @Test
     public void scaffoldSnapIsBack() {
         Scaffold scaffold = new Scaffold();

@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ShaderUtil {
-    // default vertex shader (general)
     private static final String DEFAULT_VERTEX_SHADER =
             "#version 120\n" +
                     "\n" +
@@ -19,10 +18,6 @@ public class ShaderUtil {
     private final Map<String, Integer> uniforms = new HashMap<>();
     private int programID;
 
-    /**
-     * From a fragment shader source only (with the default vertex shader)
-     * @param fragmentSource fragment shader GLSL source
-     */
     public ShaderUtil(String fragmentSource) {
         this(DEFAULT_VERTEX_SHADER, fragmentSource);
     }
@@ -40,11 +35,6 @@ public class ShaderUtil {
         GL11.glEnd();
     }
 
-    /**
-     * From custom vertex and fragment shader sources
-     * @param vertexSource vertex shader GLSL source
-     * @param fragmentSource fragment shader GLSL source
-     */
     public ShaderUtil(String vertexSource, String fragmentSource) {
         int program = 0;
         try {
@@ -70,7 +60,6 @@ public class ShaderUtil {
             GL20.glValidateProgram(program);
             GL20.glDeleteShader(vertexShaderID);
             GL20.glDeleteShader(fragmentShaderID);
-
         } catch (Exception e) {
             e.printStackTrace();
             program = 0;

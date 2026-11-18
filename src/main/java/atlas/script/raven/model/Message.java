@@ -9,11 +9,6 @@ import net.minecraft.util.IChatComponent;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Raven script API: a chat line with hover and click parts (2026-11-02). The text goes in as it is written, as
- * in Raven (util.color turns '&' codes into Minecraft's). appendStyle("HOVER", "SHOW_TEXT", "the tip", "text") or ("CLICK", "RUN_COMMAND" / "OPEN_URL" /
- * "SUGGEST_COMMAND", "the value", "text").
- */
 public class Message {
     public ChatComponentText component;
 
@@ -47,7 +42,6 @@ public class Message {
         this.component.appendSibling(new ChatComponentText(append == null ? "" : append));
     }
 
-    /** Each part's text as a new line of its own (as Raven: without the part's style). */
     public List<Message> getSiblings() {
         List<Message> out = new ArrayList<Message>();
         for (IChatComponent sibling : this.component.getSiblings()) {

@@ -84,26 +84,11 @@ public class ColorUtil {
         return new Color(color.getRed(), color.getGreen(), color.getBlue(), (int) (alpha * 255));
     }
 
-    // --- added methods ---
-
-    /**
-     * A rainbow colour
-     * @param seconds cycle length (seconds)
-     * @param offset offset
-     * @param saturation saturation
-     * @param brightness brightness
-     */
     public static Color rainbow(int seconds, int offset, float saturation, float brightness) {
         float hue = ((System.currentTimeMillis() + offset) % (seconds * 1000)) / (float) (seconds * 1000);
         return new Color(Color.HSBtoRGB(hue, saturation, brightness));
     }
 
-    /**
-     * A fade in and out ("breathing" light)
-     * @param color base colour
-     * @param index index (for a wave along a list)
-     * @param count total (sets the wave frequency)
-     */
     public static Color fade(Color color, int index, int count) {
         float[] hsb = new float[3];
         Color.RGBtoHSB(color.getRed(), color.getGreen(), color.getBlue(), hsb);

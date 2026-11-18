@@ -1,12 +1,4 @@
-/*
- * Decompiled with CFR 0.152.
- *
- * Could not load the following classes:
- *  net.minecraft.client.Minecraft
- *  org.lwjgl.opengl.GL11
- */
 package atlas.util.render;
-
 
 import net.minecraft.client.renderer.GlStateManager;
 import java.awt.Color;

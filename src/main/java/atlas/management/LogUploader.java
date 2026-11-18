@@ -23,36 +23,11 @@ import java.io.Reader;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
-/**
- * Auto-send logs. Since 2026-10-11 only when something went wrong (it was
- * every 30 minutes of play):
- *
- *  - flagged: the server corrected this player's position FLAG_LIMIT times
- *    within FLAG_WINDOW_MS. A correction is an S08 in a world (not in the first
- *    seconds after joining) that moves the player at most TELEPORT_BLOCKS --
- *    farther is the server teleporting them, not a check;
- *  - kicked: the server sent a disconnect packet, in play (S40) or at login
- *    (login S00). Leaving, closing the game and a dropped connection never
- *    receive one, so they never send a log.
- *
- * The reason is the log's title and its first line, with the modules that
- * acted most in the last minute (ActionLedger). One flag log per 10 minutes,
- * one kick log per 2 minutes (the relay allows 4 an hour). Counted here, not by
- * FlagDetector, which is off unless Debug turns it on.
- *
- * The switch ("auto-send-logs", Client Settings > Privacy; off by default since 2026-11-01, owner: the player turns
- * it on, nothing is sent unasked) lives
- * in config/Atlas/atlas-theme.json; read from the file the first time (the menu
- * may never be opened), pushed by AtlasTheme after that. The first time it
- * applies, the player is told once in chat what is sent and when.
- */
 public final class LogUploader {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File THEME_FILE = new File("./config/Atlas/atlas-theme.json");
     private static final File NOTICE_FILE = new File("./config/Atlas/auto-send-logs-notice-2.txt");
-    /* 2026-11-02 (review): "-v2". atlas-theme.json saves every setting with its value, so a player who had ever
-       changed the look kept "auto-send-logs": true from the old default and went on sending though they never chose
-       to. Under a new key everyone starts from off (the default) and only a player who turns it on sends. */
+
     public static final String SETTING = "auto-send-logs-v2";
 
     static final int FLAG_LIMIT = 8;
@@ -95,7 +70,6 @@ public final class LogUploader {
                 }
             }
         } catch (Exception ignored) {
-            // Unreadable: the default.
         }
         return false;
     }
@@ -171,14 +145,12 @@ public final class LogUploader {
         send(what + (text.isEmpty() ? "" : ": " + text));
     }
 
-    /** Builds on the game thread (BugReport reads the game's state there). */
     private static void send(String trigger) {
         String suspects = ActionLedger.summary(FLAG_WINDOW_MS, 3);
         String full = suspects.isEmpty() ? trigger : trigger + " | most active: " + suspects;
         mc.addScheduledTask(() -> BugReport.sendAuto(full));
     }
 
-    /** Once per install: what goes out, and when. */
     private static void notice() {
         if (NOTICE_FILE.exists()) {
             return;
@@ -194,7 +166,6 @@ public final class LogUploader {
             }
             java.nio.file.Files.write(NOTICE_FILE.toPath(), "shown\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         } catch (Exception ignored) {
-            // Shown again next time.
         }
     }
 }

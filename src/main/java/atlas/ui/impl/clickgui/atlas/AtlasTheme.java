@@ -21,27 +21,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * How the Atlas menu looks, as settings the menu itself can edit.
- *
- * These are ordinary Property objects, so the Appearance page draws them with
- * the same sliders, switches and lists as a module's settings. They belong to
- * no module and are kept out of the client config on purpose: the config is
- * held in memory and written once on exit, and it travels with profiles,
- * whereas what the menu looks like is the person's, not the profile's. They
- * live in config/Atlas/atlas-theme.json, written shortly after each change.
- *
- * Every default is the value the menu was designed and tuned with, so a
- * fresh install looks exactly as it did before any of this existed.
- */
 final class AtlasTheme {
-
     private static final File FILE = new File("./config/Atlas/atlas-theme.json");
 
     static final String[] ACCENTS = {"ClickGUI", "Sky", "Mint", "Violet", "Rose", "Amber", "Coral", "Ice", "Custom", "Lime"};
     private static final int[] ACCENT_COLOURS = {0, 0xFF4FC3F7, 0xFF5FFFC1, 0xFFA78BFA, 0xFFFF6B9D,
             0xFFFFC857, 0xFFFF8A65, 0xFFB3E5FC, 0, 0xFFC6FF00};
-    /** The glass colour in light mode. */
+
     private static final int LIGHT_TINT = 0xFFF3F5F9;
     static final String[] TINTS = {"Midnight", "Graphite", "Ocean", "Aurora", "Ember", "Forest", "Custom", "Void"};
     private static final int[] TINT_COLOURS = {0xFF0E121D, 0xFF121316, 0xFF08182A, 0xFF1A1030,
@@ -50,8 +36,6 @@ final class AtlasTheme {
     private static final String[] FONT_FILES = {"San-Francisco-Pro-Fonts.ttf", "product_sans_regular.ttf",
             "Google-Sans.ttf", "nunito.ttf", "harmonyOS_Sans.ttf", null};
 
-    // ---- Colors
-    /* Dark or light, for this menu and for the HUD (2026-10-05). Shared with the HUD through atlas.ui.UiMode. */
     final ModeProperty mode = new ModeProperty("appearance-mode", 0, new String[]{"Dark", "Light"});
     final ModeProperty accent = new ModeProperty("accent", 0, ACCENTS);
     final IntProperty accentHue = new IntProperty("accent-hue", 200, 0, 360, () -> this.accent.getValue() == 8);
@@ -60,12 +44,9 @@ final class AtlasTheme {
     final ModeProperty tint = new ModeProperty("glass-tint", 1, TINTS);
     final IntProperty tintHue = new IntProperty("tint-hue", 225, 0, 360, () -> this.tint.getValue() == 6);
     final PercentProperty opacity = new PercentProperty("glass-opacity", 42, 0, 90, null);
-    /* 2026-11-12 (owner: the Appearance colours did not reach the HUD, its notifications or chat): the accent also
-       colours the HUD module list (and what follows the HUD's colour), the HUD notifications and the [Atlas] chat
-       prefix; the glass colour tints the notifications. Off: each keeps its own colours as before. */
+
     final BooleanProperty accentEverywhere = new BooleanProperty("accent-everywhere", true);
 
-    // ---- Glass
     final PercentProperty blur = new PercentProperty("blur", 70, 0, 100, null);
     final PercentProperty saturation = new PercentProperty("saturation", 155, 50, 250, null);
     final PercentProperty brightness = new PercentProperty("brightness", 62, 30, 130, null);
@@ -78,12 +59,10 @@ final class AtlasTheme {
     final IntProperty radius = new IntProperty("corner-radius", 18, 6, 30);
     final PercentProperty sheen = new PercentProperty("sheen", 50, 0, 100, null);
 
-    // ---- Depth
     final PercentProperty shadow = new PercentProperty("shadow", 55, 0, 100, null);
     final IntProperty shadowSize = new IntProperty("shadow-size", 30, 0, 60);
     final PercentProperty dim = new PercentProperty("world-dim", 32, 0, 90, null);
 
-    // ---- Selection
     final ModeProperty selection = new ModeProperty("selection-style", 0, new String[]{"Liquid", "Solid", "Outline"});
     final PercentProperty selectionTint = new PercentProperty("selection-tint", 10, 0, 60, null);
     final PercentProperty selectionRefraction = new PercentProperty("selection-refraction", 100, 0, 300,
@@ -91,13 +70,11 @@ final class AtlasTheme {
     final PercentProperty selectionLight = new PercentProperty("selection-light", 75, 0, 100,
             () -> this.selection.getValue() == 0);
 
-    // ---- Cosmos (2026-10-06): the banner's space behind the window
     final BooleanProperty cosmos = new BooleanProperty("cosmos-background", true);
     final PercentProperty stars = new PercentProperty("stars", 60, 0, 100, this.cosmos::getValue);
     final BooleanProperty comets = new BooleanProperty("comets", true, this.cosmos::getValue);
     final BooleanProperty planet = new BooleanProperty("planet", true, this.cosmos::getValue);
 
-    // ---- Motion
     final BooleanProperty animations = new BooleanProperty("animations", true);
     final PercentProperty speed = new PercentProperty("speed", 100, 50, 200, this.animations::getValue);
     final PercentProperty bounce = new PercentProperty("bounce", 40, 0, 100, this.animations::getValue);
@@ -106,14 +83,11 @@ final class AtlasTheme {
             this.animations::getValue);
     final BooleanProperty smoothScroll = new BooleanProperty("smooth-scroll", true);
 
-    // ---- Text
     final ModeProperty font = new ModeProperty("font", 0, FONTS);
     final PercentProperty textSize = new PercentProperty("text-size", 100, 90, 115, null);
 
-    // ---- Language (2026-10-04): module descriptions, setting hints, headings
     final ModeProperty language = new ModeProperty("language", 0, new String[]{"中文", "English"});
 
-    // ---- Layout
     final ModeProperty density = new ModeProperty("density", 0, new String[]{"Comfortable", "Compact"});
     final BooleanProperty accountCard = new BooleanProperty("account-card", true);
     final BooleanProperty hintBar = new BooleanProperty("hint-bar", true);
@@ -121,37 +95,29 @@ final class AtlasTheme {
     final BooleanProperty counts = new BooleanProperty("category-counts", true);
     final BooleanProperty stateDots = new BooleanProperty("state-dots", true);
 
-    // ---- Privacy (2026-10-08): the automatic log upload (management.LogUploader)
-    /* Off by default since 2026-11-01 (owner): logs leave this computer only when the player turns this on. */
     final BooleanProperty autoSendLogs = new BooleanProperty(atlas.management.LogUploader.SETTING, false);
-    /* 2026-11-02 (review): the run-data choice in the menu too, not only .rundata. The choice itself lives in
-       RunCollector (config/Atlas/run-data.txt); this switch shows it and changes it (autosave keeps the two in step). */
+
     final BooleanProperty shareRunData = new BooleanProperty("share-run-data", false);
-    /* 2026-11-16 (owner: on by default): what ProjectileAimBot sees players do when shot at, shared through the relay
-       (management.HabitsCloud): the player's name and how it dodged, nothing about you. */
+
     final BooleanProperty shareDodgeData = new BooleanProperty("share-dodge-data", true);
     private boolean runDataSeen;
-    /* 2026-11-17: usage sharing (management.UsageReporter), asked once in the privacy window (ui.ConsentScreen); the
-       choice and the public name live there, these show and change them (autosave keeps them in step). */
+
     final BooleanProperty shareUsage = new BooleanProperty("share-usage", false);
     final atlas.property.properties.TextProperty publicName = new atlas.property.properties.TextProperty("public-name",
             atlas.management.UsageReporter.alias(), () -> this.shareUsage.getValue());
     private Boolean usageSeen;
     private String nameSeen;
 
-    // ---- Performance (2026-10-15): phones on gl4es / Krypton Wrapper (util.render.MobileSafe)
     final ModeProperty mobileSafe = new ModeProperty(atlas.util.render.MobileSafe.SETTING, 0,
             atlas.util.render.MobileSafe.MODES);
-    /* 2026-11-11: phone or PC layout (util.render.DeviceProfile); Auto asks the same detection. */
-    /* 2026-11-12: the move check (management.MoveCheck), no longer a module; Auto skips phones and games under 100 fps. */
+
     final ModeProperty moveCheck = new ModeProperty(atlas.management.MoveCheck.SETTING, 0, atlas.management.MoveCheck.MODES);
-    /* 2026-11-12: a line in the player's own chat when a move breaks the simulation. */
+
     final ModeProperty moveCheckChat = new ModeProperty(atlas.management.MoveCheck.CHAT_SETTING, 0,
             atlas.management.MoveCheck.CHAT_MODES);
     final ModeProperty deviceLayout = new ModeProperty(atlas.util.render.DeviceProfile.SETTING, 0,
             atlas.util.render.DeviceProfile.MODES);
 
-    /** The groups the page lists, in order, with what each is for. */
     final Map<String, List<Property<?>>> groups = new LinkedHashMap<String, List<Property<?>>>();
     final Map<String, String> descriptions = new LinkedHashMap<String, String>();
 
@@ -162,7 +128,6 @@ final class AtlasTheme {
     private long checkedAt;
 
     AtlasTheme() {
-        /* Language: English only since 2026-10-22 (the Chinese interface was removed). */
         group("Colors", "The accent that marks what is on and selected, and the colour of the glass itself. Accent "
                         + "everywhere: the HUD module list, the HUD notifications and the [Atlas] chat prefix take the "
                         + "accent too (chat in its nearest chat colour); off, they keep their own colours.",
@@ -242,15 +207,12 @@ final class AtlasTheme {
         return all().contains(property);
     }
 
-    /** Whether a setting is about looks, so a saved theme carries it: not the privacy or performance choices. */
     boolean isLook(Property<?> property) {
         return property != this.autoSendLogs && property != this.shareRunData && property != this.shareDodgeData
                 && property != this.shareUsage && property != this.publicName
                 && property != this.mobileSafe
                 && property != this.deviceLayout && property != this.moveCheck && property != this.moveCheckChat;
     }
-
-    // ---- derived values -----------------------------------------------
 
     int accent(int clickGui) {
         int mode = this.accent.getValue();
@@ -263,7 +225,6 @@ final class AtlasTheme {
         return ACCENT_COLOURS[mode];
     }
 
-    /** A colour for an option in a list, where it has one, for the swatches in the dropdown. */
     int swatch(ModeProperty property, int index, int clickGui) {
         if (property == this.accent) {
             return index == 0 ? clickGui : index == 8
@@ -276,19 +237,16 @@ final class AtlasTheme {
         return 0;
     }
 
-    /** The glass colour as drawn: the light glass in light mode. */
     int glassColour() {
         return isLight() ? LIGHT_TINT : tintBase();
     }
 
-    /** The groups that are not about looks: the Client Settings sidebar lists them, the Theme window does not. */
     static final String[] SYSTEM_GROUPS = {"Performance", "Privacy"};
 
     private int tintBase() {
         return this.tint.getValue() == 6 ? hsb(this.tintHue.getValue(), 0.55F, 0.12F) : TINT_COLOURS[this.tint.getValue()];
     }
 
-    /** Tints are nearly black; brightened for a swatch so they can be told apart. */
     private static int lift(int colour) {
         int r = Math.min(255, ((colour >> 16) & 0xFF) * 4);
         int g = Math.min(255, ((colour >> 8) & 0xFF) * 4);
@@ -302,8 +260,7 @@ final class AtlasTheme {
 
     Liquid.Style pane() {
         boolean light = isLight();
-        /* Light glass needs more body than dark: dark text over a thin pane
-           loses to whatever bright thing is behind it. */
+
         int percent = light ? Math.max(this.opacity.getValue(), 72) : this.opacity.getValue();
         int alpha = Math.round(percent / 100.0F * 255.0F);
         int base = light ? LIGHT_TINT : tintBase();
@@ -332,7 +289,6 @@ final class AtlasTheme {
                 this.selectionLight.getValue() / 100.0F * shown, 0.0F, 0.0F);
     }
 
-    /** Blur passes: none at 0%, then one to four halvings as it rises. */
     int blurLevels() {
         int b = this.blur.getValue();
         return b <= 0 ? 0 : b < 20 ? 1 : b < 45 ? 2 : b < 70 ? 3 : 4;
@@ -350,7 +306,6 @@ final class AtlasTheme {
         return this.speed.getValue() / 100.0F;
     }
 
-    /** Damping as a multiple of each spring's own: more bounce, less damping. */
     float damping() {
         return 1.6F - 1.05F * this.bounce.getValue() / 100.0F;
     }
@@ -363,7 +318,6 @@ final class AtlasTheme {
         return this.density.getValue() == 1;
     }
 
-    /** A one-line summary for a group's row. */
     String summary(String group) {
         if ("Colors".equals(group)) {
             return this.accent.getModeString() + "  ·  " + this.tint.getModeString();
@@ -394,12 +348,9 @@ final class AtlasTheme {
         return "";
     }
 
-    // ---- presets ------------------------------------------------------
-
     void reset() {
         int keepMode = this.mode.getValue();
         for (Property<?> property : all()) {
-            /* A look preset never changes the privacy or performance choice. */
             if (isLook(property)) {
                 resetOne(property);
             }
@@ -408,11 +359,9 @@ final class AtlasTheme {
     }
 
     private static void resetOne(Property<?> property) {
-        /* Property.getDefault() since 2026-10-23; this read the private field by reflection. */
         property.setValue(property.getDefault());
     }
 
-    /** Every Appearance setting's value now, for restore() (a preset's Undo, 2026-10-23). */
     java.util.Map<Property<?>, Object> values() {
         java.util.Map<Property<?>, Object> values = new java.util.LinkedHashMap<Property<?>, Object>();
         for (Property<?> property : all()) {
@@ -427,7 +376,6 @@ final class AtlasTheme {
         }
     }
 
-    /** Starts from the defaults, so a preset always looks the same whatever came before it. */
     void apply(String preset) {
         reset();
         if ("Frost".equals(preset)) {
@@ -459,7 +407,6 @@ final class AtlasTheme {
             this.selectionTint.setValue(20);
             this.dim.setValue(55);
         } else if ("Cosmos".equals(preset)) {
-            /* The banner: black glass, a lime accent, the space behind on. */
             this.accent.setValue(9);
             this.tint.setValue(7);
             this.opacity.setValue(62);
@@ -478,8 +425,6 @@ final class AtlasTheme {
         }
     }
 
-    // ---- persistence --------------------------------------------------
-
     private String snapshot() {
         StringBuilder sb = new StringBuilder();
         for (Property<?> property : all()) {
@@ -488,13 +433,7 @@ final class AtlasTheme {
         return sb.toString();
     }
 
-    /**
-     * Called every frame: writes the file once things have stopped changing
-     * for half a second, so dragging a slider is one write, not hundreds.
-     */
     void autosave() {
-        /* Four checks a second, not one a frame: each builds a string of
-           every setting, which is garbage the collector has to clear. */
         long time = System.currentTimeMillis();
         if (time - this.checkedAt < 250L) {
             return;
@@ -514,7 +453,6 @@ final class AtlasTheme {
         }
     }
 
-    /** share-run-data and RunCollector's choice: whichever changed last wins (the switch here, or .rundata / chat). */
     private void syncRunData() {
         boolean collector = Boolean.TRUE.equals(atlas.management.RunCollector.consent());
         if (collector != this.runDataSeen) {
@@ -526,7 +464,6 @@ final class AtlasTheme {
         }
     }
 
-    /** share-usage and public-name against UsageReporter: whichever changed last wins (this page or the window). */
     private void syncUsage() {
         Boolean consent = atlas.management.UsageReporter.consent();
         if (consent != this.usageSeen) {
@@ -545,7 +482,6 @@ final class AtlasTheme {
             if (atlas.management.UsageReporter.setAlias(typed)) {
                 this.nameSeen = atlas.management.UsageReporter.alias();
             } else {
-                /* Not a name the site would show (edits land on Enter): back to the one kept. */
                 this.publicName.setValue(alias);
             }
         }
@@ -579,7 +515,6 @@ final class AtlasTheme {
             this.saved = now;
             this.changedAt = 0L;
         } catch (Exception ignored) {
-            // Kept in memory; tried again on the next change or on close.
         } finally {
             if (writer != null) {
                 writer.close();
@@ -604,18 +539,15 @@ final class AtlasTheme {
                     try {
                         property.read(object);
                     } catch (Exception ignored) {
-                        // One bad value keeps its default; the rest still load.
                     }
                 }
             }
         } catch (Exception ignored) {
-            // Defaults.
         } finally {
             if (reader != null) {
                 try {
                     reader.close();
                 } catch (Exception ignored) {
-                    // Nothing further to do.
                 }
             }
         }

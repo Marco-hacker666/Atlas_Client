@@ -86,11 +86,6 @@ public class AntiFireball extends Module {
         if (this.isEnabled() && event.getType() == EventType.PRE) {
             EntityFireball fireball = this.target;
             if (TeamUtil.isEntityLoaded(fireball)) {
-                /* 2026-10-31: the look goes through the shared engine (RotationHelper), which turns it as a hand
-                   does -- it used to jump onto the fireball in one tick -- and hands it back when this stops
-                   asking. With rotations on, the hit waits until the look the engine returns, the one this
-                   tick's packet carries, is on the fireball; before, it went out along whatever look the server
-                   had. */
                 boolean aim = this.rotations.getValue()
                         && !ItemUtil.isHoldingNonEmpty()
                         && !ItemUtil.isUsingBow()
@@ -101,16 +96,10 @@ public class AntiFireball extends Module {
                             RotationHelper.serverYaw(), RotationHelper.serverPitch(), 180.0F, 0.0F);
                     look = RotationHelper.request(this, want[0], want[1], 0, this.moveMode(), false, RotationHelper.NO_LIMIT);
                     if (look != null && this.moveFix.getModeString().equals("REAL")) {
-                        /* REAL: the camera turns as well, along the look the server gets, spread over this
-                           tick's frames by RotationManager; the mouse still works (not forced). */
                         Atlas.rotationManager.setRotation(look[0], look[1], 0, false);
                     }
                 }
-                /* Only in reach and only while it is still coming this way. The
-                   swing used to run whenever a fireball was within range + 3,
-                   i.e. at air, and a fireball already knocked back stayed the
-                   target and was swung at and attacked every tick -- twenty a
-                   second -- until it left. */
+
                 if (!Atlas.playerStateManager.attacking && !Atlas.playerStateManager.digging && !Atlas.playerStateManager.placing
                         && RotationUtil.distanceToEntity(fireball) <= (double) this.range.getValue().floatValue()
                         && approaching(fireball)
@@ -123,7 +112,6 @@ public class AntiFireball extends Module {
         }
     }
 
-    /** move-fix as the engine's movement yaw: NONE the camera's, SILENT the look's with the keys turned, STRICT and REAL the look's. */
     private int moveMode() {
         switch (this.moveFix.getValue()) {
             case 0:
@@ -135,14 +123,12 @@ public class AntiFireball extends Module {
         }
     }
 
-    /** The look's line meets the fireball's hit box (its collision border included) within reach. */
     private boolean lookHits(float[] look, EntityFireball fireball) {
         float border = fireball.getCollisionBorderSize();
         AxisAlignedBB box = fireball.getEntityBoundingBox().expand(border, border, border);
         return RotationUtil.rayTrace(box, look[0], look[1], this.range.getValue() + 1.0) != null;
     }
 
-    /** Same sign test the render colour uses: velocity towards the player is positive. */
     private static boolean approaching(EntityFireball fireball) {
         double dot = (fireball.posX - fireball.lastTickPosX) * (mc.thePlayer.posX - fireball.posX)
                 + (fireball.posY - fireball.lastTickPosY) * (mc.thePlayer.posY - fireball.posY)

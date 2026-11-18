@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): throws an ender pearl at the nearest surface
-// when knocked into the void. One throw per fall, slot restored after.
+// Ported from OpenSkid (GPL-3.0)
+
 import atlas.Atlas;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
@@ -20,26 +20,11 @@ import net.minecraft.util.BlockPos;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.Vec3;
 
-/*
- * 2026-10-31, moved onto the shared engine (RotationHelper), and made to throw:
- * - the look turns to the surface as a hand does (it jumped there in one
- *   tick) and is handed back after the throw; with silent-aim off the camera
- *   follows the same look;
- * - the pearl is thrown only once the look the server already has -- the
- *   last packet's, which a throw goes along -- is on the surface;
- * - it is thrown as a pearl is (a use, as the vanilla right click sends it):
- *   a right click on a block, which this used, never throws one in 1.8, so
- *   no pearl ever left;
- * - the aim is from the eyes to the surface: the surface's world coordinates
- *   were taken for the offset to it, which pointed somewhere else entirely;
- * - the surface is a face open to the air (it took one against another block);
- * - the slot is switched only for the throw, not on every tick of the fall.
- */
 public class PearlSaver extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    /** Rotation priority: as before, below Scaffold (3) and Clutch (7). */
+
     private static final int ROT_PRIORITY = 2;
-    /** The last sent look within this many degrees of the aim counts as on the surface (the aim's own dead zone is 1). */
+
     private static final float ON_TARGET = 2.0F;
     private boolean thrown = false;
 
@@ -82,14 +67,12 @@ public class PearlSaver extends Module {
         float[] look = RotationHelper.request(this, want[0], want[1], ROT_PRIORITY,
                 silent ? RotationHelper.MOVE_CAMERA : RotationHelper.MOVE_LOOK, false, RotationHelper.NO_LIMIT);
         if (look != null && !silent) {
-            /* The camera follows the look the server gets, spread over this tick's frames. */
             Atlas.rotationManager.setRotation(look[0], look[1], ROT_PRIORITY, false);
         }
         if (RotationEngine.angle(event.getYaw(), event.getPitch(), want[0], want[1]) > ON_TARGET) {
             return;
         }
-        /* The slot is only synced (updateController would also run the incoming packets mid-update);
-           sendUseItem syncs the pearl's slot itself before its use. */
+
         int previous = mc.thePlayer.inventory.currentItem;
         mc.thePlayer.inventory.currentItem = pearlSlot;
         ItemStack stack = mc.thePlayer.inventory.getCurrentItem();

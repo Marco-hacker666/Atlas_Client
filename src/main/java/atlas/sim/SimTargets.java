@@ -25,42 +25,18 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
- * The game's side of {@link TargetTrack} (2026-11-13): the other players near this one, each followed through the
- * positions the server sends and forecast on request.
- *
- * Once a tick, between ticks (the server's packets are applied by then), each player whose position changed is a
- * new position for its track: the 1/32 cell (Entity.serverPosX and the like), the ground flag, the head's yaw (the
- * last one sent; the body's is eased toward it over three ticks), and the sprint, sneak and item-use flags. The
- * count of moves since the last position is this client's ticks since it.
- *
- * It runs only while something asks: a caller of {@link #forecast} or {@link #path} keeps it going for
- * {@link #WANTED_FOR} ticks, and so does the measuring switched on with .targets. Asked by nobody it holds nothing
- * and costs nothing. It follows the {@link #MOST} nearest players within {@link #RANGE}: a position costs up to a
- * few hundred simulated moves when the keys changed, a handful when they did not.
- *
- * An attack this client sends is told to the track of the player hit ({@link TargetTrack#expect}) as the knockback
- * vanilla would deal: the server tells nobody but the player hit.
- *
- * What a caller has to know: index 0 of a forecast is the player at the last position the server sent, which is
- * {@link #age} ticks old. After {@link #STALE} ticks without one there is no answer: a player that stopped sends
- * nothing, and the keys found before say nothing of it any more.
- *
- * Client thread, but for the packet listener, which only queues.
- */
 public final class SimTargets {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final SimTargets INSTANCE = new SimTargets();
 
-    /** Players farther than this (blocks, level) are not followed. */
     public static final double RANGE = 16.0;
-    /** How many players are followed at most, the nearest first. */
+
     public static final int MOST = 6;
-    /** A request keeps the tracking running this many ticks. */
+
     public static final int WANTED_FOR = 100;
-    /** After this many ticks without a position a track has no answer. */
+
     public static final int STALE = 6;
-    /** EntityLivingBase.sprintingSpeedBoostModifierUUID: the modifier a sprint puts on the walking speed. */
+
     private static final UUID SPRINT_BOOST = UUID.fromString("662A6B8D-DA3E-4C1C-8813-96EA6097278D");
 
     private static final class Target {
@@ -69,38 +45,32 @@ public final class SimTargets {
         int x;
         int y;
         int z;
-        /** The tick the last position came. */
+
         int tick;
     }
 
     private final Map<Integer, Target> targets = new HashMap<Integer, Target>();
-    /** Hits this client dealt, {entity id, x, y, z of the knockback}: queued where the packet is seen. */
+
     private final Queue<double[]> hits = new ConcurrentLinkedQueue<double[]>();
     private final TargetScore score = new TargetScore();
     private volatile int tick;
     private volatile int wantedUntil = -1;
     private volatile boolean measuring;
-    /* 2026-11-15 (bow aimbot): one player followed whatever its distance, while asked for (focus). */
+
     private volatile int focusId = -1;
     private volatile int focusUntil = -1;
 
     private SimTargets() {
     }
 
-    /** The one instance, for the event bus. */
     public static SimTargets get() {
         return INSTANCE;
     }
 
-    /** Keeps the tracking running for {@link #WANTED_FOR} more ticks. A forecast asked for does this itself. */
     public static void want() {
         INSTANCE.wantedUntil = INSTANCE.tick + WANTED_FOR;
     }
 
-    /**
-     * Follows this player too, however far, for the next few ticks (ask again every tick): a bow shoots past
-     * {@link #RANGE}. It is followed first, so it is never the one left out by {@link #MOST}.
-     */
     public static void focus(Entity player) {
         if (player == null) {
             return;
@@ -110,7 +80,6 @@ public final class SimTargets {
         INSTANCE.focusUntil = INSTANCE.tick + 5;
     }
 
-    /** Measuring (.targets on): the tracking runs, and every forecast is held against what comes. */
     public static void measure(boolean on) {
         INSTANCE.measuring = on;
     }
@@ -119,13 +88,10 @@ public final class SimTargets {
         return INSTANCE.measuring;
     }
 
-    /** What the measuring found so far ({@link TargetScore#summary}). */
     public static String summary() {
         return INSTANCE.score.summary();
     }
 
-    /* 2026-11-16 (owner: "save the .targets numbers by themselves"): while measuring, the numbers .targets stats
-       shows go to config/Atlas/targets-*.txt once a minute (with Logs on), with the server. */
     private static final int SAVE_EVERY = 1200;
     private java.io.File scoreFile;
     private String lastSaved = "";
@@ -145,7 +111,6 @@ public final class SimTargets {
                 + " " + server + " | " + line);
     }
 
-    /** Writes the numbers now (when measuring stops, so the last minute is kept). */
     public static void saveNow() {
         INSTANCE.saveScore();
     }
@@ -154,42 +119,31 @@ public final class SimTargets {
         INSTANCE.score.reset();
     }
 
-    /** How many players are followed now. */
     public static int followed() {
         return INSTANCE.targets.size();
     }
 
-    /** The track of this player, or null when it is not followed (yet). Read it; do not feed it. */
     public static TargetTrack track(Entity player) {
         Target target = player == null ? null : INSTANCE.targets.get(player.getEntityId());
         return target == null || !target.known ? null : target.track;
     }
 
-    /** Ticks since the last position of this player came; -1 when it is not followed. */
     public static int age(Entity player) {
         Target target = player == null ? null : INSTANCE.targets.get(player.getEntityId());
         return target == null || !target.known ? -1 : INSTANCE.tick - target.tick;
     }
 
-    /**
-     * Where this player will be over its next {@code moves} moves, index 0 being the last position the server sent
-     * ({@link #age} ticks ago). Null when it is not followed yet (the first call starts it), or has sent nothing
-     * for {@link #STALE} ticks. {@link TargetForecast#simulated} says whether it is the simulation's answer or the
-     * straight line's.
-     */
     public static TargetForecast forecast(Entity player, int moves) {
         want();
         Target target = fresh(player);
         return target == null ? null : target.track.forecast(SimPlayer.world(mc.theWorld, player), moves);
     }
 
-    /** The ways a player can get out of the way ({@link TargetDodges}), as paths. */
     public static final class Dodges {
-        /** A path for each of {@link TargetDodges#WAYS}, in that order. */
         public final List<TargetForecast> paths;
-        /** How many moves ago index 0 of the paths was: the age of the last position, or 0 for a player at rest. */
+
         public final int age;
-        /** The player has sent nothing for a while: it stands still, and the paths start from rest. */
+
         public final boolean atRest;
 
         Dodges(List<TargetForecast> paths, int age, boolean atRest) {
@@ -199,13 +153,6 @@ public final class SimTargets {
         }
     }
 
-    /**
-     * Where this player gets to if it changes what it is doing {@code after} ticks from now (2026-11-16, the bow
-     * aimbot's dodge settings): a path for each way out, reaching {@code ticks} ticks from now. A player followed
-     * and explained goes on as forecast until then; one that has sent nothing for {@link #STALE} ticks stands
-     * still and starts from rest. Null when neither is known: not followed yet, or moving in a way the simulation
-     * does not explain.
-     */
     public static Dodges dodges(Entity player, double after, int ticks) {
         want();
         if (player == null || mc.theWorld == null || ticks < 1) {
@@ -219,7 +166,7 @@ public final class SimTargets {
         if (age < 0) {
             return null;
         }
-        /* Eleven ways from one place: the cache answers nearly all of their questions (2026-11-16). */
+
         PlayerSim.World world = SimWorlds.cached(SimPlayer.world(mc.theWorld, player));
         List<TargetForecast> paths;
         boolean atRest = age > STALE;
@@ -233,10 +180,6 @@ public final class SimTargets {
         return paths.isEmpty() ? null : new Dodges(paths, age, atRest);
     }
 
-    /**
-     * Where the simulation has this player {x, z} one tick from now, two, ... up to {@code ticks}; null when it has
-     * no answer of its own (not followed, nothing sent lately, or its moves were not explained).
-     */
     public static double[][] path(Entity player, int ticks) {
         want();
         Target target = fresh(player);
@@ -271,7 +214,6 @@ public final class SimTargets {
         return this.measuring || this.tick <= this.wantedUntil;
     }
 
-    /* First in the tick: whoever asks for a forecast in it (the run recorders) gets this tick's positions. */
     @EventTarget(Priority.HIGHEST)
     public void onTick(TickEvent event) {
         if (event.getType() != EventType.PRE) {
@@ -327,7 +269,7 @@ public final class SimTargets {
                 this.targets.put(player.getEntityId(), target);
             }
         }
-        /* The hits first: a knockback is looked for in the positions that come after the attack. */
+
         double[] hit;
         while ((hit = this.hits.poll()) != null) {
             Target target = this.targets.get((int) hit[0]);
@@ -344,14 +286,12 @@ public final class SimTargets {
             try {
                 position(player, target);
             } catch (RuntimeException e) {
-                /* A forecast is never worth the game: this player's track starts again. */
                 this.score.forget(player.getEntityId());
                 this.targets.put(player.getEntityId(), new Target());
             }
         }
     }
 
-    /** A new position of this player: its track sees it, and the measuring, when on. */
     private void position(EntityPlayer player, Target target) {
         TargetFit.Seen seen = new TargetFit.Seen();
         seen.x = player.serverPosX;
@@ -371,7 +311,7 @@ public final class SimTargets {
         }
         target.track.walkSpeed = walkSpeed(player);
         target.track.depthStrider = (float) EnchantmentHelper.getDepthStriderModifier(player);
-        /* A fit runs many candidates from the last position: the cache answers nearly all of their questions. */
+
         PlayerSim.World world = SimWorlds.cached(SimPlayer.world(mc.theWorld, player));
         target.track.observe(seen, world, (double) since);
         target.known = true;
@@ -385,7 +325,6 @@ public final class SimTargets {
         }
     }
 
-    /** A player the simulation covers: alive, on its own feet. */
     private static boolean covered(EntityPlayer player) {
         return player.isEntityAlive() && !player.isRiding() && !player.isPlayerSleeping();
     }
@@ -396,10 +335,6 @@ public final class SimTargets {
         return dx * dx + dz * dz;
     }
 
-    /**
-     * The player's walking speed without a sprint's share (the simulation adds that itself): the server sends the
-     * attribute with its modifiers, a speed potion's among them.
-     */
     private static double walkSpeed(EntityPlayer player) {
         IAttributeInstance speed = player.getEntityAttribute(SharedMonsterAttributes.movementSpeed);
         if (speed == null) {
@@ -412,7 +347,6 @@ public final class SimTargets {
         return value > 0.0 && value < 1.0 ? value : (double) 0.1F;
     }
 
-    /** An attack going out: the knockback vanilla deals for it, for the track of the player hit. */
     @EventTarget
     public void onSend(PacketEvent event) {
         if (event.getType() != EventType.SEND || event.isCancelled() || !running()
@@ -428,7 +362,7 @@ public final class SimTargets {
             return;
         }
         EntityPlayer player = (EntityPlayer) hit;
-        /* Still red from the last hit: this one deals no knockback. */
+
         if (player.hurtResistantTime > player.maxHurtResistantTime / 2) {
             return;
         }

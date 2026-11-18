@@ -19,11 +19,8 @@ import java.util.List;
 import java.util.Locale;
 
 // Ported from OpenSkid (GPL-3.0), itself adapted from the MiauMinus
-// online-config concept.
-// Loads shared JSON configs from a URL or file path, applied tolerantly per
-// property. Fetches are cached locally. Nothing applies without this command.
-public class OnlineConfigCommand extends Command {
 
+public class OnlineConfigCommand extends Command {
     public OnlineConfigCommand() {
         super(new ArrayList<String>(Arrays.asList("onlineconfig", "onlinecfg", "ocfg", "online")));
     }
@@ -50,8 +47,6 @@ public class OnlineConfigCommand extends Command {
 
     private void load(String source) {
         if (OnlineConfigFetcher.looksLikeUrl(source)) {
-            /* 2026-10-30 (audit): the download (up to 14 s of timeouts) froze the game on the client thread. It runs
-               on a thread of its own; the config is applied back on the client thread. */
             Thread thread = new Thread(() -> {
                 try {
                     String json = OnlineConfigFetcher.fetch(source);

@@ -17,48 +17,22 @@ import net.minecraft.network.play.client.C02PacketUseEntity;
 
 import java.util.Random;
 
-/**
- * AutoBlock's Slinky mode (2026-11-09, owner: "merge Slinky and Crab"). Crab client's Block Hit, read from its DLL
- * with Ghidra, turned out to be Slinky's Auto Block step for step; this follows that, checked against OpenSlinky's
- * readable reconstruction (logic/combat/auto_block.cpp). No code of either is used. It replaces the earlier
- * Slinky mode (ported 2026-10-19 from the leaked source) and the Crab mode, keeping the Slinky settings' keys.
- *
- * Each tick:
- * - Whether the use key is ours: with a sword in hand, left mouse held (require-left-click), right mouse held
- *   exactly when require-right-click is on, hurt at all (require-damage), and hurt time no higher than
- *   max-hurt-time. While it is, the key is held down exactly while blocking (one more click each tick of it); when
- *   it stops being ours it goes back to what the player holds (up, while require-right-click is on).
- * - A hit landing on the player (hurt time 10) ends the re-block cooldown.
- * - An attack (the last-attacker time moving, looked at once 10 ticks have passed) or a new target ends a lag with
- *   lag-flush-on-attack; otherwise the lag counts down. lag-reblock: a lag ending ends the cooldown.
- * - Blocking: held for max-hold-ticks (plus 0 to random-hold-ticks, drawn per block), or until the key is not
- *   ours, then let go; lag-chance of the time every outgoing packet is then held for lag-ticks (AutoBlock's blink).
- * - Not blocking: the key ours, the cooldown over (and block-cooldown-ms since the last block ended) and the target
- *   (under the crosshair, else the nearest) within block-range: press, a 10-tick cooldown, hold.
- * - require-right-click: no attack goes out while not blocking.
- * - fake-animation: the sword drawn blocking while the key may be ours (only with the target in range, with
- *   fake-animation-in-range).
- *
- * Kept from the earlier Slinky mode (not in the original): random-hold-ticks and block-cooldown-ms (both 0, off, by
- * default). Different here: an attack packet during a lag lets the held packets go before it (the original
- * notices the attack a tick later), and hands off while Silent Aura blocks by itself.
- */
 final class AutoBlockSlinky {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    /** Ticks between two blocks starting, unless a hit on the player or block-again ends it sooner. */
+
     static final int COOLDOWN_TICKS = 10;
-    /** Ticks before an attack is looked for again. */
+
     static final int ATTACK_GAP_TICKS = 10;
-    /** How far an enemy may be to count as the target at all (blocks); range decides the block. */
+
     static final double TARGET_SEARCH = 6.0;
-    /** A sword's full use time: where the drawn-blocking count starts. */
+
     static final int USE_DURATION = 72000;
 
     private final BlockHit module;
     private final Random random = new Random();
     private boolean active;
     private boolean blocking;
-    /** The use key is set by this mode, so it is given back when the mode stops. */
+
     private boolean keyOwned;
     private boolean rightRequired;
     private boolean lagging;
@@ -68,7 +42,7 @@ final class AutoBlockSlinky {
     private int sinceAttack;
     private int lastTargetId;
     private int lastAttackerTime = Integer.MIN_VALUE;
-    /** The player entity lastAttackerTime was read from: a new one (respawn, world change) starts over. */
+
     private Object attackerOf;
     private boolean animationShown;
     private int animationCount = USE_DURATION;
@@ -85,7 +59,6 @@ final class AutoBlockSlinky {
         return this.lagging;
     }
 
-    /** floor(x), plus one with the chance of x's fraction. */
     static int ticks(float value, float roll) {
         if (Float.isNaN(value) || value <= 0.0F) {
             return 0;
@@ -94,7 +67,6 @@ final class AutoBlockSlinky {
         return whole + (roll < value - whole ? 1 : 0);
     }
 
-    /** Extra hold ticks drawn for the block running now (random-hold-ticks). */
     private int extraHold;
     private long blockEndedAt = -1L;
 
@@ -163,7 +135,6 @@ final class AutoBlockSlinky {
             this.cooldown = 0;
         }
 
-        /* An attack, or a new target. */
         if (this.attackerOf != mc.thePlayer) {
             this.attackerOf = mc.thePlayer;
             this.lastAttackerTime = Integer.MIN_VALUE;
@@ -243,13 +214,11 @@ final class AutoBlockSlinky {
         ((IAccessorKeyBinding) mc.gameSettings.keyBindUseItem).setPressed(down);
     }
 
-    /** One more press of the use key for vanilla's click loop. */
     private static void click() {
         KeyBinding use = mc.gameSettings.keyBindUseItem;
         ((IAccessorKeyBinding) use).setPressTime(((IAccessorKeyBinding) use).getPressTime() + 1);
     }
 
-    /** right-mouse: no attack while not blocking. Without a sword, any lag ends. */
     void onAttack(AttackEvent event) {
         if (!ItemUtil.isHoldingSword()) {
             stopLag();
@@ -259,7 +228,6 @@ final class AutoBlockSlinky {
         }
     }
 
-    /** prevent-delaying-attacks: an attack lets the held packets go before it. */
     void onSend(PacketEvent event) {
         if (!this.lagging || event.getType() != EventType.SEND || !this.module.sLagFlush.getValue()) {
             return;
@@ -287,7 +255,6 @@ final class AutoBlockSlinky {
         this.lagging = false;
     }
 
-    /** The drawn-blocking count runs down from a sword's use time while shown, as a real block's would. */
     private void showAnimation(boolean show) {
         if (!show) {
             this.animationCount = USE_DURATION;
@@ -306,7 +273,6 @@ final class AutoBlockSlinky {
         }
     }
 
-    /** Held packets go, the sword down, and the use key back to what the player really holds. */
     void reset(boolean releaseKey) {
         stopLag();
         this.blocking = false;
@@ -316,8 +282,7 @@ final class AutoBlockSlinky {
         this.rightRequired = false;
         this.lastAttackerTime = Integer.MIN_VALUE;
         this.attackerOf = null;
-        /* Handing over (to Silent Aura blocking by itself) the key goes up, or the aura could never lower the sword;
-           leaving, it goes back to what the player holds. Either way once: after that it is not ours. */
+
         if (this.keyOwned && mc.gameSettings != null) {
             setUseKey(releaseKey && mc.currentScreen == null && physicalUse());
             this.keyOwned = false;

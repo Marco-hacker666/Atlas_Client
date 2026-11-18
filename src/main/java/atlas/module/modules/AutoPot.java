@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): throws useful splash potions when needed,
-// with an optional hotbar refill from the inventory.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.util.List;
 
 import atlas.event.EventTarget;
@@ -77,9 +77,7 @@ public class AutoPot extends Module {
         if (potionSlot == -1) {
             if (this.refill.getValue()) {
                 int invSlot = this.findPotion(9, 35);
-                /* 2026-10-31 (audit): only with the player's own inventory as the open container. With a chest or a
-                   furnace open, the click was applied to that container's slot numbering here while the server
-                   dropped it (window 0 is not the open one): the items shown were no longer where they were. */
+
                 if (invSlot != -1 && this.hasSpaceInHotbar()
                         && mc.thePlayer.openContainer == mc.thePlayer.inventoryContainer) {
                     mc.playerController.windowClick(0, invSlot, 0, 1, mc.thePlayer);

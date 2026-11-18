@@ -5,10 +5,6 @@ import atlas.script.raven.model.Vec3;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
 
-/**
- * Placing or using: the block clicked, the face (0 down .. 5 east; 255 for using the held item in the air) and
- * the point on it (0..1 offsets).
- */
 public class C08 extends CPacket {
     public ItemStack itemStack;
     public Vec3 position;

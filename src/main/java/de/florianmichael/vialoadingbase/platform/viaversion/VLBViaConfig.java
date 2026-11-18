@@ -23,8 +23,6 @@ import java.util.List;
 import java.util.Map;
 
 public class VLBViaConfig extends AbstractViaConfig {
-
-  // Stolen from Sponge
   private static final List<String> UNSUPPORTED =
       Arrays.asList(
           "anti-xray-patch",
@@ -55,7 +53,6 @@ public class VLBViaConfig extends AbstractViaConfig {
 
   @Override
   protected void handleConfig(Map<String, Object> config) {
-    // Nothing Currently
   }
 
   @Override

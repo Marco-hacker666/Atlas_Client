@@ -130,5 +130,4 @@ public class FontProcess {
     private static CFontRenderer createFont(String name, int size) {
         return new CFontRenderer(name, size, Font.PLAIN, true, false);
     }
-
 }

@@ -17,10 +17,6 @@ import net.minecraft.network.play.client.C10PacketCreativeInventoryAction;
 import net.minecraft.network.play.client.C13PacketPlayerAbilities;
 import net.minecraft.network.play.client.C16PacketClientStatus;
 
-/**
- * Raven script API: the game's packets as script packets and back (2026-11-02). A kind with no class of its own
- * becomes a plain CPacket / SPacket carrying its name; null when the conversion itself failed.
- */
 public final class PacketHandler {
     private PacketHandler() {
     }
@@ -82,7 +78,6 @@ public final class PacketHandler {
         return atlas.script.raven.packet.clientbound.ClientPackets.convert(packet);
     }
 
-    /** The game's packet a script packet stands for. */
     public static Packet convertCPacket(CPacket cPacket) {
         return cPacket == null ? null : cPacket.convert();
     }

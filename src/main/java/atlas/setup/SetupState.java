@@ -2,13 +2,8 @@ package atlas.setup;
 
 import java.io.File;
 
-/**
- * Whether the first-run setup has been dealt with. A marker file under
- * {@code config/Atlas/} keeps the wizard from opening on every launch.
- *
- * <p>Ported from OpenSkid (GPL-3.0); the path follows this client's own config
- * folder.
- */
+// Ported from OpenSkid (GPL-3.0)
+
 public final class SetupState {
     private SetupState() {
     }

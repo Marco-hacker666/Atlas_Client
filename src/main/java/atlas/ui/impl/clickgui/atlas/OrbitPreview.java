@@ -13,24 +13,9 @@ import org.lwjgl.opengl.GL11;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * TargetOrbit, previewed beside the menu (2026-10-18).
- *
- * The owner: no extra screen and no extra button ("the menu is crowded
- * already"); there is empty screen beside the window, so draw the preview
- * there and let what is being adjusted show at once. So while TargetOrbit is
- * the selected module, the wider of the two gaps beside the window holds this
- * player's own model wearing the mark and the body glow, drawn by the same
- * code as in the world, so every setting shows as it is changed.
- *
- * Drag turns it (it spins slowly until first dragged), the wheel zooms, a
- * click plays a hit (and takes some health, for Lock), a right-click a kill
- * (crystals shatter, then the mark comes back in at full health). Changing the pattern replays the arrival. Nothing is drawn when
- * the gap is too narrow; dragging the window to one side makes room.
- */
 final class OrbitPreview {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    /** Narrower than this and there is no room to show anything worth seeing. */
+
     private static final int MIN_GAP = 110;
     private static final float RESPAWN_SECONDS = 0.7F;
 
@@ -54,7 +39,6 @@ final class OrbitPreview {
         return this.visible && mx >= this.x1 && mx <= this.x2 && my >= this.y1 && my <= this.y2;
     }
 
-    /** Where the preview goes: the wider gap beside the window, if wide enough. */
     private boolean place(int screenW, int winX, int winY, int winW, int winH) {
         int leftGap = winX;
         int rightGap = screenW - (winX + winW);
@@ -69,8 +53,7 @@ final class OrbitPreview {
             this.x1 = 6;
             this.x2 = winX - 6;
         }
-        /* As tall as the window and level with it (2026-10-18: the full screen height made the model
-           huge on a wide screen, and the title ran into the module list in the corner). */
+
         this.y1 = winY;
         this.y2 = winY + winH;
         return true;
@@ -107,7 +90,7 @@ final class OrbitPreview {
         float w = this.x2 - this.x1;
         float h = this.y2 - this.y1;
         float cx = (this.x1 + this.x2) / 2.0F;
-        /* Pixels a block: the model about 45 % of the window's height, at most 100. */
+
         float scale = Math.min(100.0F, Math.min(w / 3.6F, h / 4.0F)) * this.zoom;
         float feetY = this.y1 + h * 0.5F + scale * 0.95F;
 
@@ -128,14 +111,13 @@ final class OrbitPreview {
             GlStateManager.translate(cx, feetY, 300.0F);
             GlStateManager.scale(-scale, scale, scale);
             GlStateManager.rotate(180.0F, 0.0F, 0.0F, 1.0F);
-            /* From here: x right, y up, z toward the viewer, a block a unit. */
+
             GlStateManager.rotate(this.pitch, 1.0F, 0.0F, 0.0F);
             GlStateManager.rotate(this.yaw, 0.0F, 1.0F, 0.0F);
 
             floor(accent);
             drawPlayer(orbit, player);
 
-            /* Flakes face this view: the scene is turned by pitch, then yaw. */
             orbit.setView(this.yaw, -this.pitch);
             TargetOrbit.begin();
             try {
@@ -155,7 +137,6 @@ final class OrbitPreview {
         }
     }
 
-    /** This player's model facing +z, the way the inventory draws it, glowing if body glow is on. */
     private void drawPlayer(TargetOrbit orbit, final EntityPlayerSP player) {
         float bodyYaw = player.renderYawOffset;
         float prevBodyYaw = player.prevRenderYawOffset;
@@ -217,7 +198,6 @@ final class OrbitPreview {
         }
     }
 
-    /** A soft pool of the accent colour under the feet, so the model stands on something. */
     private static void floor(int accent) {
         GlStateManager.disableTexture2D();
         GlStateManager.disableCull();
@@ -243,9 +223,6 @@ final class OrbitPreview {
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
-    // ---- input --------------------------------------------------------------
-
-    /** Takes a click inside the preview; false leaves it to the menu. */
     boolean mouseClicked(int mouseX, int mouseY, int button) {
         if (!contains(mouseX, mouseY)) {
             return false;
@@ -263,14 +240,12 @@ final class OrbitPreview {
 
     void mouseReleased() {
         if (this.dragging && this.moved < 3.0F) {
-            /* A click, not a drag: play a hit, and take some health for Lock's arc. */
             this.fx.flash = 1.0F;
             this.fx.health = Math.max(0.1F, this.fx.health - 0.15F);
         }
         this.dragging = false;
     }
 
-    /** The wheel over the preview zooms it; false leaves the wheel to the menu. */
     boolean scroll(float mouseX, float mouseY, int wheel) {
         if (!contains(mouseX, mouseY)) {
             return false;
@@ -279,7 +254,6 @@ final class OrbitPreview {
         return true;
     }
 
-    /* Read every frame, like the menu's own drags: mouse events arrive only twenty times a second. */
     private void followDrag(int mouseX, int mouseY) {
         if (!this.dragging) {
             return;
@@ -293,7 +267,7 @@ final class OrbitPreview {
         this.moved += Math.abs(dx) + Math.abs(dy);
         if (this.moved >= 3.0F) {
             this.everDragged = true;
-            /* 2026-10-18: 1.2 and 0.8 degrees a pixel turned too fast. */
+
             this.yaw += dx * 0.45F;
             this.pitch = Math.max(-25.0F, Math.min(70.0F, this.pitch + dy * 0.3F));
         }

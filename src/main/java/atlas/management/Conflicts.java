@@ -13,42 +13,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.IntFunction;
 
-/**
- * Combinations of modules that work against each other (2026-10-23,
- * docs/GUI-AUDIT-2026-10-23.md F2). Only the ones that are mechanically true:
- *
- *   KEYS     two modules (or a module and a key setting) on the same key: one
- *            press does both.
- *   HOLDERS  two or more modules whose job is holding packets back, on at
- *            once. PacketHub lets only one hold at a time, so they do not
- *            corrupt each other, but together they hold more often and longer,
- *            which is the usual cause of damage mitigation (the 10-21 case had
- *            three on).
- *
- * Pairs that merely look wrong are not here: one goes in only when a log shows
- * it (owner, D4). A conflict is a warning; nothing is refused.
- *
- * Each conflict has a key; the player can stop being warned about one, kept in
- * config/Atlas/atlas-conflicts.txt. A third holder joining makes a new key, so
- * it warns again.
- */
 public final class Conflicts {
-
-    /**
-     * Modules whose whole job is to hold packets back while they are on, by
-     * class name. Modules that hold only in some modes (NoSlow's blink modes,
-     * Criticals, AutoBlock's lag) are left out: listing them would warn about
-     * every setup that uses them without holding.
-     */
     public static final Set<String> HOLDERS = Collections.unmodifiableSet(new LinkedHashSet<String>(java.util.Arrays.asList(
             "FakeLag", "LagRange", "BackTrack", "KnockbackDelay", "ServerLag", "TimerRange", "PingSpoof", "Freeze",
             "Blink",
-            /* Velocity while its mode is Lag (2026-10-24): listed as "Velocity (Lag)". */
+
             "VelocityLag")));
 
     public static final class Conflict {
         public final String key;
-        /** What is involved, as the menu names it: modules, or "Module (Setting)". */
+
         public final List<String> names;
         public final String message;
 
@@ -65,13 +39,12 @@ public final class Conflicts {
 
     private static final File FILE = new File("./config/Atlas/atlas-conflicts.txt");
     private static Set<String> ignored;
-    /** Warned about in this run of the game: each conflict is said once, when it comes about. */
+
     private static final Set<String> WARNED = new LinkedHashSet<String>();
 
     private Conflicts() {
     }
 
-    /** The holder modules that are on, by their menu names, given {menu name, class name} pairs. */
     public static List<String> holdersOn(List<String[]> modulesOn) {
         List<String> out = new ArrayList<String>();
         for (String[] module : modulesOn) {
@@ -82,10 +55,6 @@ public final class Conflicts {
         return out;
     }
 
-    /**
-     * Every conflict now: keys shared in {@code bindings} (name to key code, 0
-     * none), and the holders on. {@code keyName} turns a key code into its name.
-     */
     public static List<Conflict> find(List<String> holdersOn, Map<String, Integer> bindings, IntFunction<String> keyName) {
         List<Conflict> out = new ArrayList<Conflict>();
         if (holdersOn.size() >= 2) {
@@ -123,12 +92,6 @@ public final class Conflicts {
         return out;
     }
 
-    /**
-     * Every module key and key setting in the client, by the name the menu
-     * shows ("Clutch (Hold Key)" for a setting). The old "ClickGui" opener is
-     * left out: it shares Right Shift with ClickGUI on purpose and stands aside
-     * for it (GuiModule).
-     */
     public static Map<String, Integer> bindings() {
         Map<String, Integer> out = new LinkedHashMap<String, Integer>();
         if (atlas.Atlas.moduleManager == null) {
@@ -159,7 +122,6 @@ public final class Conflicts {
         return out;
     }
 
-    /** Every conflict in the client now, ignored ones included. */
     public static List<Conflict> current() {
         List<String[]> on = new ArrayList<String[]>();
         if (atlas.Atlas.moduleManager != null) {
@@ -176,10 +138,6 @@ public final class Conflicts {
         return find(holdersOn(on), bindings(), key -> key == 0 ? "None" : atlas.util.KeyBindUtil.getKeyName(key));
     }
 
-    /**
-     * The conflicts a module just switched on is part of that have not been
-     * said yet and are not ignored; each is marked said.
-     */
     public static synchronized List<Conflict> newFor(String module) {
         List<Conflict> out = new ArrayList<Conflict>();
         for (Conflict conflict : current()) {
@@ -190,10 +148,6 @@ public final class Conflicts {
         return out;
     }
 
-    /**
-     * Outside the menu (a key, a command): the new conflicts of a module just
-     * switched on, as notifications. The menu says them in its own toasts.
-     */
     public static void warnOnEnable(atlas.module.Module module) {
         try {
             for (Conflict conflict : newFor(module.getName())) {
@@ -202,11 +156,9 @@ public final class Conflicts {
                 }
             }
         } catch (Exception ignoredWarning) {
-            // A warning that cannot be worked out is not worth a failed toggle.
         }
     }
 
-    /** "A and B", "A, B and C". */
     static String join(List<String> names) {
         StringBuilder out = new StringBuilder();
         for (int i = 0; i < names.size(); i++) {
@@ -217,8 +169,6 @@ public final class Conflicts {
         }
         return out.toString();
     }
-
-    // ---- not warning again ------------------------------------------------
 
     public static synchronized boolean isIgnored(String key) {
         return ignored().contains(key);
@@ -242,7 +192,6 @@ public final class Conflicts {
                     }
                 }
             } catch (Exception ignoredRead) {
-                // An unreadable file means warning about everything, as before it existed.
             }
         }
         return ignored;
@@ -263,11 +212,9 @@ public final class Conflicts {
                 writer.close();
             }
         } catch (Exception ignoredWrite) {
-            // Not saved: it will warn again next time, which is the safe side.
         }
     }
 
-    /** For tests: forget what was read, without touching the file. */
     static synchronized void resetForTest(Set<String> keys) {
         ignored = keys;
     }

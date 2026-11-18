@@ -1,8 +1,5 @@
-/*
- * Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0),
- * src/main/java/openskid/module/modules/KeyStrokes.java, 2026-10-05: package openskid -> atlas,
- * OpenSkid -> Atlas. Changes after that are marked in comments.
- */
+// Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0), src/main/java/openskid/module/modules/KeyStrokes.java
+
 package atlas.module.modules;
 
 import atlas.ui.impl.clickgui.atlas.HudPanel;
@@ -27,7 +24,7 @@ import org.lwjgl.input.Mouse;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
-// WASD plus mouse click overlay polled per frame. Concept adapted from the MiauMinus Keystrokes module.
+// Concept adapted from the MiauMinus Keystrokes module.
 public class KeyStrokes extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final int KEY = 22;
@@ -51,11 +48,10 @@ public class KeyStrokes extends Module {
     private final Deque<Long> rightClicks = new ArrayDeque<Long>();
     private boolean prevLeft = false;
     private boolean prevRight = false;
-    /* 2026-11-15 (owner: KeyStrokes did not count the clicks AutoClicker makes): when a click last reached the game,
-       so a module's click lights the button too. */
+
     private long lastLeftClick;
     private long lastRightClick;
-    /** How long a click a module made shows the button pressed. */
+
     private static final long FLASH_MS = 80L;
 
     public KeyStrokes() {
@@ -81,11 +77,6 @@ public class KeyStrokes extends Module {
         lastRightClick = 0L;
     }
 
-    /**
-     * Every left click that reaches the game, yours or a module's (AutoClicker presses the attack key, which the game
-     * turns into this same click). Counted here, after every module has had its say, and not from the mouse button:
-     * the button only shows your own clicks. A click a module cancelled (HitSelect and the like) never happened.
-     */
     @EventTarget(Priority.LOWEST)
     public void onLeftClick(LeftClickMouseEvent event) {
         if (!isEnabled() || event.isCancelled()) {
@@ -96,10 +87,6 @@ public class KeyStrokes extends Module {
         lastLeftClick = now;
     }
 
-    /**
-     * A right click a module made: with the button up. With it held, the game repeats the use every four ticks by
-     * itself; those are not clicks, and the press itself is counted from the button below.
-     */
     @EventTarget(Priority.LOWEST)
     public void onRightClick(RightClickMouseEvent event) {
         if (!isEnabled() || event.isCancelled() || Mouse.isButtonDown(1)) {
@@ -149,7 +136,7 @@ public class KeyStrokes extends Module {
             default:
                 break;
         }
-        /* HUD editor (2026-10-05): report where this is drawn, so the editor can find and drag it. */
+
         HudLayout.report("KeyStrokes", "KeyStrokes", x, y, BOX_W * sc, boxH * sc,
                 HudLayout.ints(offX, posX.getValue() == 2 ? -1 : 1, offY, posY.getValue() == 2 ? -1 : 1),
                 HudLayout.scale(this.scale));
@@ -161,7 +148,7 @@ public class KeyStrokes extends Module {
         boolean jumpDown = Keyboard.isKeyDown(mc.gameSettings.keyBindJump.getKeyCode());
         boolean lHeld = Mouse.isButtonDown(0);
         boolean rHeld = Mouse.isButtonDown(1);
-        /* Left clicks are counted as they reach the game (onLeftClick); in a menu nothing reaches it. */
+
         if (rHeld && !prevRight) {
             rightClicks.addLast(now);
         }
@@ -212,7 +199,6 @@ public class KeyStrokes extends Module {
         }
     }
 
-    /** JelloBounce Key.svelte: rgba(black,.45), 7px corners; active rgba(#2e2e2e,.7) at 95% scale. */
     private static void jelloKey(float x, float y, float w, float h, boolean down) {
         if (down) {
             float dx = w * 0.025F;

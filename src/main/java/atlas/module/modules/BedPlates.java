@@ -1,12 +1,9 @@
-/*
- * Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0),
- * src/main/java/openskid/module/modules/BedPlates.java, 2026-10-05: package openskid -> atlas,
- * OpenSkid -> Atlas. Changes after that are marked in comments.
- */
+// Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0), src/main/java/openskid/module/modules/BedPlates.java
+
 package atlas.module.modules;
 
 // Adapted from Expo BedPlates (connected bed-defense scan plus per-bed overlay).
-// Rebuilt on openskid helpers (RenderUtil boxes, TickEvent throttle). No pasted code.
+
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.events.LoadWorldEvent;

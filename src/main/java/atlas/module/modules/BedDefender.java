@@ -1,9 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): places blocks to defend your bed, with
-// neighbour-cover target selection, turn speed limits and a progress readout.
-// OpenSkid's ScaffoldSessionState slot bookkeeping is inlined here as two
-// private helpers, since the client has no equivalent shared session state.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +39,6 @@ import net.minecraft.util.Vec3;
 import org.lwjgl.opengl.GL11;
 
 public class BedDefender extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final FloatProperty range = new FloatProperty("range", 4.5F, 3.0F, 6.0F);
@@ -114,7 +111,6 @@ public class BedDefender extends Module {
         this.lockedBedFacing = null;
     }
 
-    /** The slot to return to: the one already saved, else the current one. */
     private static int saveSlotOnce(int saved, int current) {
         return saved >= 0 ? saved : current;
     }

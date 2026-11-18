@@ -6,9 +6,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** "Unsaved changes": what would be saved now against the profile's file (2026-10-23, GUI redesign M7). */
 public class ConfigDiffersTest {
-
     private static JsonObject now(float range, boolean toggled, String mode) {
         JsonObject module = new JsonObject();
         module.addProperty("toggled", toggled);

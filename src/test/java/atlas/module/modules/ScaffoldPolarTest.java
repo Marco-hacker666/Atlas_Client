@@ -11,21 +11,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Polar's ledge rule (2026-10-11). Polar is LiquidBounce's GodBridge technique,
- * run with polar.json's config: Modes = [Jump], ForceSneakBelowCount = 5,
- * SneakTime = 1..1.
- *
- * The owner's report against the first build was that it jumped on every block
- * ("it should jump like 1 time per 7 blocks"), that the look was not fixed, and
- * that the polar settings appeared while another rotation mode was selected.
- * The look itself is godBridgeRotation, which needs a live player, but the rule
- * that decides the ledge action is polarLedgeAction and has no client in it --
- * so the jump cadence and the mode scoping are checked here.
- */
 public class ScaffoldPolarTest {
-
-    /* Scaffold's own constants: POLAR_JUMP..POLAR_BACKWARDS, LEDGE_NONE. */
     private static final int JUMP = 0;
     private static final int SNEAK = 1;
     private static final int STOP_INPUT = 2;
@@ -33,7 +19,7 @@ public class ScaffoldPolarTest {
     private static final int NONE = -1;
     private static final int GODBRIDGE = 4;
     private static final int POLAR = 10;
-    /** polar.json's ForceSneakBelowCount. */
+
     private static final int FORCE_SNEAK_BELOW = 5;
 
     private static int ledge(boolean onGround, boolean forwardPressed, boolean hasTarget,
@@ -42,16 +28,10 @@ public class ScaffoldPolarTest {
                 canPlaceFromLook, blockCount, FORCE_SNEAK_BELOW, mode, jumpBoost);
     }
 
-    /** Bridging at the edge, plenty of blocks, no Jump Boost, Modes = [Jump]. */
     private static int atTheEdge(boolean canPlaceFromLook) {
         return ledge(true, true, true, true, canPlaceFromLook, 64, JUMP, -1);
     }
 
-    /**
-     * The whole of the "jumps way too often" complaint: LiquidBounce only takes
-     * a ledge action when the look it is about to send cannot place the block,
-     * so the edges that can still place are silent.
-     */
     @Test
     public void aLookThatStillPlacesGetsNoLedgeAction() {
         assertEquals("the block goes down from here, so there is nothing to jump for",
@@ -111,8 +91,6 @@ public class ScaffoldPolarTest {
         assertTrue("Jump Boost I does not", Scaffold.jumpApexHeight(0) < 2.0);
     }
 
-    /* ------------------------------------------------- polar.json's settings */
-
     private static Scaffold scaffold() throws Exception {
         Constructor<Scaffold> constructor = Scaffold.class.getDeclaredConstructor();
         constructor.setAccessible(true);
@@ -142,10 +120,6 @@ public class ScaffoldPolarTest {
         assertEquals("Modes = [Jump]", "Jump", modes.getModeString());
     }
 
-    /**
-     * The report: the polar settings showed while another rotation mode was selected. Since 2026-11-08 GODBRIDGE has
-     * its own flow (GodBridge) with no LiquidBounce ledge, so they are POLAR's alone.
-     */
     @Test
     public void thePolarSettingsAreShownOnlyForTheLiquidBounceGodBridge() throws Exception {
         Scaffold scaffold = scaffold();

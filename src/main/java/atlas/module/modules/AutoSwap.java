@@ -15,7 +15,7 @@ import java.util.List;
 
 public class AutoSwap extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    
+
     private Item lastItem;
     private int lastSlot = -1;
 
@@ -86,7 +86,6 @@ public class AutoSwap extends Module {
             }
         }
 
-        // Loop through hotbar to find replacement
         for (int offset = 1; offset <= 9; ++offset) {
             int i = (current + offset) % 9;
             ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
@@ -95,19 +94,16 @@ public class AutoSwap extends Module {
                 Item item = stack.getItem();
                 String id = item.getUnlocalizedName().toLowerCase();
 
-                // Check if it's the same item
                 if (item == lastItem) {
                     mc.thePlayer.inventory.currentItem = i;
                     return;
                 }
 
-                // Check for blocks
                 if (isBlock && this.blocks.getValue() && isValidBlock(stack)) {
                     mc.thePlayer.inventory.currentItem = i;
                     return;
                 }
 
-                // Check for category matches
                 if (category != null) {
                     if (containsAny(id, category) && !id.contains("leggings")) {
                         mc.thePlayer.inventory.currentItem = i;
@@ -140,4 +136,3 @@ public class AutoSwap extends Module {
         return false;
     }
 }
-

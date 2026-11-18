@@ -1,7 +1,6 @@
 package atlas.util.vector;
 
 public final class Vector2d {
-
     public double x, y;
 
     public Vector2d() {}

@@ -10,7 +10,6 @@ import org.spongepowered.asm.mixin.Shadow;
 
 @Mixin(S32PacketConfirmTransaction.class)
 public class MixinS32PacketConfirmTransaction {
-
   @Shadow private int windowId;
 
   @Shadow private short actionNumber;

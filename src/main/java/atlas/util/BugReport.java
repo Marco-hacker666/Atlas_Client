@@ -26,40 +26,19 @@ import java.util.Date;
 import java.util.List;
 import java.util.regex.Pattern;
 
-/**
- * One-click bug report (2026-10-07): everything a tester would otherwise be
- * asked for in #bug-reports, as one block of text -- client and game
- * versions, OptiFine and Fast Render, the machine, the server, the click menu,
- * the other mods, every enabled module with its settings, the tail of the
- * FlagDetector, place and Clutch logs, and the warnings and errors of the
- * game log. Copied to the clipboard and saved under config/Atlas/reports.
- *
- * Everything goes through {@link Redactor} first: the player's name, UUID and
- * session token, the names on the tab list, the Windows account and home
- * folder, e-mail addresses, token-shaped strings and public IP addresses.
- * Chat from other players is left out of the game log altogether.
- */
 public final class BugReport {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File ATLAS_DIR = new File("./config/Atlas/");
     private static final File REPORT_DIR = new File(ATLAS_DIR, "reports");
     private static final File GAME_LOG = new File("./logs/latest.log");
-    /* Game-log lines worth keeping: problems, and the client's / anticheat's own messages. */
+
     private static final Pattern LOG_KEEP = Pattern.compile(
             "WARN|ERROR|Exception|Caused by|^\\s+at |GrimAC|Vulcan|Matrix|Polar|Intave|Verus|failed |FlagDetector|Atlas|Mixin",
             Pattern.CASE_INSENSITIVE);
 
-    /* The relay (a Cloudflare Worker, report-relay/ outside the mod) that
-       forwards a report to the Discord channel. Its address is not a secret:
-       the Discord webhook stays on the Worker. Can be overridden with one line
-       in config/Atlas/report-relay.txt. */
     private static final String RELAY_URL = "https://atlas-report.atlas-client.workers.dev/report";
     private static final File RELAY_OVERRIDE = new File(ATLAS_DIR, "report-relay.txt");
 
-    /*
-     * 2026-10-08: what the report is about, picked in the dialog (sent in
-     * English; the Chinese labels are only what the menu shows).
-     */
     public static final String[] REASONS = {"Flagged / banned", "Crash / freeze", "Lag / low FPS",
             "Module not working", "Visual / menu bug", "Other"};
     public static final String[] REASONS_ZH = {"被反作弊抓 / 被 ban", "崩潰 / 卡死", "延遲 / FPS 低",
@@ -68,10 +47,6 @@ public final class BugReport {
     private BugReport() {
     }
 
-    /**
-     * The relay's address without its path, for other routes on it (2026-11-16: /habits, HabitsCloud); empty when
-     * no relay is configured.
-     */
     public static String relayBase() {
         String url = relayUrl();
         int path = url.indexOf('/', "https://".length());
@@ -87,29 +62,18 @@ public final class BugReport {
                 }
             }
         } catch (Exception ignored) {
-            // Falls back to the built-in address.
         }
         return RELAY_URL;
     }
 
-    /** What happened to a report: shown in chat on the game thread. */
     public interface Result {
         void done(boolean sent, String message, File saved);
     }
 
-    /**
-     * Builds the report on this (game) thread, saves it, and sends it to the
-     * relay on a background thread. If it cannot be sent it is copied to the
-     * clipboard instead, so the click is never wasted.
-     */
     public static void send(String description, Result result) {
         send(null, description, result);
     }
 
-    /**
-     * 2026-10-08: the reason picked in the dialog and the player's own words;
-     * the log and the config travel as two files (report.txt, config.txt).
-     */
     public static void send(String reason, String description, Result result) {
         String log = buildLog(MARK_REPORT, reason, description);
         String config = buildConfig();
@@ -131,11 +95,6 @@ public final class BugReport {
         }));
     }
 
-    /**
-     * The automatic log (LogUploader: kicked, or flagged many times): the same
-     * log and config, no dialog, nothing said in chat, nothing saved. The
-     * trigger is the title and the log's first line. Built on the game thread.
-     */
     public static void sendAuto(String trigger) {
         String relay = relayUrl();
         if (relay.isEmpty()) {
@@ -146,9 +105,6 @@ public final class BugReport {
         String title;
         Redactor redactor;
         try {
-            /* What only the game thread may read, now; the log files (up to
-               1 MB each) are read on the upload thread, so a mid-fight
-               upload costs no frame time. */
             redactor = redactor();
             head = logHead(MARK_AUTO, trigger, null);
             config = buildConfig();
@@ -164,18 +120,12 @@ public final class BugReport {
                 post(relay, "auto", title, redactor.apply("**Trigger:** " + trigger), redactor.apply(sb.toString()), config, (ok, message) -> {
                 });
             } catch (Throwable ignored) {
-                // Nothing to tell anyone: it was automatic.
             }
         }, "Atlas log upload");
         thread.setDaemon(true);
         thread.start();
     }
 
-    /**
-     * Anonymous SpeedBlocker run data (RunCollector, 2026-11-01): kind "runs", the relay posts it to its own channel.
-     * Only numbers; nothing to redact. {@code done} hears on the sending thread whether it went (RunCollector keeps
-     * the rows for one retry when it did not).
-     */
     public static void sendRuns(String title, String summary, String csv, java.util.function.Consumer<Boolean> done) {
         post(relayUrl(), "runs", title, summary, csv, "", (ok, message) -> {
             if (!ok) {
@@ -189,7 +139,6 @@ public final class BugReport {
         void done(boolean ok, String message);
     }
 
-    /** POSTs to the relay on a daemon thread; answers on that thread. */
     private static void post(String relay, String kind, String title, String summary, String log, String config, Sent sent) {
         Thread thread = new Thread(() -> {
             boolean ok = false;
@@ -201,7 +150,7 @@ public final class BugReport {
                 json.addProperty("summary", summary);
                 json.addProperty("report", log);
                 json.addProperty("config", config);
-                /* 2026-11-17: who sent it, only when the player agreed to share usage (UsageReporter). */
+
                 com.google.gson.JsonObject who = atlas.management.UsageReporter.reportIdentity();
                 if (who != null) {
                     json.add("usage", who);
@@ -215,7 +164,7 @@ public final class BugReport {
                 http.setRequestProperty("Content-Type", "application/json; charset=utf-8");
                 http.setRequestProperty("X-Atlas-Report", "1");
                 http.setRequestProperty("User-Agent", "Atlas/" + (Atlas.version == null ? "dev" : Atlas.version));
-                /* Signed by the official build, so the relay can tell it from a fork's or a forged one. */
+
                 atlas.management.BuildSignature.sign(http, "/report", body);
                 http.setFixedLengthStreamingMode(body.length);
                 try (java.io.OutputStream out = http.getOutputStream()) {
@@ -286,34 +235,25 @@ public final class BugReport {
         }
     }
 
-    /** Builds, saves and copies the report; returns the file it was saved to, or null. */
     public static File createAndCopy() {
         String text = build(null);
         GuiScreen.setClipboardString(text);
         return save(text);
     }
 
-    /** The relay checks for these: a report, or an automatic log. */
     private static final String MARK_REPORT = "**Atlas bug report**";
     private static final String MARK_AUTO = "**Atlas log**";
 
-    /** Log and config together (the clipboard copy). */
     public static String build(String description) {
         return buildLog(MARK_REPORT, null, description) + "\n" + buildConfig();
     }
 
-    /**
-     * The log part (2026-10-08: longer -- 150 flag lines, 80 placement and
-     * Clutch lines, 60 fight and hit lines, 250 game-log lines -- and without
-     * the module settings, which are the config part now).
-     */
     public static String buildLog(String mark, String reason, String description) {
         StringBuilder sb = new StringBuilder(logHead(mark, reason, description));
         logFiles(sb);
         return redactor().apply(sb.toString());
     }
 
-    /** The part read from the game (GL strings, display, modules): game thread only. */
     private static String logHead(String mark, String reason, String description) {
         StringBuilder sb = new StringBuilder();
         sb.append(mark).append('\n');
@@ -352,8 +292,7 @@ public final class BugReport {
             }
         }
         line(sb, "Enabled modules", on.isEmpty() ? "none" : String.join(", ", on) + "  (settings: config.txt)");
-        /* The blocking and packet-holding modules at a glance (2026-10-22): two ban reports showed AutoBlock
-           and NoSlow as active with nothing to say in which mode. */
+
         line(sb, "AutoBlock", onOff("AutoBlock") + " | mode " + setting("AutoBlock", "Mode")
                 + " | lag-chance " + setting("AutoBlock", "lag-chance") + " | full-style " + setting("AutoBlock", "full-style")
                 + " hold " + setting("AutoBlock", "full-hold") + " air " + setting("AutoBlock", "full-air")
@@ -366,7 +305,6 @@ public final class BugReport {
         return sb.toString();
     }
 
-    /** The part read from files: any thread. */
     private static void logFiles(StringBuilder sb) {
         tail(sb, "FlagDetector (last 150)", newest("flags-"), 150);
         tail(sb, "Placements (last 80)", newest("places-"), 80);
@@ -377,7 +315,6 @@ public final class BugReport {
         sb.append("```\n");
     }
 
-    /** The config part: every module, on or off, with all its settings. */
     public static String buildConfig() {
         StringBuilder sb = new StringBuilder();
         sb.append("Atlas config (").append(Atlas.version == null ? "dev" : Atlas.version).append(")\n");
@@ -388,8 +325,6 @@ public final class BugReport {
         }
         return redactor().apply(sb.toString());
     }
-
-    // ---------------------------------------------------------------- parts
 
     private static void section(StringBuilder sb, String title) {
         sb.append("\n== ").append(title).append(" ==\n");
@@ -490,11 +425,6 @@ public final class BugReport {
         return shownText(property instanceof atlas.property.properties.TextProperty, property.getValue());
     }
 
-    /**
-     * 2026-10-30 (audit): text settings are left out of reports. They are what the Redactor cannot recognise --
-     * AutoAuth's password went out as it was in every automatic kick log -- and the rest are chat lines, names and
-     * commands nobody needs to see a bug.
-     */
     static String shownText(boolean text, Object value) {
         if (!text) {
             return String.valueOf(value);
@@ -502,7 +432,6 @@ public final class BugReport {
         return value == null || String.valueOf(value).isEmpty() ? "<empty>" : "<hidden>";
     }
 
-    /** When this game started: a log last written before it belongs to another session. */
     private static final long SESSION_START = sessionStart();
 
     private static long sessionStart() {
@@ -513,11 +442,6 @@ public final class BugReport {
         }
     }
 
-    /**
-     * The newest of this client's logs with this prefix written during this game, or null (2026-10-22: two
-     * ban reports carried fights and hits from 10-18 as if they were the session's -- with Logs off those
-     * files are not written, and the newest left on disk was days old).
-     */
     private static File newest(String prefix) {
         File[] files = ATLAS_DIR.listFiles((dir, name) -> name.startsWith(prefix) && name.endsWith(".txt"));
         if (files == null || files.length == 0) {
@@ -547,7 +471,6 @@ public final class BugReport {
         }
     }
 
-    /** Problems and client/anticheat messages only: other players' chat never goes in. */
     private static void gameLog(StringBuilder sb, int lines) {
         section(sb, "Game log (warnings, errors, client and anticheat messages)");
         List<String> tail = lastLines(GAME_LOG, lines, LOG_KEEP);
@@ -555,12 +478,10 @@ public final class BugReport {
             sb.append("(nothing)\n");
         }
         for (String l : tail) {
-            /* Minecraft colour codes are noise in a text report. */
             sb.append(l.replaceAll("§.", "")).append('\n');
         }
     }
 
-    /** The last lines of a file (reading at most its last 1 MB), optionally only matching ones. */
     private static List<String> lastLines(File file, int count, Pattern keep) {
         List<String> out = new ArrayList<String>();
         if (file == null || !file.isFile()) {
@@ -584,24 +505,19 @@ public final class BugReport {
                 out.add(0, l);
             }
         } catch (Exception ignored) {
-            // A missing or locked file only leaves its part of the report empty.
         }
         return out;
     }
 
-    /** A chat line the client or the anticheat wrote, not a player. */
     private static boolean isOwnMessage(String line) {
         return line.contains("GrimAC") || line.contains("FlagDetector") || line.contains("Atlas")
                 || line.contains("Vulcan") || line.contains("Polar");
     }
 
-    /* 2026-10-26 (review): every name seen on the tab list this session, so a player who has left is still
-       taken out of the logs in the report (the tab list alone only knew who was there at report time). */
     private static final java.util.Set<String> SEEN = java.util.Collections.newSetFromMap(
             new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
     private static final int SEEN_MAX = 5000;
 
-    /** Records the tab list's names once a second. */
     public static final class SeenNames {
         private int ticks;
 
@@ -618,7 +534,6 @@ public final class BugReport {
                     }
                 }
             } catch (Throwable ignored) {
-                // The tab list can change under us; next second again.
             }
         }
     }
@@ -633,7 +548,6 @@ public final class BugReport {
             uuid = mc.getSession().getPlayerID();
             token = mc.getSession().getToken();
         } catch (Throwable ignored) {
-            // No session details: nothing of them to take out.
         }
         try {
             if (mc.getNetHandler() != null) {
@@ -644,7 +558,6 @@ public final class BugReport {
                 }
             }
         } catch (Throwable ignored) {
-            // The tab list can change under us; the names collected so far still count.
         }
         return new Redactor(self, uuid, token, names, System.getProperty("user.home"), System.getProperty("user.name"));
     }

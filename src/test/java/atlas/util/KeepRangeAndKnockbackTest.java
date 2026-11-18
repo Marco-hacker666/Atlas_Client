@@ -4,32 +4,24 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** KeepRange's input arithmetic and the knockback planner's scoring (2026-09-28). */
 public class KeepRangeAndKnockbackTest {
-
-    /* Yaw 0 looks along +Z; forward moves +Z, strafe +1 (left) moves +X. */
-
     @Test
     public void awayFromATargetAheadIsBackwards() {
-        /* Target at +Z, so away is -Z. */
         assertArrayEquals(new int[]{-1, 0}, KeepRangeMath.bestAway(0.0F, 0.0, -1.0));
     }
 
     @Test
     public void awayFromATargetToTheSideIsAStrafe() {
-        /* Target at +X (to the left at yaw 0): away is -X, strafe right. */
         assertArrayEquals(new int[]{0, -1}, KeepRangeMath.bestAway(0.0F, -1.0, 0.0));
     }
 
     @Test
     public void theYawTurnsTheAnswer() {
-        /* Yaw 90 looks along -X: target at -X is ahead, away is backwards. */
         assertArrayEquals(new int[]{-1, 0}, KeepRangeMath.bestAway(90.0F, 1.0, 0.0));
     }
 
     @Test
     public void diagonalsAreChosenWhenTheyFitBest() {
-        /* Away is -Z and -X at once: backwards and right. */
         assertArrayEquals(new int[]{-1, -1}, KeepRangeMath.bestAway(0.0F, -1.0, -1.0));
     }
 
@@ -63,8 +55,6 @@ public class KeepRangeAndKnockbackTest {
         assertTrue("0: always", KeepRangeMath.comboReached(0, 0));
     }
 
-    // ------------------------------------------------------------ knockback
-
     @Test
     public void worseAndNearerHazardsScoreHigher() {
         assertTrue(KnockbackPlanner.score("Lava", 1.0, 0.0) > KnockbackPlanner.score("Web", 1.0, 0.0));
@@ -85,7 +75,7 @@ public class KeepRangeAndKnockbackTest {
         assertEquals(0.0F, KnockbackPlanner.yawToward(0.0, 1.0), 1.0E-4F);
         assertEquals(90.0F, Math.abs(net.minecraft.util.MathHelper.wrapAngleTo180_float(
                 KnockbackPlanner.yawToward(-1.0, 0.0))), 1.0E-4F);
-        /* The planner's own directions: (-sin a, cos a) is yaw a. */
+
         double a = Math.toRadians(37.0);
         assertEquals(37.0F, net.minecraft.util.MathHelper.wrapAngleTo180_float(
                 KnockbackPlanner.yawToward(-Math.sin(a), Math.cos(a))), 1.0E-3F);

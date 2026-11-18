@@ -17,13 +17,9 @@ public class RoundedUtils {
     private static ShaderUtils roundedTexturedShader;
     private static ShaderUtils roundedGradientShader;
     private static ShaderUtils roundedRectRiseShader;
-    /* Tried once (2026-10-15). A shader that failed used to be compiled
-       again on every call -- every rounded rectangle, every frame -- leaking
-       a program object each time; now it stays null and its callers draw the
-       plain geometry (RoundRectGeometry) instead of nothing. */
+
     private static boolean initTried;
 
-    /** Plain geometry instead of the shader: mobile-safe mode, or the shader did not build. */
     private static boolean plain(ShaderUtils shader) {
         return atlas.util.render.MobileSafe.active() || shader == null;
     }
@@ -70,7 +66,6 @@ public class RoundedUtils {
         }
     }
 
-
     public static void drawRound(float x, float y, float width, float height, float radius, Color color) {
         drawRound(x, y, width, height, radius, false, color);
     }
@@ -84,7 +79,6 @@ public class RoundedUtils {
     }
 
     public static void drawGradientCornerLR(float x, float y, float width, float height, float radius, Color topLeft, Color bottomRight) {
-        // Interpolate between two colors
         int r = (int) ((topLeft.getRed() + bottomRight.getRed()) / 2);
         int g = (int) ((topLeft.getGreen() + bottomRight.getGreen()) / 2);
         int b = (int) ((topLeft.getBlue() + bottomRight.getBlue()) / 2);
@@ -93,7 +87,6 @@ public class RoundedUtils {
     }
 
     public static void drawGradientCornerRL(float x, float y, float width, float height, float radius, Color bottomLeft, Color topRight) {
-        // Interpolate between two colors
         int r = (int) ((topRight.getRed() + bottomLeft.getRed()) / 2);
         int g = (int) ((topRight.getGreen() + bottomLeft.getGreen()) / 2);
         int b = (int) ((topRight.getBlue() + bottomLeft.getBlue()) / 2);
@@ -202,7 +195,7 @@ public class RoundedUtils {
 
     public static void drawRoundTextured(float x, float y, float width, float height, float radius, float alpha) {
         initShaders();
-        /* No plain form (unused at the time of writing): skipped. */
+
         if (plain(roundedTexturedShader)) return;
 
         RenderUtil.resetColor();
@@ -229,9 +222,6 @@ public class RoundedUtils {
     public static void drawRoundedRectRise(final float x, final float y, final float width, final float height, final float radius, final int color, boolean leftTop, boolean rightTop, boolean rightBottom, boolean leftBottom) {
         initShaders();
         if (plain(roundedRectRiseShader)) {
-            /* The shader reads its edge flags with the texture's v running
-               down the screen, so "leftTop" rounds the corner drawn at the
-               bottom left; kept the same here so both paths look alike. */
             atlas.util.render.RoundRectGeometry.fill(x, y, width, height,
                     leftBottom ? radius : 0.0F, rightBottom ? radius : 0.0F,
                     rightTop ? radius : 0.0F, leftTop ? radius : 0.0F, color);

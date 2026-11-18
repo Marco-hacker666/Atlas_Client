@@ -13,10 +13,7 @@ import java.util.List;
 
 import static org.junit.Assert.*;
 
-/** ServerSession lifecycle and isolation (Phase 2, 2026-09-28). */
 public class ServerSessionTest {
-
-    /** Records every session event as "TYPE key changed?". */
     public static class Recorder {
         final List<String> events = new ArrayList<String>();
         final List<SessionEvent> raw = new ArrayList<SessionEvent>();
@@ -102,7 +99,6 @@ public class ServerSessionTest {
 
     @Test
     public void unloadWithoutASessionDoesNothing() {
-        /* GuiConnecting unloads the world before connecting. */
         this.sessions.worldLoaded(false);
         this.sessions.worldLoaded(true);
         assertTrue(events().isEmpty());
@@ -110,7 +106,6 @@ public class ServerSessionTest {
 
     @Test
     public void serverAStateDoesNotReachServerB() {
-        /* Connect A, generate state, disconnect, connect B. */
         this.sessions.joined("play.pika-network.net");
         this.timer.record(250L);
         this.timer.record(260L);
@@ -174,8 +169,6 @@ public class ServerSessionTest {
 
     @Test
     public void aJoinQueuedBeforeADisconnectIsDropped() {
-        /* The packet arrives, the player disconnects in the same tick, then
-           the queued join runs: it must not open a session. */
         Runnable queued = this.sessions.joinArrived("a.example");
         this.sessions.worldLoaded(false);
         queued.run();
@@ -186,7 +179,6 @@ public class ServerSessionTest {
 
     @Test
     public void queuedJoinsOnOneConnectionRunInOrder() {
-        /* Two joins queued before either runs: the second is a proxy hop. */
         Runnable first = this.sessions.joinArrived("mc.hypixel.net");
         Runnable second = this.sessions.joinArrived("mc.hypixel.net");
         first.run();
@@ -199,7 +191,7 @@ public class ServerSessionTest {
     @Test
     public void aStaleJoinDoesNotDisturbTheNextConnection() {
         Runnable stale = this.sessions.joinArrived("a.example");
-        this.sessions.worldLoaded(false);          // disconnect
+        this.sessions.worldLoaded(false);
         Runnable fresh = this.sessions.joinArrived("b.example");
         stale.run();
         fresh.run();

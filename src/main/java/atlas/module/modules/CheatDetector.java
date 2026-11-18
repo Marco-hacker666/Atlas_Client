@@ -1,8 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): passive opponent spotter. Watches nearby
-// players each tick and posts one chat line per check once its violation
-// level crosses the threshold.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -350,7 +349,7 @@ public class CheatDetector extends Module {
         this.lastAlertAt.put(id, now);
         this.flagged.add(player.getName());
         ChatUtil.sendFormatted("&7[&cCheatDetector&7] &f" + player.getName() + " &7failed &c" + check + " &7(VL " + vl + ") &8[" + detail + "]");
-        /* 2026-11-03: Raven scripts' onAntiCheatFlag(flag, player), as Raven's own Anticheat tells them. */
+
         atlas.script.ScriptDispatcher.INSTANCE.onAntiCheatFlag(check, player);
         if (this.alertMode.getValue() == 1) {
             Long lastReport = this.lastReportAt.get(id);

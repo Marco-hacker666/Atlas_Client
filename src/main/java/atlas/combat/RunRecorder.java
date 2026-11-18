@@ -6,44 +6,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
 
-/**
- * How good SpeedBlocker's prediction of a run is, measured on real players (2026-11-01, owner: "add the recorder",
- * before deciding whether a learned model is worth it).
- *
- * Every SAMPLE_EVERY ticks each moving player gets a prediction from SpeedblockPlan.simulate (the model) and one
- * from a straight line at its current speed (the baseline). When each horizon in HORIZONS has passed, both are
- * compared with where the server then had the player, and a row goes to the sink:
- *
- *   tick,player,horizon,dist,speed,approach,keyOffset,chasing,ground,sprint,modelErr,lineErr
- *
- * dist, speed, approach (blocks, blocks a tick) and keyOffset (degrees between where it ran and where it looked),
- * chasing (looking within the chase cone of us), ground and sprint are the features at the moment of the prediction;
- * the errors are the distance in blocks between predicted and actual feet. The sums give a summary: the model's mean
- * error against the straight line's, per horizon -- the number that says whether the model helps and where it
- * misses. No game types: the module passes plain numbers.
- *
- * 2026-11-02 (review): a prediction starts from the position SpeedBlocker plans from -- the last server update
- * moved on by the velocity (RunTracker.now) -- not the raw one, and is checked only on a tick a fresh update came
- * (the raw position is exact then, not up to a tick old), at the first such tick at or past each horizon; the row's
- * horizon is the ticks that really passed. Sampled every SAMPLE_EVERY = 10 ticks (was 5): a busy fight filled the
- * collector's buffer in under a minute.
- *
- * 2026-11-13: a third prediction beside the two, the movement simulation's (atlas.sim.TargetTrack through
- * SimTargets), in the last column, engineErr. Empty when the simulation had no answer of its own for the player.
- */
 public final class RunRecorder {
     public static final int[] HORIZONS = {5, 10, 15, 20};
     static final int SAMPLE_EVERY = 10;
     static final int MAX_ROWS = 50000;
     public static final String HEADER =
             "tick,player,horizon,dist,speed,approach,keyOffset,chasing,ground,sprint,modelErr,lineErr,engineErr";
-    /** How many ticks ahead a prediction has to reach: a few past the last horizon. */
+
     public static final int LENGTH = HORIZONS[HORIZONS.length - 1] + 3;
 
-    /**
-     * A row as the header has it now: one written before a column was added (kept across a launch) gets the empty
-     * cells it lacks, so every row sent under one header has its columns (review, PR #41).
-     */
     public static String padded(String row) {
         int want = HEADER.split(",").length;
         int have = row.split(",", -1).length;
@@ -64,7 +35,7 @@ public final class RunRecorder {
         final double vx;
         final double vz;
         final String features;
-        /** The simulation's positions {x, z}, tick by tick from the sample on; null for none. */
+
         final double[][] engine;
         int next;
 
@@ -85,7 +56,7 @@ public final class RunRecorder {
 
     private final Consumer<String> sink;
     private final List<Sample> open = new ArrayList<Sample>();
-    /** Per horizon: model error sum, line error sum, count; the simulation's error sum and its own count. */
+
     private final double[][] sums = new double[HORIZONS.length][5];
     private int rows;
 
@@ -93,15 +64,6 @@ public final class RunRecorder {
         this.sink = sink;
     }
 
-    /**
-     * One tick of one player: settles its predictions on a fresh update, and every SAMPLE_EVERY ticks makes a new one
-     * when it moves.
-     *
-     * @param startX,startZ   where the server has it now as SpeedBlocker reckons it (last update + velocity)
-     * @param actualX,actualZ the last position the server sent
-     * @param fresh           that position arrived this tick
-     * @param moveX,moveZ     its velocity, blocks a tick; NaN when unknown
-     */
     public void observe(int tick, int id, String name, double startX, double startZ, double actualX, double actualZ,
                         boolean fresh, double moveX, double moveZ, double lookYaw, double playerX, double playerZ,
                         boolean onGround, boolean sprinting) {
@@ -109,17 +71,10 @@ public final class RunRecorder {
                 onGround, sprinting, null);
     }
 
-    /** True on the ticks a new prediction is made: the only ticks the simulation's path is asked for. */
     public boolean samples(int tick) {
         return tick % SAMPLE_EVERY == 0;
     }
 
-    /**
-     * As above, with the simulation's answer.
-     *
-     * @param engine where the movement simulation has the player {x, z} one tick from now, two, ... (at least
-     *               {@link #LENGTH}), or null when it has no answer; read only on the ticks {@link #samples} says
-     */
     public void observe(int tick, int id, String name, double startX, double startZ, double actualX, double actualZ,
                         boolean fresh, double moveX, double moveZ, double lookYaw, double playerX, double playerZ,
                         boolean onGround, boolean sprinting, double[][] engine) {
@@ -168,7 +123,7 @@ public final class RunRecorder {
         if (speed < 0.05) {
             return;
         }
-        /* A few ticks past the last horizon: the fresh update that settles it may come a tick or two after. */
+
         int length = LENGTH;
         double[][] model = SpeedblockPlan.simulate(startX, startZ, moveX, moveZ, lookYaw, playerX, playerZ, onGround,
                 sprinting, length);
@@ -185,7 +140,6 @@ public final class RunRecorder {
                 engine));
     }
 
-    /** A player gone from the world: its open predictions can never be settled. */
     public void forget(int id) {
         this.open.removeIf(s -> s.id == id);
     }
@@ -194,13 +148,11 @@ public final class RunRecorder {
         this.open.clear();
     }
 
-    /** Drops predictions past their last horizon: a player that left (or stopped being seen) never settles them. */
     public void prune(int tick) {
         int last = HORIZONS[HORIZONS.length - 1];
         this.open.removeIf(s -> tick - s.tick > last + 3);
     }
 
-    /** Settled predictions so far, all horizons. */
     public int settled() {
         int n = 0;
         for (double[] sum : this.sums) {
@@ -209,10 +161,6 @@ public final class RunRecorder {
         return n;
     }
 
-    /**
-     * Mean errors per horizon, model against straight line, e.g. "10t: 0.42 vs 0.61 (n 120)"; where the simulation
-     * answered too, ", engine 0.38 (n 90)" after it (its mean is over its own rows only).
-     */
     public String summary() {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < HORIZONS.length; i++) {

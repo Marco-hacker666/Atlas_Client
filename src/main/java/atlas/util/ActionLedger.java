@@ -13,38 +13,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * A running record of which module did what, kept for the last few seconds.
- *
- * Blame used to be a list. {@code FlagDetector} knew about eight modules by
- * name, asked each of them a question written for it, and said nothing about
- * the rest -- so a correction caused by anything not on the list came out as
- * an unattributed flag, and a module added afterwards was invisible until
- * someone remembered to extend the list. That is the wrong shape for the
- * question being asked, which is not "was it one of these eight" but "what was
- * running when this happened".
- *
- * Nothing here is written per module. Two generic points feed it:
- *
- *   CANCELLATION. Whoever stops a packet is identified by the dispatcher, at
- *   the moment it happens, from the listener that did it. Withholding packets
- *   is the single most common cause of a correction, and this catches every
- *   module that does it -- including ones that do it through a shared manager,
- *   and ones written after this was.
- *
- *   INJECTION. A packet the client sends from inside a module rather than from
- *   the game loop is found by looking at who is on the stack. Only the packets
- *   worth attributing are examined: movement is sent every tick by vanilla and
- *   would be nothing but noise, while an attack, a placement or a dig that a
- *   module produced by itself is exactly what is being looked for.
- *
- * The record is evidence of coincidence, not of cause. Two modules acting in
- * the same tick both appear, and it is the count over many flags -- not one
- * line -- that says which one is responsible.
- */
 public final class ActionLedger {
-
-    /** Entries older than this are dropped; nothing asks about them. */
     private static final long RETENTION_MS = 15000L;
     private static final int CAP = 512;
 
@@ -54,7 +23,6 @@ public final class ActionLedger {
     private ActionLedger() {
     }
 
-    /** One action: who, what, when, and how many packets it stood for. */
     public static final class Record {
         public final long at;
         public final String module;
@@ -73,7 +41,6 @@ public final class ActionLedger {
         note(module, kind, 1);
     }
 
-    /** One action standing for {@code count} packets (a released queue, say). */
     public static void note(String module, String kind, int count) {
         if (module == null || count <= 0) {
             return;
@@ -88,21 +55,10 @@ public final class ActionLedger {
         }
     }
 
-    /**
-     * The module a packet came from, or null when the game loop sent it.
-     *
-     * Walking the stack is the only way to answer this without every module
-     * being changed to announce itself, which is the coupling this exists to
-     * remove. It is reached for a few packets a second at most.
-     */
     public static String callerModule() {
         return callerModuleExcept(null);
     }
 
-    /**
-     * callerModule() for a module that is itself on the stack -- a listener
-     * asking who sent the packet it is looking at -- skipping its own frames.
-     */
     public static String callerModuleExcept(String self) {
         StackTraceElement[] stack = new Throwable().getStackTrace();
         for (StackTraceElement frame : stack) {
@@ -111,7 +67,7 @@ public final class ActionLedger {
                 continue;
             }
             String simple = name.substring("atlas.module.modules.".length());
-            /* Inner classes belong to the module that owns them. */
+
             int inner = simple.indexOf('$');
             String module = inner < 0 ? simple : simple.substring(0, inner);
             if (module.equals(self)) {
@@ -122,10 +78,6 @@ public final class ActionLedger {
         return null;
     }
 
-    /**
-     * Packets worth attributing: the ones a module sends deliberately. Movement
-     * is excluded because vanilla sends it every tick regardless.
-     */
     public static boolean isAttributable(Packet<?> packet) {
         return packet instanceof C02PacketUseEntity
                 || packet instanceof C07PacketPlayerDigging
@@ -135,20 +87,6 @@ public final class ActionLedger {
                 || packet instanceof C13PacketPlayerAbilities;
     }
 
-    /**
-     * Whether stopping this packet could plausibly move the player, or delay
-     * the stream that carries the things that do.
-     *
-     * Without this the ledger reports whoever cancels the most packets, which
-     * is not the same as whoever causes the most corrections. A module that
-     * suppresses the day/night cycle and the weather cancels two packets a
-     * second and appeared on every single flag -- consistently, which is
-     * exactly what makes a coincidence look like a cause.
-     *
-     * Named as a list of what cannot matter rather than what can: a packet
-     * nobody thought about should count, and be argued out later, rather than
-     * silently not counting because it was not on a list.
-     */
     public static boolean cancelMatters(Packet<?> packet) {
         String name = packet.getClass().getSimpleName();
         for (String cosmetic : COSMETIC) {
@@ -159,7 +97,6 @@ public final class ActionLedger {
         return true;
     }
 
-    /** World time, weather, sound, chat, tab list, scoreboard, titles, effects. */
     private static final String[] COSMETIC = {
             "S03PacketTimeUpdate", "S2BPacketChangeGameState", "S29PacketSoundEffect",
             "S02PacketChat", "S38PacketPlayerListItem", "S3APacketTabComplete",
@@ -169,13 +106,6 @@ public final class ActionLedger {
             "S25PacketBlockBreakAnim", "S1CPacketEntityMetadata", "S04PacketEntityEquipment"
     };
 
-    /**
-     * What withholding this packet is (plan step 12): an outgoing packet is
-     * this player's own action ("held-send"); an incoming one either moves
-     * this player -- a correction, an explosion, knockback addressed to us --
-     * ("held-self"), or only describes someone else ("held-recv"). The last
-     * kind cannot move this player, and is weighed accordingly.
-     */
     public static String holdKind(Packet<?> packet, boolean send) {
         if (send) {
             return "held-send";
@@ -195,7 +125,6 @@ public final class ActionLedger {
         return "held-recv";
     }
 
-    /** The records of the last {@code millis}, oldest first: a snapshot. */
     public static java.util.List<Record> records(long millis) {
         long cutoff = System.currentTimeMillis() - millis;
         java.util.List<Record> out = new java.util.ArrayList<Record>();
@@ -228,7 +157,6 @@ public final class ActionLedger {
         return "packet";
     }
 
-    /** Modules that acted within the window, with how many actions each. */
     public static Map<String, Integer> within(long millis) {
         Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
         long cutoff = System.currentTimeMillis() - millis;
@@ -244,7 +172,6 @@ public final class ActionLedger {
         return counts;
     }
 
-    /** The most active modules in the window, as a short readable line. */
     public static String summary(long millis, int max) {
         Map<String, Integer> counts = within(millis);
         if (counts.isEmpty()) {
@@ -274,7 +201,6 @@ public final class ActionLedger {
         return sb.toString();
     }
 
-    /** Distinct kinds one module was seen doing, for an explanation line. */
     public static String kindsFor(String module, long millis) {
         StringBuilder sb = new StringBuilder();
         long cutoff = System.currentTimeMillis() - millis;

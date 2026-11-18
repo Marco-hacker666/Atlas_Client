@@ -9,19 +9,6 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.ResourceLocation;
 
-/**
- * The main-menu background (2026-10-12; it replaces the six of
- * BackgroundRenderer and its picker, removed at the owner's request).
- *
- * Vanilla's title panorama sliding slowly, blurred (when shaders are
- * allowed), graded to a sunrise -- dusk purple above, orange glow below, a
- * sun bloom, dark on the left where the menu is -- with drifting motes of
- * light. SetupScreen draws the same background as the menu.
- *
- * 2026-10-13: the AURORA look (a fragment shader) and the pill that chose
- * between the two were removed at the owner's request; CINEMATIC is the
- * only one, and config/Atlas/menu-style.txt is no longer read.
- */
 public final class MenuBackground {
     private static final long START = System.currentTimeMillis();
 
@@ -37,7 +24,6 @@ public final class MenuBackground {
     private MenuBackground() {
     }
 
-    /** The background for a screen of {@code width} x {@code height} GUI pixels. */
     public static void draw(int width, int height, float mouseX, float mouseY) {
         drawCinematic(width, height);
     }
@@ -46,8 +32,6 @@ public final class MenuBackground {
         return (System.currentTimeMillis() - START) / 1000.0F;
     }
 
-    // ---- cinematic -----------------------------------------------------
-
     private static void drawCinematic(int width, int height) {
         drawPanoramaStrip(width, height);
         if (atlas.module.modules.RenderFixes.shouldUseShaders()) {
@@ -55,15 +39,13 @@ public final class MenuBackground {
             rect(0.0F, 0.0F, width, height, 0xFFFFFFFF);
             atlas.util.shader.BlurUtils.blurEnd(1, 1.0F);
         }
-        /* Dusk above, a warm glow below. */
+
         gradient(0, 0, width, height, 0x50140A24, 0x50140A24, 0x38FF8A3C, 0x38FF8A3C);
-        /* Warm light low on the right, wide and faint (2026-10-13, owner: the
-           sun disc looked fake -- it was a bright ellipse with a hard rim).
-           No disc any more: a broad haze that fades out smoothly. */
+
         glow(width * 0.72F, height * 0.70F, width * 0.55F, height * 0.60F, 0x34FFB070);
-        /* Dark on the left, where the menu reads. */
+
         gradient(0, 0, width * 0.55F, height, 0xB806040A, 0x0006040A, 0xB806040A, 0x0006040A);
-        /* Motes of light drifting up. */
+
         float t = seconds();
         for (int i = 0; i < 46; i++) {
             float speed = 6.0F + (i % 5) * 3.0F;
@@ -72,10 +54,8 @@ public final class MenuBackground {
             float tw = MathHelper.sin(t * 1.3F + i);
             rect(px, py, px + 1.0F, py + 1.0F, ((int) ((0.3F + 0.45F * tw * tw) * 255)) << 24 | 0xFFDCAA);
         }
-        /* No letterbox bars (owner, 2026-10-12): the picture runs to the edges. */
     }
 
-    /** A filled rectangle, with texturing off (RenderUtil.drawRect leaves it as it finds it). */
     static void rect(float x1, float y1, float x2, float y2, int color) {
         GlStateManager.disableTexture2D();
         GlStateManager.enableBlend();
@@ -84,11 +64,6 @@ public final class MenuBackground {
         GlStateManager.enableTexture2D();
     }
 
-    /**
-     * An elliptical glow: {@code color} at the centre fading to nothing at
-     * the rim along a smooth (Gaussian-like) curve, in rings -- a single fan
-     * fades linearly and shows a cone and a rim.
-     */
     private static void glow(float cx, float cy, float rx, float ry, int color) {
         GlStateManager.disableTexture2D();
         GlStateManager.enableBlend();
@@ -119,12 +94,6 @@ public final class MenuBackground {
         GlStateManager.enableTexture2D();
     }
 
-    /**
-     * Vanilla's title panorama as a flat strip: the four side faces in a
-     * row (each one's edges meet the next one's), tall enough to fill the
-     * screen, sliding slowly to the left forever. Flat and 2D, so nothing
-     * about the GUI's projection or depth state can hide it.
-     */
     private static void drawPanoramaStrip(int width, int height) {
         Minecraft mc = Minecraft.getMinecraft();
         float size = Math.max(height * 1.25F, width / 2.0F);
@@ -146,8 +115,7 @@ public final class MenuBackground {
                     org.lwjgl.opengl.GL11.GL_TEXTURE_MIN_FILTER, org.lwjgl.opengl.GL11.GL_LINEAR);
             org.lwjgl.opengl.GL11.glTexParameteri(org.lwjgl.opengl.GL11.GL_TEXTURE_2D,
                     org.lwjgl.opengl.GL11.GL_TEXTURE_MAG_FILTER, org.lwjgl.opengl.GL11.GL_LINEAR);
-            /* Clamped, and half a texel in: with wrapping, linear filtering
-               pulled the far edge's sky into each border as a white line. */
+
             org.lwjgl.opengl.GL11.glTexParameteri(org.lwjgl.opengl.GL11.GL_TEXTURE_2D,
                     org.lwjgl.opengl.GL11.GL_TEXTURE_WRAP_S, org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE);
             org.lwjgl.opengl.GL11.glTexParameteri(org.lwjgl.opengl.GL11.GL_TEXTURE_2D,
@@ -163,7 +131,6 @@ public final class MenuBackground {
         GlStateManager.enableAlpha();
     }
 
-    /** A quad with a colour at each corner: top-left, top-right, bottom-left, bottom-right. */
     private static void gradient(float x1, float y1, float x2, float y2, int tl, int tr, int bl, int br) {
         GlStateManager.disableTexture2D();
         GlStateManager.enableBlend();
@@ -183,5 +150,4 @@ public final class MenuBackground {
     private static void vertex(WorldRenderer wr, float x, float y, int c) {
         wr.pos(x, y, 0.0D).color(c >> 16 & 255, c >> 8 & 255, c & 255, c >>> 24).endVertex();
     }
-
 }

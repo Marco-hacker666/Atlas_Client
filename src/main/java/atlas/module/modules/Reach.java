@@ -46,12 +46,6 @@ public class Reach extends Module {
         }
     }
 
-    /**
-     * The entity reach in effect right now: this module's range when it is on
-     * and this tick's chance roll came up, vanilla's 3.0 otherwise. HitBox
-     * computes its own mouse-over and needs the same number, or the two
-     * modules overrule each other.
-     */
     public static double effectiveRange() {
         Module module = atlas.Atlas.moduleManager.modules.get(Reach.class);
         if (module instanceof Reach && module.isEnabled() && ((Reach) module).expanding) {
@@ -65,8 +59,6 @@ public class Reach extends Module {
         return new String[]{df.format(this.range.getValue())};
     }
 
-    /* Merged modules as modes (2026-10-11, ModuleBundle): the module's own
-       work pauses while another type is picked. */
     public final atlas.property.properties.ModeProperty mergedType = new atlas.property.properties.ModeProperty("type", 0, new String[]{"Normal", "Legit"});
     public final atlas.module.ModuleBundle legitMerged = atlas.module.ModuleBundle.forMode(this, new atlas.module.modules.LegitReach(), "legit", "Legit", () -> this.mergedType.getValue() == 1).deselectWith(() -> this.mergedType.setValue(0));
 

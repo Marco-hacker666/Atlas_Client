@@ -8,7 +8,6 @@ import java.util.function.Function;
 import static java.lang.Math.*;
 
 public class AnimationUtil {
-
     private long startTime;
     private double startValue;
     private double destinationValue;
@@ -86,5 +85,4 @@ public class AnimationUtil {
             this.function = function;
         }
     }
-
 }

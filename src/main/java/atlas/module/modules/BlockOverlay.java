@@ -108,7 +108,6 @@ public class BlockOverlay extends Module {
         return block != Blocks.air && block != Blocks.water && block != Blocks.lava ? pos : null;
     }
 
-    /** Themed by the Blocks group; its fill transparency is the overlay's. */
     private Color getOverlayColor() {
         Color own = this.ownOverlayColor();
         ThemeStyle style = ThemeStyle.active(BlockColors.class);

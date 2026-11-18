@@ -13,15 +13,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-/**
- * Attacks, knockback and explosions between two movement packets, and which move each is offered to (2026-11-12).
- * The moves are made by the simulation itself, so a knockback is "applied" by setting the motion as the game does.
- */
 public class ImpulsesTest {
-
     private static final double RESTING_FALL = -0.0784000015258789;
 
-    /** Ground at y = 0, and a wall where x reaches {@code wallX} (none when NaN). */
     private static final class Ground implements PlayerSim.World {
         private final List<AxisAlignedBB> solid = new ArrayList<AxisAlignedBB>();
 
@@ -61,7 +55,6 @@ public class ImpulsesTest {
         return sim;
     }
 
-    /** One move of {@code sim}, with the knockback applied first when {@code applied}; the state after it. */
     private static PlayerSim move(PlayerSim sim, PlayerSim.World world, boolean applied) {
         PlayerSim next = sim.copy();
         if (applied) {
@@ -73,7 +66,6 @@ public class ImpulsesTest {
         return next;
     }
 
-    /** Closes the window, checks the move from {@code before} to {@code after} and settles, as MoveCheck does. */
     private static Impulses.Knockback check(Impulses impulses, final PlayerSim before, final PlayerSim after,
                                             final PlayerSim.World world) {
         final SelfCheck.Extra extra = impulses.close();
@@ -102,7 +94,6 @@ public class ImpulsesTest {
 
     @Test
     public void aKnockbackAppliedAMoveLateIsTakenByTheNextMove() {
-        /* It arrived while a tick was running: that tick's move is without it, the next one has it. */
         Impulses impulses = new Impulses();
         PlayerSim before = standing();
         impulses.velocity(KB[0], KB[1], KB[2]);
@@ -115,7 +106,6 @@ public class ImpulsesTest {
 
     @Test
     public void aKnockbackInNeitherOfItsTwoMovesIsIgnoredAndThenForgotten() {
-        /* What a module that cancels the packet leaves: two plain moves. */
         Impulses impulses = new Impulses();
         PlayerSim before = standing();
         impulses.velocity(KB[0], KB[1], KB[2]);
@@ -129,9 +119,6 @@ public class ImpulsesTest {
 
     @Test
     public void aKnockbackIntoAWallIsTakenAlthoughThePlainMoveFitsToo() {
-        /* Straight into a wall the box already touches, with no rise: it ends where standing still ends. The plain
-           move is found first; asked, the move with the knockback fits too, so it is taken on the first offer.
-           Before, it waited for the next move, which no longer fits it, and was reported as ignored. */
         PlayerSim.World walled = new Ground(0.8);
         Impulses impulses = new Impulses();
         PlayerSim before = standing();
@@ -157,8 +144,6 @@ public class ImpulsesTest {
 
     @Test
     public void theSecondSearchIsMadeOnlyWhenThePlainMoveFits() {
-        /* It costs a whole check. Found with the knockback: no need. Nothing fitting at all: no input with the
-           knockback fits either. */
         Impulses impulses = new Impulses();
         impulses.velocity(KB[0], KB[1], KB[2]);
         impulses.close();
@@ -188,7 +173,7 @@ public class ImpulsesTest {
         impulses.velocity(0.0, 0.0, 2.0);
         SelfCheck.Extra extra = impulses.close();
         assertArrayEquals(new double[]{0.0, 0.0, 2.0}, extra.velocity, 0.0);
-        /* The new one is on its first offer: not in this move means waiting, not ignored. */
+
         SelfCheck.Result off = new SelfCheck.Result();
         off.offset = 0.5;
         assertEquals(Impulses.Knockback.WAITING, impulses.settle(off, () -> false));
@@ -205,7 +190,6 @@ public class ImpulsesTest {
 
     @Test
     public void explosionsAddUpAndOnlyThoseAfterAKnockbackGoWithIt() {
-        /* Review, PR #38: explosion A, knockback V, explosion B in one window end as V + B, not V + A + B. */
         Impulses impulses = new Impulses();
         impulses.explosion(0.3, 0.0, 0.0);
         impulses.velocity(0.0, 0.2, 0.25);
@@ -251,8 +235,6 @@ public class ImpulsesTest {
 
     @Test
     public void aKnockbackOfAMoveNobodyCheckedIsNotCarriedToTheNext() {
-        /* The tick right after a correction is left out. Its knockback was applied in that move; offered on, the
-           next move (plain) would report it as ignored. */
         Impulses impulses = new Impulses();
         PlayerSim before = standing();
         impulses.velocity(KB[0], KB[1], KB[2]);
@@ -268,14 +250,13 @@ public class ImpulsesTest {
         SelfCheck.Result result = SelfCheck.check(unchecked, OPEN, 0.0F, false, false, next.x(), next.y(), next.z(),
                 extra);
         assertEquals(Impulses.Knockback.NONE, impulses.settle(result, () -> false));
-        /* What comes in after the skip is a new window's, and is offered as ever. */
+
         impulses.velocity(KB[0], KB[1], KB[2]);
         assertArrayEquals(KB, impulses.close().velocity, 0.0);
     }
 
     @Test
     public void anExplosionFromBeforeATakenKnockbackIsNotOfferedAgain() {
-        /* Review, PR #39: A, then V. V taken replaced A's push; A must not explain the next move. */
         Impulses impulses = new Impulses();
         impulses.explosion(0.3, 0.0, 0.0);
         impulses.velocity(KB[0], KB[1], KB[2]);
@@ -286,7 +267,6 @@ public class ImpulsesTest {
         assertEquals(Impulses.Knockback.TAKEN, impulses.settle(tookVelocity, () -> false));
         assertNull(impulses.close().explosion);
 
-        /* A, V, then B: B came after the knockback and is still offered once more. */
         impulses.explosion(0.3, 0.0, 0.0);
         impulses.velocity(KB[0], KB[1], KB[2]);
         impulses.explosion(0.0, 0.0, 0.1);

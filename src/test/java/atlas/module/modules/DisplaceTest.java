@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** 2026-11-04: Dynamic falls back on Yaw-offset and Direction, so both stay in the menu. */
 public class DisplaceTest {
-
     @Test
     public void theFallbackSettingsAreShownInDynamicToo() {
         Displace displace = new Displace();
@@ -16,7 +14,6 @@ public class DisplaceTest {
         assertFalse("still only Static's", displace.findVoid.isVisible());
     }
 
-    /** 2026-11-07 (owner): only turn up close; off unless set, so saved configs act as before. */
     @Test
     public void aFarHitDoesNotTurnOnceTurnRangeIsSet() {
         assertEquals(0F, new Displace().turnRange.getValue(), 0F);
@@ -25,14 +22,12 @@ public class DisplaceTest {
         assertFalse(DisplacePlan.inTurnRange(2.1F, 2.0F));
     }
 
-    /** 2026-11-04 (owner): Keep-hitbox is off by default, in both modes. */
     @Test
     public void keepHitboxStartsOff() {
         assertFalse(new Displace().keepHitbox.getValue());
         assertFalse(new Hitflick().keepHitbox.getValue());
     }
 
-    /** 2026-11-05: a saved config, or none, keeps every hit; the new settings change nothing until asked. */
     @Test
     public void newSettingsStartAsItWas() {
         Displace displace = new Displace();
@@ -48,7 +43,6 @@ public class DisplaceTest {
         assertTrue(displace.maxHurtTime.isVisible());
     }
 
-    /** 2026-11-05: a catch has the look; a turn at priority 100 would take it from under the placement. */
     @Test
     public void noTurnDuringACatch() {
         atlas.management.Arbiter.setCatching("Clutch", true);

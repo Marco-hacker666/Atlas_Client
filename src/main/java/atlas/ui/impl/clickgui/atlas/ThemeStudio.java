@@ -28,26 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * The Theme window (2026-11-09): everything about how the client looks, in a
- * window of its own that pops out over the menu.
- *
- * Before this the looks were spread over four places -- the menu's
- * Appearance page, the Theme tab's fifteen modules, the HUD module's colour
- * settings and HUDStyle -- each edited as a list of settings with no way to
- * see the result without closing the menu. Here they are in six sections
- * with a live preview beside them (a module list, a target card, a
- * notification and a piece of the menu, all drawn with the real settings),
- * and the whole look can be saved under a name and put back in one click
- * (ThemeFiles).
- *
- * The window edits the same Property objects the menus do, so a change here
- * is a change everywhere, saved the way each setting is always saved: the
- * menu's in atlas-theme.json, the modules' in the config. Right-click a
- * setting to put it back to its default.
- */
 public final class ThemeStudio extends GuiScreen {
-
     private static final String[] SECTIONS = {"Saved", "Colours", "Menu", "Motion", "HUD", "World"};
     private static final String[] ICONS = {"folder", "colors", "glass", "motion", "layout", "world"};
     private static final String[] BLURBS = {
@@ -58,15 +39,12 @@ public final class ThemeStudio extends GuiScreen {
             "One look for every HUD panel, and the module list's own style.",
             "Players, tracers, chests, items and the rest: each group on or off, and its colours."};
 
-    /** Quick colours offered under every colour picker. */
     private static final int[] SWATCHES = {0xCCFF00, 0x4FC3F7, 0x5FFFC1, 0xA78BFA, 0xFF6B9D,
             0xFFC857, 0xFF8A65, 0xFFFFFF, 0x9AA3B2, 0x101216};
 
-    /** The HUD module's colour settings (Colours section) and the rest of its look (HUD section). */
     private static final String[] HUD_COLOURS = {"color", "color-speed", "color-saturation", "color-brightness",
             "custom-color-1", "custom-color-2", "custom-color-3", "color-dist"};
-    /* 2026-11-14: what the custom list shares with the others: every HUD's look (hud-theme), the font, and how
-       the names and tags read. */
+
     private static final String[] HUD_LIST_SHARED = {"hud-theme", "font-mode", "suffixes", "separator-mode",
             "lower-case"};
     private static final String[] HUD_LIST = {"hud-theme", "font-mode", "background", "bg-alpha", "rounded",
@@ -82,7 +60,6 @@ public final class ThemeStudio extends GuiScreen {
     private static final float PREVIEW = 168.0F;
     private static final float RADIUS = 14.0F;
 
-    /** One line of a section: a heading (optionally with a module's switch), a setting, or a note. */
     private static final class Row {
         final String heading;
         final Module module;
@@ -116,11 +93,11 @@ public final class ThemeStudio extends GuiScreen {
     }
 
     private final AtlasClickGui gui;
-    /** Where Esc goes: the menu that opened the window, or null for the game (ThemeGUI's key). */
+
     private final GuiScreen back;
     private final AtlasTheme theme;
     private final UiContext ui = new UiContext();
-    /* The window pops from 94% on a spring that overshoots a little, fading in over its first fifth of a second. */
+
     private final Spring open = new Spring(0.94F, 300.0F, 22.0F);
     private long lastFrame;
     private float delta = 0.016F;
@@ -137,10 +114,9 @@ public final class ThemeStudio extends GuiScreen {
     private float listBottom;
     private float listLeft;
     private float listRight;
-    /** World groups whose settings are showing. */
+
     private final Set<String> expanded = new HashSet<String>();
 
-    /* What a held button is dragging. */
     private Property<?> sliding;
     private float slideLeft;
     private float slideWidth;
@@ -150,27 +126,25 @@ public final class ThemeStudio extends GuiScreen {
     private float pickY;
     private float pickW;
     private float pickH;
-    /** The open colour picker, and the colour it is showing as hue, saturation, brightness. */
+
     private ColorProperty picker;
     private final float[] hsb = new float[3];
-    /** How far the open picker has unfolded this frame, read once a frame from its spring. */
+
     private float pickerHeight;
-    /** The open list of a choice with many options. */
+
     private ModeProperty dropdown;
     private float dropX;
     private float dropY;
     private float dropW;
 
-    /* Typing: a colour's hex, or a new theme's name. */
     private final TextInput hexInput = new TextInput(9, false);
     private ColorProperty hexFor;
     private final TextInput nameInput = new TextInput(ThemeFiles.MAX_NAME, false);
     private boolean naming;
 
-    /** The look before the last load or preset, for Undo; and what it undoes. */
     private JsonObject undo;
     private String undoLabel;
-    /** A theme whose Delete was clicked once: the second click within three seconds deletes it. */
+
     private String armedDelete;
     private long armedAt;
 
@@ -186,7 +160,6 @@ public final class ThemeStudio extends GuiScreen {
         this(gui, gui);
     }
 
-    /** Opened on its own (ThemeGUI): {@code back} is the screen to return to, null for the game. */
     public ThemeStudio(AtlasClickGui gui, GuiScreen back) {
         this.gui = gui;
         this.back = back;
@@ -209,8 +182,6 @@ public final class ThemeStudio extends GuiScreen {
     public boolean doesGuiPauseGame() {
         return false;
     }
-
-    // ---- small helpers ----------------------------------------------------
 
     private static LiquidFont font(float size, boolean bold) {
         return LiquidFont.of(Math.round(size * AtlasClickGui.textScale() * 4.0F) / 4.0F, bold);
@@ -279,8 +250,6 @@ public final class ThemeStudio extends GuiScreen {
         return null;
     }
 
-    // ---- numbers, whatever class they are ------------------------------------
-
     private static boolean isNumeric(Property<?> p) {
         return p instanceof IntProperty || p instanceof FloatProperty || p instanceof PercentProperty;
     }
@@ -330,8 +299,6 @@ public final class ThemeStudio extends GuiScreen {
         return String.valueOf(Math.round(value));
     }
 
-    // ---- what each section lists ------------------------------------------------
-
     private List<Row> rows(int index) {
         List<Row> rows = new ArrayList<Row>();
         switch (index) {
@@ -352,7 +319,6 @@ public final class ThemeStudio extends GuiScreen {
                             + "set list-color to HUD to colour it with these."));
                 }
                 if (HudPanel.active() && !customList) {
-                    /* 2026-11-14: the owner tuned these and the module list stayed white. */
                     rows.add(Row.note("The JELLO HUD look draws the module list in white, so these colours show only "
                             + "where something follows the HUD colour. HUD section > hud-theme CLASSIC colours the list."));
                 }
@@ -455,8 +421,6 @@ public final class ThemeStudio extends GuiScreen {
         return row.property != null && row.property == this.picker ? ROW + this.pickerHeight : ROW;
     }
 
-    // ---- frame ------------------------------------------------------------------
-
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         ScaledResolution sr = new ScaledResolution(this.mc);
@@ -520,7 +484,7 @@ public final class ThemeStudio extends GuiScreen {
                     alpha(0xFF000000, shade / 100.0F), 8.0F);
             Liquid.pane(x, y, x + width, y + height, RADIUS, this.theme.pane());
             Liquid.rect(x, y, x + width, y + 70, RADIUS, 0x14FFFFFF, 0x00FFFFFF);
-            /* Clicks outside the window do nothing but close an open list. */
+
             hit("window", null, x, y, x + width, y + height);
 
             drawHeader(x, y, width, mx, my);
@@ -576,13 +540,12 @@ public final class ThemeStudio extends GuiScreen {
         if (this.undo != null) {
             edge = button("undo", null, "Undo " + this.undoLabel, edge - 6, cy, mx, my, true);
         }
-        /* What the open section is for, as far as it fits before the buttons. */
+
         LiquidFont blurb = font(7.5F, false);
         blurb.draw(blurb.trim(BLURBS[this.section], Math.max(0.0F, edge - 10 - (x + 36))), x + 36, cy + 6.0F,
                 AtlasStyle.faint);
     }
 
-    /** A pill button ending at {@code right}; returns its left edge. */
     private float button(String kind, Object payload, String label, float right, float cy, float mx, float my,
                          boolean strong) {
         LiquidFont bold = font(8.0F, true);
@@ -624,7 +587,7 @@ public final class ThemeStudio extends GuiScreen {
             font(9.0F, active).draw(SECTIONS[i], x + 37, cy, colour);
             hit("section", Integer.valueOf(i), x + 10, ry, x + SIDEBAR - 10, ry + rowH);
         }
-        /* The quick starts, under the sections: the menu's own presets. */
+
         float py = y + SECTIONS.length * (rowH + 2) + 14;
         if (py + 18 < bottom) {
             font(7.0F, true).drawTracked("START FROM", x + 16, py, AtlasStyle.faint, 0.6F);
@@ -648,15 +611,13 @@ public final class ThemeStudio extends GuiScreen {
         }
     }
 
-    // ---- the settings list --------------------------------------------------------
-
     private void drawContent(ScaledResolution sr, float left, float top, float right, float bottom, float mx,
                              float my) {
         this.listLeft = left;
         this.listRight = right;
         this.listTop = top + 4;
         this.listBottom = bottom;
-        /* A section arrives sliding up a little as it fades in. */
+
         float arrive = this.ui.toward("arrive", 1.0F, 9.0F);
         float lift = (1.0F - arrive) * 10.0F;
         float saved = Liquid.alpha;
@@ -776,7 +737,7 @@ public final class ThemeStudio extends GuiScreen {
         int track = on ? alpha(accent, 0.9F) : ink(0x26);
         Liquid.rect(x, cy - h / 2, x + w, cy + h / 2, h / 2, track, on ? alpha(accent, 0.75F) : ink(0x1C));
         float kx = x + 6.5F + (w - 13.0F) * knob;
-        /* The knob stretches a little while it travels. */
+
         float stretch = 1.0F + 0.35F * (float) Math.sin(clamp01(knob) * Math.PI);
         Liquid.rect(kx - 4.5F * stretch, cy - 4.5F, kx + 4.5F * stretch, cy + 4.5F, 4.5F,
                 on ? 0xFF0B0C0E : 0xFFE6E9EF);
@@ -814,7 +775,6 @@ public final class ThemeStudio extends GuiScreen {
         }
     }
 
-    /** Where a slider's track is, for a drag that starts on it. */
     private void slideLeftFor(Property<?> p, float trackLeft, float trackRight) {
         if (this.sliding == null || this.sliding == p) {
             this.slideLeft = trackLeft;
@@ -838,7 +798,6 @@ public final class ThemeStudio extends GuiScreen {
         }
         int accent = accent();
         if (modes.length <= 4 && total <= right - left) {
-            /* Few options: all of them side by side, the chosen one under a sliding pill. */
             float x = right - total;
             Liquid.rect(x - 2, cy - 8, right + 2, cy + 8, 8.0F, ink(0x14));
             float pillX = x;
@@ -870,7 +829,7 @@ public final class ThemeStudio extends GuiScreen {
             }
             return;
         }
-        /* Many options: the chosen one, and a list that opens under it. */
+
         LiquidFont bold = font(8.0F, true);
         String shown = p.getModeString();
         float w = Math.min(right - left, Math.max(70.0F, bold.width(shown) + 26));
@@ -902,7 +861,6 @@ public final class ThemeStudio extends GuiScreen {
         float y = this.dropY;
         float bottomLimit = this.listBottom - 4;
         if (y + modes.length * itemH + 6 > bottomLimit) {
-            /* No room below: it opens upward from the row instead. */
             y = Math.max(this.listTop, this.dropY - 20 - modes.length * itemH - 6);
         }
         Liquid.shadow(x, y, x2, y + h, 9.0F, 10.0F, 0x66000000, 2.0F);
@@ -975,7 +933,7 @@ public final class ThemeStudio extends GuiScreen {
         float svH = 58.0F;
         float hue = this.hsb[0];
         int pure = opaque(Color.HSBtoRGB(hue, 1.0F, 1.0F));
-        /* Saturation across, brightness down: white to the hue, then clear to black over it. */
+
         Liquid.rectH(left, top, left + svW, top + svH, 6.0F, 0xFFFFFFFF, pure);
         Liquid.rect(left, top, left + svW, top + svH, 6.0F, 0x00000000, 0xFF000000);
         Liquid.rim(left, top, left + svW, top + svH, 6.0F, 1.0F, ink(0x30), ink(0x18));
@@ -1004,7 +962,6 @@ public final class ThemeStudio extends GuiScreen {
         this.pickW = svW;
         this.pickH = svH;
 
-        /* Quick colours, two rows, beside the square. */
         float sx = left + svW + 12;
         float size = Math.min(14.0F, (right - sx - 4 * 4) / 5.0F);
         if (size >= 8.0F) {
@@ -1026,8 +983,6 @@ public final class ThemeStudio extends GuiScreen {
         }
     }
 
-    // ---- the Saved section ----------------------------------------------------------
-
     private List<String> savedThemes() {
         long now = System.currentTimeMillis();
         if (now - this.savedReadAt > 500L) {
@@ -1043,7 +998,7 @@ public final class ThemeStudio extends GuiScreen {
         float y = top;
         font(7.0F, true).drawTracked("SAVE THIS LOOK", left, y + 4, alpha(accent, 0.85F), 0.6F);
         y += 14;
-        /* The name field and Save. */
+
         float fieldRight = right - 62;
         boolean focused = this.naming;
         float lit = ease("nameField", focused || inside(mx, my, left, y, fieldRight, y + 20), AtlasStyle.HOVER_RATE);
@@ -1098,8 +1053,6 @@ public final class ThemeStudio extends GuiScreen {
         }
     }
 
-    // ---- preview -------------------------------------------------------------
-
     private void drawPreview(float left, float top, float right, float bottom) {
         float x = left + 12;
         float x2 = right - 12;
@@ -1109,7 +1062,6 @@ public final class ThemeStudio extends GuiScreen {
         long now = System.currentTimeMillis();
         HUD hud = (HUD) module(HUD.class);
 
-        /* A piece of the menu: the glass, a selected row, a switch and a slider. */
         float menuH = 52.0F;
         Liquid.pane(x, y, x2, y + menuH, 10.0F, this.theme.pane());
         int accent = accent();
@@ -1128,14 +1080,12 @@ public final class ThemeStudio extends GuiScreen {
         Liquid.ring(fx, y + 35, 4.0F, 1.4F, accent);
         y += menuH + 10;
 
-        /* The world behind the HUD: a strip of sky and grass, so the panels' glass reads as it does in game. */
         float worldH = Math.max(60.0F, bottom - y - 8);
         Liquid.rect(x, y, x2, y + worldH, 10.0F, 0xFF2E4A6B, 0xFF4E7BA0);
         Liquid.rect(x, y + worldH * 0.72F, x2, y + worldH, 10.0F, 0xFF4A7A34, 0xFF3A5E2A);
         drawHudPreview(hud, x, y, x2, y + worldH, now);
     }
 
-    /** The game's font draws from a texture, which the shapes leave switched off. */
     private static void textState() {
         GlStateManager.enableTexture2D();
         GlStateManager.enableBlend();
@@ -1146,22 +1096,19 @@ public final class ThemeStudio extends GuiScreen {
     private void drawHudPreview(HUD hud, float x, float y, float x2, float y2, long now) {
         net.minecraft.client.gui.FontRenderer fr = this.mc.fontRendererObj;
         boolean panels = HudPanel.active();
-        /* 2026-11-14: the custom list (interface CUSTOM) is drawn by the HUD itself, with its own layout and
-           font: what the game shows. */
+
         float shownListBottom = y + 6 + 4 * 12;
         if (hud != null && hud.customList()) {
             shownListBottom = hud.drawListPreview(hud.posX.getValue() == 1 ? x2 - 6 : x + 6, y + 6, now);
             GlStateManager.enableBlend();
         } else {
-            /* The module list, top right, coloured as the HUD colours it. */
             String[] names = {"Silent Aura", "Velocity", "NoSlow", "Sprint"};
             float ry = y + 6;
             int unit = 0;
             for (String name : names) {
                 float w = fr.getStringWidth(name) + 8;
                 float rx = x2 - 6 - w;
-                /* 2026-11-14 (owner: the preview's colours were unlike the game's): as HUD draws the list -- a JELLO
-                   list has white names and no edge bar, whatever the HUD colour. */
+
                 int background = hud == null ? 0x70000000 : hud.listRowBackground();
                 if (panels) {
                     HudPanel.row(rx, ry, x2 - 6, ry + 11);
@@ -1182,7 +1129,6 @@ public final class ThemeStudio extends GuiScreen {
             GlStateManager.enableBlend();
         }
 
-        /* A target card with a health bar that loses health and gets it back. */
         float cardW = Math.min(110.0F, x2 - x - 12);
         float cx = x + 6;
         float cy = Math.max(y + 6 + 4 * 12 + 6, shownListBottom + 6);
@@ -1201,7 +1147,7 @@ public final class ThemeStudio extends GuiScreen {
             float barR = cx + cardW - 6;
             Liquid.rect(barL, cy + 19, barR, cy + 23, 2.0F, 0x33000000);
             Liquid.rect(barL, cy + 19, barL + (barR - barL) * Math.max(health, trail), cy + 23, 2.0F, 0xFF646464);
-            /* The bar in the colour the chosen TargetHUD style draws it (JELLO: light grey). */
+
             atlas.module.modules.TargetHUD target = (atlas.module.modules.TargetHUD) module(
                     atlas.module.modules.TargetHUD.class);
             int colour = target != null ? target.previewBarColour(health)
@@ -1210,7 +1156,6 @@ public final class ThemeStudio extends GuiScreen {
             GlStateManager.enableBlend();
         }
 
-        /* A notification sliding in from the right every four seconds. */
         long phase = now % 4000L;
         float in = clamp01(phase / 300.0F);
         float out = clamp01((3200L - phase) / 300.0F);
@@ -1222,11 +1167,9 @@ public final class ThemeStudio extends GuiScreen {
             float nx = x2 - 6 - w + (1.0F - shown) * 18.0F;
             float ny = y2 - 26;
             if (ny > cy + 36) {
-                /* 2026-11-14: as HUD.drawModernNotification draws it -- with accent everywhere, the glass in the
-                   Appearance glass colour and the bar in the accent (owner: the preview did not match the game). */
                 int sharedAccent = AtlasClickGui.sharedAccent();
                 int sharedGlass = AtlasClickGui.sharedGlass();
-                /* Notifications never use the HUD panels: always this glass. */
+
                 Liquid.rect(nx, ny, nx + w, ny + 18, 6.0F, sharedGlass != 0
                         ? alpha((150 << 24) | (sharedGlass & 0xFFFFFF), shown) : alpha(0x5C0A0C10, shown));
                 Liquid.rim(nx, ny, nx + w, ny + 18, 6.0F, 1.0F, alpha(0x18FFFFFF, shown), 0);
@@ -1278,7 +1221,6 @@ public final class ThemeStudio extends GuiScreen {
         LiquidFont.alpha = saved;
     }
 
-    /** Restricts drawing to a rectangle in layout pixels, through the window's opening scale. */
     private void clip(ScaledResolution sr, float x, float y, float width, float height) {
         float sx = this.pivotX + (x - this.pivotX) * this.viewScale;
         float sy = this.pivotY + (y - this.pivotY) * this.viewScale;
@@ -1289,8 +1231,6 @@ public final class ThemeStudio extends GuiScreen {
         GL11.glScissor((int) Math.floor(sx * factor), (int) Math.floor((sr.getScaledHeight() - (sy + sh)) * factor),
                 Math.max(0, (int) Math.ceil(sw * factor)), Math.max(0, (int) Math.ceil(sh * factor)));
     }
-
-    // ---- input ---------------------------------------------------------------
 
     private void followDrag(float mx, float my) {
         if (!Mouse.isButtonDown(0)) {
@@ -1314,7 +1254,6 @@ public final class ThemeStudio extends GuiScreen {
         }
     }
 
-    /** Sets a colour's red, green and blue, keeping whatever alpha byte the setting was declared with. */
     private static void setColour(ColorProperty p, int rgb) {
         int keep = p.getValue() & 0xFF000000;
         p.setValue(Integer.valueOf(keep | (rgb & 0x00FFFFFF)));
@@ -1362,7 +1301,6 @@ public final class ThemeStudio extends GuiScreen {
         float my = layoutY(mouseY);
         UiContext.Hit target = this.ui.hitAt(mx, my);
         if (this.dropdown != null) {
-            /* While a list is open, a click picks from it or only closes it. */
             this.dropdown = null;
             if (target != null && "dropItem".equals(target.kind) && button == 0) {
                 Object[] pick = (Object[]) target.payload;
@@ -1377,7 +1315,6 @@ public final class ThemeStudio extends GuiScreen {
             return;
         }
         if (button == 1) {
-            /* Right-click: the setting back to its default. */
             Property<?> p = settingOf(target);
             if (p != null) {
                 p.setValue(p.getDefault());
@@ -1476,7 +1413,6 @@ public final class ThemeStudio extends GuiScreen {
         }
     }
 
-    /** The setting a hit belongs to, if any: its payload, or the first part of a choice's. */
     private static Property<?> settingOf(UiContext.Hit hit) {
         if (hit.payload instanceof Property<?>) {
             return (Property<?>) hit.payload;

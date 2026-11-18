@@ -12,46 +12,9 @@ import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
 
-/**
- * Liquid glass, drawn by the graphics card rather than approximated with
- * triangle fans.
- *
- * Everything the menu shows is one of four things, each a small fragment
- * shader working from the signed distance to a rounded rectangle:
- *
- *   SHAPES. Fills, rims and soft shadows. A distance field gives every corner
- *   a one-pixel antialiased edge at any radius, which the fan geometry in
- *   Glass never could -- it drew corners out of eight straight segments and
- *   relied on line smoothing for the rim.
- *
- *   THE PANE. The world behind the menu is copied, blurred by a dual-filter
- *   Kawase chain, and drawn back through the window's shape: saturated and
- *   darkened in the middle, and near the edge bent through a circular bevel
- *   with the three colour channels bent by slightly different amounts. The
- *   rim samples the unblurred copy, so the edge of the window is clear glass
- *   that visibly bends whatever is behind it while the middle is frosted.
- *   That combination -- frosted body, clear refracting rim, light caught on
- *   the edge facing the pointer -- is what reads as Liquid Glass.
- *
- *   LENSES. The same material over the menu's own content instead of the
- *   world: the selected category and module sit under a droplet of clear
- *   glass that refracts the text under its edge as it slides.
- *
- *   LINES. Round-capped segments, for the icons.
- *
- * All of it falls back to the older Glass geometry when shaders or
- * framebuffers are not available, so the menu is never missing -- only
- * plainer.
- *
- * Coordinates are taken in GUI pixels and converted through the current
- * modelview matrix, so the whole window can be scaled for its opening
- * animation and every shader still knows where it is drawing.
- */
 final class Liquid {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    /** Settings for one piece of glass. */
     static final class Style {
         float bezel;
         float refract;
@@ -64,7 +27,7 @@ final class Liquid {
         float specular = 0.5F;
         float shade;
         float clear;
-        /** Marks the selection droplets, which the theme can draw solid or as an outline instead. */
+
         boolean selection;
 
         Style(float bezel, float refract, float dispersion, float saturation, float brightness,
@@ -81,16 +44,14 @@ final class Liquid {
         }
     }
 
-    /** Multiplies every alpha drawn, for the menu fading in. */
     static float alpha = 1.0F;
-    /** Where the light is, in GUI pixels. The pointer, eased. */
+
     static float lightX;
     static float lightY;
 
-    /** Blur strength: how many halvings (0 = none) and how far each samples. Set by the theme. */
     static int blurLevels = 4;
     static float blurOffset = 3.2F;
-    /** The texture the pane samples this frame: the blurred copy, or the plain copy at no blur. */
+
     private static int blurred;
 
     private static boolean tried;
@@ -108,7 +69,6 @@ final class Liquid {
     private static int fbHeight;
     private static int scale = 2;
 
-    /** Draw calls since the last frame began, for the Ctrl+P readout. */
     static int draws;
 
     private static float viewScaleX = 1.0F;
@@ -118,8 +78,6 @@ final class Liquid {
 
     private Liquid() {
     }
-
-    // ---- shaders ------------------------------------------------------
 
     private static final String COMMON = "#version 120\n"
             + "float sdRB(vec2 p, vec2 b, float r) {\n"
@@ -140,11 +98,9 @@ final class Liquid {
             + "    return fract((p3.x + p3.y) * p3.z);\n"
             + "}\n";
 
-    /** Quads in GUI space, through the game's own matrices. */
     private static final String QUAD_VERT = "#version 120\n"
             + "void main() { gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex; }\n";
 
-    /** Full-target passes: vertices already in clip space. */
     private static final String PASS_VERT = "#version 120\n"
             + "varying vec2 vUv;\n"
             + "void main() { vUv = gl_MultiTexCoord0.xy; gl_Position = vec4(gl_Vertex.xy, 0.0, 1.0); }\n";
@@ -182,7 +138,6 @@ final class Liquid {
             + "    gl_FragColor = vec4((sum / 12.0).rgb, 1.0);\n"
             + "}\n";
 
-    /* Output is premultiplied; drawn with ONE, ONE_MINUS_SRC_ALPHA. */
     private static final String SHAPE_FRAG = COMMON
             + "uniform vec4 uRect;\n"
             + "uniform float uRadius;\n"
@@ -317,14 +272,7 @@ final class Liquid {
             + "    gl_FragColor = vec4(clamp(col, 0.0, 1.0) * A, A);\n"
             + "}\n";
 
-    /**
-     * Compiles once. A driver that refuses any of the four leaves the menu on
-     * the old geometry for the rest of the session rather than retrying a
-     * compile every frame.
-     */
     private static boolean compile() {
-        /* Mobile-safe (2026-10-15): the old geometry, and no compile at all
-           -- not even marked as tried, so turning the mode off compiles then. */
         if (atlas.util.render.MobileSafe.active()) {
             return false;
         }
@@ -348,11 +296,6 @@ final class Liquid {
         return compiled;
     }
 
-    /**
-     * HudPanel (2026-10-08): the shaders and the framebuffer size the shape
-     * shader converts with, without copying the screen -- for HUD panes drawn
-     * with blur off, when no frame may have begun yet.
-     */
     static void ensureCompiled() {
         compile();
         if (fbWidth != mc.displayWidth || fbHeight != mc.displayHeight) {
@@ -365,7 +308,6 @@ final class Liquid {
         }
     }
 
-    /** Shapes need only the shaders; the pane and lenses also need this frame's copies. */
     static boolean shapes() {
         return compiled && !atlas.util.render.MobileSafe.active();
     }
@@ -374,15 +316,6 @@ final class Liquid {
         return compiled && frameReady && !atlas.util.render.MobileSafe.active();
     }
 
-    // ---- per frame ----------------------------------------------------
-
-    /**
-     * Copies and blurs whatever is on screen, before the menu draws anything.
-     *
-     * Every framebuffer bind here is undone in the finally: a pass that binds
-     * an offscreen target and then throws would leave the game rendering into
-     * a texture nobody displays -- the black screen NOTES §3 warns about.
-     */
     static void beginFrame() {
         frameReady = false;
         draws = 0;
@@ -392,10 +325,6 @@ final class Liquid {
             return;
         }
         if (!atlas.util.render.FramebufferCompat.available()) {
-            /* Framebuffers off this frame (OptiFine Fast Render, or FBOs
-               disabled): a bind does nothing, so the blur passes below would
-               draw their full-screen quads onto the screen -- the white
-               screen. The pane uses the plain glass instead (2026-10-05). */
             return;
         }
         Framebuffer main = mc.getFramebuffer();
@@ -454,9 +383,7 @@ final class Liquid {
             out.createBindFramebuffer(width, height);
         }
         out.setFramebufferFilter(GL11.GL_LINEAR);
-        /* The game's framebuffers clamp with GL_CLAMP, which blends in the
-           border colour at the very edge; the blur would darken the screen's
-           rim with it. */
+
         GlStateManager.bindTexture(out.framebufferTexture);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
@@ -464,7 +391,6 @@ final class Liquid {
         return out;
     }
 
-    /** Copies a region of the bound framebuffer into the same place in a texture. */
     private static void copy(Framebuffer into, int x, int y, int width, int height) {
         if (width <= 0 || height <= 0) {
             return;
@@ -494,10 +420,6 @@ final class Liquid {
         shader.unload();
     }
 
-    /**
-     * Copies what the menu has drawn so far, for the lenses to refract.
-     * Only the window's own rectangle: nothing outside it is ever sampled.
-     */
     static void captureContent(float x, float y, float x2, float y2) {
         if (!glass()) {
             return;
@@ -515,17 +437,6 @@ final class Liquid {
         }
     }
 
-    // ---- coordinates --------------------------------------------------
-
-    /**
-     * The transform the caller has put on the modelview, which every shader
-     * needs to know where it is drawing: a uniform scale, then a translation.
-     *
-     * Told rather than read back. Reading the matrix with glGetFloat on every
-     * draw -- three hundred times a frame -- makes a driver running its own
-     * command thread (NVIDIA's threaded optimisation) stop and catch up each
-     * time, which is a stall per draw.
-     */
     static void setView(float scale, float translateX, float translateY) {
         viewScaleX = scale;
         viewScaleY = scale;
@@ -537,12 +448,10 @@ final class Liquid {
         draws++;
     }
 
-    /** GUI x to framebuffer x. */
     private static float fbX(float x) {
         return (viewScaleX * x + viewX) * scale;
     }
 
-    /** GUI y to framebuffer y, which counts up from the bottom. */
     private static float fbY(float y) {
         return fbHeight - (viewScaleY * y + viewY) * scale;
     }
@@ -568,8 +477,7 @@ final class Liquid {
     private static void begin() {
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        /* The screen's alpha test discards anything under 0.1, which is most
-           of a soft shadow and every antialiased edge. */
+
         GlStateManager.disableAlpha();
         GlStateManager.disableCull();
     }
@@ -581,23 +489,18 @@ final class Liquid {
         GlStateManager.enableCull();
     }
 
-    // ---- shapes -------------------------------------------------------
-
     static void rect(float x, float y, float x2, float y2, float radius, int colour) {
         shape(x, y, x2, y2, radius, colour, colour, false, 0.0F, 0, 0);
     }
 
-    /** Vertical gradient, top colour first. */
     static void rect(float x, float y, float x2, float y2, float radius, int top, int bottom) {
         shape(x, y, x2, y2, radius, top, bottom, false, 0.0F, 0, 0);
     }
 
-    /** Horizontal gradient, left colour first. */
     static void rectH(float x, float y, float x2, float y2, float radius, int left, int right) {
         shape(x, y, x2, y2, radius, left, right, true, 0.0F, 0, 0);
     }
 
-    /** An edge only, brighter at the top than the bottom. */
     static void rim(float x, float y, float x2, float y2, float radius, float width, int top, int bottom) {
         shape(x, y, x2, y2, radius, 0, 0, false, width, top, bottom);
     }
@@ -648,7 +551,6 @@ final class Liquid {
         end();
     }
 
-    /** A soft shadow or glow of the rounded rectangle, spreading by {@code soft}. */
     static void shadow(float x, float y, float x2, float y2, float radius, float soft, int colour, float dy) {
         if (x2 <= x || y2 <= y) {
             return;
@@ -672,7 +574,6 @@ final class Liquid {
         end();
     }
 
-    /** A round-capped line, for icons. */
     static void line(float ax, float ay, float bx, float by, float width, int colour) {
         if (!shapes()) {
             GlStateManager.enableBlend();
@@ -706,9 +607,6 @@ final class Liquid {
         end();
     }
 
-    // ---- glass --------------------------------------------------------
-
-    /** The window itself, over the blurred world. */
     static void pane(float x, float y, float x2, float y2, float radius, Style style) {
         if (!glass()) {
             paneFallback(x, y, x2, y2, radius);
@@ -717,7 +615,6 @@ final class Liquid {
         glassDraw(x, y, x2, y2, radius, style, blurred, capture.framebufferTexture);
     }
 
-    /** A droplet over the menu's own content, captured by captureContent. */
     static void lens(float x, float y, float x2, float y2, float radius, Style style) {
         if (!glass()) {
             Glass.glow(x, y, x2, y2, radius, style.tint | 0xFF000000,
@@ -761,19 +658,13 @@ final class Liquid {
         s.setUniformf("uAlpha", alpha);
         quad(x, y, x2, y2);
         end();
-        /* Unbound through the state cache rather than restored from a
-           glGetInteger: the lightmap is re-bound by name whenever the game
-           next needs it, and the cache now agrees that nothing is bound. */
+
         GlStateManager.setActiveTexture(OpenGlHelper.lightmapTexUnit);
         GlStateManager.bindTexture(0);
         GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
         GlStateManager.bindTexture(0);
     }
 
-    /**
-     * The window the way it was drawn before shaders: the blur the other
-     * menus use, masked to the pane, and the geometric glass over it.
-     */
     private static void paneFallback(float x, float y, float x2, float y2, float radius) {
         boolean blurred = false;
         try {
@@ -781,25 +672,21 @@ final class Liquid {
             blurred = true;
             Glass.fill(x, y, x2, y2, radius, 0xFFFFFFFF);
         } catch (Throwable ignored) {
-            // No blur; the pane still draws.
         } finally {
             if (blurred) {
                 try {
                     BlurUtils.blurEnd(2, 9.0F);
                 } catch (Throwable ignored) {
-                    // Nothing further can be done.
                 }
             }
         }
         Glass.pane(x, y, x2, y2, radius);
     }
 
-    /** Scale of the GUI in framebuffer pixels, for anything snapping to them. */
     static int scale() {
         return scale;
     }
 
-    /** Re-reads the GUI scale outside a frame, for work done before the first one. */
     static void refreshScale() {
         scale = new ScaledResolution(mc).getScaleFactor();
     }

@@ -5,9 +5,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** AngleSmooth.Tracking (2026-10-26): keeps up with a strafing target, settles on a still one. */
 public class TrackingSmoothTest {
-
     private static AngleSmooth.Tracking fixed() {
         AngleSmooth.Tracking t = new AngleSmooth.Tracking();
         t.gainVariance = 0.0F;
@@ -16,7 +14,6 @@ public class TrackingSmoothTest {
         return t;
     }
 
-    /** The yaw error after 40 ticks of a target moving {@code speed} degrees a tick. */
     private static float lagAfter(AngleSmooth smooth, float speed) {
         Rotation current = new Rotation(0.0F, 0.0F);
         Rotation previous = null;
@@ -36,7 +33,7 @@ public class TrackingSmoothTest {
     @Test
     public void keepsUpWithAStrafingTargetBetterThanAShareOfWhatIsLeft() {
         float tracking = lagAfter(fixed(), 4.0F);
-        /* A turn of 35 % of what is left (Tracking's own kp alone) trails by speed * (1 - k) / k. */
+
         AngleSmooth proportional = new AngleSmooth() {
             @Override
             public Rotation process(SmoothContext context, Rotation current, Rotation target) {
@@ -86,7 +83,7 @@ public class TrackingSmoothTest {
     public void aJumpOfTheGoalStartsTheMemoryOver() {
         AngleSmooth.Tracking t = fixed();
         Rotation current = new Rotation(0.0F, 0.0F);
-        /* The goal jumps 90 degrees in a tick (a new target): no feed-forward from that jump. */
+
         Rotation next = t.process(new SmoothContext(true, current, new Rotation(0.0F, 0.0F), 3.0, false),
                 current, new Rotation(90.0F, 0.0F));
         assertTrue("first step " + next.yaw, next.yaw <= 40.0F + 1e-3F && next.yaw > 0.0F);

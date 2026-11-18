@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): eats soup to heal when health is low, with
-// an optional inventory hotbar refill.
+// Ported from OpenSkid (GPL-3.0)
+
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.events.TickEvent;
@@ -47,7 +47,6 @@ public class AutoSoup extends Module {
 
     @Override
     public void onDisabled() {
-        /* 2026-10-31 (audit): switched off mid-action, the hand stayed on the item it had swapped to. */
         if (this.originalSlot >= 0 && this.originalSlot < 9 && mc.thePlayer != null && mc.thePlayer.inventory.currentItem != this.originalSlot) {
             mc.thePlayer.inventory.currentItem = this.originalSlot;
         }

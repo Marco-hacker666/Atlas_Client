@@ -8,32 +8,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Which category every module is in -- the one place that says so
- * (2026-09-28, sorted after LiquidBounce's categories).
- *
- * The classic menu used to hardcode five lists of its own, and Atlas read
- * those; a module missing from them was in no menu at all (seven were).
- * The classic menu now builds its frames from here, Atlas follows it as
- * before, and a unit test fails when a registered module has no entry.
- *
- * Where LiquidBounce has the module, it sits where LiquidBounce puts it
- * (Scaffold, FastPlace, Timer and ChestStealer in World; AntiBot and the
- * name hider in Misc; GhostHand and Disabler in Exploit). Since 2026-10-19
- * Combat follows OpenSlinky's combat list plus the fight modules in common
- * use (see the COMBAT entry).
- */
 public final class ModuleCategories {
-
     private static final Map<Class<? extends Module>, Category> CATEGORY =
             new LinkedHashMap<Class<? extends Module>, Category>();
 
     static {
-        /* 2026-10-19, owner: Combat had 44 modules, too many. It keeps what
-           OpenSlinky's own combat list has, plus the fight modules in common
-           use here; the rest went where OpenSlinky puts them (FakeLag and
-           AutoRod with the utilities, KeepSprint with movement), the packet
-           tricks to Exploit and the item helpers to Player. */
         put(Category.COMBAT,
                 AimAssist.class, AutoClicker.class, AutoWeapon.class, BackTrack.class, HitBox.class, HitSelect.class, KnockbackDelay.class, LagRange.class,
                 Piercing.class, Reach.class, SprintReset.class, TimerRange.class, Velocity.class, BlockHit.class,
@@ -83,7 +62,7 @@ public final class ModuleCategories {
                 ItemPhysics.class, LegitHUD.class, NoHurtCam.class, Sprint.class, Statistics.class, PlayTracker.class,
                 WaterMark.class, KeyStrokes.class, PotionHUD.class, InventoryHUD.class,
                 PlayerList.class, ClosestPlayerHUD.class, FKCounter.class, KillEffect.class);
-        /* In the order they appear on screen, not sorted: the order is the point. */
+
         put(Category.THEME,
                 Theme.class, PlayerColors.class, TracerColors.class, TargetColors.class, BacktrackColors.class,
                 BedColors.class, ChestColors.class, ItemColors.class, BlockColors.class, ProjectileColors.class,
@@ -91,20 +70,14 @@ public final class ModuleCategories {
                 EffectColors.class, HUDStyle.class);
     }
 
-    /* Modules being tested (2026-10-16): registered and categorised, so the
-       table stays complete, but left out of the menus (modulesIn) -- the
-       owner tests them with .toggle / .bind before they are shown. */
     private static final java.util.Set<Class<? extends Module>> TESTING =
             new java.util.HashSet<Class<? extends Module>>(java.util.Arrays.<Class<? extends Module>>asList(
-                    /* The old "ClickGui" opener (2026-10-17): a second entry
-                       beside ClickGUI that does the same thing, listed twice
-                       in the Client column. Still bindable with .bind. */
+
                     GuiModule.class));
 
     private ModuleCategories() {
     }
 
-    /** Whether a module is kept out of the menus while it is tested. */
     public static boolean testing(Class<?> type) {
         return TESTING.contains(type);
     }
@@ -119,12 +92,10 @@ public final class ModuleCategories {
         }
     }
 
-    /** The module's category; null for a module this table does not know. */
     public static Category of(Class<?> type) {
         return CATEGORY.get(type);
     }
 
-    /** Every module type in a category, in the order listed. */
     public static List<Class<? extends Module>> typesIn(Category category) {
         List<Class<? extends Module>> out = new ArrayList<Class<? extends Module>>();
         for (Map.Entry<Class<? extends Module>, Category> entry : CATEGORY.entrySet()) {
@@ -135,10 +106,6 @@ public final class ModuleCategories {
         return out;
     }
 
-    /**
-     * The registered modules in a category: sorted by name, except Theme,
-     * which keeps its listed order.
-     */
     public static List<Module> modulesIn(Category category, Map<Class<?>, Module> registered) {
         List<Module> out = new ArrayList<Module>();
         for (Class<? extends Module> type : typesIn(category)) {
@@ -153,7 +120,6 @@ public final class ModuleCategories {
         return out;
     }
 
-    /** Every module type with a category. */
     public static Map<Class<? extends Module>, Category> all() {
         return Collections.unmodifiableMap(CATEGORY);
     }

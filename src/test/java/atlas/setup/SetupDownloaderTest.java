@@ -8,7 +8,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class SetupDownloaderTest {
-
     private static SetupEntry entry(String url) {
         return new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.DIRECT,
                 "X", "", "x.jar", url, 0, false);

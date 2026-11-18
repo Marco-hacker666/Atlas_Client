@@ -50,56 +50,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Reports server position corrections (S08PacketPlayerPosLook) with enough
- * context to tell them apart, and attributes them to whatever the client was
- * doing at the time.
- *
- * The original version printed one line per S08 with no filtering: a respawn,
- * a pearl, a rounding sync and a real setback all looked identical, and one
- * correction repeated over several ticks looked like several violations.
- *
- * Classification, added earlier:
- *
- *   TELEPORT   - respawn, pearl, lobby send. Not a violation, off by default.
- *   RELOCATE   - the server put the player somewhere they have not been in
- *                the last ten seconds. A setback always returns the player to
- *                a position this client sent, so a target it never occupied
- *                was chosen by the server rather than refused by it: a match
- *                start moving everyone to their spawn is the case that made
- *                this necessary. Shown, never counted as a violation.
- *   VERTICAL   - correction mostly on Y with little horizontal movement,
- *                which is what fall / ground-state disagreements look like.
- *   LAGBACK    - horizontal correction. This is the movement violation.
- *   REJECT     - a block placement the server undid. Not a position packet at
- *                all, and previously invisible: a rejected placement produces
- *                no S08, so a scaffold or clutch fighting the server left no
- *                trace here even though it is the same class of problem.
- *
- * Three things make the output usable while actually playing rather than only
- * in a log read afterwards:
- *
- * BLAME. A flag on its own says the server disagreed; it does not say with
- * what. Every flag now carries a snapshot of the client state that could have
- * caused it -- how many packets a lag module was holding, how long since a
- * placement, a dig, an attack, or incoming knockback. These are recorded from
- * the packet stream rather than asked of the modules, so a module that acts
- * through some other module still shows up.
- *
- * SESSION COUNTERS. The question being asked of this module is almost always
- * comparative: is this config worse than the last one. That needs a rate, not
- * a stream of individual lines, so totals and flags-per-minute are kept and
- * reset on a server switch.
- *
- * HUD. Chat scrolls, and the flags that matter arrive during a fight, which
- * is exactly when chat is unreadable. The counters and the last few flags are
- * drawn on screen instead.
- */
 public class FlagDetector extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    /** Vanilla sprint is ~0.28 blocks/tick; anything near it is full speed. */
     private static final double SPRINT_SPEED = 0.28;
 
     private static final File LOG_DIR = new File("./config/Atlas/");
@@ -115,49 +68,30 @@ public class FlagDetector extends Module {
     public final FloatProperty burstWindow = new FloatProperty("burst-window", 1.0F, 0.2F, 5.0F);
 
     public final BooleanProperty detectRejects = new BooleanProperty("detect-rejects", true);
-    /* Every block placement, accepted or not, one line each with what the
-       server saw when it judged it, to config/Atlas/places-<stamp>.txt.
-       REJECTs alone could not say what refused placements have in common
-       (2026-09-25: 674 of them in 15 days, no pattern), because nothing
-       recorded the ones that went through. */
+
     public final BooleanProperty placeLog = new BooleanProperty("place-log", true, this.detectRejects::getValue);
     public final BooleanProperty chat = new BooleanProperty("chat", true);
     public final BooleanProperty sound = new BooleanProperty("sound", false);
 
-    /* NONE by default since 2026-10-08: the owner wants the screen clean; the log file still records everything. */
     public final ModeProperty hud = new ModeProperty("hud", 0, new String[]{"NONE", "COMPACT", "LIST"});
-    /* The module arraylist owns one top corner and grows downward as modules
-       are enabled, so any fixed position on that side is eventually buried by
-       it. AUTO takes the opposite corner and stays clear however long the
-       list gets. */
+
     public final ModeProperty hudAlign = new ModeProperty("hud-align", 0,
             new String[]{"AUTO", "LEFT", "RIGHT"}, () -> this.hud.getValue() != 0);
     public final IntProperty hudX = new IntProperty("hud-x", 4, 0, 800, () -> this.hud.getValue() != 0);
     public final IntProperty hudY = new IntProperty("hud-y", 60, 0, 600, () -> this.hud.getValue() != 0);
     public final IntProperty hudLines = new IntProperty("hud-lines", 5, 1, 12, () -> this.hud.getValue() == 2);
     public final IntProperty hudFade = new IntProperty("hud-fade", 20, 3, 120, () -> this.hud.getValue() == 2);
-    /* 2026-11-09: like every HUD element, resizable, draggable in the HUD
-       editor and able to sit on the shared panel (off: text only, as before). */
+
     public final FloatProperty hudScale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F, () -> this.hud.getValue() != 0);
     public final BooleanProperty hudBackground = new BooleanProperty("background", false, () -> this.hud.getValue() != 0);
 
     public final BooleanProperty logFile = new BooleanProperty("log-file", false);
-    /**
-     * LOW-DAMAGE: hits that land (the target flinches) but each take a small
-     * part of the health hits usually take -- a server cutting damage instead
-     * of refusing the hit, a "silent" flag (util/DamageWatch, 2026-09-28).
-     */
+
     public final BooleanProperty detectLowDamage = new BooleanProperty("detect-low-damage", true);
-    /* Every landed hit's damage in chat. KillAura's "Debug: Health" shows the
-       health this player loses, not what its hits take off the target. */
+
     public final BooleanProperty damageChat = new BooleanProperty("damage-chat", false,
             this.detectLowDamage::getValue);
-    /**
-     * How far back a module's actions still count as coinciding with a flag.
-     * One round trip plus a little: shorter and a correction caused by a packet
-     * already in flight has nothing to point at, longer and every module that
-     * did anything at all gets named.
-     */
+
     public final IntProperty blameWindow = new IntProperty("blame-window", 2, 1, 10,
             this.blame::getValue);
 
@@ -166,25 +100,8 @@ public class FlagDetector extends Module {
     private int ticksSinceDig = 999;
     private int ticksSinceKnockback = 999;
 
-    /* Position history, one sample a tick. A correction can only be compared
-       against how far the client actually travelled while the server's view
-       was stale, and that distance cannot be reconstructed from the speed at
-       the moment the packet lands: after knockback you are already
-       decelerating, so the arrival-time speed is far below the speed that
-       accumulated the divergence. Recording the path avoids the estimate
-       entirely, and it needs no gravity model for the vertical axis.
-
-       That needs one round trip. The rest -- ten seconds in all -- is for
-       visited(): a setback can return the player to a position several
-       seconds old, and one older than the history would be filed as a
-       RELOCATE. */
     private static final int HISTORY = 200;
 
-    /* How near a correction's target must be to a recorded position to count
-       as somewhere the player has been. The samples are the positions this
-       client sent, give or take the 0.03 blocks below which vanilla does not
-       send one; the rest is margin. Every match-start move on record was
-       0.42 blocks or more. */
     private static final double VISITED_TOLERANCE = 0.3;
     private final double[] histX = new double[HISTORY];
     private final double[] histY = new double[HISTORY];
@@ -192,50 +109,22 @@ public class FlagDetector extends Module {
     private int histIndex = 0;
     private int histFilled = 0;
 
-    /* Positions this client asked the server to place a block at, with the
-       tick it asked. A server that disagrees answers by setting the position
-       back to air, so the pair identifies a refused placement. Bounded by age
-       rather than by count so a burst of placements cannot evict the entry
-       that is about to be answered. */
     private static final int REJECT_WINDOW_TICKS = 20;
     private final Map<BlockPos, Placement> pendingPlacements = new HashMap<BlockPos, Placement>();
 
-    /**
-     * A placement waiting to be confirmed, and how close anyone came to
-     * standing in it.
-     *
-     * A refused placement has two entirely different causes that used to be
-     * reported as one. Vanilla will not let a block be placed inside an
-     * entity's box -- {@code canBlockBePlaced} ends in
-     * {@code checkNoEntityCollision} -- and the server applies that rule to
-     * where the opponent really is, not to where this client last saw them.
-     * Blocking someone off at 230ms therefore gets refused routinely, by the
-     * ordinary rules, with no anticheat involved and nothing to fix.
-     *
-     * The other cause is a placement the server rejected on its own terms,
-     * which is the one worth knowing about. The two look identical in the
-     * packet stream, so the distinction has to be measured: the nearest
-     * opponent is sampled every tick while the placement is outstanding, and
-     * the closest approach decides which of the two it was.
-     */
     private static final class Placement {
         final int tick;
         double closestOpponent = Double.MAX_VALUE;
-        /** The place-log line up to its outcome; null when not logging. */
+
         String context;
-        /** The module whose click sent it, from the stack; null for a click by hand (2026-10-04). */
+
         String module;
-        /* 2026-10-12: what the click claimed, to judge it again along the
-           rotation of the movement packet after it (ray-next). */
+
         BlockPos clicked;
         net.minecraft.util.EnumFacing face;
         net.minecraft.util.Vec3 hit;
         boolean awaitingNext;
-        /* 2026-10-13: the eyes the click was made from. A 1.8 client clicks
-           before it moves, so the click is the position before the movement
-           packet with that packet's look; ray-next took the packet's new
-           position too and missed by a tick of motion on every moving
-           placement (Clutch "face 0.45-0.83" at 0.25 b/t). */
+
         net.minecraft.util.Vec3 eyes;
 
         Placement(int tick) {
@@ -243,11 +132,9 @@ public class FlagDetector extends Module {
         }
     }
 
-    /** Within this many blocks of the target, a body is a plausible explanation. */
     private static final double OCCUPIED_DISTANCE = 1.2;
     private int tickCounter = 0;
 
-    // Pending burst being accumulated.
     private String burstLabel = null;
     private int burstCount = 0;
     private double burstMaxDistance = 0.0;
@@ -255,47 +142,32 @@ public class FlagDetector extends Module {
     private long burstLastAt = 0L;
     private String burstContext = "";
 
-    // Session statistics, reset on enable and on a server switch.
     private long sessionStart;
     private int countLagback;
     private int countVertical;
     private int countTeleport;
     private int countReject;
-    /** Not a violation; kept out of the rate, shown so the cause is visible. */
+
     private int countBlockedByBody;
-    /** The server placing the player; kept out of the rate for the same reason. */
+
     private int countRelocated;
-    /** Runs of landed hits doing a fraction of their usual damage. */
+
     private int countLowDamage;
-    /** Runs of hits the server did not act on at all. */
+
     private int countHitsDropped;
     private final atlas.util.DamageWatch damageWatch = new atlas.util.DamageWatch();
-    /** The target's sword block, tick by tick, for HIT-DMG blk= (2026-10-16). */
+
     private final atlas.util.BlockTrace blockTrace = new atlas.util.BlockTrace();
     private boolean hiddenHealthReported;
-    /* The mitigation check was active at the last look: to say so once when it starts. */
+
     private boolean mitigationSaid;
 
-    /* Client faults: this client contradicting itself, with no server
-       involved. Everything above is the server objecting to something; these
-       are the client doing something no switched-on module asked for. They
-       are kept out of the flag rate, the blame and Adaptive for the same
-       reason BLOCKED-BY-BODY is -- counting them would teach the long-term
-       record that a server objected when none did.
-
-       Both exist because of bugs that ran for days unseen (BUG-AUDIT
-       2026-09-23): TimerRange changing the timer while switched off, and
-       Blink's drain re-queueing every packet it "released". Neither produced
-       a flag of its own at the moment it went wrong -- the flags came later,
-       blamed on whatever was nearby. */
     private int countClientFault;
 
-    /** Ticks the timer must stay off 1.0 before it counts; covers a one-tick handover between owners. */
     private static final int ORPHAN_TICKS = 5;
     private int timerOffTicks;
     private boolean timerOrphanReported;
 
-    /** A second with no progress. The drain releases at least one position a tick, so a working one never gets near this. */
     private static final int STALL_TICKS = 20;
     private int drainSmallest = Integer.MAX_VALUE;
     private int drainStallTicks;
@@ -306,31 +178,15 @@ public class FlagDetector extends Module {
     private final ArrayDeque<HudEntry> recent = new ArrayDeque<HudEntry>();
     private File logTarget;
 
-    /** Ticks a correction stays attributable to the event that caused it. */
     private static final int RESPAWN_GRACE = 60;
-    /* 20 -> 60 (2026-10-13, owner): a send to spawn loads new chunks, and
-       the client stutters for a second or two after it; what the server
-       objects to then belongs to the teleport. */
+
     private static final int TELEPORT_GRACE = 60;
     private int lastRespawnTick = Integer.MIN_VALUE / 2;
     private int lastTeleportTick = Integer.MIN_VALUE / 2;
-    /* A RELOCATE (a small move to a place never stood on) keeps the old
-       20-tick grace and only for corrections (2026-10-13): mid-fight one
-       followed a setback, and the 60-tick teleport grace then hid 7 hits in
-       a row the server ignored. */
+
     private static final int RELOCATE_GRACE = 20;
     private int lastRelocateTick = Integer.MIN_VALUE / 2;
 
-    /* 2026-10-13 (owner: false flags while a ghost after death, after being
-       sent to spawn, and for blocks refused when the round ends).
-       STALL: a client tick that came this late means the client froze --
-       chunk loading after a teleport, a GC pause -- and its movement and
-       clicks for a while after are late in a way the server sees as wrong.
-       ROUND: a title (VICTORY!, GAME OVER!, the countdown) or a game-mode
-       change marks a round starting or ending, when servers refuse every
-       placement. REFUSED-ALL: after this many refusals in a row with no
-       placement accepted in between, the server is refusing every block
-       (a protected area, a finished round) and the rest are not counted. */
     private static final long STALL_MS = 300L;
     private static final int STALL_GRACE = 40;
     private static final int ROUND_GRACE = 160;
@@ -340,12 +196,11 @@ public class FlagDetector extends Module {
     private int lastRoundTick = Integer.MIN_VALUE / 2;
     private int rejectsInARow;
     private boolean refusedAllSaid;
-    /* The hotbar slot the server has (the last C09 sent; -1 until one is):
-       a hit is made with that item, not with the one the client shows. */
+
     private int serverSlot = -1;
     private final Map<String, Integer> ignoredReasons = new LinkedHashMap<String, Integer>();
     private int ignoredTotal;
-    /** Set while building context; read when the flag's kind is keyed. */
+
     private boolean lastExceededTravel;
 
     public FlagDetector() {
@@ -458,10 +313,7 @@ public class FlagDetector extends Module {
                 it.remove();
                 continue;
             }
-            /* Sampled here rather than when the refusal arrives: by then the
-               opponent has had a round trip to walk out of the space they were
-               standing in, which is exactly the evidence being looked for. On
-               the client thread, where walking the entity list is safe. */
+
             trackOccupancy(entry.getKey(), entry.getValue());
         }
 
@@ -470,15 +322,6 @@ public class FlagDetector extends Module {
         }
     }
 
-    /**
-     * TIMER-ORPHAN: the game clock is not at 1.0 and nothing that is switched
-     * on is allowed to have changed it.
-     *
-     * The owners are named by class literal, not by string, so renaming one is
-     * a compile error rather than a list entry that silently matches nothing
-     * (NOTES 4.5). Reported once per episode; a new episode starts when the
-     * timer returns to 1.0.
-     */
     private void checkTimerOrphan() {
         float speed;
         try {
@@ -502,15 +345,6 @@ public class FlagDetector extends Module {
                 speed, this.timerOffTicks));
     }
 
-    /**
-     * DRAIN-STALL: a queue that should be emptying is not.
-     *
-     * Two shapes. Blink in its release phase whose queue has not reached a new
-     * low for a second -- a working drain sends more positions than the game
-     * produces, so its queue only ever shrinks. And packets left in the blink
-     * queue with nothing blinking: they are sent at whichever release happens
-     * next, by whichever module, describing a moment long gone.
-     */
     private void checkDrainStall() {
         if (Atlas.blinkManager == null) {
             return;
@@ -583,9 +417,7 @@ public class FlagDetector extends Module {
                 }
                 this.sentGround = c03.isOnGround();
                 this.sentTick = this.tickCounter;
-                /* A 1.8 client sends a click before the movement packet of
-                   its tick, so a server may judge it along either rotation:
-                   the one before (ray) or this one (ray-next). */
+
                 for (Placement placement : this.pendingPlacements.values()) {
                     if (placement.awaitingNext && placement.context != null) {
                         placement.awaitingNext = false;
@@ -616,11 +448,7 @@ public class FlagDetector extends Module {
                 }
             } else if (event.getPacket() instanceof C07PacketPlayerDigging) {
                 this.ticksSinceDig = 0;
-                /* Breaking a block this client placed produces the same air
-                   update from the server as a refused placement. Dropping the
-                   pending entry keeps the two apart -- in a game spent
-                   bridging and re-breaking, they would otherwise be the
-                   majority of what gets reported. */
+
                 C07PacketPlayerDigging dig = (C07PacketPlayerDigging) event.getPacket();
                 if (dig.getPosition() != null) {
                     Placement dug = this.pendingPlacements.remove(dig.getPosition());
@@ -628,14 +456,7 @@ public class FlagDetector extends Module {
                 }
             } else if (event.getPacket() instanceof C08PacketPlayerBlockPlacement) {
                 C08PacketPlayerBlockPlacement place = (C08PacketPlayerBlockPlacement) event.getPacket();
-                /* This packet is sent for every right-click against a block,
-                   not only for placements: opening a chest, using a bucket,
-                   striking a bed, right-clicking a wall with a sword. Direction
-                   255 removes only the clicks that hit no block at all, so on
-                   its own it leaves nearly every right-click looking like a
-                   placement awaiting confirmation. What distinguishes a real
-                   one is the item: nothing can be placed without a block in
-                   hand. */
+
                 ItemStack held = place.getStack();
                 boolean placingBlock = held != null && held.getItem() instanceof ItemBlock;
                 if (place.getPlacedBlockDirection() != 255 && place.getPosition() != null
@@ -666,15 +487,8 @@ public class FlagDetector extends Module {
             return;
         }
 
-        /* Everything below used to run right here, on the network thread:
-           pendingPlacements (a HashMap the tick iterates and prunes) had
-           entries removed underneath that iteration, implicated() wrote the
-           map FlagResponder reads on its tick, and the reports touched chat,
-           the HUD list and the log file. It is now handed to the client
-           thread. Scheduled here, it still runs ahead of vanilla's own
-           handling of the same packet -- which handlePosLook depends on, since
-           it compares the correction with where the player is before the
-           correction is applied. */
+        // pendingPlacements (a HashMap the tick iterates and prunes) had entries removed underneath that iteration, implicated wrote the map FlagResponder reads on its...
+
         final net.minecraft.network.Packet<?> received = event.getPacket();
         if (!(received instanceof S01PacketJoinGame || received instanceof S07PacketRespawn
                 || received instanceof S12PacketEntityVelocity || received instanceof S23PacketBlockChange
@@ -700,15 +514,12 @@ public class FlagDetector extends Module {
         }
 
         if (packet instanceof S07PacketRespawn) {
-            /* The respawn itself, and the world change a lobby send produces.
-               Both are followed by the server placing the player. */
             this.lastRespawnTick = this.tickCounter;
             flushBurst();
             return;
         }
 
         if (packet instanceof S45PacketTitle) {
-            /* A title with words in it; the timing and clear packets carry none. */
             net.minecraft.util.IChatComponent message = ((S45PacketTitle) packet).getMessage();
             if (message != null && !message.getUnformattedText().trim().isEmpty()) {
                 this.lastRoundTick = this.tickCounter;
@@ -717,7 +528,6 @@ public class FlagDetector extends Module {
         }
 
         if (packet instanceof S2BPacketChangeGameState) {
-            /* State 3: the game mode changed. */
             if (((S2BPacketChangeGameState) packet).getGameState() == 3) {
                 this.lastRoundTick = this.tickCounter;
             }
@@ -725,8 +535,6 @@ public class FlagDetector extends Module {
         }
 
         if (packet instanceof S39PacketPlayerAbilities) {
-            /* Being allowed to fly outside creative: the ghost a death or the
-               end of a round makes on most minigame servers. */
             S39PacketPlayerAbilities abilities = (S39PacketPlayerAbilities) packet;
             if (abilities.isAllowFlying() && !abilities.isCreativeMode()) {
                 this.lastRoundTick = this.tickCounter;
@@ -752,7 +560,6 @@ public class FlagDetector extends Module {
         handlePosLook((S08PacketPlayerPosLook) packet);
     }
 
-    /** Closest any other player's body came to the block being placed. */
     private void trackOccupancy(BlockPos pos, Placement placement) {
         if (mc.theWorld == null || mc.thePlayer == null) {
             return;
@@ -769,9 +576,7 @@ public class FlagDetector extends Module {
             if (player == mc.thePlayer) {
                 continue;
             }
-            /* Vertical distance is measured against the body, not the feet: a
-               player standing on the block below occupies the space a block
-               would go into. */
+
             double dx = player.posX - centreX;
             double dz = player.posZ - centreZ;
             double dy = 0.0;
@@ -787,11 +592,6 @@ public class FlagDetector extends Module {
         }
     }
 
-    /**
-     * A placement the server answered with air at the same position is a
-     * placement it refused. Anything else it might set there is a normal
-     * world update and is ignored.
-     */
     private void handleBlockChange(S23PacketBlockChange packet) {
         if (!this.detectRejects.getValue() || this.pendingPlacements.isEmpty()) {
             return;
@@ -807,19 +607,12 @@ public class FlagDetector extends Module {
             this.refusedAllSaid = false;
             return;
         }
-        /* The client places its own block immediately and waits to be
-           contradicted, so a refusal is only a refusal if there is something
-           there to take back. Where the click never produced a block -- it
-           opened a container, or the placement was against a face the client
-           itself rejected -- the position is already air and the server saying
-           so again changes nothing. */
+
         if (mc.theWorld == null || mc.theWorld.getBlockState(pos).getBlock() == Blocks.air) {
             logPlacement(placement, "NO-BLOCK");
             return;
         }
-        /* Refusals that say nothing about the click: a ghost, a respawn, a
-           teleport or a frozen client, a round starting or ending
-           (2026-10-13). Counted under their reason, like ignored corrections. */
+
         String quiet = quietReason();
         if (quiet == null && this.tickCounter - this.lastRoundTick < ROUND_GRACE) {
             quiet = "round-change";
@@ -837,10 +630,7 @@ public class FlagDetector extends Module {
             noteIgnored(quiet);
             return;
         }
-        /* Someone was standing where the block was going. Vanilla refuses
-           that, the server judges it against where they actually are, and at
-           this latency the client cannot know. Reported under its own name so
-           it stops being counted against the client's behaviour. */
+
         boolean occupied = placement.closestOpponent <= OCCUPIED_DISTANCE;
         logPlacement(placement, occupied ? "BODY" : "REJECT");
         if (!occupied) {
@@ -850,10 +640,7 @@ public class FlagDetector extends Module {
         if (placement.closestOpponent < Double.MAX_VALUE) {
             where += String.format(" &8| &7body %.2f", placement.closestOpponent);
         }
-        /* The refused block is known, and so is whose click sent it: that is
-           the cause, not a guess from what else happened in the window
-           (2026-10-04; the window capped a placing module at 52%, "unknown
-           48%"). A click by hand still goes through the window. */
+
         Attribution.Result attribution = placement.module != null
                 ? Attribution.direct(placement.module, "placed-this-block")
                 : attributeNow();
@@ -862,31 +649,6 @@ public class FlagDetector extends Module {
         emit(occupied ? "BLOCKED-BY-BODY" : "REJECT", 1, 0.0, context);
     }
 
-    /**
-     * States in which a position correction says nothing about this client.
-     *
-     * A correction is evidence only when the server and the client were both
-     * simulating the same moving player. Several ordinary states break that,
-     * and each of them produces corrections continuously rather than once:
-     *
-     *   SPECTATING. The server moves a spectator directly and repeatedly --
-     *   anchoring them on whoever they follow, passing them through blocks --
-     *   and every one of those arrives as the same packet a violation would.
-     *   Watching the end of a round therefore filled the log with flags for
-     *   movement the client never made.
-     *
-     *   DEAD, OR JUST ALIVE AGAIN. The death screen and the respawn are both
-     *   delivered as position packets, and the seconds after a respawn are the
-     *   server placing the player rather than disagreeing with them.
-     *
-     *   RIDING, OR FLYING. A vehicle's position is the server's to decide, and
-     *   a flying player is not being checked against the movement rules that
-     *   produce a correction in the first place.
-     *
-     *   SETTLING AFTER A TELEPORT. A deliberate move is followed by a short
-     *   train of smaller corrections while the two sides agree on where the
-     *   player landed. Those belong to the teleport, not to what came next.
-     */
     private String ignoreReason() {
         String quiet = quietReason();
         if (quiet != null) {
@@ -904,31 +666,11 @@ public class FlagDetector extends Module {
         return null;
     }
 
-    /**
-     * The quiet states for hits: as quietReason, but not the teleport grace.
-     * Hits the server ignores or cuts right after a setback are the very
-     * thing the damage checks look for (2026-10-13, owner: mitigation that
-     * was not reported).
-     */
     private String hitQuietReason() {
         String quiet = quietReason();
         return "post-teleport".equals(quiet) ? null : quiet;
     }
 
-    /**
-     * The states in which nothing the server objects to -- a correction, a
-     * refused block, a hit that did little or nothing -- says anything about
-     * this client (2026-10-13; corrections had most of these, refusals and
-     * hits none):
-     *
-     *   GHOST. A spectator, the dead, and the ghost most minigame servers
-     *   make of a player after a death or at the end of a round: allowed to
-     *   fly though not in creative, often invisible. Its movement and clicks
-     *   are not checked as a player's, and are refused or moved freely.
-     *   RESPAWN, TELEPORT. The server placing the player, and the settling
-     *   after it (see TELEPORT_GRACE).
-     *   STALL. The client froze (a tick over STALL_MS late) a moment ago.
-     */
     private String quietReason() {
         if (mc.thePlayer == null) {
             return null;
@@ -961,18 +703,14 @@ public class FlagDetector extends Module {
         this.ignoredTotal++;
     }
 
-    /** What the guards suppressed, so a quiet log can be told from a gagged one. */
-    /** Violations only -- teleports and body-blocked placements excluded. */
     public int violationCount() {
         return this.countLagback + this.countVertical + this.countReject;
     }
 
-    /** Milliseconds since the counters were last reset. */
     public long sessionMillis() {
         return System.currentTimeMillis() - this.sessionStart;
     }
 
-    /** Starts a fresh measurement period; used by whatever is comparing configs. */
     public void resetCounters() {
         resetSession();
     }
@@ -995,15 +733,11 @@ public class FlagDetector extends Module {
         String ignored = this.ignoreReason();
         if (ignored != null) {
             noteIgnored(ignored);
-            /* Any burst in progress is closed rather than left open: the next
-               real correction is a separate event, not a continuation of one
-               interrupted by a death. */
+
             flushBurst();
             return;
         }
-        /* Fields flagged relative carry a delta; the rest carry an absolute
-           target. Treating a relative packet as absolute would report a
-           displacement the size of the player's world coordinates. */
+
         Set<S08PacketPlayerPosLook.EnumFlags> flags = packet.func_179834_f();
         boolean relX = flags != null && flags.contains(S08PacketPlayerPosLook.EnumFlags.X);
         boolean relY = flags != null && flags.contains(S08PacketPlayerPosLook.EnumFlags.Y);
@@ -1017,8 +751,6 @@ public class FlagDetector extends Module {
 
         String label;
         if (distance >= teleportDistance.getValue()) {
-            /* Recorded whether or not teleports are shown: the grace period it
-               opens is about what follows, not about reporting this one. */
             this.lastTeleportTick = this.tickCounter;
             if (!showTeleports.getValue()) {
                 return;
@@ -1027,13 +759,6 @@ public class FlagDetector extends Module {
         } else if (distance < minDistance.getValue()) {
             return;
         } else if (!visited(mc.thePlayer.posX + dx, mc.thePlayer.posY + dy, mc.thePlayer.posZ + dz)) {
-            /* Pika moves every player to their spawn two to three seconds
-               after "Game starts in 1...", a few blocks from where they stood
-               in the cage. Under teleport-distance, it used to be filed as a
-               LAGBACK -- all six standing-still, purely horizontal LAGBACKs
-               in the logs of 09-23 and 09-24 were exactly this -- and fed to
-               the rate, the Brain and Adaptive as a violation. Like a
-               teleport, it opens the settling grace for what follows. */
             this.lastRelocateTick = this.tickCounter;
             label = "RELOCATE";
         } else if (Math.abs(dy) > horizontal * 2.0 && horizontal < 0.3) {
@@ -1042,8 +767,6 @@ public class FlagDetector extends Module {
             label = "LAGBACK";
         }
 
-        /* Weighed now, at the correction -- not when a burst is reported,
-           which can be a second later, with a different window of actions. */
         Attribution.Result attribution = attributeNow();
         String context = showContext.getValue() ? buildContext(horizontal, Math.abs(dy), attribution) : "";
 
@@ -1073,16 +796,6 @@ public class FlagDetector extends Module {
         }
     }
 
-    /**
-     * Whether the player has stood within VISITED_TOLERANCE of this point in
-     * the last HISTORY ticks, or stands there now.
-     *
-     * The current position counts because the newest one this client sent is
-     * not in the history until the next tick samples it, and it is the one a
-     * setback most often returns to. With no history at all nothing can be
-     * said, and the answer is yes: the correction keeps the kind it would
-     * have had before this check existed.
-     */
     private boolean visited(double x, double y, double z) {
         if (this.histFilled == 0) {
             return true;
@@ -1091,8 +804,7 @@ public class FlagDetector extends Module {
         if (squaredDistance(mc.thePlayer.posX - x, mc.thePlayer.posY - y, mc.thePlayer.posZ - z) <= limit) {
             return true;
         }
-        /* The ring fills from index 0, so while it is not yet full the filled
-           entries are exactly the first histFilled. */
+
         for (int i = 0; i < this.histFilled; i++) {
             if (squaredDistance(histX[i] - x, histY[i] - y, histZ[i] - z) <= limit) {
                 return true;
@@ -1109,30 +821,18 @@ public class FlagDetector extends Module {
         return Ping.own();
     }
 
-    /* Which modules were implicated, and when. The chat suffix says the same
-       thing in prose, but prose cannot be counted: anything that wants to act
-       on a repeated cause -- rather than print it and hope somebody notices --
-       needs the module named and the occurrence timestamped. */
     private final Map<String, ArrayDeque<Long>> implicated = new HashMap<String, ArrayDeque<Long>>();
 
-    /** How many flags named this module in the last {@code millis}. */
-    /** Every module that has been implicated at all, for a caller to filter. */
     public java.util.Set<String> implicatedNames() {
         return new java.util.HashSet<String>(this.implicated.keySet());
     }
 
-    /**
-     * Blame is about one connection (F-12). resetSession runs on every join,
-     * proxy hops included, but never cleared this, so FlagResponder could act
-     * on the last server's corrections on the next one. Cleared on every new
-     * session, whether or not this module is on.
-     */
     @EventTarget(whenDisabled = true)
     public void onSession(atlas.events.SessionEvent event) {
         if (event.getType() == atlas.events.SessionEvent.Type.START) {
             this.implicated.clear();
             atlas.management.ModuleHealth.resetSession();
-            /* Damage and whether health is shown are the server's. */
+
             this.damageWatch.reset();
             this.blockTrace.reset();
             this.hiddenHealthReported = false;
@@ -1167,24 +867,17 @@ public class FlagDetector extends Module {
         }
     }
 
-    /** The attribution for the last violation, for diagnostics. */
     private volatile Attribution.Result lastAttribution;
-    /* Set just before emit, taken by it: the attribution that goes with the
-       flag being emitted (a burst's is the one of its largest correction). */
+
     private Attribution.Result emitAttribution;
     private Attribution.Result burstAttribution;
 
-    /** Weighs what every module did in the blame window before now (Attribution). */
-    /**
-     * Once a tick: each target attacked lately, its health and flinch, to
-     * see what each landed hit took off it (util/DamageWatch).
-     */
     private void watchDamage() {
         if (!this.detectLowDamage.getValue() || mc.theWorld == null || mc.thePlayer == null) {
             return;
         }
         long now = System.currentTimeMillis();
-        /* A flinch answers an attack within a round trip and a little. */
+
         long window = Math.max(0, Ping.own()) + 350L;
         for (Integer id : this.damageWatch.watched()) {
             net.minecraft.entity.Entity entity = mc.theWorld.getEntityByID(id);
@@ -1194,9 +887,7 @@ public class FlagDetector extends Module {
             net.minecraft.entity.EntityLivingBase living = (net.minecraft.entity.EntityLivingBase) entity;
             this.blockTrace.record(id, now, living instanceof net.minecraft.entity.player.EntityPlayer
                     && ((net.minecraft.entity.player.EntityPlayer) living).isBlocking());
-            /* HealthUtil, not getHealth(): minigame servers often never send
-               other players' health in metadata, or send it once; the tab
-               list or the objective under the name is what they keep current. */
+
             this.damageWatch.setPrecision(
                     atlas.util.HealthUtil.SOURCE_ENTITY.equals(atlas.util.HealthUtil.source(living)) ? 0.0F : 1.0F);
             atlas.util.DamageWatch.Hit hit = this.damageWatch.tick(id,
@@ -1205,14 +896,6 @@ public class FlagDetector extends Module {
                 continue;
             }
             if (this.logFile.getValue()) {
-                /* Every hit, so a damage cut can be judged afterwards from the
-                   numbers rather than from memory (2026-10-13). */
-                /* dealt is per hit since 2026-10-15: the window's loss over the
-                   flinches in it (hits=, total=). */
-                /* blk-hit: a sword block seen within 2 ticks of the first
-                   flinch -- the flinch and the use flag both come from the
-                   server, so this is the state the hit met. blk-window: ticks
-                   blocking over the whole settle window (2026-10-16). */
                 int[] blkWindow = this.blockTrace.count(id, hit.at - 100L, now);
                 writeLog(String.format("HIT-DMG target=%s dealt=%.2f hits=%d total=%.2f expected=%s usual=%s health=%s weapon=%s"
                                 + " armour=%d blocking=%s blk-hit=%s blk-window=%d/%d",
@@ -1258,12 +941,6 @@ public class FlagDetector extends Module {
         this.damageWatch.forget(now, 5000L);
     }
 
-    /**
-     * HitCheck's verdict on one swing: landed, or dropped -- in range, in
-     * sight, out of the invulnerability window, and still no reaction from
-     * the server at all. A run of dropped ones is the other shape a "silent"
-     * flag takes: the hits are discarded instead of weakened.
-     */
     public void noteHitResult(boolean dropped, String target, double distance) {
         if (!this.isEnabled() || !this.detectLowDamage.getValue()) {
             return;
@@ -1290,16 +967,8 @@ public class FlagDetector extends Module {
         }
     }
 
-    /** How long after its last hit a mitigation is still shown. */
     public static final long MITIGATION_SHOW_MS = 20000L;
 
-    /**
-     * The least vanilla 1.8 lets a hit from this client take off this target
-     * right now (util/DamageModel): the held weapon, sharpness, strength and
-     * weakness, the target's armour and protection -- never a critical, so
-     * that a crit the server did not grant cannot make a fair hit look low.
-     * NaN when it cannot be known (the target is not a player).
-     */
     private float leastDamage(net.minecraft.entity.EntityLivingBase target) {
         if (!(target instanceof net.minecraft.entity.player.EntityPlayer) || mc.thePlayer == null) {
             return Float.NaN;
@@ -1326,9 +995,7 @@ public class FlagDetector extends Module {
                         .getEnchantmentLevel(net.minecraft.enchantment.Enchantment.protection.effectId, armour));
             }
         }
-        /* Blocking with a sword halves the hit, Resistance takes 20% a level
-           (2026-10-13). Both are visible here: the use flag and the effects
-           come with the other player's entity. */
+
         boolean blocking = ((net.minecraft.entity.player.EntityPlayer) target).isBlocking();
         net.minecraft.potion.PotionEffect resistance = target.getActivePotionEffect(net.minecraft.potion.Potion.resistance);
         return atlas.util.DamageModel.expected(weapon, sharpness,
@@ -1337,7 +1004,6 @@ public class FlagDetector extends Module {
                 resistance == null ? 0 : resistance.getAmplifier() + 1)[0];
     }
 
-    /** The item the server thinks is in hand: the slot last sent, else the one shown. */
     private ItemStack serverHeld() {
         if (this.serverSlot >= 0 && this.serverSlot < 9) {
             return mc.thePlayer.inventory.getStackInSlot(this.serverSlot);
@@ -1345,11 +1011,6 @@ public class FlagDetector extends Module {
         return mc.thePlayer.getHeldItem();
     }
 
-    /**
-     * What a hit is made with, for hits whose vanilla minimum is not known:
-     * the item, its sharpness, and strength and weakness. Hits are only
-     * compared with hits made the same way (DamageWatch).
-     */
     private String weaponBasis() {
         ItemStack held = serverHeld();
         StringBuilder basis = new StringBuilder(held == null ? "hand"
@@ -1372,12 +1033,10 @@ public class FlagDetector extends Module {
         return basis.toString();
     }
 
-    /** The mitigation check now (for the HUD); inactive when low-damage detection is off. */
     public atlas.util.DamageWatch.Mitigation mitigation() {
         return this.damageWatch.mitigation(System.currentTimeMillis(), MITIGATION_SHOW_MS);
     }
 
-    /** The current run of hits the server ignored outright. */
     public int droppedRun() {
         return this.damageWatch.droppedRun(System.currentTimeMillis());
     }
@@ -1391,17 +1050,6 @@ public class FlagDetector extends Module {
         return this.lastAttribution;
     }
 
-    /**
-     * Names the culprit for FlagResponder -- only when the evidence names one
-     * (plan step 12). This used to name every module that did anything in the
-     * window, once each, plus a list of modules this class knew by name if
-     * they were merely switched on; FlagResponder then switched off whichever
-     * collected the most names, which is whoever is busiest, not whoever
-     * causes corrections. The ledger now carries everything that list did
-     * (lag holds, knockback holds, Clutch and Scaffold placements, BedNuker
-     * digs), weighed by kind and time. Two modules close together, or nothing
-     * strong, names nobody.
-     */
     private void recordSuspects(Attribution.Result attribution) {
         if (attribution == null) {
             return;
@@ -1411,8 +1059,7 @@ public class FlagDetector extends Module {
         if (culprit != null) {
             implicate(culprit);
         }
-        /* The menu's health marks (2026-10-23, ModuleHealth): the same
-           verdict, counted apart from `implicated`, which FlagResponder trims. */
+
         long now = System.currentTimeMillis();
         if (culprit != null) {
             atlas.management.ModuleHealth.named(culprit, now);
@@ -1425,33 +1072,22 @@ public class FlagDetector extends Module {
         }
     }
 
-    /**
-     * What the client was doing when the flag arrived.
-     *
-     * Read from the packet stream rather than from the modules themselves, so
-     * a module acting indirectly -- Backtrack driving LagRange, Clutch
-     * placing through the same path as Scaffold -- is still visible. The lag
-     * queue is the one signal that names a culprit outright: nothing else in
-     * the client holds outgoing packets.
-     */
     private String blameSuffix(Attribution.Result attribution) {
         if (!this.blame.getValue()) {
             return "";
         }
         StringBuilder sb = new StringBuilder();
-        /* Everything held right now, by every holder (PacketHolds, plan step
-           13). This used to know two of the seven holders by name. */
+
         String holds = atlas.management.PacketHolds.describe();
         if (!holds.isEmpty()) {
             sb.append(" &8| &cholding ").append(holds).append("&7");
         }
-        /* PacketHub turned a holder away or made one let go just before (2026-10-18). */
+
         String hub = atlas.management.PacketHub.recent(3000L);
         if (hub != null) {
             sb.append(" &8| &chub ").append(hub).append("&7");
         }
-        /* A hold its holder never ended, ended by its lease shortly before:
-           the packets arrived at the server late and all at once. */
+
         atlas.management.PacketHolds.Expiry expiry = atlas.management.PacketHolds.lastExpiry();
         if (expiry != null && System.currentTimeMillis() - expiry.at <= 3000L) {
             sb.append(" &8| &clease ended ").append(System.currentTimeMillis() - expiry.at)
@@ -1466,9 +1102,7 @@ public class FlagDetector extends Module {
         if (this.ticksSinceKnockback <= 10) {
             sb.append(" &8| &7kb ").append(this.ticksSinceKnockback).append("t ago");
         }
-        /* Who did what in the moments before this, weighed (Attribution):
-           the verdict first, then the strongest candidates with their share
-           and the actions behind it, then the share left unexplained. */
+
         if (attribution != null && attribution.verdict != Attribution.Verdict.UNKNOWN) {
             sb.append(" &8| &e").append(attribution.describe(3)).append("&7");
         }
@@ -1476,18 +1110,12 @@ public class FlagDetector extends Module {
     }
 
     private String buildContext(double horizontalPush, double verticalPush, Attribution.Result attribution) {
-        /* Cleared per flag. Left standing, a correction with no travel data --
-           no ping reading, or too little history -- inherited the previous
-           flag's verdict and was filed under a kind it had not earned. */
         this.lastExceededTravel = false;
         StringBuilder sb = new StringBuilder();
         double speed = Math.sqrt(mc.thePlayer.motionX * mc.thePlayer.motionX
                 + mc.thePlayer.motionZ * mc.thePlayer.motionZ);
         sb.append(" &8| &7speed ").append(round(speed)).append("/t");
 
-        /* Sprint speed is only a meaningful ceiling on the ground. Knockback
-           routinely throws you faster than that through the air, so calling
-           it "over sprint" while airborne would flag every hit you take. */
         if (speed > SPRINT_SPEED && mc.thePlayer.onGround) {
             sb.append(" &c(over sprint)&7");
         }
@@ -1495,12 +1123,6 @@ public class FlagDetector extends Module {
         sb.append(mc.thePlayer.onGround ? " &8| &7ground" : " &8| &7air");
         sb.append(" &8| &7push h").append(round(horizontalPush)).append(" v").append(round(verticalPush));
 
-        /* Measured, not estimated: the distance actually covered while the
-           server's view was one round trip old. A correction no larger than
-           that is the server answering a position already superseded, which
-           is latency rather than a rejected move. Both axes are compared
-           separately because a fall diverges vertically far faster than
-           horizontally. */
         int ping = ping();
         if (ping > 0) {
             int ticks = (int) Math.ceil(ping / 50.0);
@@ -1512,13 +1134,6 @@ public class FlagDetector extends Module {
             sb.append(" &8| &7ping ").append(ping).append("ms");
 
             if (histFilled > ticks) {
-                /* Path length, not displacement. A player knocked back and
-                   running in again ends up near where they started, so the
-                   straight line between the two samples understates how far
-                   they actually went -- and understating travel is what makes
-                   an ordinary correction look like it exceeded it. Summing the
-                   per-tick steps measures the path the server was actually
-                   sent. */
                 double travelH = 0.0;
                 double travelV = 0.0;
                 for (int step = ticks; step > 0; step--) {
@@ -1533,8 +1148,6 @@ public class FlagDetector extends Module {
                         .append(" v").append(round(travelV))
                         .append(" in ").append(ticks).append("t");
 
-                // Small absolute allowance so a near-stationary player is not
-                // flagged by sub-block rounding.
                 boolean withinH = horizontalPush <= travelH * 1.2 + 0.2;
                 boolean withinV = verticalPush <= travelV * 1.2 + 0.2;
                 this.lastExceededTravel = !(withinH && withinV);
@@ -1552,12 +1165,7 @@ public class FlagDetector extends Module {
         if (burstCount <= 0) {
             return;
         }
-        /* The burst is cleared before it is reported, not after. Reporting
-           touches chat, a sound handler, the HUD list and a file, and anything
-           that throws in there used to leave the counter standing -- so the
-           next packet flushed the same burst again, and the one after that,
-           for as long as the failure lasted. Taking the state first means a
-           failed report costs one line, not an unbounded stream of them. */
+
         String label = burstLabel;
         int count = burstCount;
         double distance = burstMaxDistance;
@@ -1569,23 +1177,15 @@ public class FlagDetector extends Module {
         emit(label, count, distance, context, span);
     }
 
-    /** Counts the flag, then routes it to chat, the HUD, a sound and a file. */
     private void emit(String label, int count, double distance, String context) {
         emit(label, count, distance, context, 1L);
     }
 
     private static boolean isViolation(String label) {
-        /* A block refused because a body was in the way is the game's own rule
-           being applied to a position this client could not have known. It is
-           reported so the cause is visible, but it is not evidence of anything
-           and must not reach the counters, the rate, the blame or the alert --
-           counting it would make ordinary blocking-off at high latency look
-           like a client that keeps being caught. */
         return !"BLOCKED-BY-BODY".equals(label) && !"TELEPORT".equals(label)
                 && !"RELOCATE".equals(label) && !isClientFault(label);
     }
 
-    /** The client contradicting itself; see countClientFault. */
     private static boolean isClientFault(String label) {
         return "TIMER-ORPHAN".equals(label) || "DRAIN-STALL".equals(label);
     }
@@ -1596,8 +1196,6 @@ public class FlagDetector extends Module {
         if ("BLOCKED-BY-BODY".equals(label)) {
             this.countBlockedByBody += count;
         } else if (isClientFault(label)) {
-            /* Before the else below, which would otherwise file these as
-               REJECTs and put them in the flag rate. */
             this.countClientFault += count;
         } else if ("LAGBACK".equals(label)) {
             this.countLagback += count;
@@ -1606,8 +1204,6 @@ public class FlagDetector extends Module {
         } else if ("TELEPORT".equals(label)) {
             this.countTeleport += count;
         } else if ("RELOCATE".equals(label)) {
-            /* Before the else below, which files anything it does not name as
-               a REJECT. */
             this.countRelocated += count;
         } else if ("LOW-DAMAGE".equals(label)) {
             this.countLowDamage += count;
@@ -1633,10 +1229,7 @@ public class FlagDetector extends Module {
 
         if (isViolation(label)) {
             recordSuspects(attribution);
-            /* Handed to the long-term record under a key derived from what was
-               observable, not from a list of known kinds. A server that starts
-               objecting to something this client has never seen produces a new
-               key by itself and begins accumulating evidence immediately. */
+
             Adaptive.observeFlag(signatureFor(label), count);
         }
         if (this.chat.getValue()) {
@@ -1657,17 +1250,6 @@ public class FlagDetector extends Module {
         }
     }
 
-    /**
-     * A compact key for what kind of flag this was.
-     *
-     * Built from the label and the circumstances rather than chosen from an
-     * enumeration, so the set of kinds grows on its own. The features are the
-     * ones that survive being compared across servers: what the player was
-     * doing, whether a push preceded it, and whether the correction exceeded
-     * what latency alone could explain. Anything finer -- exact distances,
-     * coordinates, timings -- would make every flag its own kind and the
-     * statistics would never accumulate.
-     */
     private String signatureFor(String label) {
         StringBuilder sb = new StringBuilder(label);
         if (mc.thePlayer == null) {
@@ -1720,19 +1302,14 @@ public class FlagDetector extends Module {
         return "&e";
     }
 
-    /** One file per session, appended to, so runs can be compared afterwards. */
     private void writeLog(String line) {
         if (this.logTarget == null) {
             this.logTarget = new File(LOG_DIR, "flags-" + FILE_STAMP.format(new Date()) + ".txt");
         }
-        /* Written on AsyncLog's thread: a file opened mid-tick is a stall. */
+
         AsyncLog.append(this.logTarget, LINE_STAMP.format(new Date()) + "  " + line);
     }
 
-    /* What the server was last told: the position and rotation it judges a
-       placement against. Vanilla's right-click placements are sent before the
-       tick's movement packet, a module's in POST after it -- either way the
-       last one sent is the one the server has. */
     private double sentX, sentY, sentZ;
     private float sentYaw, sentPitch, sentYawBefore, sentPitchBefore;
     private boolean sentGround;
@@ -1740,22 +1317,11 @@ public class FlagDetector extends Module {
     private int lastPlaceTick = -1000;
     private java.io.File placeTarget;
 
-    /**
-     * One place-log line, up to the outcome: key=value fields, | separated.
-     *
-     * ray: whether the rotation the server has, from the eyes where it has
-     * them, reaches the clicked block, and on which face -- what a placement
-     * check can verify. face: the face the click claimed. rot: the turn in the
-     * last rotation sent. gap: ticks since the previous placement. The rest is
-     * the player's state and what was running.
-     */
-    /** Where the rotation and position last sent reach on the clicked block: miss, another side, or the face (with the distance to the claimed point). */
     private String rayText(BlockPos clicked, net.minecraft.util.EnumFacing face, net.minecraft.util.Vec3 hit) {
         double eyeY = this.sentY + (mc.thePlayer.isSneaking() ? 1.54 : 1.62);
         return rayText(new net.minecraft.util.Vec3(this.sentX, eyeY, this.sentZ), clicked, face, hit);
     }
 
-    /** The same from given eyes, along the rotation last sent. */
     private String rayText(net.minecraft.util.Vec3 eyes, BlockPos clicked, net.minecraft.util.EnumFacing face,
                            net.minecraft.util.Vec3 hit) {
         float yawRad = -this.sentYaw * 0.017453292F - (float) Math.PI;
@@ -1789,12 +1355,7 @@ public class FlagDetector extends Module {
                 mods.append(mods.length() == 0 ? "" : ",").append(module.getName());
             }
         }
-        /* self: the block against the player's box where the server has it
-           (the last position sent) -- a block placed into it is refused --
-           as the vertical clearance of the feet over the block's top, when
-           the two overlap across; "-" when they do not. feet: the same from
-           where the client has the player now. held: packets FakeLag and the
-           blink manager were holding. */
+
         double half = 0.3;
         boolean across = this.sentX + half > target.getX() && this.sentX - half < target.getX() + 1
                 && this.sentZ + half > target.getZ() && this.sentZ - half < target.getZ() + 1;
@@ -1852,8 +1413,6 @@ public class FlagDetector extends Module {
                 total(), this.countLagback, this.countVertical, this.countReject,
                 this.countTeleport, perMinute());
         if (this.countClientFault > 0) {
-            /* Only when non-zero: a clean session should look exactly as it
-               did before these existed. */
             header += String.format("  §dBUG%d", this.countClientFault);
         }
         java.util.List<String> lines = new java.util.ArrayList<String>();
@@ -1868,9 +1427,7 @@ public class FlagDetector extends Module {
                 if (age > fade) {
                     break;
                 }
-                /* Newest lines are opaque and older ones dim, so a burst that
-                   just happened is separable from one a while ago without
-                   reading the timestamps. */
+
                 int alpha = (int) (255 - 195 * ((double) age / fade));
                 if (alpha < 60) {
                     alpha = 60;
@@ -1882,14 +1439,13 @@ public class FlagDetector extends Module {
             }
         }
 
-        /* The panel's extent, for the HUD editor and the background. */
         int widest = mc.fontRendererObj.getStringWidth(header);
         for (String line : lines) {
             widest = Math.max(widest, mc.fontRendererObj.getStringWidth(line) + 2);
         }
         float left = right ? sr.getScaledWidth() - margin - widest : margin;
         float height = lines.isEmpty() ? 9.0F : 11.0F + lines.size() * 10.0F - 1.0F;
-        /* Resized about the corner it is placed from. */
+
         float s = this.hudScale.getValue();
         float pivotX = right ? sr.getScaledWidth() - margin : margin;
         float[] area = atlas.ui.hud.HudLayout.scaledRect(pivotX, y, s, left - 2.0F, y - 2.0F, widest + 4.0F,
@@ -1928,11 +1484,6 @@ public class FlagDetector extends Module {
         }
     }
 
-    /**
-     * The side to draw on. AUTO mirrors the arraylist: the HUD module exposes
-     * which corner it occupies, so taking the other one needs no measurement
-     * of how tall the list currently is.
-     */
     private boolean alignRight() {
         int mode = this.hudAlign.getValue();
         if (mode == 1) {
@@ -1945,7 +1496,6 @@ public class FlagDetector extends Module {
         return hud != null && hud.isEnabled() && hud.posX.getValue() == 0;
     }
 
-    /** Left edge for one line, so right-aligned text ends at the margin. */
     private int lineX(ScaledResolution sr, String line, int margin, boolean right) {
         if (!right) {
             return margin;
@@ -1953,7 +1503,6 @@ public class FlagDetector extends Module {
         return sr.getScaledWidth() - margin - mc.fontRendererObj.getStringWidth(line);
     }
 
-    /** Chat colour codes rendered directly, for the HUD path. */
     private static String sectionOf(String label) {
         return colourOf(label).replace('&', '§');
     }

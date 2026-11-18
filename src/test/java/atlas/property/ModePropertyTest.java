@@ -6,9 +6,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** ModeProperty.hide / alias (2026-10-08): fewer modes in the menus, old configs still load. */
 public class ModePropertyTest {
-
     private static ModeProperty sample() {
         return new ModeProperty("m", 0, new String[]{"A", "B", "C", "D"}).hide("B", "D").alias("OldC", "C");
     }

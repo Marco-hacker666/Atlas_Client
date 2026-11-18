@@ -1,9 +1,7 @@
 package atlas.module.modules;
 
 // Ported from OpenSkid (GPL-3.0), itself adapted from MiauMinus ghost/NoClickDelay
-// (leftClickCounter reset pattern). Reflection is used because no accessor for
-// the field exists in this client, and it is guarded so a mapping change cannot
-// break the tick loop.
+
 import java.lang.reflect.Field;
 
 import atlas.event.EventTarget;

@@ -9,40 +9,20 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Where each HUD element was drawn on the last frame, and how to move it.
- *
- * A HUD module calls {@link #report} after drawing, with the rectangle it
- * covered (in scaled screen pixels) and a {@link Mover} built over the settings
- * that store its position. The HUD editor reads these back to draw the frames
- * and to drag the elements. Moving is done by whole-pixel deltas, so an element
- * follows the pointer exactly whatever its own position formula is (an anchor
- * and an offset, a right-hand margin, a free position), as long as the setting
- * moves the element one pixel per unit -- which is true of every element that
- * reports here.
- *
- * One set of rules for every element (2026-11-09): each can be dragged, and
- * each can be scaled -- an element that reports a {@link Scaler} is resized in
- * the editor with the mouse wheel, through the same setting its menu shows.
- */
 public final class HudLayout {
-    /** Moves an element; returns how far it really moved, since a setting may be at its limit. */
     public interface Mover {
         int[] moveBy(int dx, int dy);
 
-        /** Whether the element is still where it was declared (never moved); MobileHud only moves those. */
         default boolean atDefault() {
             return false;
         }
     }
 
-    /** Reads and changes an element's size; set keeps the value inside the setting's range. */
     public interface Scaler {
         float get();
 
         void set(float value);
 
-        /** The size the setting was declared with; NaN when not known. */
         default float defaultValue() {
             return Float.NaN;
         }
@@ -56,7 +36,7 @@ public final class HudLayout {
         public float width;
         public float height;
         public Mover mover;
-        /** Null for an element that cannot be resized. */
+
         public Scaler scaler;
         long seenAt;
 
@@ -69,7 +49,6 @@ public final class HudLayout {
         }
     }
 
-    /** An element counts as on screen if it reported this recently. */
     private static final long VISIBLE_MS = 250L;
     private static final Map<String, Element> ELEMENTS = new LinkedHashMap<String, Element>();
     private static boolean editing;
@@ -77,7 +56,6 @@ public final class HudLayout {
     private HudLayout() {
     }
 
-    /** True while the HUD editor is open: elements that hide behind menus should keep drawing. */
     public static boolean isEditing() {
         return editing;
     }
@@ -90,7 +68,6 @@ public final class HudLayout {
         report(id, label, x, y, width, height, mover, null);
     }
 
-    /** As {@link #report(String, String, float, float, float, float, Mover)}, for an element that can be resized. */
     public static void report(String id, String label, float x, float y, float width, float height, Mover mover,
                               Scaler scaler) {
         if (width <= 0.0F || height <= 0.0F || mover == null) {
@@ -109,11 +86,11 @@ public final class HudLayout {
         element.mover = mover;
         element.scaler = scaler;
         element.seenAt = System.currentTimeMillis();
-        /* Anchors (2026-10-18): kept in place through a screen change. */
+
         net.minecraft.client.gui.ScaledResolution sr =
                 new net.minecraft.client.gui.ScaledResolution(net.minecraft.client.Minecraft.getMinecraft());
         HudAnchors.track(element, sr.getScaledWidth(), sr.getScaledHeight());
-        /* Phones (2026-11-11): the first time an element is seen there, out of the way of the touch buttons. */
+
         if (!editing) {
             MobileHud.consider(element, sr.getScaledWidth(), sr.getScaledHeight());
         }
@@ -130,11 +107,6 @@ public final class HudLayout {
         return out;
     }
 
-    /**
-     * A mover over two integer settings. A sign of 1 means a larger value moves
-     * the element right (or down); -1 means it moves it left (or up), as with a
-     * right-hand margin. Either setting may be null to lock that axis.
-     */
     public static Mover ints(final IntProperty xSetting, final int xSign, final IntProperty ySetting, final int ySign) {
         return new Mover() {
             @Override
@@ -150,7 +122,6 @@ public final class HudLayout {
         };
     }
 
-    /** A mover over a {@link DragProperty}, which stores a free position. */
     public static Mover drag(final DragProperty setting) {
         return new Mover() {
             @Override
@@ -171,7 +142,6 @@ public final class HudLayout {
         };
     }
 
-    /** A scaler over a size setting. */
     public static Scaler scale(final FloatProperty setting) {
         if (setting == null) {
             return null;
@@ -195,13 +165,6 @@ public final class HudLayout {
         };
     }
 
-    /**
-     * Draws what follows scaled by {@code s} about the screen point (px, py),
-     * so code written in screen pixels keeps working; pair with
-     * {@link #endScaled()}. Text, items and HudPanel shapes follow the
-     * transform; shaders placed in raw screen pixels (RoundedUtils, BlurUtils)
-     * do not, so those are given {@link #scaledRect} coordinates instead.
-     */
     public static void beginScaled(float px, float py, float s) {
         net.minecraft.client.renderer.GlStateManager.pushMatrix();
         net.minecraft.client.renderer.GlStateManager.translate(px, py, 0.0F);
@@ -213,12 +176,10 @@ public final class HudLayout {
         net.minecraft.client.renderer.GlStateManager.popMatrix();
     }
 
-    /** Where the rectangle (x, y, w, h) ends up when scaled by s about (px, py): {x, y, w, h}. */
     public static float[] scaledRect(float px, float py, float s, float x, float y, float w, float h) {
         return new float[]{px + (x - px) * s, py + (y - py) * s, w * s, h * s};
     }
 
-    /** A size kept inside its range and rounded to a hundredth, so the wheel lands on round numbers. */
     static float clampScale(float value, float minimum, float maximum) {
         float rounded = Math.round(value * 100.0F) / 100.0F;
         return Math.max(minimum, Math.min(maximum, rounded));

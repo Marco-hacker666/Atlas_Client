@@ -5,12 +5,6 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
 
-/**
- * Time before reacting to a target (2026-10-25). A target never seen, or not
- * for reacquireWindow, costs a new-target reaction; one seen again within it
- * a (shorter) reacquire; changing from one target to another a switch. Until
- * the time is up the caller does not aim or click. Targets are entity ids.
- */
 public final class Reaction {
     public static final int KIND_NONE = 0;
     public static final int KIND_NEW = 1;
@@ -33,7 +27,6 @@ public final class Reaction {
         this.lostAt.clear();
     }
 
-    /** One draw in [min, max] by the profile's shape. */
     public static long draw(int min, int max, int shape, Random random) {
         int low = Math.max(0, Math.min(min, max));
         int high = Math.max(low, Math.max(min, max));
@@ -54,10 +47,6 @@ public final class Reaction {
         return Math.round(Math.max(low, Math.min(high, value)));
     }
 
-    /**
-     * Whether the reaction to {@code target} (an entity id; Integer.MIN_VALUE
-     * for none) is over at {@code now}.
-     */
     public boolean ready(int target, long now, HumanProfile p) {
         if (target == Integer.MIN_VALUE) {
             if (this.current != Integer.MIN_VALUE) {

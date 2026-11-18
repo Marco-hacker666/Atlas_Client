@@ -9,9 +9,7 @@ import java.util.List;
 
 import static org.junit.Assert.*;
 
-/** Evidence-weighted attribution of a correction (plan step 12, 2026-09-28). */
 public class AttributionTest {
-
     private static final long WINDOW = 2000L;
     private long now;
 
@@ -21,7 +19,6 @@ public class AttributionTest {
         this.now = System.currentTimeMillis();
     }
 
-    /** Notes {@code times} actions and returns the ledger's records. */
     private static void act(String module, String kind, int times) {
         for (int i = 0; i < times; i++) {
             ActionLedger.note(module, kind);
@@ -50,8 +47,6 @@ public class AttributionTest {
 
     @Test
     public void manyEntityPacketsDoNotOutweighOneOwnMovementHold() {
-        /* 09:41:16 on 2026-09-28: "Backtrackx41 BLINKx2". Backtrack held other
-           players' packets; Blink held this player's own movement. */
         act("BackTrack", "held-recv", 41);
         act("Blink", "held-send", 2);
         Attribution.Result result = attribute();
@@ -62,7 +57,6 @@ public class AttributionTest {
 
     @Test
     public void busyButHarmlessIsNotACulprit() {
-        /* A fight: clicks and swings, and entity packets held -- nothing that moves us. */
         act("AutoClicker", "attack", 6);
         act("AutoClicker", "swing", 6);
         act("BackTrack", "held-recv", 30);
@@ -102,7 +96,7 @@ public class AttributionTest {
         act("New", "held-send", 1);
         records.addAll(ActionLedger.records(WINDOW));
         long at = records.get(0).at;
-        /* Seen from 1.5 s after both: equal. Now pretend "Old" was 1.5 s earlier. */
+
         Attribution.Result result = Attribution.attribute(records, at + 1500L, WINDOW);
         assertEquals(result.candidates.get(0).score, result.candidates.get(1).score, 0.2);
         Attribution.Result fresh = Attribution.attribute(records, at, WINDOW);
@@ -153,8 +147,6 @@ public class AttributionTest {
                 Attribution.attribute(Collections.<ActionLedger.Record>emptyList(), this.now, WINDOW).verdict);
     }
 
-    /* 2026-10-04: a refused block whose placing module is known is blamed on
-       it outright, nothing left to "unknown". */
     @Test
     public void aDirectCauseIsSingleWithNothingUnknown() {
         Attribution.Result result = Attribution.direct("Clutch", "placed-this-block");

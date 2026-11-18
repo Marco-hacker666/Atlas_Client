@@ -15,7 +15,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(targets = "net.minecraft.network.NetworkManager$5")
 public class MixinNetworkManager_5 {
-
   @Inject(method = "initChannel", at = @At("TAIL"), remap = false)
   private void onInitChannel(Channel channel, CallbackInfo ci) {
     if (channel instanceof SocketChannel

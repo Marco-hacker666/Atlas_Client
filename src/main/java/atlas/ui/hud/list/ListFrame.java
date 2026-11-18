@@ -3,12 +3,8 @@ package atlas.ui.hud.list;
 import java.util.ArrayList;
 import java.util.List;
 
-/** One frame of the module list, worked out: what to draw, in order, and the space it takes (2026-11-14). */
 public final class ListFrame {
-
-    /** A rectangle or a line of text. */
     public static final class Op {
-        /** Null for a rectangle. */
         public final String text;
         public final float x1;
         public final float y1;
@@ -18,7 +14,7 @@ public final class ListFrame {
         public final int corners;
         public final int argb;
         public final boolean shadow;
-        /** A background: what the game blurs behind and glows round. */
+
         public final boolean backing;
 
         Op(String text, float x1, float y1, float x2, float y2, float radius, int corners, int argb, boolean shadow,
@@ -37,12 +33,9 @@ public final class ListFrame {
     }
 
     public final List<Op> ops = new ArrayList<Op>();
-    /**
-     * Each row's area in the row's colour, at the row's own fade: not drawn by {@link #paint}. What the game glows
-     * round, whether or not the row has a background.
-     */
+
     public final List<Op> bodies = new ArrayList<Op>();
-    /** The box round everything drawn; all zero for an empty list. */
+
     public float minX;
     public float minY;
     public float maxX;
@@ -86,7 +79,6 @@ public final class ListFrame {
         this.maxY = Math.max(this.maxY, y2);
     }
 
-    /** Draws everything, in order. */
     public void paint(ListPainter painter) {
         for (Op op : this.ops) {
             if (op.text == null) {
@@ -97,7 +89,6 @@ public final class ListFrame {
         }
     }
 
-    /** Draws only the backgrounds, each in {@code argb}: the shape the game blurs behind or glows round. */
     public void paintBacking(ListPainter painter, int argb) {
         for (Op op : this.ops) {
             if (op.backing) {
@@ -106,7 +97,6 @@ public final class ListFrame {
         }
     }
 
-    /** Draws each row's area in its colour at {@code strength} (0 to 1) of its own opacity: the glow's shape. */
     public void paintGlow(ListPainter painter, float strength) {
         for (Op op : this.bodies) {
             float alpha = (op.argb >>> 24) / 255.0F * Math.max(0.0F, Math.min(1.0F, strength));

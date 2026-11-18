@@ -19,7 +19,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @SideOnly(Side.CLIENT)
 @Mixin(value = {PlayerControllerMP.class}, priority = 9999)
 public abstract class MixinPlayerControllerMP {
-
     @Inject(
             method = "attackEntity",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/PlayerControllerMP;syncCurrentPlayItem()V"),
@@ -27,15 +26,13 @@ public abstract class MixinPlayerControllerMP {
     private void attackEntity(
             EntityPlayer entityPlayer, Entity targetEntity, CallbackInfo callbackInfo
     ) {
-        /* Hitflick sends this hit itself a tick later, behind the turned look. Held here, before the event, so
-           the modules that watch hits see the one that goes out, once. */
         if (atlas.module.modules.Hitflick.holdsHit(targetEntity)) {
             callbackInfo.cancel();
             return;
         }
         AttackEvent event = new AttackEvent(targetEntity);
         EventManager.call(event);
-        /* A listener may drop a hit the server would not count (Clutch, 2026-10-22). */
+
         if (event.isCancelled()) {
             callbackInfo.cancel();
         }

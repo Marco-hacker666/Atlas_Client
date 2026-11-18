@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): removes the hit and jump delays for faster
-// combat movement, with an opt-out while Scaffold is running.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.lang.reflect.Field;
 
 import atlas.Atlas;

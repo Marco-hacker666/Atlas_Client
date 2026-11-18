@@ -7,10 +7,6 @@ import net.minecraft.util.EnumFacing;
 
 import java.util.Locale;
 
-/**
- * Digging: status "START_DESTROY_BLOCK", "ABORT_DESTROY_BLOCK", "STOP_DESTROY_BLOCK", "DROP_ALL_ITEMS",
- * "DROP_ITEM" or "RELEASE_USE_ITEM"; facing "DOWN", "UP", "NORTH", "SOUTH", "WEST" or "EAST".
- */
 public class C07 extends CPacket {
     public Vec3 position;
     public String status;

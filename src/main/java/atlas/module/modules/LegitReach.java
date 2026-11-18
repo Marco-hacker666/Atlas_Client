@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): a small, legit-only reach widening with
-// conservative caps (never past 3.4/3.5) and an optional chance gate.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.util.Random;
 
 import atlas.event.EventTarget;

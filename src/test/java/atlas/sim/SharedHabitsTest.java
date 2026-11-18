@@ -10,7 +10,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class SharedHabitsTest {
-
     @Test
     public void namesAreOneAndCrackedOnesApart() {
         assertEquals(SharedHabits.key("Steve", false), SharedHabits.key("steve", false));
@@ -42,7 +41,7 @@ public class SharedHabitsTest {
         }
         assertEquals(43.0 / 9.0, shared.reaction(key, 5.0), 1.0E-9);
         assertEquals(9.0, shared.shots(key), 1.0E-9);
-        /* A new answer from the relay already holds what we sent: ours since is dropped. */
+
         shared.fetched(key, counts, 40.0, 8.0);
         assertEquals(8.0, shared.shots(key), 1.0E-9);
     }

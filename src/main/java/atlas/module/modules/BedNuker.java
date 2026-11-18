@@ -64,7 +64,6 @@ public class BedNuker extends Module {
     private int tickCounter = 0;
     private float breakProgress = 0.0F;
 
-    /** For scripts (Raven's modules.getBedAuraPosition / getBedAuraProgress), 2026-11-03: read only. */
     public BlockPos getTargetBed() {
         return this.targetBed;
     }
@@ -80,8 +79,7 @@ public class BedNuker extends Module {
     private long whitelistScanAt = -1L;
     private int breakCooldown = 0;
     private BlockPos ownBedHead = null;
-    /* The dig log (2026-10-20): each START and STOP, and whether the block was really gone 0.6 s later, in
-       config/Atlas/bednuker-*.txt, to line up with the server's flags. */
+
     private static final java.io.File LOG_DIR = new java.io.File("./config/Atlas/");
     private static final java.text.SimpleDateFormat FILE_STAMP = new java.text.SimpleDateFormat("yyyyMMdd-HHmmss");
     private static final java.text.SimpleDateFormat LINE_STAMP = new java.text.SimpleDateFormat("HH:mm:ss.SSS");
@@ -91,11 +89,7 @@ public class BedNuker extends Module {
     private long checkAt;
     private String checkWhat = "";
     private BlockPos ownBedFoot = null;
-    /* 2026-10-31 (a player: "beds with nothing round them are not dug"). The bed taken as ours was looked for
-       again at every teleport -- a lagback beside an enemy bed made that bed ours -- and only while this was
-       on, so switching it on beside an enemy bed did the same. Now it is looked for whether this is on or
-       not, in the first three seconds after a spawn (the chunks may come late), and once found it stays
-       ours until a respawn or a new world; when it is broken, no other bed becomes ours. */
+
     private volatile boolean ownBedPending = false;
     private volatile boolean ownBedRelocate = false;
     private boolean ownBedLocked = false;
@@ -106,41 +100,19 @@ public class BedNuker extends Module {
     public final BooleanProperty groundSpeed = new BooleanProperty("ground-spoof", false);
     public final ModeProperty ignoreVelocity = new ModeProperty("ignore-velocity", 0, new String[]{"NONE", "CANCEL", "DELAY"});
     public final BooleanProperty surroundings = new BooleanProperty("surroundings", true);
-    /* 2026-10-21 (owner: "a switch to dig from the outside in"). Off: dig the easiest block touching the bed
-       (the inner layer). On: dig the first block on the line from the eyes to the bed, layer by layer
-       from the side facing the player, until the bed is in the open. */
+
     public final BooleanProperty outsideFirst = new BooleanProperty("outside-first", false, this.surroundings::getValue);
     public final BooleanProperty toolCheck = new BooleanProperty("tool-check", true);
     public final BooleanProperty whiteList = new BooleanProperty("whitelist", true);
 
-    /* Never break your own bed.
-       The whitelist above cannot do this job: it only fills after a Hypixel
-       specific chat line, so on any other server it stays empty, and even
-       when it does run it protects every bed within 25 blocks including the
-       enemy's. Your bed is instead identified by being the one nearest to
-       where you spawn, which holds on every Bedwars implementation and needs
-       no server specific text. */
     public final BooleanProperty protectOwnBed = new BooleanProperty("protect-own-bed", true);
     public final IntProperty ownBedRadius = new IntProperty("own-bed-radius", 20, 5, 40);
     public final BooleanProperty swing = new BooleanProperty("swing", true);
 
-    /* Vanilla sets destroyDelay = 5 ticks after every successful break in
-       PlayerControllerMP, so chaining the next block immediately is faster
-       than the game can go. LiquidBounce's PacketMine uses 6 for the same
-       reason and calls out network variance as the motivation. This applied
-       only to beds before -- surrounding blocks were broken back to back
-       with no cooldown at all. */
     public final IntProperty postBreakDelay = new IntProperty("post-break-delay", 6, 0, 20);
 
-    /* Extra progress required beyond the normal threshold. The server runs
-       its own break timer; finishing before it agrees is what "breaking too
-       fast" means. A margin trades a little speed for tolerance when the
-       client and server disagree, which they do more the higher the ping. */
     public final FloatProperty breakMargin = new FloatProperty("break-margin", 0.0F, 0.0F, 1.0F);
 
-    /* Abandoning a dig without telling the server leaves it believing the
-       block is still being mined, so the next START on another block arrives
-       while one is already open. */
     public final BooleanProperty abortOnDrop = new BooleanProperty("abort-on-drop", true);
     public final ModeProperty moveFix = new ModeProperty("move-fix", 1, new String[]{"NONE", "SILENT", "STRICT", "REAL"});
     public final ModeProperty showTarget = new ModeProperty("show-target", 1, new String[]{"NONE", "DEFAULT", "HUD"});
@@ -148,9 +120,6 @@ public class BedNuker extends Module {
 
     private void resetBreaking() {
         if (this.targetBed != null && mc.theWorld != null && mc.thePlayer != null) {
-            /* Only when a dig was actually opened (stage 1) and not already
-               closed by a STOP (stage 2); aborting a dig the server never
-               heard about is itself an unexpected packet. */
             if (this.abortOnDrop.getValue() && this.breakStage == 1) {
                 PacketUtil.sendPacket(new C07PacketPlayerDigging(
                         Action.ABORT_DESTROY_BLOCK, this.targetBed, this.getHitFacing(this.targetBed)));
@@ -180,9 +149,6 @@ public class BedNuker extends Module {
             return;
         }
 
-        /* 2026-10-31: only the bed nearest at the start -- ours -- and its other half. Every bed within 25
-           blocks went on the list, a neighbour's too, so on a small map the bed a rush reaches first, the one
-           with nothing round it yet, was never dug. */
         int sX = MathHelper.floor_double(mc.thePlayer.posX);
         int sY = MathHelper.floor_double(mc.thePlayer.posY + (double) mc.thePlayer.getEyeHeight());
         int sZ = MathHelper.floor_double(mc.thePlayer.posZ);
@@ -212,7 +178,6 @@ public class BedNuker extends Module {
         }
     }
 
-    /** Both halves of a bed: HEAD and FOOT sit in adjacent blocks. */
     private BlockPos otherBedHalf(BlockPos pos) {
         IBlockState state = mc.theWorld.getBlockState(pos);
         if (!(state.getBlock() instanceof BlockBed)) {
@@ -224,14 +189,6 @@ public class BedNuker extends Module {
                 : pos.offset(facing);
     }
 
-    /**
-     * Marks the bed closest to the current position as ours.
-     *
-     * Called right after a spawn, where "closest bed" and "our bed" are the
-     * same thing on every Bedwars map. Scanning a flat slab rather than a
-     * cube keeps this to a few thousand lookups instead of the 130k the
-     * whitelist scan costs.
-     */
     private boolean findOwnBed() {
         if (mc.theWorld == null || mc.thePlayer == null) {
             return false;
@@ -267,7 +224,6 @@ public class BedNuker extends Module {
         return false;
     }
 
-    /** Runs whether this is on or not: finds our bed after a spawn, forgets it at a respawn, drops it once broken. */
     private void updateOwnBed() {
         if (mc.theWorld == null || mc.thePlayer == null) {
             return;
@@ -291,7 +247,7 @@ public class BedNuker extends Module {
                 this.ownBedRetryTicks = 0;
             }
         }
-        // Our bed being gone means it was broken; stop reserving the spot (and take no other bed for ours).
+
         if (this.ownBedHead != null
                 && !(mc.theWorld.getBlockState(this.ownBedHead).getBlock() instanceof BlockBed)) {
             this.ownBedHead = null;
@@ -353,16 +309,6 @@ public class BedNuker extends Module {
         }
     }
 
-    /*
-     * 2026-10-20 (owner: "BedNuker digs but gets flagged / the block will not
-     * break"). The face used to come from a look ray toward the block, and
-     * when that ray met another block first -- the bed's cover, a corner --
-     * the face reported was that other block's. A dig whose face is not the
-     * target's side toward the player is what Grim's PositionBreak and
-     * WrongBreak refuse, and a refused dig is a block that does not break.
-     * Now: the ray's face only if the ray lands on the target itself, else
-     * the target's face pointing at the eye.
-     */
     private EnumFacing getHitFacing(BlockPos blockPos) {
         net.minecraft.util.Vec3 eye = mc.thePlayer.getPositionEyes(1.0F);
         net.minecraft.util.Vec3 centre = new net.minecraft.util.Vec3(blockPos.getX() + 0.5, blockPos.getY() + 0.5,
@@ -375,7 +321,6 @@ public class BedNuker extends Module {
         return facingToward(blockPos, eye);
     }
 
-    /** The face of the block at pos whose side the point is on, by the largest offset from the centre. */
     static EnumFacing facingToward(BlockPos pos, net.minecraft.util.Vec3 point) {
         double dx = point.xCoord - (pos.getX() + 0.5);
         double dy = point.yCoord - (pos.getY() + 0.5);
@@ -392,7 +337,6 @@ public class BedNuker extends Module {
         return dz >= 0.0 ? EnumFacing.SOUTH : EnumFacing.NORTH;
     }
 
-    /** Whether the line from the eye to the block's centre meets this block first (no digging through walls). */
     private boolean visible(BlockPos pos) {
         net.minecraft.util.Vec3 eye = mc.thePlayer.getPositionEyes(1.0F);
         net.minecraft.util.Vec3 centre = new net.minecraft.util.Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
@@ -476,8 +420,6 @@ public class BedNuker extends Module {
                 }
             }
             if (!pos.isEmpty()) {
-                /* One in sight first (2026-10-20): the easiest cover block could be on the far side of the
-                   bed, dug through it -- a break through a wall, which Grim refuses. */
                 pos.sort(
                         (blockPos, blockPos2) -> {
                             int seen = Boolean.compare(this.visible(blockPos2), this.visible(blockPos));
@@ -499,11 +441,6 @@ public class BedNuker extends Module {
         return null;
     }
 
-    /**
-     * outside-first: the first block on the line from the eyes to either half
-     * of the bed, the nearer of the two; the bed itself when a line reaches it.
-     * Null when no line meets anything (then the old pick decides).
-     */
     private BlockPos outermostOnPath(BlockPos bedPosition) {
         IBlockState blockState = mc.theWorld.getBlockState(bedPosition);
         if (!(blockState.getBlock() instanceof BlockBed)) {
@@ -522,11 +459,9 @@ public class BedNuker extends Module {
             }
             BlockPos hit = mop.getBlockPos();
             if (mc.theWorld.getBlockState(hit).getBlock() instanceof BlockBed) {
-                /* A clear line to the bed: dig the bed. */
                 return hit;
             }
             if (mc.theWorld.getBlockState(hit).getBlock().getBlockHardness(mc.theWorld, hit) < 0.0F) {
-                /* Bedrock, a map wall: never breaks, so not this line. */
                 continue;
             }
             double sq = hit.distanceSqToCenter(eye.xCoord, eye.yCoord, eye.zCoord);
@@ -652,7 +587,6 @@ public class BedNuker extends Module {
                 this.breakCooldown--;
             }
             if (this.checkPos != null && System.currentTimeMillis() >= this.checkAt) {
-                /* The client removes the block at STOP; a refusal puts it back. */
                 boolean back = !mc.theWorld.isAirBlock(this.checkPos);
                 log((back ? "REFUSED " : "BROKEN ") + this.checkWhat + " " + this.checkPos.getX() + ","
                         + this.checkPos.getY() + "," + this.checkPos.getZ() + (back ? " -- the server put it back" : ""));
@@ -680,9 +614,7 @@ public class BedNuker extends Module {
                 }
                 switch (this.breakStage) {
                     case 0:
-                        /* 2026-10-31: the dig opens once the look the server has is on the block. The look
-                           now turns there as a hand does (RotationHelper), over a tick or more; it used to
-                           jump there in the one tick before this. */
+
                         if (!mc.thePlayer.isUsingItem() && this.lookOn(this.targetBed)) {
                             IBlockState startState = mc.theWorld.getBlockState(this.targetBed);
                             float perTick = this.getBreakDelta(startState, this.targetBed, slot, mc.thePlayer.onGround);
@@ -793,21 +725,17 @@ public class BedNuker extends Module {
                 double x = (double) this.targetBed.getX() + 0.5 - mc.thePlayer.posX;
                 double y = (double) this.targetBed.getY() + 0.5 - mc.thePlayer.posY - (double) mc.thePlayer.getEyeHeight();
                 double z = (double) this.targetBed.getZ() + 0.5 - mc.thePlayer.posZ;
-                /* 2026-10-31: through the shared engine (RotationHelper): turned as a hand does, whole mouse
-                   counts, keys turned for SILENT, handed back when this stops asking. */
+
                 float[] want = RotationUtil.getRotationsTo(x, y, z, event.getYaw(), event.getPitch());
                 float[] look = RotationHelper.request(this, want[0], want[1], 5, this.moveMode(), false,
                         RotationHelper.NO_LIMIT);
                 if (look != null && this.moveFix.getModeString().equals("REAL")) {
-                    /* REAL: the camera turns as well, along the look the server gets, spread over this
-                       tick's frames by RotationManager; the mouse still works (not forced). */
                     Atlas.rotationManager.setRotation(look[0], look[1], 5, false);
                 }
             }
         }
     }
 
-    /** move-fix as the engine's movement yaw: NONE the camera's, SILENT the look's with the keys turned, STRICT and REAL the look's. */
     private int moveMode() {
         switch (this.moveFix.getValue()) {
             case 0:
@@ -819,7 +747,6 @@ public class BedNuker extends Module {
         }
     }
 
-    /** The look the server has meets the block within range (through other blocks: the nuker digs through them). */
     private boolean lookOn(BlockPos pos) {
         net.minecraft.util.Vec3 eye = mc.thePlayer.getPositionEyes(1.0F);
         net.minecraft.util.Vec3 dir = RotationEngine.direction(RotationHelper.serverYaw(), RotationHelper.serverPitch());
@@ -908,7 +835,7 @@ public class BedNuker extends Module {
         this.whitelistScanAt = -1L;
         this.bedWhitelist.clear();
         this.resetBreaking();
-        /* A new world: no bed is ours until the spawn there. */
+
         this.ownBedLocked = false;
         this.ownBedHead = null;
         this.ownBedFoot = null;
@@ -929,10 +856,7 @@ public class BedNuker extends Module {
                 this.bedWhitelist.clear();
                 this.scheduleWhitelistScan();
             }
-            /* A respawn or a teleport is where our bed is looked for, which is
-               why this does not depend on the game-start message: that line is
-               Hypixel's wording and never arrives on other servers. A teleport
-               only while no bed is ours yet (see ownBedPending). */
+
             if (event.getPacket() instanceof S07PacketRespawn) {
                 this.ownBedRelocate = true;
             } else if (event.getPacket() instanceof S08PacketPlayerPosLook && !this.ownBedLocked) {
@@ -998,7 +922,7 @@ public class BedNuker extends Module {
     @Override
     public void onDisabled() {
         this.resetBreaking();
-        /* 2026-10-31 (audit): switched off mid-action, the hand stayed on the item it had swapped to. */
+
         if (this.savedSlot >= 0 && this.savedSlot < 9 && mc.thePlayer != null && mc.thePlayer.inventory.currentItem != this.savedSlot) {
             mc.thePlayer.inventory.currentItem = this.savedSlot;
         }

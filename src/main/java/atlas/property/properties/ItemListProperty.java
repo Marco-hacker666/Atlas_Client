@@ -5,7 +5,6 @@ import net.minecraft.item.ItemStack;
 import java.util.function.BooleanSupplier;
 
 public class ItemListProperty extends TextProperty {
-
     public ItemListProperty(String name, String value) {
         super(name, value);
     }

@@ -6,7 +6,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 
-/** Using an entity: action "ATTACK", "INTERACT" or "INTERACT_AT" (with hitVec, relative to the entity). */
 public class C02 extends CPacket {
     public Entity entity;
     public String action;

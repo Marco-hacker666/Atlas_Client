@@ -23,28 +23,11 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.Vec3;
 
-/**
- * Knocks the target toward danger, for fights by hand (2026-09-28, item 7 of
- * the Rise comparison; Rise's ManualKBDisplacement, rewritten from what it
- * does).
- *
- * After this player lands a hit, and for as long as the target is still
- * hurt, the yaw the server has is turned -- silently, the camera untouched --
- * toward the worst place around the target (KnockbackPlanner). When the next
- * hit lands, its sprint push goes that way. Movement is fixed to the camera,
- * so walking is unaffected. Stays out of the way of a falling crit, and off
- * while KillAura is on (KillAura has its own, KBDisplace).
- *
- * Risk, stated plainly: the server sees a hit while this player's yaw points
- * away from the target. Servers that check the facing of every hit will see
- * that.
- */
 public class KBDisplacement extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    /* Above AimAssist (1), below Scaffold (3) and Clutch (7). */
+
     private static final int PRIORITY = 2;
 
-    /* Rise's units: times 36 degrees a tick. */
     public final IntProperty rotationSpeed = new IntProperty("rotation-speed", 8, 1, 20);
     public final FloatProperty trackingRange = new FloatProperty("tracking-range", 6.0F, 3.0F, 8.0F);
     public final BooleanProperty debug = new BooleanProperty("debug", false);
@@ -142,7 +125,6 @@ public class KBDisplacement extends Module {
         debug("applied", plan);
     }
 
-    /** Keeps walking where the camera points while the server yaw is turned. */
     @EventTarget
     public void onMoveInput(MoveInputEvent event) {
         if (this.isEnabled()
@@ -154,7 +136,6 @@ public class KBDisplacement extends Module {
         }
     }
 
-    /** The pitch that looks at the target's body along this yaw. */
     private static float pitchTo(EntityLivingBase living, float yaw) {
         Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
         Vec3 body = new Vec3(living.posX, living.posY + living.height * 0.5, living.posZ);

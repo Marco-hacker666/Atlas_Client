@@ -6,12 +6,9 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** FakeLag's modes (2026-10-27): LIQUID renamed DYNAMIC, the old DYNAMIC gone; saved configs still load. */
 public class FakeLagModeTest {
-
     @Test
     public void theModesAreLatencyAndDynamic() {
-        /* 2026-10-31: REPEL retired. */
         assertArrayEquals(new String[]{"LATENCY", "DYNAMIC"}, new FakeLag().mode.visibleModes());
     }
 

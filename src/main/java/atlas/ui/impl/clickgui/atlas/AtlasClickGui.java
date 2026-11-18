@@ -36,105 +36,46 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * A menu built around finding things and understanding them, rather than
- * around looking like a menu.
- *
- * The existing styles all share a shape: columns of collapsible category
- * panels, a row per module, settings hidden behind an arrow. That shape works
- * when a client has thirty modules whose names say what they do. This one has
- * over a hundred, a dozen of which were added in the last week, and several
- * whose behaviour is a paragraph rather than a name -- a module that spends
- * eight minutes measuring without telling you why cannot be explained by being
- * called "Adaptive".
- *
- * So the design puts three things on screen at once, and nothing behind a
- * hover:
- *
- *   SEARCH. Typing filters every module in every category at once. With this
- *   many modules, remembering which category something was filed under is the
- *   actual obstacle, and a search box removes it entirely.
- *
- *   A DETAIL PANE. The selected module's description sits permanently on the
- *   right, wrapped and readable, with its key, whether the array list shows it,
- *   and every setting listed under it.
- *
- *   LIVE STATE. Each row carries the module's own status suffix -- the same
- *   text the array list shows -- so a probe in progress, a flag rate or a hit
- *   percentage is visible while deciding what to change.
- *
- * 2026-09-24: LIQUID GLASS. The window is real refracting glass over the
- * blurred world (Liquid), the text is SF Pro rasterised for the GUI scale
- * (LiquidFont), and everything that moves is on a spring (Spring): the
- * selection pills slide as droplets of clear glass that stretch with their
- * speed and settle with a small overshoot, switches squash as they travel,
- * the window pops open. The layout was prototyped in a browser against the
- * same shaders before any of it was written here.
- *
- * EVERY CONTROL IS HIT TESTED AGAINST WHERE IT WAS ACTUALLY DRAWN. The
- * previous version computed the layout twice -- once to draw it and once to
- * decide what a click had landed on -- and the two copies disagreed by six
- * pixels, so no slider could be dragged. Drawing a control registers the
- * rectangle it occupies; clicking looks the pointer up in that list.
- *
- * Nothing about the modules here is new behaviour. It reads the module list,
- * the property list and the descriptions that were already there, and it
- * writes only through the same setters the other menus use.
- */
 public class AtlasClickGui extends GuiScreen {
-
     private static AtlasClickGui instance;
 
-    // Layout, in scaled pixels.
     private static final int HEADER = 42;
-    /* Set from the theme at the start of every frame: the density, the
-       corner radius and whether the hint bar has a strip of its own. */
+
     private int FOOTER = 20;
     private float RADIUS = 18.0F;
-    /** A module row, and the pitch rows are laid out at. */
+
     private int ROW_H = 24;
     private int ROW = 26;
     private int CAT_H = 26;
-    /* 2026-10-11 (owner): the category list scrolls, and the column keeps a
-       small empty strip at its foot. */
+
     private static final int SIDEBAR_FOOT = 22;
     private float sidebarScroll;
     private float sidebarMaxScroll;
     private float sidebarRight;
-    /* 2026-10-11: the Appearance page's group list scrolls (ten groups did
-       not fit, and the wheel did nothing there). */
+
     private float appearanceScroll;
     private float appearanceMaxScroll;
     private int CAT = 28;
 
-    /** Nothing useful fits below these, so the resize grip stops here. */
     private static final int MIN_WIDTH = 520;
     private static final int MIN_HEIGHT = 280;
     private static final int DEFAULT_WIDTH = 720;
     private static final int DEFAULT_HEIGHT = 400;
-    /** Means "no position chosen yet", which is drawn centred. */
+
     private static final int UNSET = Integer.MIN_VALUE;
 
-    /* Text is opaque and bright; every surface behind it is glass. Text over a
-       translucent panel has to be brighter than text over a solid one -- the
-       background shows through and eats contrast. */
-    /* Dark-mode values. Repainted at the start of every frame by paintPalette(),
-       so light mode swaps them for dark text without touching any call site. */
     private static int TEXT = 0xFFF5F8FF;
     private static int DIM = 0xD1C3CEDF;
     private static int FAINT = 0x9E93A3BA;
     private static final int WHITE = 0xFFFFFFFF;
-    /* The neutral every hover wash, divider and rim is mixed from: white over
-       dark glass, ink over light glass. See ink(). */
+
     private static int INK = 0xFFFFFFFF;
 
-    /** How the menu looks; edited on the Appearance page, kept in atlas-theme.json. */
     private final AtlasTheme theme = new AtlasTheme();
     private static float textScale = 1.0F;
-    /* 2026-11-11: on a phone (util.render.DeviceProfile) -- set each frame in applyTheme. */
+
     private boolean mobile;
-    /* Touch: a press in the body waits for the finger to lift. Moved more than TOUCH_SLOP first, it was a
-       scroll, not a tap, and the press never clicks (see mouseClicked). */
+
     private static final float TOUCH_SLOP = 6.0F;
     private boolean touchPending;
     private boolean touchScrolling;
@@ -142,7 +83,7 @@ public class AtlasClickGui extends GuiScreen {
     private int touchY;
     private int touchLastY;
     private float touchCarry;
-    /* On a phone the last hint stays a few seconds after the finger has gone: there is no hover to hold it. */
+
     private String lastHint = "";
     private long lastHintAt;
     private static final long HINT_HOLD_MS = 4000L;
@@ -150,33 +91,29 @@ public class AtlasClickGui extends GuiScreen {
     private float springSpeed = 1.0F;
     private float slideY;
 
-    /** Where the window's size, position and last selection are remembered. */
     private static final File STATE = new File("./config/Atlas/atlas-ui.txt");
 
     private final List<String> categories = new ArrayList<String>();
     private final Map<String, List<Module>> byCategory = new LinkedHashMap<String, List<Module>>();
-    /** The Legit page's sub-groups (see LegitGroups), rebuilt with the catalogue. */
+
     private final Map<String, List<Module>> legitGroups = new LinkedHashMap<String, List<Module>>();
 
     private String category = "";
     private String page = "Modules";
     private Module selected;
-    /** The name of the module to reselect, held until the list is built. */
+
     private String pendingSelection = "";
     private final TextInput searchInput = new TextInput(128, false);
     private boolean searchFocused;
-    /* What the search looks through (SearchIndex, 2026-10-23: modules and
-       settings, names and help), built on open; the last query's results are
-       kept until the query or the page changes, so the three callers a frame
-       share one search. */
+
     private SearchIndex index = new SearchIndex();
     private String searchedFor;
     private String searchedOn;
-    /** ScriptManager.version() when the index was built. */
+
     private int indexedScripts = -1;
     private SearchIndex.Results searchResults = SearchIndex.NONE;
     private static final int MAX_SETTING_RESULTS = 60;
-    /** How many modules the client had when the index was built: it is built again only if that changes. */
+
     private int indexedModules = -1;
 
     private int listScroll;
@@ -184,9 +121,8 @@ public class AtlasClickGui extends GuiScreen {
     private int detailScroll;
     private int detailMaxScroll;
 
-    /** The window's own geometry, which the user owns once they touch it. */
     private int userWidth = DEFAULT_WIDTH;
-    /** A size larger than any screen: the window fills it (phones, see loadState). */
+
     private static final int FILL = 100000;
     private boolean sizedOnPhone;
     private int userHeight = DEFAULT_HEIGHT;
@@ -199,69 +135,45 @@ public class AtlasClickGui extends GuiScreen {
     private int grabX;
     private int grabY;
 
-    /**
-     * The module whose key is being rebound, if any. The key is not a
-     * property, so it would never appear among the settings by itself.
-     */
     private Module binding;
 
-    /** A key setting (KeyProperty, e.g. Clutch hold-key) waiting for its key. */
     private KeyProperty keyEditing;
 
-    /* The colour setting whose picker is open. It is edited in HSB, kept
-       here: a grey or black has no hue of its own, and recomputing it from
-       the RGB would throw the hue away every time saturation reached zero.
-       colorSynced is the RGB the HSB was taken from, so a change made
-       elsewhere (a typed hex, a theme preset) is picked up. */
     private ColorProperty colorOpen;
     private final float[] colorHsb = new float[3];
     private int colorSynced = -1;
-    /** What a press on the picker is dragging: "sv", "hue", or null; and that control's rectangle. */
+
     private String colorDrag;
     private float colorX;
     private float colorY;
     private float colorW;
     private float colorH;
-    /** Height of an open picker, below the setting's own row. */
+
     private static final int PICKER_HEIGHT = 74;
 
-    /* 2026-10-23 (GUI redesign M2): a setting's info row -- what it does in
-       full, its default and range, Reset -- opened by the (i) after its label,
-       one at a time like the picker. The description's More, and the
-       module-wide Reset, which asks first (a Dialog since M7). */
     private Property<?> infoOpen;
     private Module descriptionOpen;
-    /** The width of the settings card being drawn, which an info row wraps its text to. */
+
     private float cardWidth = 200.0F;
     private static final int INFO_LINE = 11;
     private static final float INFO_ICON = 9.0F;
     private static final int DESCRIPTION_MAX_LINES = 14;
 
-    /* 2026-10-23 (GUI redesign M4): two rows above the categories on the
-       Modules and Legit pages, lists made on the spot from this page's
-       modules -- everything on, and everything that needs a look. */
     private static final String ENABLED = "Enabled";
     private static final String ATTENTION = "Attention";
-    /* The Scripts page (2026-11-03, owner: "a tab somewhere you see it, that loads everyone's scripts, Raven's
-       API and ours"): its sidebar's groups. Its rows are the scripts' modules, so switching, keys and settings
-       work as on the other pages; a toolbar over the list makes, opens, imports and reloads them. */
+
     private static final String SCRIPTS = "Scripts";
     private static final String SCRIPTS_ALL = "All scripts";
     private static final String SCRIPTS_ATLAS = "Atlas scripts";
     private static final String SCRIPTS_RAVEN16 = "Raven bS 16";
     private static final String SCRIPTS_RAVEN17 = "Raven bS 17";
 
-    /**
-     * One module's health marks: what FlagDetector named it for this session
-     * (ModuleHealth), what it holds back right now (PacketHolds), and its
-     * settings at a risky value (RiskRules). Read four times a second.
-     */
     private static final class Health {
         ModuleHealth.Report report = ModuleHealth.Report.NONE;
         int held;
         String heldWay = "";
         final List<Property<?>> risky = new ArrayList<Property<?>>();
-        /** Conflicts it is part of and the player has not dismissed (Conflicts, M5). */
+
         final List<atlas.management.Conflicts.Conflict> conflicts = new ArrayList<atlas.management.Conflicts.Conflict>();
     }
 
@@ -269,13 +181,10 @@ public class AtlasClickGui extends GuiScreen {
     private long healthAt;
     private static final long HEALTH_MS = 250L;
 
-    /* Dragging a slider. The track's own rectangle is taken from the registry
-       when the drag starts, so the value follows the pointer against the bar
-       that is on screen rather than against a second guess at where it is. */
     private Property<?> dragging;
-    /** The button that started a drag, so the frame loop can tell when it is let go. */
+
     private int dragButton;
-    /** Ctrl+P: frame cost, averaged, and draws per frame. */
+
     private boolean perf;
     private float perfMillis;
     private float dragMin;
@@ -283,49 +192,32 @@ public class AtlasClickGui extends GuiScreen {
     private float dragX;
     private float dragWidth;
 
-    /**
-     * The setting currently being typed into, and what has been typed. A
-     * slider can only express as many values as its track has pixels, and
-     * most of the latency settings in this client want an exact number.
-     */
     private Property<?> editing;
     private final TextInput editInput = new TextInput(0, false);
-    /** Enter was pressed on something that is not a value for the setting: the field stays open, edged red. */
+
     private boolean editError;
 
-    /** The mode list currently expanded, and where to draw it. */
     private ModeProperty dropdown;
     private float dropX;
     private float dropY;
     private float dropRight;
-    /* 2026-10-16: long lists (NoSlow's 34 sword modes) ran off the window.
-       The list is capped at DROP_ROWS rows and scrolls with the wheel. */
+
     private static final int DROP_ROWS = 12;
     private int dropScroll;
     private int dropMaxScroll;
     private boolean dropScrollInit;
     private boolean dropAnchored;
 
-    /** What the pointer is over, shown along the bottom. */
     private String hint = "";
 
-    /* What a click did, or why it could not, shown in the menu (2026-10-23):
-       these went to chat, half hidden behind the menu. closing is set while
-       the menu closes, when a toast would never be seen and chat is used. */
     private final Toasts toasts = new Toasts();
     private boolean closing;
 
-    /**
-     * A question before something that cannot be taken back (2026-10-23, M7):
-     * loading over unsaved changes, deleting a profile, resetting a module.
-     * It takes every click and key while open; Enter is its first button,
-     * Escape closes it.
-     */
     private static final class Dialog {
         final String title;
         final String body;
         final String[] labels;
-        /** Button styles as drawButton has them: 0 accent, 1 plain, 2 destructive. */
+
         final int[] styles;
         final Runnable[] actions;
 
@@ -339,18 +231,16 @@ public class AtlasClickGui extends GuiScreen {
     }
 
     private Dialog dialog;
-    /* Whether the profile in use has changes its file does not (Config.differsFromFile), read once a second. */
+
     private boolean unsaved;
     private long unsavedAt;
-    /** Set by drawField: where the caret is in what it drew. */
+
     private float fieldCaretX;
 
-    /* The profiles view: a column of its own in the sidebar, under the
-       categories, replacing the module list and the detail pane while open. */
     private boolean profilesView;
-    /** The Appearance page, and which of its groups is open. */
+
     private boolean appearanceView;
-    /** The Servers page (2026-10-23, M6): which profile ServerProfiles loads on which server. */
+
     private boolean serversView;
     private String appearanceGroup = "Colors";
     private String profileSelected;
@@ -361,23 +251,17 @@ public class AtlasClickGui extends GuiScreen {
     private List<AtlasProfiles.Info> profiles = new ArrayList<AtlasProfiles.Info>();
     private long profilesReadAt;
 
-    /* Motion. Easing and springs are driven by wall time rather than ticks,
-       so the feel does not change with frame rate or with the game paused. */
     private long lastFrame;
     private float openedFor;
     private final Spring open = new Spring(0.92F, 260.0F, 17.0F);
-    /** Hits, fades, springs and pulses (UiContext); delta is copied into it every frame. */
+
     private final UiContext ui = new UiContext();
     private float delta = 0.016F;
 
-    /* The opening animation scales the window about its centre. Everything
-       is drawn through that transform, and the pointer is taken back through
-       it, so a click during the pop still lands on what is under it. */
     private float pivotX;
     private float pivotY;
     private float viewScale = 1.0F;
 
-    /** Glass drawn after the content is captured, so it can refract it. */
     private static final class Lens {
         final float x;
         final float y;
@@ -400,8 +284,6 @@ public class AtlasClickGui extends GuiScreen {
 
     private final List<Lens> lenses = new ArrayList<Lens>();
 
-    // ---- hit registry and motion (UiContext) ------------------------------
-
     private void hit(String kind, Object payload, float x, float y, float x2, float y2) {
         this.ui.hit(kind, payload, x, y, x2, y2);
     }
@@ -410,7 +292,6 @@ public class AtlasClickGui extends GuiScreen {
         return this.ui.hitAt(mouseX, mouseY);
     }
 
-    /** Screen to layout, undoing the opening scale. */
     private float layoutX(float screenX) {
         return this.pivotX + (screenX - this.pivotX) / this.viewScale;
     }
@@ -443,7 +324,6 @@ public class AtlasClickGui extends GuiScreen {
         return this.ui.pulseAt(key, millis);
     }
 
-    /** Slow at both ends, which is what makes a movement look intentional. */
     private static float smooth(float t) {
         t = Math.max(0.0F, Math.min(1.0F, t));
         return t * t * (3.0F - 2.0F * t);
@@ -465,10 +345,6 @@ public class AtlasClickGui extends GuiScreen {
         return instance;
     }
 
-    /**
-     * Categories come from the same arrays the other menus use, so a module
-     * added to those appears here without this class being touched.
-     */
     private void build() {
         this.categories.clear();
         this.byCategory.clear();
@@ -489,7 +365,6 @@ public class AtlasClickGui extends GuiScreen {
                 this.category = SCRIPTS_ALL;
             }
         } else if (isQuick(this.category)) {
-            /* Enabled and Attention are lists of the page, not categories. */
         } else if ("Legit".equals(this.page) && !this.legitGroups.isEmpty()) {
             if (!this.legitGroups.containsKey(this.category)) {
                 this.category = this.legitGroups.keySet().iterator().next();
@@ -503,8 +378,7 @@ public class AtlasClickGui extends GuiScreen {
         if (!this.categories.isEmpty() && this.category.isEmpty()) {
             this.category = this.categories.get(0);
         }
-        /* The remembered selection is a name, because the module instance from
-           a previous run of the game is not the one in this one. */
+
         if (this.selected == null && !this.pendingSelection.isEmpty()) {
             for (List<Module> list : this.byCategory.values()) {
                 for (Module module : list) {
@@ -556,17 +430,6 @@ public class AtlasClickGui extends GuiScreen {
         return out;
     }
 
-    // ---- persistence --------------------------------------------------
-
-    /**
-     * Reads back where the window was and what was open in it.
-     *
-     * Kept in its own file rather than in the client's config, deliberately.
-     * The config is held in memory for a whole session and written once on
-     * exit, so anything written into it from here would be overwritten by
-     * whatever that copy held; and a menu's window position is not a setting
-     * anyone wants travelling with a shared profile.
-     */
     private void loadState() {
         if (this.stateLoaded) {
             return;
@@ -615,26 +478,17 @@ public class AtlasClickGui extends GuiScreen {
                 }
             }
         } catch (Exception ignored) {
-            /* A missing or unreadable file means the defaults, which is what
-               this menu did before it remembered anything at all. */
         } finally {
             if (reader != null) {
                 try {
                     reader.close();
                 } catch (Exception ignored) {
-                    // Nothing further to do.
                 }
             }
         }
         fillOnPhone();
     }
 
-    /**
-     * A phone (2026-11-11): the first time there, the window fills the screen, whatever size it had; once
-     * sized there (mobile=1 in the file), the player's own size is kept. windowWidth/Height clamp it to the
-     * screen less a four-pixel margin each side. Also asked on every open: the menu is built at start-up,
-     * possibly before the GL strings that detection reads are there.
-     */
     private void fillOnPhone() {
         if (!this.sizedOnPhone && atlas.util.render.DeviceProfile.isMobile()) {
             this.userWidth = FILL;
@@ -667,7 +521,6 @@ public class AtlasClickGui extends GuiScreen {
                     : this.serversView ? "servers" : "modules"));
             writer.flush();
         } catch (Exception ignored) {
-            // Losing a window position is not worth an error on screen.
         } finally {
             if (writer != null) {
                 writer.close();
@@ -675,9 +528,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    // ---- layout helpers ----------------------------------------------
-
-    /** TargetOrbit, drawn beside the window while it is selected (2026-10-18). */
     private final OrbitPreview orbitPreview = new OrbitPreview();
 
     private int windowWidth(ScaledResolution sr) {
@@ -706,11 +556,6 @@ public class AtlasClickGui extends GuiScreen {
         return Math.max(0, Math.min(sr.getScaledHeight() - height, this.userY));
     }
 
-    /* The columns take a share of the window rather than a fixed number of
-       pixels, so making the window bigger buys room in all three. They are
-       clamped at both ends: a sidebar narrower than its longest category name
-       is useless, and a detail pane much wider than three hundred pixels wraps
-       descriptions into lines too long for the eye to find the start of. */
     private static int sidebarWidth(int width) {
         return Math.max(118, Math.min(160, Math.round(width * 0.19F)));
     }
@@ -719,7 +564,6 @@ public class AtlasClickGui extends GuiScreen {
         return Math.max(210, Math.min(300, Math.round(width * 0.35F)));
     }
 
-    /** Modules shown in the middle column: a search result, or one category. */
     private List<Module> visibleModules() {
         List<Module> out = new ArrayList<Module>();
         if ("Client Settings".equals(this.page)) {
@@ -727,9 +571,6 @@ public class AtlasClickGui extends GuiScreen {
         }
         String needle = search().toLowerCase().trim();
         if (!needle.isEmpty()) {
-            /* Search spans every page: this page's matches first, then the other
-               page's, which the list draws as borrowed (see drawList). Modules
-               found by name come before those found by their description. */
             for (SearchIndex.Entry entry : searchResults().modules) {
                 out.add((Module) entry.module);
             }
@@ -837,13 +678,6 @@ public class AtlasClickGui extends GuiScreen {
         return on;
     }
 
-    // ---- numeric settings, whatever class they are ---------------------
-
-    /* Three unrelated classes carry a bounded number: IntProperty,
-       FloatProperty and PercentProperty, which extends neither of the others.
-       The menu once handled the first two and silently rendered the third as
-       plain text, so a percentage could not be set with the pointer at all. */
-
     private static boolean isNumeric(Property<?> property) {
         return property instanceof IntProperty
                 || property instanceof FloatProperty
@@ -893,13 +727,9 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    // ---- type ---------------------------------------------------------
-
     private static LiquidFont font(float size, boolean bold) {
         return LiquidFont.of(Math.round(size * textScale * 4.0F) / 4.0F, bold);
     }
-
-    // ---- drawing ------------------------------------------------------
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
@@ -922,8 +752,7 @@ public class AtlasClickGui extends GuiScreen {
         applyTheme();
         paintPalette();
         followDrag(sr, mouseX, mouseY);
-        /* Before anything of the menu is drawn: the copy it blurs has to be
-           of the world alone. */
+
         long blurStart = System.nanoTime();
         Liquid.beginFrame();
         long blurNanos = System.nanoTime() - blurStart;
@@ -935,9 +764,6 @@ public class AtlasClickGui extends GuiScreen {
         int sidebar = sidebarWidth(width);
         int detail = detailWidth(width);
 
-        /* The window arrives the way the theme says: popping from 92% on a
-           spring that overshoots a little, fading, or sliding up, while it
-           fades in over the first fifth of a second. */
         int opening = this.theme.animations.getValue() ? this.theme.opening.getValue() : 3;
         this.open.target = 1.0F;
         float progress = opening == 3 ? 1.0F : this.open.step(this.delta * this.springSpeed);
@@ -949,7 +775,6 @@ public class AtlasClickGui extends GuiScreen {
         float mx = layoutX(mouseX);
         float my = layoutY(mouseY);
 
-        /* The light the glass catches follows the pointer, a little behind. */
         boolean follow = this.theme.followCursor.getValue();
         Liquid.lightX = toward("lightX", follow ? mouseX : x + width * 0.25F, 7.0F);
         Liquid.lightY = toward("lightY", follow ? mouseY : y - 120.0F, 7.0F);
@@ -960,8 +785,6 @@ public class AtlasClickGui extends GuiScreen {
         LiquidFont.alpha = fade;
         GL11.glPushMatrix();
         try {
-            /* The world behind is dimmed a little so the window is the
-               brightest thing on screen. */
             float dim = this.theme.dim.getValue() / 100.0F;
             if (dim > 0.0F) {
                 Liquid.rect(0, 0, sr.getScaledWidth(), sr.getScaledHeight(), 0.0F,
@@ -984,14 +807,12 @@ public class AtlasClickGui extends GuiScreen {
                         alpha(0xFF000000, this.theme.shadow.getValue() / 100.0F), shadowSize * 0.4F);
             }
             Liquid.pane(x, y, x + width, y + height, RADIUS, this.theme.pane());
-            /* Light caught in the thickness along the top. */
+
             int sheen = Math.round(this.theme.sheen.getValue() / 100.0F * 26.0F);
             if (sheen > 0) {
                 Liquid.rect(x, y, x + width, y + 90, RADIUS, (sheen << 24) | 0x00FFFFFF, 0x00FFFFFF);
             }
 
-            /* Registered first, so everything drawn into the header afterwards
-               -- the search box above all -- sits on top of it and wins. */
             hit("move", null, x, y, x + width, y + HEADER - 1);
 
             int bodyTop = y + HEADER;
@@ -1021,8 +842,6 @@ public class AtlasClickGui extends GuiScreen {
             }
             drawGrip(x + width, y + height, mx, my);
 
-            /* The lenses refract what is under them, so what is under them has
-               to be finished first. */
             Liquid.captureContent(x, y, x + width, y + height);
             for (Lens lens : this.lenses) {
                 if (lens.clip != null) {
@@ -1044,18 +863,12 @@ public class AtlasClickGui extends GuiScreen {
                 }
             }
 
-            /* Over the content, under an open list and the report dialog. */
             drawToasts(x, y, width, height, mx, my);
 
-            /* Last of all, and outside every scissor: an expanded mode list has
-               to cover the rows below it, and a clipped dropdown is worse than
-               none. */
             if (this.dropdown != null) {
                 if (this.dropAnchored) {
                     drawDropdown(y, height, mx, my);
                 } else {
-                    /* Its row scrolled out of the pane, so there is nothing
-                       left to hang the list from. */
                     this.dropdown = null;
                 }
             }
@@ -1073,7 +886,6 @@ public class AtlasClickGui extends GuiScreen {
             unclip();
         }
 
-        /* Outside the window, after it: TargetOrbit's live preview in the gap beside it. */
         this.orbitPreview.draw(!this.profilesView && !this.appearanceView && !this.serversView
                         && this.selected instanceof atlas.module.modules.TargetOrbit,
                 sr.getScaledWidth(), x, y, width, height, mouseX, mouseY, this.delta,
@@ -1089,15 +901,10 @@ public class AtlasClickGui extends GuiScreen {
         }
         GlStateManager.disableBlend();
         super.drawScreen(mouseX, mouseY, partialTicks);
-        /* Last, so the capture includes everything this frame drew and the
-           audit is of the same frame that was captured. */
+
         AtlasInspector.tick();
     }
 
-    /* Read from the jar and uploaded as a dynamic texture, like WaterMark's
-       pictures: the mod's own assets are not in the game's resource packs,
-       so a plain ResourceLocation found nothing and drew the missing-texture
-       checkerboard (seen 2026-10-06). */
     private static ResourceLocation logo;
     private static boolean logoTried;
 
@@ -1117,7 +924,6 @@ public class AtlasClickGui extends GuiScreen {
         return logo;
     }
 
-    /** The logo texture as a square at (x, y), faded with the rest of the menu. */
     private static void drawLogo(float x, float y, float size) {
         ResourceLocation texture = logo();
         if (texture == null) {
@@ -1128,7 +934,7 @@ public class AtlasClickGui extends GuiScreen {
         GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
         GlStateManager.color(1.0F, 1.0F, 1.0F, Liquid.alpha);
         net.minecraft.client.Minecraft.getMinecraft().getTextureManager().bindTexture(texture);
-        /* Smoothed: the 64 px picture is drawn at 18 GUI pixels. */
+
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
         Tessellator tessellator = Tessellator.getInstance();
@@ -1142,10 +948,8 @@ public class AtlasClickGui extends GuiScreen {
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
-    /** The bug-report dialog is open: nothing is sent until Send. */
     private boolean reportConfirm;
-    /* 2026-10-08: the reason picked (an index of BugReport.REASONS, -1 none
-       yet) and what the player typed about it. */
+
     private int reportReason = -1;
     private static final int REPORT_TEXT_MAX = 500;
     private final TextInput reportInput = new TextInput(REPORT_TEXT_MAX, true);
@@ -1162,7 +966,6 @@ public class AtlasClickGui extends GuiScreen {
 
     private void sendReport() {
         if (this.reportReason < 0) {
-            /* A reason is required: the Send button says so. */
             pulse("btn:reportSend");
             return;
         }
@@ -1174,7 +977,6 @@ public class AtlasClickGui extends GuiScreen {
                 atlas.command.commands.ReportCommand::announce);
     }
 
-    /** An amber warning triangle with an exclamation mark, centred on (cx, cy). */
     private void drawWarning(float cx, float cy, float size) {
         int amber = 0xFFFFC857;
         float top = cy - size;
@@ -1188,10 +990,6 @@ public class AtlasClickGui extends GuiScreen {
         Liquid.dot(cx, cy + size * 0.55F, w * 0.6F, amber);
     }
 
-    /**
-     * Asks before anything leaves the machine: what goes to Discord, what is
-     * taken out, and Send / Cancel. Drawn over the whole window.
-     */
     private void drawReportConfirm(int x, int y, int width, int height, float mx, float my) {
         Liquid.rect(x, y, x + width, y + height, RADIUS, 0x99000000, 0xAA000000);
         hit("reportOutside", null, x, y, x + width, y + height);
@@ -1212,7 +1010,6 @@ public class AtlasClickGui extends GuiScreen {
         drawWarning(cx, by + 22.0F, 10.0F);
         font(13.0F, true).drawCentred(zh ? "回報問題" : "Send a bug report", cx, by + 44.0F, TEXT);
 
-        /* What went wrong: one of a few reasons, required. */
         LiquidFont label = font(8.0F, true);
         label.draw(zh ? "發生什麼問題？（必選）" : "What went wrong? (pick one)", bx + 18, by + 64.0F, DIM);
         String[] reasons = zh ? atlas.util.BugReport.REASONS_ZH : atlas.util.BugReport.REASONS;
@@ -1236,7 +1033,6 @@ public class AtlasClickGui extends GuiScreen {
                     picked ? TEXT : DIM);
         }
 
-        /* In the player's own words: optional, always typing here. */
         float textTop = by + 128.0F;
         label.draw(zh ? "描述一下（選填）：做了什麼、看到什麼" : "Describe it (optional): what you did, what you saw",
                 bx + 18, textTop, DIM);
@@ -1259,8 +1055,7 @@ public class AtlasClickGui extends GuiScreen {
             if (this.reportInput.allSelected()) {
                 Liquid.rect(fx + 4, fy + 4, fx2 - 4, fy2 - 4, 8.0F, alpha(accent, 0.14F));
             }
-            /* Four lines show: the four around the caret, which while typing
-               at the end are the last four, as before. */
+
             List<int[]> lines = TextLayout.wrap(typedText, body::width, fx2 - fx - 20);
             int caret = this.reportInput.caret();
             int caretLine = TextLayout.lineOf(lines, caret);
@@ -1309,20 +1104,14 @@ public class AtlasClickGui extends GuiScreen {
         float cy = y + HEADER / 2.0F;
         int accent = accent();
 
-        /* The mark: the Atlas logo (the A with the orbit) and the name.
-           One word since the rename (2026-10-14); before, the old name in the
-           text colour and ATLAS in lime. */
         Liquid.shadow(x + 11, cy - 9, x + 29, cy + 9, 5.0F, 5.0F, 0x55000000, 0.0F);
         drawLogo(x + 11, cy - 9, 18.0F);
         float brandEnd = x + 35 + font(12.5F, true).draw("ATLAS", x + 35, cy, TEXT);
 
-        /* One row: the page tabs after the brand, the HUD editor and the
-           dark/light switch on the right, and the search box filling the rest. */
         float tabsEnd = drawPageTabs(brandEnd + 14, cy, mx, my);
 
         float right = x + width - 12;
-        /* 2026-11-09: the Theme window takes the HUD Editor's place, so the header
-           keeps its three buttons; the HUD editor opens from inside the window. */
+
         float studioWidth = font(8.5F, true).width("Theme") + 34;
         float studioX = right - studioWidth;
         drawButton("themeStudio", null, studioX, cy, studioWidth, "    Theme", 0, mx, my);
@@ -1330,7 +1119,7 @@ public class AtlasClickGui extends GuiScreen {
         if (mx >= studioX && mx <= right && my >= cy - 10 && my <= cy + 10) {
             this.hint = "Colours, menu, HUD and world looks in one window  ·  the HUD editor is inside";
         }
-        /* One-click bug report (2026-10-07): copies everything #bug-reports asks for. */
+
         float reportWidth = font(8.5F, true).width("Report") + 34;
         float reportX = studioX - 8 - reportWidth;
         drawButton("bugReport", null, reportX, cy, reportWidth, "    Report", 0, mx, my);
@@ -1340,7 +1129,6 @@ public class AtlasClickGui extends GuiScreen {
         }
         float modeLeft = drawModeSwitch(reportX - 10, cy, width >= 600, mx, my);
 
-        /* Search covers every page; results from the other page are marked in the list. */
         float sx = tabsEnd + 12;
         float sx2 = modeLeft - 10;
         float sy = cy - 11.0F;
@@ -1387,11 +1175,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /**
-     * The page tabs as one compact segmented control. The selection slides
-     * between tabs on a spring and takes each tab's width on the way.
-     * Returns the control's right edge.
-     */
     private float drawPageTabs(float left, float cy, float mx, float my) {
         String[] names = {"Modules", "Legit", SCRIPTS, "Client Settings"};
         LiquidFont label = font(8.5F, false);
@@ -1414,7 +1197,6 @@ public class AtlasClickGui extends GuiScreen {
         Liquid.rect(left, top, right, bottom, 9.0F, ink(0x0E), ink(0x08));
         Liquid.rim(left, top, right, bottom, 9.0F, 1.0F, ink(0x16), ink(0x08));
 
-        /* In the control's own coordinates, so moving the window carries it along. */
         Spring slide = spring("tabSlide", lefts[activeIndex] - left, 420.0F, 30.0F);
         Spring size = spring("tabSize", widths[activeIndex], 420.0F, 30.0F);
         float px = left + slide.value;
@@ -1444,10 +1226,6 @@ public class AtlasClickGui extends GuiScreen {
         return right;
     }
 
-    /**
-     * The dark/light switch, right-aligned at {@code right}: a label (when there
-     * is room for it) and a switch. Returns its left edge.
-     */
     private float drawModeSwitch(float right, float cy, boolean withLabel, float mx, float my) {
         boolean light = this.theme.isLight();
         float switchWidth = 22.0F;
@@ -1470,10 +1248,6 @@ public class AtlasClickGui extends GuiScreen {
         return left - 4;
     }
 
-    /**
-     * The corner grip, drawn as the conventional diagonal. There is no other
-     * affordance this small that anyone reads as "pull me".
-     */
     private void drawGrip(int right, int bottom, float mx, float my) {
         boolean hovered = mx >= right - 14 && mx <= right - 2 && my >= bottom - 14 && my <= bottom - 2;
         hit("grip", null, right - 14, bottom - 14, right - 2, bottom - 2);
@@ -1495,8 +1269,7 @@ public class AtlasClickGui extends GuiScreen {
         float profilesRow = profilesLabel + 10;
         float appearanceRow = profilesRow + CAT;
         float serversRow = appearanceRow + CAT;
-        /* 2026-11-12 (owner: "no Performance, no Privacy"): since Appearance opens the Theme window, which lists
-           only the looks, these two had no way in. Each has its own row. */
+
         float[] systemRows = new float[AtlasTheme.SYSTEM_GROUPS.length];
         for (int i = 0; i < systemRows.length; i++) {
             systemRows[i] = serversRow + CAT * (i + 1);
@@ -1506,8 +1279,7 @@ public class AtlasClickGui extends GuiScreen {
         boolean profile = settingsPage && this.theme.accountCard.getValue()
                 && y + height - (lastRow + CAT_H) >= 46;
         float limit = y + height - (profile ? 44 : 4);
-        /* Module pages: the categories scroll inside [top, listLimit], over a
-           small fixed strip at the foot of the column. */
+
         float listLimit = settingsPage ? limit : y + height - SIDEBAR_FOOT;
         this.sidebarRight = x + sidebar;
         this.sidebarMaxScroll = settingsPage ? 0.0F
@@ -1527,13 +1299,6 @@ public class AtlasClickGui extends GuiScreen {
         boolean pillOnAppearance = this.appearanceView && appearanceFit && systemIndex < 0;
         boolean pillOnServers = this.serversView && serversFit;
 
-        /* The selected category sits under a droplet of clear glass. It slides
-           between rows on a spring and stretches along its path in proportion
-           to its speed, so it reads as liquid being pulled rather than a box
-           being moved. Its shadow goes down before the labels, or it would
-           darken the very text the glass is showing. */
-        /* Sprung in the column's own coordinates, so dragging the window
-           carries the pill with it instead of leaving it to catch up. */
         Spring pill = spring("catPill", pillOnProfiles ? profilesRow - top
                         : pillOnAppearance ? appearanceRow - top
                         : pillOnServers ? serversRow - top
@@ -1600,13 +1365,12 @@ public class AtlasClickGui extends GuiScreen {
                         : on + " of " + list.size() + " enabled in " + name;
             }
             if (i == 1 && attention && shownCategories.size() > 2) {
-                /* The two lists above, the categories below. */
                 Liquid.rect(x + 18, rowY + CAT - 1.0F, x + sidebar - 18, rowY + CAT - 0.5F, 0.0F, ink(0x14));
             }
         }
         if (!settingsPage) {
             unclip();
-            /* More above or below: a small chevron at that edge. */
+
             if (scrolled > 1.0F) {
                 icon("chevronup", x + sidebar / 2.0F, top + 3, FAINT);
             }
@@ -1693,12 +1457,7 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /** The profile list, re-read from disk at most twice a second. */
     private List<AtlasProfiles.Info> profiles() {
-        /* Listing the folder means touching every file in it -- there are over
-           a hundred logs beside the profiles -- so the sidebar's count is
-           refreshed every ten seconds, and only the open page every second.
-           Saving or deleting from here refreshes at once anyway. */
         long now = System.currentTimeMillis();
         if (now - this.profilesReadAt > (this.profilesView ? 1000L : 10000L)) {
             this.profiles = AtlasProfiles.list();
@@ -1716,10 +1475,6 @@ public class AtlasClickGui extends GuiScreen {
         return null;
     }
 
-    /**
-     * The middle column in the profiles view: a field to save the current
-     * setup under a new name, and every saved profile below it.
-     */
     private void drawProfileList(ScaledResolution sr, int x, int y, int width, int height, float mx, float my) {
         List<AtlasProfiles.Info> list = profiles();
         String current = AtlasProfiles.current();
@@ -1728,7 +1483,6 @@ public class AtlasClickGui extends GuiScreen {
                 x + 16, y + 31, FAINT);
         int accent = accent();
 
-        /* New profile: type a name, press Enter or Save. */
         float fy = y + 42;
         float fy2 = fy + 22;
         float fcy = fy + 11;
@@ -1847,10 +1601,6 @@ public class AtlasClickGui extends GuiScreen {
         unclip();
     }
 
-    /**
-     * The right column in the profiles view: what the selected profile turns
-     * on, and what can be done with it.
-     */
     private void drawProfileDetail(ScaledResolution sr, int x, int y, int width, int height, float mx, float my) {
         AtlasProfiles.Info info = this.profileSelected == null ? null : profileNamed(this.profileSelected);
         LiquidFont body = font(8.5F, false);
@@ -1877,8 +1627,6 @@ public class AtlasClickGui extends GuiScreen {
         font(8.0F, false).draw(saved, x + 16, cursor, alpha(FAINT, arrived));
         cursor += 12;
         if (inUse) {
-            /* 2026-10-23: this said changes stay in memory until saved here; the
-               game saves them to the profile in use when it quits. */
             for (String line : body.wrap("In use. Your changes are saved to it when you quit, "
                     + "or now with Save here.", width - 32)) {
                 body.draw(line, x + 16, cursor, alpha(DIM, arrived));
@@ -1893,7 +1641,6 @@ public class AtlasClickGui extends GuiScreen {
         }
         cursor += 12;
 
-        /* Load, save over it, delete. Delete asks first; Load asks when there are unsaved changes. */
         float bx = x + 16;
         bx += drawButton("profileLoad", info.name, bx, cursor, 0.0F, inUse ? "Reload" : "Load", 0, mx, my) + 6;
         bx += drawButton("profileSave", info.name, bx, cursor, 0.0F, "Save here", 1, mx, my) + 6;
@@ -1932,14 +1679,11 @@ public class AtlasClickGui extends GuiScreen {
         drawButton("profileFolder", null, x + 16, y + height - 16, 0.0F, "Open folder", 1, mx, my);
     }
 
-    // ---- servers page ----------------------------------------------------
-
     private static atlas.module.modules.ServerProfiles serverProfiles() {
         return (atlas.module.modules.ServerProfiles) Atlas.moduleManager.modules.get(
                 atlas.module.modules.ServerProfiles.class);
     }
 
-    /** The server's host: the address without its port, lower case; null in single player. */
     private static String currentHost() {
         String address = atlas.module.modules.ServerProfiles.currentAddress();
         if (address == null) {
@@ -1949,10 +1693,6 @@ public class AtlasClickGui extends GuiScreen {
         return colon > 0 ? address.substring(0, colon) : address;
     }
 
-    /**
-     * The middle column of the Servers page: ServerProfiles on or off, and its
-     * rules, first match wins, as the module reads them.
-     */
     private void drawServersList(int x, int y, int width, float mx, float my) {
         atlas.module.modules.ServerProfiles profiles = serverProfiles();
         font(15.0F, true).draw("Servers", x + 16, y + 17, TEXT);
@@ -2015,7 +1755,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /** The right column: the server played on now, the profile in use, and a rule for this server. */
     private void drawServersDetail(int x, int y, int width, float mx, float my) {
         String host = currentHost();
         font(14.0F, true).draw("This server", x + 16, y + 17, TEXT);
@@ -2068,7 +1807,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /** A rule for this server's host to the profile in use, replacing one for the same host. */
     private void useProfileHere() {
         atlas.module.modules.ServerProfiles profiles = serverProfiles();
         String host = currentHost();
@@ -2093,10 +1831,6 @@ public class AtlasClickGui extends GuiScreen {
                 + (profiles.isEnabled() ? "" : "  ·  turn on Auto load config to use it"));
     }
 
-    /**
-     * Pushes the theme into everything that reads it, once a frame and before
-     * any of it is drawn: the blur, the typeface, the springs and the layout.
-     */
     private void applyTheme() {
         Liquid.blurLevels = this.theme.blurLevels();
         Liquid.blurOffset = this.theme.blurOffset();
@@ -2108,13 +1842,10 @@ public class AtlasClickGui extends GuiScreen {
         this.ui.animations = animated;
         this.ui.smoothScroll = this.theme.smoothScroll.getValue();
         this.jelly = animated ? this.theme.jelly() : 0.0F;
-        /* In steps of five percent, and the old sheets dropped on a change:
-           every distinct size is a set of glyph sheets, and dragging the
-           slider would otherwise leave hundreds of them behind. */
+
         float scale = Math.round(this.theme.textSize.getValue() / 5.0F) * 0.05F;
         this.mobile = atlas.util.render.DeviceProfile.isMobile();
         if (this.mobile) {
-            /* A finger and a small screen: larger text, still in steps of five percent. */
             scale = Math.round(scale * 1.15F * 20.0F) / 20.0F;
         }
         if (scale != textScale) {
@@ -2122,7 +1853,7 @@ public class AtlasClickGui extends GuiScreen {
             LiquidFont.clear();
         }
         boolean compact = this.theme.compact();
-        /* On a phone every row is six pixels taller: a finger needs a bigger target than a pointer. */
+
         int touch = this.mobile ? 6 : 0;
         this.ROW_H = (compact ? 20 : 24) + touch;
         this.ROW = (compact ? 22 : 26) + touch;
@@ -2130,17 +1861,11 @@ public class AtlasClickGui extends GuiScreen {
         this.CAT = (compact ? 24 : 28) + touch;
         this.RADIUS = this.theme.radius.getValue();
         this.FOOTER = this.mobile ? 30 : this.theme.hintBar.getValue() ? 20 : 8;
-        /* The chat prefix follows an accent changed here at once. */
+
         syncChatPrefix(this.theme.accentEverywhere.getValue() ? accent() | 0xFF000000 : 0);
     }
 
-    /**
-     * The middle column of the Appearance page: presets, then the groups of
-     * settings, each with a one-line summary of where it stands.
-     */
     private void drawAppearanceList(ScaledResolution sr, int x, int y, int width, int height, float mx, float my) {
-        /* 2026-11-12: the looks are all in the Theme window (the Appearance row); this page keeps the client's own
-           choices, Performance and Privacy, which the Theme window does not list. */
         font(15.0F, true).draw("Client", x + 16, y + 17, TEXT);
         font(8.0F, false).draw("Applies as you change it  ·  saved automatically", x + 16, y + 31, FAINT);
 
@@ -2199,7 +1924,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /** The right column of the Appearance page: the open group's settings. */
     private void drawAppearanceDetail(ScaledResolution sr, int x, int y, int width, int height, float mx, float my) {
         if (!java.util.Arrays.asList(AtlasTheme.SYSTEM_GROUPS).contains(this.appearanceGroup)) {
             this.appearanceGroup = AtlasTheme.SYSTEM_GROUPS[0];
@@ -2225,10 +1949,6 @@ public class AtlasClickGui extends GuiScreen {
         drawSettingsCard(sr, "theme", visible, x + 12, x + width - 12, cursor, y + height - 6, mx, my);
     }
 
-    /**
-     * A capsule button. Style 0 is the accent, 1 plain glass, 2 destructive.
-     * A width of 0 fits the label. Returns the width drawn.
-     */
     private float drawButton(String kind, Object payload, float x, float cy, float width, String label,
                              int style, float mx, float my) {
         LiquidFont bold = font(8.5F, true);
@@ -2273,7 +1993,6 @@ public class AtlasClickGui extends GuiScreen {
         return w;
     }
 
-    /** Who is playing, and where: the account, the server and the ping. */
     private void drawProfile(int x, float y, int sidebar) {
         Liquid.rect(x + 10, y, x + sidebar - 10, y + 28, 11.0F, ink(0x0D), ink(0x08));
         Liquid.rim(x + 10, y, x + sidebar - 10, y + 28, 11.0F, 1.0F, ink(0x1F), ink(0x08));
@@ -2303,13 +2022,11 @@ public class AtlasClickGui extends GuiScreen {
                 }
             }
         } catch (Exception ignored) {
-            // Mid-transfer; the server name alone will do.
         }
         LiquidFont small = font(7.0F, false);
         small.draw(small.trim(where, sidebar - 50), x + 35, cy + 4.5F, FAINT);
     }
 
-    /** The Scripts page's buttons, flowing onto a second row when narrow; returns the bottom. */
     private float drawScriptToolbar(float left, float top, float width, float mx, float my) {
         String[][] buttons = {
                 {"newAtlas", "+ Atlas", "A new Atlas script from the template, opened in your editor"},
@@ -2367,8 +2084,7 @@ public class AtlasClickGui extends GuiScreen {
                 }
             }
         }
-        /* Settings the search found follow the modules, under a heading row
-           of their own, in the same scroll. */
+
         List<SearchIndex.Entry> settings = searching ? searchResults().settings
                 : java.util.Collections.<SearchIndex.Entry>emptyList();
         int rows = modules.size() + (settings.isEmpty() ? 0 : settings.size() + 1);
@@ -2422,18 +2138,11 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
 
-        /* Scrolling moves a pixel offset rather than an index, so a row can be
-           part-way past the edge. Clipping is what lets that be true. */
         float shown = scrollEase("listScroll", this.listScroll * (float) ROW);
         clip(sr, x, top - 2, width, bottom - top + 2);
 
-        /* The selected module sits under the same glass as the category, its
-           shadow laid down first for the same reason. */
         int selectedIndex = modules.indexOf(this.selected);
         if (selectedIndex >= 0) {
-            /* In list coordinates for the same reason, and before the scroll
-               offset, so scrolling moves the pill exactly with its row and
-               only a change of selection makes it slide. */
             Spring pill = spring("rowPill", selectedIndex * ROW, 380.0F, 26.0F);
             float stretch = Math.min(8.0F, Math.abs(pill.velocity) * this.jelly * 0.015F);
             float px = x + 10 - stretch * 0.3F;
@@ -2460,8 +2169,7 @@ public class AtlasClickGui extends GuiScreen {
             AtlasInspector.note("list", module.getName(), x + 10, rowY, x + width - 10, rowY + ROW_H);
             boolean hovered = mx >= x + 10 && mx <= x + width - 10 && my >= rowY && my <= rowY + ROW_H
                     && my >= top && my <= bottom;
-            /* Only the part of a row inside the clip can be clicked, because
-               only that part can be seen. */
+
             float clippedTop = Math.max(rowY, top);
             float clippedBottom = Math.min(rowY + ROW_H, bottom);
             if (clippedBottom - clippedTop > 4.0F) {
@@ -2473,8 +2181,7 @@ public class AtlasClickGui extends GuiScreen {
                 Liquid.rect(x + 10, rowY, x + width - 10, rowY + ROW_H, 9.0F,
                         alpha(ink(0x10), hoverLit), alpha(ink(0x0A), hoverLit));
             }
-            /* A result from the other page looks borrowed: its own tint, a dashed
-               edge, and a tag naming the page it lives on. */
+
             boolean foreign = searching && !belongsOnPage(module);
             if (foreign) {
                 Liquid.rect(x + 10, rowY, x + width - 10, rowY + ROW_H, 9.0F,
@@ -2484,9 +2191,6 @@ public class AtlasClickGui extends GuiScreen {
             float cy = rowY + ROW_H / 2.0F;
             int accent = accent();
 
-            /* The state bead is the leftmost thing on the row and the only
-               accent-coloured dot there, so "what is on" is answerable at a
-               glance. A ring leaves it once on the click that changed it. */
             float onLit = ease("on:" + module.getName(), module.isEnabled(), 12.0F);
             float ring = pulseAt("tog:" + module.getName(), 420L);
             boolean dots = this.theme.stateDots.getValue();
@@ -2517,9 +2221,7 @@ public class AtlasClickGui extends GuiScreen {
                     : nameX + nameWidth + (module.isHidden() ? 22 : 10);
 
             float switchX = x + width - 18 - 22;
-            /* Only the switch turns a module on or off; the rest of the row
-               selects it. Registered after the row, so it wins where they
-               overlap, and a little larger than drawn so it is easy to hit. */
+
             if (clippedBottom - clippedTop > 4.0F) {
                 hit("rowSwitch", module, switchX - 4, Math.max(cy - 9, top), switchX + 26, Math.min(cy + 9, bottom));
             }
@@ -2574,7 +2276,6 @@ public class AtlasClickGui extends GuiScreen {
         }
         unclip();
 
-        /* A thin capsule on the right edge, only while there is more. */
         if (this.listMaxScroll > 0) {
             float track = bottom - top;
             float thumb = Math.max(18.0F, track * maxRows / (float) rows);
@@ -2584,12 +2285,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /**
-     * One setting the search found: its name and the module it is in, its
-     * value on the right. A click opens the module at it (openSetting). A
-     * setting the module hides right now -- another mode's -- says so in place
-     * of its value.
-     */
     private void drawSettingResult(SearchIndex.Entry entry, int x, float rowY, int width, float top, float bottom,
                                    float mx, float my) {
         Module module = (Module) entry.module;
@@ -2614,8 +2309,7 @@ public class AtlasClickGui extends GuiScreen {
             dashedRim(x + 10, rowY, x + width - 10, rowY + ROW_H, 9.0F, alpha(foreignColour(), 0.75F));
         }
         float cy = rowY + ROW_H / 2.0F;
-        /* A hollow ring where a module row has its on/off bead: a setting is
-           not on or off. */
+
         boolean dots = this.theme.stateDots.getValue();
         float nameX = dots ? x + 30 : x + 20;
         if (dots) {
@@ -2656,7 +2350,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /** The search's results for what is typed, on this page; searched again only when either changes. */
     private SearchIndex.Results searchResults() {
         String query = search();
         if (this.indexedScripts != atlas.script.ScriptManager.get().version()) {
@@ -2671,10 +2364,6 @@ public class AtlasClickGui extends GuiScreen {
         return this.searchResults;
     }
 
-    /**
-     * Every module in the menu, in its order, and every setting of each, with
-     * the descriptions and help ModuleDocs gave them at start-up.
-     */
     private void buildIndex() {
         SearchIndex built = new SearchIndex();
         java.util.Set<Module> seen = new java.util.HashSet<Module>();
@@ -2685,7 +2374,7 @@ public class AtlasClickGui extends GuiScreen {
                 }
             }
         }
-        /* Scripts come and go, and a reload makes a new module: searchResults builds this again when they change. */
+
         this.indexedScripts = atlas.script.ScriptManager.get().version();
         for (Module module : scriptModules(SCRIPTS_ALL)) {
             index(built, module);
@@ -2706,10 +2395,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /**
-     * A script's module is a new object each time it reloads, and a placeholder until it loads: the selection
-     * follows the script, so the card never edits a module that is gone. When the file is gone, so is the selection.
-     */
     private void followScripts() {
         if (!(this.selected instanceof atlas.script.ScriptHost)) {
             return;
@@ -2723,12 +2408,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /**
-     * Opens a setting found by the search: selects its module, scrolls the
-     * settings card to it, opens its info row and makes it glow for a moment.
-     * A setting the module hides right now (another mode's, or behind a
-     * switch) is not in the card to scroll to, so that is said instead.
-     */
     private void openSetting(SearchIndex.Entry entry) {
         openSetting((Module) entry.module, (Property<?>) entry.setting);
     }
@@ -2750,8 +2429,7 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
         this.infoOpen = property;
-        /* The same arithmetic as drawSettingsCard: the headings and rows above
-           it. The card clamps the scroll to its content when it is drawn. */
+
         int offset = 0;
         for (int i = 0; i < index; i++) {
             offset += (headingBefore(shown, i) != null ? HEADING_HEIGHT : 0) + rowHeightOf(shown.get(i));
@@ -2761,7 +2439,6 @@ public class AtlasClickGui extends GuiScreen {
         pulse("found:" + module.getName() + ":" + property.getName());
     }
 
-    /** Enter in the search box: the first result, a module before a setting. */
     private void openFirstResult() {
         if (search().trim().isEmpty()) {
             return;
@@ -2782,17 +2459,12 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /** The selection droplet, as the theme has it; {@code shown} fades it with its pill. */
     private Liquid.Style pillStyle(float shown) {
         Liquid.Style style = this.theme.pill(accent(), shown);
         style.selection = true;
         return style;
     }
 
-    /**
-     * An on/off switch whose knob travels on a spring and stretches with its
-     * speed, like a drop of something thick being pushed.
-     */
     private void drawSwitch(String key, float x, float cy, float w, float h, boolean on) {
         Spring s = spring("sw:" + key, on ? 1.0F : 0.0F, 520.0F, 24.0F);
         float t = Math.max(-0.08F, Math.min(1.08F, s.value));
@@ -2849,8 +2521,6 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
 
-        /* A new selection arrives rather than replacing the old one in place:
-           the pane fades up and settles a few pixels. */
         float arrived = toward("detailArrive", 1.0F, 11.0F);
         float lift = (1.0F - arrived) * 6.0F;
         int accent = accent();
@@ -2871,8 +2541,7 @@ public class AtlasClickGui extends GuiScreen {
         LiquidFont body = font(8.5F, false);
         if (description != null && !description.isEmpty()) {
             List<String> lines = body.wrap(description, width - 32);
-            /* Five lines, as before; a longer one gets More, which shows the
-               rest (2026-10-23: the rest used to be cut off for good). */
+
             boolean expanded = this.descriptionOpen == this.selected;
             int shownLines = Math.min(lines.size(), expanded ? DESCRIPTION_MAX_LINES : 5);
             for (int i = 0; i < shownLines; i++) {
@@ -2902,9 +2571,6 @@ public class AtlasClickGui extends GuiScreen {
         }
         cursor = drawHealthStrip(this.selected, x, width, cursor, mx, my, arrived);
 
-        /* The two things about a module that are not properties: its key and
-           whether the array list shows it. Both live on Module itself, which
-           is why neither appeared among the settings. */
         boolean rebinding = this.binding == this.selected;
         String keyName = rebinding ? "Press a key"
                 : (this.selected.getKey() == 0 ? "None"
@@ -2925,11 +2591,6 @@ public class AtlasClickGui extends GuiScreen {
                 x + 12, x + width - 12, cursor, y + height - 6, mx, my);
     }
 
-    /**
-     * "N changed · Reset" on the SETTINGS line, when any of the module's
-     * settings differs from its default -- counted over all of them, those of
-     * other modes too, since all of them are reset. A click asks first (Dialog).
-     */
     private void drawResetModule(int x, int width, float cy, float mx, float my) {
         List<Property<?>> all = Atlas.propertyManager.properties.get(this.selected.getClass());
         int changed = all == null ? 0 : SettingFacts.countChanged(all);
@@ -2949,11 +2610,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /**
-     * A rounded card of settings rows that scrolls inside itself: a module's
-     * settings, or one group of the Appearance page. {@code owner} keeps the
-     * animations of two owners' same-named settings apart.
-     */
     private void drawSettingsCard(ScaledResolution sr, String owner, List<Property<?>> properties,
                                   float cardX, float cardX2, float cardTop, float cardBottom, float mx, float my) {
         LiquidFont body = font(8.5F, false);
@@ -3028,10 +2684,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /**
-     * A capsule with an icon, a faint label and a bright value. Returns its
-     * width so the next one can follow it.
-     */
     private float drawChip(String kind, Module module, float x, float cy, String iconName,
                            String label, String value, boolean active, float mx, float my) {
         LiquidFont small = font(8.0F, false);
@@ -3045,7 +2697,7 @@ public class AtlasClickGui extends GuiScreen {
         float hover = ease("chip:" + kind, hovered, 12.0F);
         float on = ease("chipOn:" + kind, active, 12.0F);
         float press = pulseAt("chip:" + kind, 260L);
-        /* A tap squashes the chip and lets it spring back. */
+
         float squash = press >= 0.0F ? (float) Math.sin(press * Math.PI) * 1.2F : 0.0F;
         float x1 = x + squash;
         float x3 = x + width - squash;
@@ -3074,18 +2726,8 @@ public class AtlasClickGui extends GuiScreen {
         return width;
     }
 
-    /**
-     * How tall a settings row is. A slider row carries its name and value on
-     * one line and the track under them.
-     */
-    /** Height of a settings heading row (ModuleDocs groups). */
     private static final int HEADING_HEIGHT = 16;
 
-    /**
-     * The heading to draw before the setting at index: its group, when it
-     * differs from the setting before it. Null for none -- and none at all in
-     * a list whose settings share one group or have none.
-     */
     private static String headingBefore(List<Property<?>> properties, int index) {
         String group = properties.get(index).getGroup();
         if (group == null) {
@@ -3096,7 +2738,6 @@ public class AtlasClickGui extends GuiScreen {
             return null;
         }
         if (index == 0) {
-            /* A single heading over everything says nothing. */
             boolean other = false;
             for (Property<?> property : properties) {
                 if (!group.equals(property.getGroup())) {
@@ -3111,15 +2752,10 @@ public class AtlasClickGui extends GuiScreen {
         return group;
     }
 
-    /** A heading's colour: the accent, toned down so it reads as a label rather than a control. */
     private int accentText() {
         return (0xCC << 24) | (accent() & 0x00FFFFFF);
     }
 
-    /**
-     * The hint line's start for a setting: its name, its default when it was
-     * changed, and what it does when that is written down.
-     */
     private static String hintName(Property<?> property) {
         String name = SettingFacts.changed(property)
                 ? property.getLabel() + " (default " + SettingFacts.defaultText(property) + ")"
@@ -3127,7 +2763,6 @@ public class AtlasClickGui extends GuiScreen {
         return property.getHelp() == null ? name : name + "  ·  " + property.getHelp();
     }
 
-    /** How tall a setting's whole block is: its row, an open colour picker and an open info row. */
     private int rowHeightOf(Property<?> property) {
         int height = baseHeightOf(property);
         if (property == this.infoOpen) {
@@ -3136,7 +2771,6 @@ public class AtlasClickGui extends GuiScreen {
         return height;
     }
 
-    /** The row itself, with an open colour picker: the part that is hovered and clicked as the setting. */
     private int baseHeightOf(Property<?> property) {
         if (isNumeric(property)) {
             return 32;
@@ -3144,13 +2778,11 @@ public class AtlasClickGui extends GuiScreen {
         return property == this.colorOpen ? 22 + PICKER_HEIGHT : 22;
     }
 
-    /** What a setting does, wrapped for its info row; a plain note when nothing is written down yet. */
     private static List<String> infoHelp(Property<?> property, LiquidFont font, float width) {
         String help = property.getHelp();
         return font.wrap(help == null || help.isEmpty() ? "No description for this setting yet." : help, width);
     }
 
-    /** Its default and range, and who is overriding it, wrapped for its info row. */
     private static List<String> infoFacts(Property<?> property, LiquidFont font, float width) {
         StringBuilder facts = new StringBuilder();
         if (SettingFacts.resettable(property)) {
@@ -3174,7 +2806,6 @@ public class AtlasClickGui extends GuiScreen {
         return lines;
     }
 
-    /** Why the value is risky, wrapped for the info row; nothing when it is not. */
     private List<String> infoRisk(Property<?> property, LiquidFont font, float width) {
         String risk = riskOf(property);
         return risk == null ? java.util.Collections.<String>emptyList() : font.wrap(risk, width);
@@ -3197,11 +2828,6 @@ public class AtlasClickGui extends GuiScreen {
         return height + 8;
     }
 
-    /**
-     * A setting's info row, under its row: what it does in full, its default
-     * and range, and Reset when it differs from the default. The hint bar only
-     * ever had room for the first line of this.
-     */
     private void drawSettingInfo(Property<?> property, float x, float top, float width, float mx, float my,
                                  float paneTop, float paneBottom) {
         LiquidFont body = font(8.0F, false);
@@ -3238,7 +2864,7 @@ public class AtlasClickGui extends GuiScreen {
             body.draw("At its default", left, buttonCy, FAINT);
             return;
         }
-        /* Only a button wholly in view takes clicks, like every row. */
+
         if (buttonCy - 10 >= paneTop && buttonCy + 10 <= paneBottom) {
             String fallback = SettingFacts.defaultText(property);
             drawButton("infoReset", property, left - 2, buttonCy, 0.0F,
@@ -3246,12 +2872,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /**
-     * A setting's label, with the mark of a changed value before it and the
-     * (i) that opens its info row after it. maxWidth is the room the row
-     * leaves for the label (Float.MAX_VALUE: never trimmed); the button takes
-     * its share of it. Returns where the button ends.
-     */
     private float drawLabel(Property<?> property, String text, float labelX, float cy, float maxWidth,
                             boolean rowHovered, float mx, float my, boolean clickable) {
         LiquidFont label = font(8.5F, false);
@@ -3286,13 +2906,6 @@ public class AtlasClickGui extends GuiScreen {
         return end;
     }
 
-    /**
-     * Draws one setting and registers every part of it that can be clicked.
-     *
-     * The registration is the point. Each control's hit box is the rectangle
-     * this method just drew it at, written once, so there is no second piece
-     * of arithmetic to fall out of step with the first.
-     */
     private void drawProperty(String owner, Property<?> property, float x, float top, float width,
                               float mx, float my, float paneTop, float paneBottom) {
         drawPropertyRow(owner, property, x, top, width, mx, my, paneTop, paneBottom);
@@ -3301,7 +2914,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /** The setting's own row (and an open colour picker), without its info row. */
     private void drawPropertyRow(String owner, Property<?> property, float x, float top, float width,
                                  float mx, float my, float paneTop, float paneBottom) {
         float labelX = x + 10;
@@ -3311,19 +2923,15 @@ public class AtlasClickGui extends GuiScreen {
         int accent = accent();
         boolean hovered = mx >= x && mx <= x + width && my >= top && my <= top + rowHeight
                 && my >= paneTop && my <= paneBottom;
-        /* A row straddling the edge of the clip is half drawn, so only a row
-           wholly inside it takes a hit box at all. */
+
         boolean clickable = top >= paneTop - 2 && top + rowHeight <= paneBottom + 2;
-        /* Opened from a search result: the row glows for a moment, so the eye
-           finds it in the card. */
+
         float found = pulseAt("found:" + owner + ":" + property.getName(), 1600L);
         if (found >= 0.0F) {
             Liquid.rect(x + 4, top + 1, x + width - 4, top + rowHeight - 1, 8.0F,
                     alpha(accent, 0.30F * (1.0F - smooth(found))));
         }
         if (hovered) {
-            /* The range is the part people actually need and the part most
-               menus hide: a slider with no numbers cannot be set deliberately. */
             this.hint = hintName(property) + "  ·  " + property.getValuePrompt()
                     + (property instanceof ModeProperty ? "  ·  click for the list, right click to cycle"
                             : isNumeric(property)
@@ -3344,17 +2952,13 @@ public class AtlasClickGui extends GuiScreen {
             if (clickable) {
                 hit("toggle", property, x + 2, top, x + width - 2, top + rowHeight);
             }
-            /* After the row's hit, so the (i) wins where they overlap. */
+
             drawLabel(property, property.getLabel(), labelX, cy, width - 50, hovered, mx, my, clickable);
             drawSwitch(id, right - 22, cy, 22.0F, 12.0F, ((BooleanProperty) property).getValue());
             return;
         }
 
         if (isNumeric(property)) {
-            /* The bar is the player's value (the base); the number is the one in
-               effect. While a tuner holds an override they differ, and the
-               number alone looked like a slider that did nothing (BackTrack
-               adaptive-delay under an AutoTune trial, 2026-10-02). Say whose. */
             String overrider = property.isOverridden() ? property.getSourceOwner() : null;
             if (hovered && overrider != null) {
                 this.hint = hintName(property) + "  ·  " + property.describe() + "  ·  the bar is your value";
@@ -3387,25 +2991,20 @@ public class AtlasClickGui extends GuiScreen {
             float barY = top + 23;
             float barX = labelX;
             float barX2 = right;
-            /* The grab area is the whole strip the track sits in, not the
-               three pixels it is painted in, and it starts below the number's
-               box so the two never share a pixel. */
+
             if (clickable) {
                 hit("slide", property, barX - 3, barY - 5, barX2 + 3, barY + 7);
             }
             float min = minimumOf(property);
             float max = maximumOf(property);
             float fraction = max <= min ? 0.0F : (currentOf(property) - min) / (max - min);
-            /* On a spring even while dragging: the handle trailing the pointer
-               very slightly is what gives the control weight, and the value
-               itself is already exact. */
+
             Spring knob = spring("sl:" + id, fraction, 520.0F, 30.0F);
             float f = Math.max(0.0F, Math.min(1.0F, knob.value));
             float fillX = barX + (barX2 - barX) * f;
             boolean hue = property.getName().endsWith("-hue");
             int knobColour = 0xFFFFFFFF;
             if (hue) {
-                /* A hue is chosen by looking, so the track is the spectrum. */
                 float segment = (barX2 - barX) / 6.0F;
                 for (int i = 0; i < 6; i++) {
                     Liquid.rectH(barX + segment * i, barY - 2.0F, barX + segment * (i + 1) + 0.5F, barY + 2.0F,
@@ -3419,8 +3018,7 @@ public class AtlasClickGui extends GuiScreen {
                     Liquid.rectH(barX, barY - 1.5F, fillX, barY + 1.5F, 1.5F, alpha(accent, 0.75F), accent);
                 }
             }
-            /* The knob swells while held and turns into a drop of clear glass
-               that magnifies the track under it. */
+
             boolean held = this.dragging == property;
             Spring grow = spring("grab:" + id, held ? 1.0F : 0.0F, 420.0F, 20.0F);
             float r = 5.0F + 2.6F * Math.max(0.0F, grow.value);
@@ -3464,8 +3062,6 @@ public class AtlasClickGui extends GuiScreen {
             modeFont.draw(value, capsuleLeft + 7, cy, accent);
             icon(open ? "chevronUp" : "chevron", right - 8, cy, accent);
             if (open) {
-                /* Where the list hangs from, recorded here because this is the
-                   only place that knows where the row ended up after scrolling. */
                 this.dropX = capsuleLeft;
                 this.dropY = cy + 8;
                 this.dropRight = right;
@@ -3478,8 +3074,7 @@ public class AtlasClickGui extends GuiScreen {
             float labelEnd = drawLabel(property, property.getLabel(), labelX, cy, Float.MAX_VALUE, hovered, mx, my,
                     clickable);
             float available = right - labelEnd - 10;
-            /* The tail rather than the head: the end of a comma separated
-               list is the part being typed. */
+
             FieldLayout field = beingEdited ? layoutField(this.editInput, valueFont, available, true) : null;
             String clipped = value;
             if (!beingEdited && valueFont.width(clipped) > available) {
@@ -3505,9 +3100,6 @@ public class AtlasClickGui extends GuiScreen {
         }
 
         if (property instanceof KeyProperty) {
-            /* A key of its own, such as Clutch's hold-key: click, then press it.
-               It used to fall through to the read-only row below, so a hold
-               trigger could be chosen but never given a key (2026-10-02). */
             KeyProperty key = (KeyProperty) property;
             boolean listening = this.keyEditing == key;
             String shown = listening ? "Press a key" : key.getKeyName();
@@ -3534,25 +3126,12 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
 
-        /* Anything else -- item lists -- is shown but not editable here,
-           because there is no honest control for it yet. Printing it is
-           still better than hiding it. */
         float labelEnd = drawLabel(property, property.getLabel(), labelX, cy, Float.MAX_VALUE, hovered, mx, my,
                 clickable);
         String shown = valueFont.trim(value, right - labelEnd - 10);
         valueFont.drawRight(shown, right, cy, TEXT);
     }
 
-    /**
-     * A colour setting: a swatch and its hex on the row; a click on the row
-     * opens a picker under it -- saturation/brightness field, hue strip --
-     * and a click on the hex types one. Theme's colour-1..3, HUD's custom
-     * colours and the rest used to be read-only here (2026-10-02).
-     *
-     * Each part takes clicks only while it is wholly inside the pane, like
-     * every other row, but measured per part: the open picker is tall, and
-     * a row half scrolled out of view should still close from its header.
-     */
     private void drawColour(ColorProperty colour, float x, float top, float width, float cy, float labelX,
                             float right, boolean hovered, float mx, float my, float paneTop, float paneBottom,
                             LiquidFont valueFont, boolean beingEdited, int accent) {
@@ -3565,15 +3144,14 @@ public class AtlasClickGui extends GuiScreen {
         boolean rowClickable = top >= paneTop - 2 && top + 22 <= paneBottom + 2;
         if (rowClickable) {
             hit("colorOpen", colour, x + 2, top, x + width - 2, top + 22);
-            /* Registered after the row, so it is found first. */
+
             hit("type", colour, hexLeft - 4, cy - 7, hexRight + 3, cy + 7);
         }
         if (hovered && my <= top + 22) {
             this.hint = colour.getLabel() + "  ·  click to " + (open ? "close" : "open") + " the picker"
                     + "  ·  click the hex to type one";
         }
-        /* After the row's hits, so the (i) wins where they overlap. The label,
-           not the raw key (colour rows alone showed "line-color"). */
+
         drawLabel(colour, colour.getLabel(), labelX, cy, hexLeft - labelX - 8, hovered && my <= top + 22, mx, my,
                 rowClickable);
         if (beingEdited) {
@@ -3596,8 +3174,6 @@ public class AtlasClickGui extends GuiScreen {
         }
         int pure = 0xFF000000 | (java.awt.Color.HSBtoRGB(this.colorHsb[0], 1.0F, 1.0F) & 0xFFFFFF);
 
-        /* Saturation left to right, brightness top to bottom: white to the
-           pure hue across, then a veil from clear to black down. */
         float boxX = labelX;
         float boxX2 = right;
         float boxY = top + 24;
@@ -3629,7 +3205,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /** Moves the open picker's dragged control to the pointer and writes the colour. */
     private void colourDragTo(float mouseX, float mouseY) {
         if (this.colorDrag == null || this.colorOpen == null || this.colorW <= 0.0F) {
             return;
@@ -3640,7 +3215,6 @@ public class AtlasClickGui extends GuiScreen {
             this.colorHsb[1] = fx;
             this.colorHsb[2] = 1.0F - fy;
         } else {
-            /* Hue 1.0 is hue 0.0: stop short so the knob stays at the right end. */
             this.colorHsb[0] = Math.min(fx, 0.9999F);
         }
         int rgb = java.awt.Color.HSBtoRGB(this.colorHsb[0], this.colorHsb[1], this.colorHsb[2]) & 0xFFFFFF;
@@ -3648,16 +3222,7 @@ public class AtlasClickGui extends GuiScreen {
         this.colorOpen.setValue(Integer.valueOf(rgb));
     }
 
-    /**
-     * The expanded list of a mode setting, as a glass popover that springs
-     * out of the value it belongs to.
-     *
-     * Cycling on click is fine for two options and hostile for eight: finding
-     * the one wanted means clicking past the others and reading each in turn.
-     */
     private void drawDropdown(int windowTop, int windowHeight, float mx, float my) {
-        /* ModeProperty's own list (2026-10-23): the names used to be split back
-           out of the chat prompt at its commas. */
         String[] modes = this.dropdown.visibleModes();
         if (modes.length == 0) {
             this.dropdown = null;
@@ -3679,7 +3244,7 @@ public class AtlasClickGui extends GuiScreen {
         float left = right - width;
         float top = this.dropY + 4;
         boolean above = false;
-        /* Flipped above the row when there is no room below it. */
+
         if (top + height > windowTop + windowHeight - 4) {
             top = this.dropY - 20 - height;
             above = true;
@@ -3706,8 +3271,7 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
         float content = Math.min(1.0F, (g - 0.6F) / 0.4F);
-        /* Menu rows are the visible modes (ModeProperty.hide): the current
-           mode's row, not its index. */
+
         int current = -1;
         int[] visible = this.dropdown.visibleIndices();
         for (int v = 0; v < visible.length; v++) {
@@ -3716,14 +3280,12 @@ public class AtlasClickGui extends GuiScreen {
             }
         }
         if (this.dropScrollInit) {
-            /* Opened with the current mode in view, a little below the top. */
             this.dropScrollInit = false;
             this.dropScroll = current < 0 ? 0 : current - rows / 3;
         }
         this.dropScroll = Math.max(0, Math.min(this.dropMaxScroll, this.dropScroll));
         int accent = accent();
         if (this.dropMaxScroll > 0) {
-            /* Where the visible rows sit in the whole list. */
             float trackTop = top + 6;
             float trackBottom = top + height - 6;
             float thumb = Math.max(10.0F, (trackBottom - trackTop) * rows / modes.length);
@@ -3737,7 +3299,7 @@ public class AtlasClickGui extends GuiScreen {
             float cy = rowY + rowHeight / 2.0F;
             boolean hovered = mx >= left && mx <= right && my >= rowY && my <= rowY + rowHeight;
             hit("pick", Integer.valueOf(i), left, rowY, right, rowY + rowHeight);
-            /* Colour choices show their colour. */
+
             int swatch = this.theme.swatch(this.dropdown, i < visible.length ? visible[i] : i, clickGuiAccent());
             if (swatch != 0) {
                 Liquid.dot(left + 12, cy, 3.5F, alpha(swatch, content));
@@ -3763,11 +3325,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /**
-     * The hint bar. Always present, always at the same place, showing whatever
-     * the pointer is over -- so an explanation never moves, never covers what
-     * it describes, and never has to be chased.
-     */
     private void drawHintBar(int x, int y, int width) {
         long now = System.currentTimeMillis();
         if (!this.hint.isEmpty()) {
@@ -3781,7 +3338,6 @@ public class AtlasClickGui extends GuiScreen {
         float shownHint = ease("hint", !hint.isEmpty(), 12.0F);
         LiquidFont small = font(7.5F, false);
         if (this.mobile) {
-            /* A phone: two lines, so the help is read in full rather than cut off at the edge. */
             String text = hint.isEmpty()
                     ? "Tap a module for its settings  ·  tap its switch to turn it on or off  ·  drag a list to scroll"
                     : hint;
@@ -3803,11 +3359,6 @@ public class AtlasClickGui extends GuiScreen {
         small.draw(text, x + 16, y + FOOTER / 2.0F - 1, blend(FAINT, DIM, shownHint));
     }
 
-    /**
-     * The toasts, centred along the foot of the window above the hint bar,
-     * the newest lowest. Each is a hit of its own, so a click on one dismisses
-     * it and reaches nothing drawn under it.
-     */
     private void drawToasts(int x, int y, int width, int height, float mx, float my) {
         long now = System.currentTimeMillis();
         List<Toasts.Toast> shown = this.toasts.visible(now);
@@ -3844,7 +3395,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /** A result or a problem, as a toast; in chat while the menu closes, when a toast would never be seen. */
     private void tell(Toasts.Kind kind, String message) {
         if (this.closing || this.mc.currentScreen != this) {
             say(message);
@@ -3853,7 +3403,6 @@ public class AtlasClickGui extends GuiScreen {
         this.toasts.add(message, kind, System.currentTimeMillis());
     }
 
-    /** A module just switched on in the menu: what it now works against, once, as toasts. */
     private void warnConflicts(Module module) {
         if (!module.isEnabled()) {
             return;
@@ -3864,7 +3413,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /** Says what a key now does, and what else answers to the same key. */
     private void reportKey(String what, String self, int key) {
         if (key == 0) {
             tell(Toasts.Kind.OK, what + " has no key now");
@@ -3880,9 +3428,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    // ---- text fields ----------------------------------------------------
-
-    /** A field's text laid out to a width: what shows, from which character, and how wide it is. */
     private static final class FieldLayout {
         final int start;
         final String head;
@@ -3899,11 +3444,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /**
-     * A field's text in maxWidth: all of it when it fits, otherwise the part
-     * around the caret with "..." where it is cut. preferTail shows the end of a
-     * long text rather than its start.
-     */
     private static FieldLayout layoutField(TextInput input, LiquidFont font, float maxWidth, boolean preferTail) {
         String text = input.text();
         int start = 0;
@@ -3921,11 +3461,6 @@ public class AtlasClickGui extends GuiScreen {
         return new FieldLayout(start, head, shown, tail, font.width(head + shown + tail));
     }
 
-    /**
-     * Draws a laid-out field from x, or ending at x when alignRight, with a
-     * Ctrl+A selection behind it. Records where the text went, so a click can
-     * place the caret, and leaves the caret's x in fieldCaretX.
-     */
     private void drawField(TextInput input, LiquidFont font, FieldLayout field, float x, float cy, int colour,
                            boolean alignRight) {
         float left = alignRight ? x - field.width : x;
@@ -3940,7 +3475,6 @@ public class AtlasClickGui extends GuiScreen {
         this.fieldCaretX = textX + font.width(field.shown.substring(0, caret - field.start));
     }
 
-    /** The setting being typed into, ending at {@code right}, and its caret. */
     private void drawEditedText(LiquidFont font, float maxWidth, boolean preferTail, float right, float cy, int accent) {
         drawField(this.editInput, font, layoutField(this.editInput, font, maxWidth, preferTail), right, cy, accent, true);
         drawEditCaret(cy, accent);
@@ -3952,17 +3486,10 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /** The edge of the field being typed into: red after Enter on something that is not a value for it. */
     private int editEdge(int accent) {
         return this.editError ? AtlasStyle.danger : accent;
     }
 
-    // ---- icons --------------------------------------------------------
-
-    /**
-     * Icons, drawn from primitives so they are sharp at any scale. Category
-     * icons are chosen by name; anything unknown gets the grid.
-     */
     static void icon(String name, float x, float y, int c) {
         String key = name.toLowerCase();
         if (key.equals("combat")) {
@@ -3973,14 +3500,12 @@ public class AtlasClickGui extends GuiScreen {
             Liquid.line(x - 6.0F, y, x - 4.6F, y, 1.1F, c);
             Liquid.line(x + 4.6F, y, x + 6.0F, y, 1.1F, c);
         } else if (key.equals("code")) {
-            /* </>: the Scripts page. */
             Liquid.line(x - 2.2F, y - 3.6F, x - 5.4F, y, 1.2F, c);
             Liquid.line(x - 5.4F, y, x - 2.2F, y + 3.6F, 1.2F, c);
             Liquid.line(x + 2.2F, y - 3.6F, x + 5.4F, y, 1.2F, c);
             Liquid.line(x + 5.4F, y, x + 2.2F, y + 3.6F, 1.2F, c);
             Liquid.line(x + 1.0F, y - 4.4F, x - 1.0F, y + 4.4F, 1.1F, c);
         } else if (key.equals("theme")) {
-            /* A palette: the board and three wells of paint. */
             Liquid.ring(x, y, 5.0F, 1.1F, c);
             Liquid.dot(x - 2.2F, y - 1.6F, 1.1F, c);
             Liquid.dot(x + 1.6F, y - 2.2F, 1.1F, c);
@@ -4048,27 +3573,21 @@ public class AtlasClickGui extends GuiScreen {
             Liquid.rim(x - 3.8F, y - 5.0F, x + 3.8F, y + 5.0F, 1.6F, 1.0F, c, c);
             Liquid.line(x - 1.8F, y - 1.2F, x + 1.8F, y - 1.2F, 0.9F, c);
             Liquid.line(x - 1.8F, y + 1.3F, x + 1.8F, y + 1.3F, 0.9F, c);
-        /* 2026-10-11: the categories and Appearance sections that fell back
-           to the four squares. */
         } else if (key.equals("world")) {
-            /* A globe: outline, equator, a meridian and two latitudes. */
             Liquid.ring(x, y, 5.0F, 1.1F, c);
             Liquid.line(x - 5.0F, y, x + 5.0F, y, 1.0F, c);
             Liquid.line(x, y - 5.0F, x, y + 5.0F, 1.0F, c);
             Liquid.line(x - 4.0F, y - 2.6F, x + 4.0F, y - 2.6F, 0.9F, c);
             Liquid.line(x - 4.0F, y + 2.6F, x + 4.0F, y + 2.6F, 0.9F, c);
         } else if (key.equals("misc")) {
-            /* "More": three dots. */
             Liquid.dot(x - 4.0F, y, 1.4F, c);
             Liquid.dot(x, y, 1.4F, c);
             Liquid.dot(x + 4.0F, y, 1.4F, c);
         } else if (key.equals("exploit")) {
-            /* A lightning bolt. */
             Liquid.line(x + 1.8F, y - 5.5F, x - 2.6F, y + 0.4F, 1.3F, c);
             Liquid.line(x - 2.6F, y + 0.4F, x + 2.6F, y - 0.4F, 1.3F, c);
             Liquid.line(x + 2.6F, y - 0.4F, x - 1.8F, y + 5.5F, 1.3F, c);
         } else if (key.equals("client")) {
-            /* A gear: hub, rim and six teeth. */
             Liquid.ring(x, y, 3.4F, 1.2F, c);
             Liquid.dot(x, y, 1.1F, c);
             for (int i = 0; i < 6; i++) {
@@ -4078,7 +3597,6 @@ public class AtlasClickGui extends GuiScreen {
                 Liquid.line(x + cx * 3.9F, y + cy * 3.9F, x + cx * 5.6F, y + cy * 5.6F, 1.5F, c);
             }
         } else if (key.equals("language")) {
-            /* A speech bubble with two lines of text. */
             Liquid.line(x - 5.0F, y - 4.2F, x + 5.0F, y - 4.2F, 1.0F, c);
             Liquid.line(x + 5.0F, y - 4.2F, x + 5.0F, y + 2.4F, 1.0F, c);
             Liquid.line(x + 5.0F, y + 2.4F, x - 1.0F, y + 2.4F, 1.0F, c);
@@ -4087,26 +3605,21 @@ public class AtlasClickGui extends GuiScreen {
             Liquid.line(x - 2.8F, y - 1.9F, x + 2.8F, y - 1.9F, 0.9F, c);
             Liquid.line(x - 2.8F, y + 0.2F, x + 1.2F, y + 0.2F, 0.9F, c);
         } else if (key.equals("cosmos")) {
-            /* A ringed planet. */
             Liquid.ring(x, y, 3.2F, 1.1F, c);
             Liquid.line(x - 6.0F, y + 2.2F, x + 6.0F, y - 2.2F, 1.0F, c);
             Liquid.dot(x + 4.6F, y - 4.6F, 0.8F, c);
         } else if (key.equals("layout")) {
-            /* A page: a header bar over two columns. */
             Liquid.rect(x - 5.0F, y - 5.0F, x + 5.0F, y - 2.4F, 1.0F, c);
             Liquid.rect(x - 5.0F, y - 1.2F, x - 0.8F, y + 5.0F, 1.0F, c);
             Liquid.rect(x + 0.6F, y - 1.2F, x + 5.0F, y + 5.0F, 1.0F, c);
         } else if (key.equals("privacy")) {
-            /* A padlock: shackle over a body with a keyhole. */
             Liquid.ring(x, y - 2.2F, 2.8F, 1.1F, c);
             Liquid.rect(x - 4.2F, y - 1.0F, x + 4.2F, y + 5.0F, 1.2F, c);
         } else if (key.equals("performance")) {
-            /* A gauge: the dial and its needle (2026-11-12, the Client Settings row). */
             Liquid.ring(x, y + 0.6F, 4.8F, 1.1F, c);
             Liquid.line(x, y + 0.6F, x + 2.8F, y - 2.4F, 1.2F, c);
             Liquid.dot(x, y + 0.6F, 1.0F, c);
         } else if (key.equals("attention")) {
-            /* A warning triangle and its mark. */
             Liquid.line(x, y - 4.6F, x - 4.8F, y + 3.8F, 1.1F, c);
             Liquid.line(x - 4.8F, y + 3.8F, x + 4.8F, y + 3.8F, 1.1F, c);
             Liquid.line(x + 4.8F, y + 3.8F, x, y - 4.6F, 1.1F, c);
@@ -4123,8 +3636,6 @@ public class AtlasClickGui extends GuiScreen {
             }
         }
     }
-
-    // ---- colour -------------------------------------------------------
 
     private static int blend(int a, int b, float t) {
         t = Math.max(0.0F, Math.min(1.0F, t));
@@ -4149,19 +3660,13 @@ public class AtlasClickGui extends GuiScreen {
         return (colour & 0xFF000000) | (r << 16) | (g << 8) | b;
     }
 
-    /** The accent, as the theme has it: its own colour, or the ClickGUI module's. */
     private int accent() {
         return this.theme.accent(clickGuiAccent());
     }
 
-    /* 2026-11-12 (owner: the Appearance colours did not reach the HUD, its notifications or chat). */
     private static final String DEFAULT_CHAT_PREFIX = "&7[&bAtlas&7]&r ";
     private static int chatPrefixFor = 0;
 
-    /**
-     * The Appearance accent (opaque) for drawing outside this menu, or 0 while "accent everywhere" is off. Keeps the
-     * [Atlas] chat prefix in its nearest chat colour as it goes.
-     */
     public static int sharedAccent() {
         AtlasClickGui gui = getInstance();
         int accent = gui.theme.accentEverywhere.getValue() ? gui.accent() | 0xFF000000 : 0;
@@ -4169,7 +3674,6 @@ public class AtlasClickGui extends GuiScreen {
         return accent;
     }
 
-    /** The Appearance glass colour (opaque) for drawing outside this menu, or 0 while "accent everywhere" is off. */
     public static int sharedGlass() {
         AtlasClickGui gui = getInstance();
         return gui.theme.accentEverywhere.getValue() ? gui.theme.glassColour() | 0xFF000000 : 0;
@@ -4188,12 +3692,10 @@ public class AtlasClickGui extends GuiScreen {
         Atlas.clientName = code == 0 ? DEFAULT_CHAT_PREFIX : "&7[&" + code + "Atlas&7]&r ";
     }
 
-    /** A neutral of the given alpha: white in dark mode, ink in light mode. */
     private static int ink(int alpha) {
         return (alpha << 24) | (INK & 0x00FFFFFF);
     }
 
-    /** Sets the text and neutral colours for the current mode, and tells the HUD. */
     private void paintPalette() {
         boolean light = this.theme.isLight();
         atlas.ui.UiMode.setLight(light);
@@ -4204,7 +3706,6 @@ public class AtlasClickGui extends GuiScreen {
         INK = AtlasStyle.ink;
     }
 
-    /** The modules behind a sidebar row: a Legit sub-group on the Legit page, a category elsewhere. */
     private List<Module> modulesOf(String name) {
         if (isScriptGroup(name)) {
             return scriptModules(name);
@@ -4232,7 +3733,6 @@ public class AtlasClickGui extends GuiScreen {
                 || SCRIPTS_RAVEN17.equals(name);
     }
 
-    /** The scripts of a group, as menu rows (a script that did not load has a row too, with why). */
     private static List<Module> scriptModules(String group) {
         atlas.script.ScriptKind kind = SCRIPTS_ATLAS.equals(group) ? atlas.script.ScriptKind.ATLAS
                 : SCRIPTS_RAVEN16.equals(group) ? atlas.script.ScriptKind.RAVEN16
@@ -4244,7 +3744,6 @@ public class AtlasClickGui extends GuiScreen {
         return out;
     }
 
-    /** Every module of this page once, in its categories' order. */
     private List<Module> pageModules() {
         if (SCRIPTS.equals(this.page)) {
             return scriptModules(SCRIPTS_ALL);
@@ -4287,15 +3786,11 @@ public class AtlasClickGui extends GuiScreen {
         return "Legit".equals(this.page) ? LegitGroups.icon(name) : name;
     }
 
-    // ---- health marks ---------------------------------------------------
-
-    /** The module's health marks, or null when it has none. */
     private Health health(Module module) {
         refreshHealth();
         return this.health.get(module);
     }
 
-    /** Named in this session's corrections, or switched on with a setting at a risky value. */
     private boolean needsAttention(Module module) {
         Health h = health(module);
         return h != null && (h.report.named > 0
@@ -4307,11 +3802,6 @@ public class AtlasClickGui extends GuiScreen {
         return detector != null && detector.isEnabled();
     }
 
-    /**
-     * Reads every module's marks again, at most four times a second: the
-     * counts are locked against the network thread, and the holds ask seven
-     * holders, which is not worth doing every frame.
-     */
     private void refreshHealth() {
         long now = System.currentTimeMillis();
         if (now - this.healthAt < HEALTH_MS) {
@@ -4357,8 +3847,7 @@ public class AtlasClickGui extends GuiScreen {
                 }
             }
         }
-        /* Holders name themselves "FakeLag", "Backtrack", "Blink/NoSlow",
-           "DelayManager/BedNuker": the part after a slash is the module. */
+
         for (PacketHolds.Hold hold : PacketHolds.snapshot()) {
             String name = hold.holder == null ? "" : hold.holder;
             int slash = name.lastIndexOf('/');
@@ -4382,7 +3871,6 @@ public class AtlasClickGui extends GuiScreen {
         return h;
     }
 
-    /** Why this setting of the selected module is at a risky value, or null. */
     private String riskOf(Property<?> property) {
         if (this.selected == null || this.profilesView || this.appearanceView || this.serversView) {
             return null;
@@ -4390,11 +3878,6 @@ public class AtlasClickGui extends GuiScreen {
         return RiskRules.warning(this.selected.getClass(), property);
     }
 
-    /**
-     * A module row's mark after its name: the number of corrections it was
-     * named for this session (amber; red when three came in five minutes), or
-     * a small warning for a setting at a risky value. Returns where it ends.
-     */
     private float drawHealthBadge(Health h, float x, float cy) {
         if (h == null) {
             return x;
@@ -4415,10 +3898,6 @@ public class AtlasClickGui extends GuiScreen {
         return x;
     }
 
-    /**
-     * The detail pane's health lines, under the description, only when there
-     * is something to say. A risky setting's line opens that setting.
-     */
     private float drawHealthStrip(Module module, int x, int width, float cursor, float mx, float my, float arrived) {
         Health h = health(module);
         if (h == null) {
@@ -4474,7 +3953,6 @@ public class AtlasClickGui extends GuiScreen {
         font.draw(font.trim(text, width), x + 28, cy, alpha(DIM, arrived));
     }
 
-    /** The top-level page a module lives on, as its tab is labelled. */
     private static String pageOf(Module module) {
         if (module instanceof atlas.script.ScriptHost) {
             return SCRIPTS;
@@ -4482,7 +3960,6 @@ public class AtlasClickGui extends GuiScreen {
         return ModuleCategories.of(module.getClass()) == Category.LEGIT ? "Legit" : "Modules";
     }
 
-    /** The colour that marks a search result from the other page. */
     private static int foreignColour() {
         return AtlasStyle.foreign;
     }
@@ -4491,7 +3968,6 @@ public class AtlasClickGui extends GuiScreen {
         return AtlasStyle.foreignText;
     }
 
-    /** A dashed outline along the straight parts of a rounded rectangle. */
     private static void dashedRim(float x, float y, float x2, float y2, float radius, int colour) {
         float dash = 4.0F;
         float gap = 3.0F;
@@ -4509,8 +3985,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /* 2026-11-09: for the Theme window (ThemeStudio), which edits the same
-       Appearance settings and draws with the same look as this menu. */
     AtlasTheme theme() {
         return this.theme;
     }
@@ -4519,7 +3993,6 @@ public class AtlasClickGui extends GuiScreen {
         return accent();
     }
 
-    /** Applies the Appearance settings to the shared drawing state (glass, font, springs, palette). */
     void applyLook() {
         applyTheme();
         paintPalette();
@@ -4540,15 +4013,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    // ---- clipping -----------------------------------------------------
-
-    /**
-     * Restricts drawing to a rectangle given in layout pixels.
-     *
-     * Scissor works in real framebuffer pixels with the origin at the bottom
-     * left, and knows nothing of the opening scale, so the rectangle is taken
-     * through both rather than passed through.
-     */
     private void clip(ScaledResolution sr, float x, float y, float width, float height) {
         float sx = this.pivotX + (x - this.pivotX) * this.viewScale;
         float sy = this.pivotY + (y - this.pivotY) * this.viewScale + this.slideY;
@@ -4566,8 +4030,6 @@ public class AtlasClickGui extends GuiScreen {
         GL11.glDisable(GL11.GL_SCISSOR_TEST);
     }
 
-    // ---- input --------------------------------------------------------
-
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
         if (button == 0 && waitForTap(mouseX, mouseY)) {
@@ -4582,13 +4044,6 @@ public class AtlasClickGui extends GuiScreen {
         click(mouseX, mouseY, button);
     }
 
-    /**
-     * On a phone (2026-11-11), whether a press waits for the finger to lift
-     * before it clicks: anything in the body of the window that does not
-     * start a drag of its own (a slider, the colour picker, the header, the
-     * resize grip). If the finger moves first, the press was a scroll and
-     * clicks nothing (touchMove); lifted where it went down, it clicks then.
-     */
     private boolean waitForTap(int mouseX, int mouseY) {
         if (!this.mobile || this.dialog != null || this.reportConfirm || this.dropdown != null) {
             return false;
@@ -4610,7 +4065,6 @@ public class AtlasClickGui extends GuiScreen {
                 && !"grip".equals(kind) && !"move".equals(kind);
     }
 
-    /** A finger moving while a tap waits: past TOUCH_SLOP it scrolls what is under where it went down. */
     private void touchMove(int mouseY) {
         if (!this.touchScrolling && Math.abs(mouseY - this.touchY) > TOUCH_SLOP) {
             this.touchScrolling = true;
@@ -4621,12 +4075,10 @@ public class AtlasClickGui extends GuiScreen {
         int moved = mouseY - this.touchLastY;
         this.touchLastY = mouseY;
         if (moved != 0) {
-            /* The content follows the finger: dragging up shows what is further down. */
             touchScroll(layoutX(this.touchX), -moved);
         }
     }
 
-    /** Scrolls the column under {@code mouseX} by {@code pixels}, as the wheel picks it (handleMouseInput). */
     private void touchScroll(float mouseX, float pixels) {
         ScaledResolution sr = new ScaledResolution(mc);
         int width = windowWidth(sr);
@@ -4644,7 +4096,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /** Whole units of {@code unit} pixels in what the finger has moved, the rest kept for the next move. */
     private int carried(float pixels, float unit) {
         this.touchCarry += pixels / unit;
         int whole = (int) this.touchCarry;
@@ -4671,8 +4122,7 @@ public class AtlasClickGui extends GuiScreen {
             }
             return;
         }
-        /* The report dialog takes every click while it is open: Send sends,
-           anything outside the dialog box closes it (2026-10-07). */
+
         if (this.reportConfirm) {
             if (target != null && "reportSend".equals(target.kind)) {
                 sendReport();
@@ -4686,9 +4136,6 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
 
-        /* An open list takes the next click wherever it lands, and that click
-           does nothing else. Letting a dismissing click also toggle whatever
-           was underneath turns closing a menu into changing a setting. */
         if (this.dropdown != null) {
             ModeProperty open = this.dropdown;
             this.ui.removeSpring("drop:" + open.getName());
@@ -4711,12 +4158,10 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
 
-        /* Typing into a setting ends when the pointer goes anywhere else, and
-           what was typed is kept rather than thrown away. */
         if (this.editing != null && (target == null || target.payload != this.editing)) {
             commitEdit();
         }
-        /* A key setting waiting for its key stops waiting on a click elsewhere. */
+
         if (this.keyEditing != null && (target == null || target.payload != this.keyEditing)) {
             this.keyEditing = null;
         }
@@ -4802,7 +4247,6 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
         if ("appearance".equals(target.kind)) {
-            /* 2026-11-09: every Appearance setting is in the Theme window, with a preview. */
             this.mc.displayGuiScreen(new ThemeStudio(this));
             return;
         }
@@ -4882,7 +4326,6 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
         if ("category".equals(target.kind) && atlas.module.Category.THEME.displayName().equals(target.payload)) {
-            /* 2026-11-09: the Theme tab's modules are all in the Theme window, laid out by what they colour. */
             this.mc.displayGuiScreen(new ThemeStudio(this));
             return;
         }
@@ -4915,8 +4358,7 @@ public class AtlasClickGui extends GuiScreen {
         }
         if ("module".equals(target.kind)) {
             Module module = (Module) target.payload;
-            /* A row only selects. Toggling from anywhere on the row turned
-               modules on by accident while reaching for their settings. */
+
             if (this.selected != module) {
                 this.ui.set("detailArrive", Float.valueOf(0.0F));
                 this.detailScroll = 0;
@@ -4994,8 +4436,6 @@ public class AtlasClickGui extends GuiScreen {
         if ("mode".equals(target.kind)) {
             ModeProperty mode = (ModeProperty) target.payload;
             if (button == 1) {
-                /* Right click still cycles, because for a two-option setting
-                   opening a list of two is more work than it saves. */
                 mode.nextMode();
                 pulse("edit:" + mode.getName());
                 return;
@@ -5009,8 +4449,6 @@ public class AtlasClickGui extends GuiScreen {
         if ("type".equals(target.kind)) {
             Property<?> property = (Property<?>) target.payload;
             if (this.editing == property) {
-                /* Already typing into it: the click moves the caret. Re-reading
-                   the value here would replace what has been typed so far. */
                 this.editInput.placeAt(mx);
                 return;
             }
@@ -5034,7 +4472,7 @@ public class AtlasClickGui extends GuiScreen {
         if ("colorSV".equals(target.kind) || "colorHue".equals(target.kind)) {
             boolean field = "colorSV".equals(target.kind);
             this.colorDrag = field ? "sv" : "hue";
-            /* The strip's hit box has 3 px of grab margin either side. */
+
             this.colorX = field ? target.x : target.x + 3.0F;
             this.colorW = field ? target.x2 - target.x : (target.x2 - 3.0F) - (target.x + 3.0F);
             this.colorY = target.y;
@@ -5047,16 +4485,13 @@ public class AtlasClickGui extends GuiScreen {
             this.dragging = property;
             this.dragMin = minimumOf(property);
             this.dragMax = maximumOf(property);
-            /* Straight off the rectangle the track was drawn at, less the grab
-               margin either side, so the value under the pointer is the value
-               on screen. */
+
             this.dragX = target.x + 3.0F;
             this.dragWidth = (target.x2 - 3.0F) - (target.x + 3.0F);
             dragTo(mx);
         }
     }
 
-    /** Everything the profiles view can be clicked for. Returns whether it was one. */
     private boolean handleProfileClick(UiContext.Hit target) {
         String kind = target.kind;
         if ("profiles".equals(kind)) {
@@ -5118,7 +4553,6 @@ public class AtlasClickGui extends GuiScreen {
         return false;
     }
 
-    /** Whether the profile in use has changes its file does not, read at most once a second. */
     private boolean profileUnsaved() {
         long now = System.currentTimeMillis();
         if (now - this.unsavedAt > 1000L) {
@@ -5128,10 +4562,6 @@ public class AtlasClickGui extends GuiScreen {
         return this.unsaved;
     }
 
-    /**
-     * Loads a profile; with unsaved changes in the one in use, asks first
-     * (2026-10-23: loading used to drop them without a word).
-     */
     private void loadProfile(final String name) {
         final String current = AtlasProfiles.current();
         boolean changes = atlas.config.Config.differsFromFile(current);
@@ -5159,7 +4589,6 @@ public class AtlasClickGui extends GuiScreen {
                 }, load, null});
     }
 
-    /** The open dialog, over the whole window like the report dialog. */
     private void drawDialog(int x, int y, int width, int height, float mx, float my) {
         Dialog open = this.dialog;
         Liquid.rect(x, y, x + width, y + height, RADIUS, 0x99000000, 0xAA000000);
@@ -5197,7 +4626,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /** Saves the current setup under the typed name, and selects it. */
     private void createProfile() {
         String name = AtlasProfiles.clean(this.profileNameInput.text());
         if (name.isEmpty()) {
@@ -5214,11 +4642,6 @@ public class AtlasClickGui extends GuiScreen {
         pulse("saved:" + name);
     }
 
-    /**
-     * Turns the centred default into explicit coordinates. Until the window
-     * is moved it is drawn in the middle of whatever screen it finds itself
-     * on; the moment it is dragged it needs a real number to drag from.
-     */
     private void anchorWindow(ScaledResolution sr) {
         int width = windowWidth(sr);
         int height = windowHeight(sr);
@@ -5232,19 +4655,8 @@ public class AtlasClickGui extends GuiScreen {
         this.userHeight = height;
     }
 
-    /**
-     * Carries on whatever the pointer is dragging, every frame.
-     *
-     * The game hands a screen its mouse events from the tick loop, twenty
-     * times a second, so a drag driven only by mouseClickMove moved the
-     * window and the sliders in twenty jumps a second however fast the frame
-     * rate was -- which is what dragging the menu looked like. The position
-     * passed to drawScreen is read every frame, so the drag follows that
-     * instead, and ends as soon as the button is seen to be up.
-     */
     private void followDrag(ScaledResolution sr, int mouseX, int mouseY) {
         if (this.touchPending) {
-            /* Every frame, as a drag is: the tick-paced mouseClickMove alone scrolls in jumps. */
             if (org.lwjgl.input.Mouse.isButtonDown(0)) {
                 touchMove(mouseY);
             }
@@ -5276,9 +4688,7 @@ public class AtlasClickGui extends GuiScreen {
                     Math.min(sr.getScaledWidth() - 8, mouseX + this.grabX));
             this.userHeight = Math.max(MIN_HEIGHT,
                     Math.min(sr.getScaledHeight() - 8, mouseY + this.grabY));
-            /* A window grown larger than the room left of it would otherwise
-               be pushed back by the clamp in left(), which looks like the drag
-               fighting the pointer. */
+
             this.userX = Math.max(0, Math.min(this.userX, sr.getScaledWidth() - this.userWidth));
             this.userY = Math.max(0, Math.min(this.userY, sr.getScaledHeight() - this.userHeight));
             return;
@@ -5305,8 +4715,7 @@ public class AtlasClickGui extends GuiScreen {
             touchMove(mouseY);
             return;
         }
-        /* Still applied, so a drag works even between frames; the frame loop
-           (followDrag) is what makes it smooth. */
+
         applyDrag(new ScaledResolution(mc), mouseX, mouseY);
     }
 
@@ -5315,7 +4724,6 @@ public class AtlasClickGui extends GuiScreen {
         if (this.touchPending) {
             this.touchPending = false;
             if (!this.touchScrolling) {
-                /* A tap: the click it held back, where the finger went down. */
                 click(this.touchX, this.touchY, 0);
             }
             this.touchScrolling = false;
@@ -5336,7 +4744,6 @@ public class AtlasClickGui extends GuiScreen {
         }
         int step = (wheel > 0 ? -1 : 1) * atlas.module.modules.ClickGUIModule.wheelSteps(wheel);
         if (this.dropdown != null) {
-            /* An open list takes the wheel: it scrolls its options. */
             this.dropScroll = Math.max(0, Math.min(this.dropMaxScroll, this.dropScroll + step));
             return;
         }
@@ -5349,13 +4756,10 @@ public class AtlasClickGui extends GuiScreen {
         float mouseX = layoutX(rawX);
         int width = windowWidth(sr);
         if (mouseX > left(sr) + width - detailWidth(width)) {
-            /* Bounded by the content, measured when it was last drawn, so the
-               pane cannot be scrolled into empty space. */
             this.detailScroll = Math.max(0, Math.min(this.detailMaxScroll, this.detailScroll + step * 16));
-            /* An open list is anchored to a row that has just moved. */
+
             this.dropdown = null;
         } else if (mouseX < this.sidebarRight && !"Client Settings".equals(this.page)) {
-            /* Over the category column: scroll the categories (2026-10-11). */
             this.sidebarScroll = Math.max(0.0F, Math.min(this.sidebarMaxScroll, this.sidebarScroll + step * CAT));
         } else if (this.appearanceView) {
             this.appearanceScroll = Math.max(0.0F, Math.min(this.appearanceMaxScroll, this.appearanceScroll + step * ROW));
@@ -5366,11 +4770,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /**
-     * Takes what was typed into a setting and applies it. Out of range is
-     * clamped rather than refused: someone who types 9000 into a field that
-     * stops at 5000 wants the largest value it has.
-     */
     private void commitEdit() {
         Property<?> property = this.editing;
         this.editing = null;
@@ -5380,12 +4779,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /**
-     * Applies the typed text to the setting. False, with a toast saying why,
-     * when it is not a value for it: a number that does not parse, or text the
-     * setting's own check turns down (parseString returns false then; that used
-     * to pass as applied).
-     */
     private boolean applyEdit(Property<?> property) {
         String text = this.editInput.text().trim();
         if (text.isEmpty()) {
@@ -5436,9 +4829,6 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
         if (this.binding != null) {
-            /* Escape clears rather than cancels: wanting to remove a key is far
-               commoner than changing one's mind about setting one (kept, owner
-               2026-10-23). Another module on the same key is said, not refused. */
             Module bound = this.binding;
             this.binding = null;
             int newKey = key == Keyboard.KEY_ESCAPE ? 0 : key;
@@ -5447,7 +4837,6 @@ public class AtlasClickGui extends GuiScreen {
             return;
         }
         if (this.keyEditing != null) {
-            /* Escape clears, as for a module's own key. */
             KeyProperty edited = this.keyEditing;
             this.keyEditing = null;
             int newKey = key == Keyboard.KEY_ESCAPE ? Keyboard.KEY_NONE : key;
@@ -5462,8 +4851,6 @@ public class AtlasClickGui extends GuiScreen {
             TextInput.Result result = this.editInput.key(typed, key, GuiScreen.isCtrlKeyDown(),
                     GuiScreen::getClipboardString);
             if (result == TextInput.Result.SUBMIT) {
-                /* Something that is not a value keeps the field open, edged
-                   red, to be corrected; a click elsewhere still gives up on it. */
                 if (applyEdit(this.editing)) {
                     this.editing = null;
                     this.editError = false;
@@ -5492,18 +4879,11 @@ public class AtlasClickGui extends GuiScreen {
             }
             return;
         }
-        /* Client Settings has no search to type into -- but Escape still
-           closes the menu, as on every other page. It used to return here for
-           every key, Escape included, so the menu could not be closed from it
-           (2026-10-04). */
+
         if ("Client Settings".equals(this.page) && !this.searchFocused && key != Keyboard.KEY_ESCAPE) {
             return;
         }
-        /* The menu's own commands live behind Control rather than on the
-           function keys: F11 is the game's fullscreen toggle and is handled in
-           the frame loop, F3 is the debug prefix, F5 the camera, F1 the HUD.
-           Control plus a letter is untouched inside a screen, and holding
-           Control keeps the character out of the search box as well. */
+
         if (GuiScreen.isCtrlKeyDown()) {
             if (this.searchFocused && (key == Keyboard.KEY_V || key == Keyboard.KEY_A)) {
                 editSearch(typed, key, true);
@@ -5515,8 +4895,6 @@ public class AtlasClickGui extends GuiScreen {
                     say("checking layout -- press Ctrl+L again");
                 }
             } else if (key == Keyboard.KEY_K) {
-                /* So the menu can be looked at without asking anyone to take a
-                   screenshot and describe it. */
                 say(AtlasInspector.capture());
             } else if (key == Keyboard.KEY_I) {
                 say(AtlasInspector.toggleLive());
@@ -5536,8 +4914,6 @@ public class AtlasClickGui extends GuiScreen {
         }
         if (key == Keyboard.KEY_ESCAPE) {
             if (!this.searchInput.isEmpty()) {
-                /* Escape clears the search before it closes the menu: losing a
-                   filter is a smaller surprise than losing the menu. */
                 this.searchInput.clear();
                 this.listScroll = 0;
                 alignCategory();
@@ -5546,19 +4922,13 @@ public class AtlasClickGui extends GuiScreen {
             mc.displayGuiScreen(null);
             return;
         }
-        /* Any printable character starts a search, wherever focus nominally
-           is. Having to click a box first is what stops people searching. */
+
         boolean printable = typed >= 32 && typed != 127;
         if (this.searchFocused || printable || key == Keyboard.KEY_BACK) {
             editSearch(typed, key, false);
         }
     }
 
-    /**
-     * A key for the search box. Without the box focused, typing and Backspace
-     * work at the end of the search, as they always did; with it focused the
-     * caret moves too.
-     */
     private void editSearch(char typed, int key, boolean ctrl) {
         if (!this.searchFocused) {
             this.searchInput.toEnd();
@@ -5576,7 +4946,6 @@ public class AtlasClickGui extends GuiScreen {
         if (this.searchInput.isEmpty()) {
             alignCategory();
         } else {
-            /* A search is of modules, so it leaves the profiles and appearance views. */
             this.profilesView = false;
             this.appearanceView = false;
             this.serversView = false;
@@ -5584,7 +4953,6 @@ public class AtlasClickGui extends GuiScreen {
         }
     }
 
-    /** What is typed in the search box. */
     private String search() {
         return this.searchInput.text();
     }
@@ -5598,22 +4966,19 @@ public class AtlasClickGui extends GuiScreen {
         atlas.ui.GuiPerf.step("before-init");
         loadState();
         fillOnPhone();
-        /* The fill is kept as the size it came to on this screen, so what is saved is a real size: a 100000 in the
-           file would fill any larger screen the same folder is opened on later. */
+
         if (this.userWidth == FILL || this.userHeight == FILL) {
             ScaledResolution fitted = new ScaledResolution(mc);
             this.userWidth = windowWidth(fitted);
             this.userHeight = windowHeight(fitted);
         }
-        /* A press left waiting when the screen last closed (Escape or a disconnect with the finger down) never saw
-           its release: forgotten here, or the next drag would be taken for a scroll. */
+
         this.touchPending = false;
         this.touchScrolling = false;
         this.touchCarry = 0.0F;
         atlas.ui.GuiPerf.step("load");
         build();
-        /* Names and help do not change in a session, so the index is built
-           once, and again only if a module is added (a script). */
+
         if (Atlas.moduleManager.modules.size() != this.indexedModules) {
             buildIndex();
             this.indexedModules = Atlas.moduleManager.modules.size();
@@ -5638,9 +5003,7 @@ public class AtlasClickGui extends GuiScreen {
         this.searchFocused = false;
         this.profileNameFocused = false;
         this.profilesReadAt = 0L;
-        /* The filter is per-visit; the category and the selected module are
-           not, which is the difference between "where I was" and "what I was
-           looking for at the time". */
+
         this.searchInput.clear();
         this.listScroll = 0;
         this.openedFor = 0.0F;
@@ -5652,8 +5015,7 @@ public class AtlasClickGui extends GuiScreen {
         this.lastFrame = 0L;
         this.ui.reset();
         this.lenses.clear();
-        /* Every size the menu draws, built now rather than on the first frame
-           that needs it, where building them would stall the opening. */
+
         Liquid.refreshScale();
         float[][] faces = {{7.0F, 1}, {7.0F, 0}, {7.5F, 0}, {8.0F, 0}, {8.0F, 1}, {8.5F, 0}, {8.5F, 1},
                 {9.0F, 0}, {9.5F, 0}, {9.5F, 1}, {12.5F, 0}, {12.5F, 1}, {14.0F, 1}, {15.0F, 1}};
@@ -5663,13 +5025,6 @@ public class AtlasClickGui extends GuiScreen {
         atlas.ui.GuiPerf.step("fonts");
     }
 
-    /**
-     * The middle list and the detail pane show the same category (2026-10-17).
-     * A module picked from search results, or the one remembered from last
-     * time, could stay in the detail pane while the sidebar showed another
-     * category: KeepRange's settings under "Exploit". The sidebar follows the
-     * selection instead of dropping it.
-     */
     private void alignCategory() {
         if (this.selected == null || !search().trim().isEmpty() || this.profilesView || this.appearanceView
                 || this.serversView || SCRIPTS.equals(this.page)) {
@@ -5691,9 +5046,6 @@ public class AtlasClickGui extends GuiScreen {
 
     @Override
     public void onGuiClosed() {
-        /* Anything half-typed counts, so closing the menu is not a way to lose
-           a number that was already entered. A problem with it goes to chat:
-           a toast would never be seen now. */
         this.closing = true;
         commitEdit();
         this.dragging = null;

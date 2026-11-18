@@ -13,12 +13,7 @@ import java.util.Set;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-/**
- * 2026-10-22 (plan item 14): Google-Sans cut to its default instance, NotoSansSC and tenacity to everything but
- * the ideographs (the Chinese interface was removed). Every font must still load and keep its symbols.
- */
 public class FontCoverageTest {
-
     private static final String DIR = "/assets/atlas/font/";
 
     private static Font load(String name) throws Exception {
@@ -71,8 +66,6 @@ public class FontCoverageTest {
 
     @Test
     public void theTrimmedFontsKeepEverythingButChinese() throws Exception {
-        /* 2026-10-22: the Chinese interface was removed; NotoSansSC and tenacity keep every glyph but the
-           ideographs (LiquidFont still draws symbols beyond Latin-1 with NotoSansSC). */
         String symbols = "Aé·×°±→←↑↓…—•★ΩЖ€";
         for (String name : new String[]{"NotoSansSC-Regular.ttf", "tenacity.ttf"}) {
             Font font = load(name);

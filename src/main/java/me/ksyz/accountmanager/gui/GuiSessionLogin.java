@@ -16,12 +16,8 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-/*
- * This file is derived from https://github.com/ksyzov/AccountManager.
- * Originally licensed under the GNU LGPL.
- *
- * This modified version is licensed under the GNU GPL v3.
- */
+// Originally licensed under the GNU LGPL.
+
 public class GuiSessionLogin extends GuiScreen {
     private GuiScreen previousScreen;
 
@@ -66,27 +62,22 @@ public class GuiSessionLogin extends GuiScreen {
 
     @Override
     protected void actionPerformed(GuiButton button) throws IOException {
-        //login button
         if (button.id == 998) {
             try {
                 String username, uuid, token, session = sessionField.getText();
 
-                if (session.contains(":")) { //if fully formatted string (ign:uuid:token)
-                    //split string to data
+                if (session.contains(":")) {
                     username = session.split(":")[0];
                     uuid = session.split(":")[1];
                     token = session.split(":")[2];
-                } else { //if only token
-                    //make request
+                } else {
                     HttpURLConnection c = (HttpURLConnection) new URL("https://api.minecraftservices.com/minecraft/profile/").openConnection();
                     c.setRequestProperty("Content-type", "application/json");
                     c.setRequestProperty("Authorization", "Bearer " + sessionField.getText());
                     c.setDoOutput(true);
 
-                    //get json
                     JsonObject json = new JsonParser().parse(IOUtils.toString(c.getInputStream())).getAsJsonObject();
 
-                    //get data
                     username = json.get("name").getAsString();
                     uuid = json.get("id").getAsString();
                     token = session;

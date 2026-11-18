@@ -71,10 +71,8 @@ public class KawaseBlur {
     }
 
     public static void renderBlur(int stencilFrameBufferTexture, int iterations, float offset) {
-        // Initialize shaders on first use
         initShaders();
 
-        // Check if shaders are properly initialized
         if (kawaseDown == null || kawaseUp == null) {
             System.err.println("KawaseBlur shaders not initialized, skipping blur render");
             return;
@@ -95,7 +93,6 @@ public class KawaseBlur {
             renderFBO(framebufferList.get(i - 1), framebufferList.get(i).framebufferTexture, kawaseUp, offset);
         }
 
-
         Framebuffer lastBuffer = framebufferList.get(0);
         lastBuffer.framebufferClear();
         lastBuffer.bindFramebuffer(false);
@@ -107,8 +104,7 @@ public class KawaseBlur {
         kawaseUp.setUniformi("textureToCheck", 16);
         kawaseUp.setUniformf("halfpixel", 1.0f / lastBuffer.framebufferWidth, 1.0f / lastBuffer.framebufferHeight);
         kawaseUp.setUniformf("iResolution", lastBuffer.framebufferWidth, lastBuffer.framebufferHeight);
-        /* Unit 16 is past the 8 GlStateManager tracks (its bindTexture would index out of range): bound
-           directly, after the cache is put on unit 0 so both end there (2026-11-15). */
+
         RenderUtil.bindTextureOnUnit16(stencilFrameBufferTexture);
         RenderUtil.bindTexture(framebufferList.get(1).framebufferTexture);
         ShaderUtils.drawQuads();

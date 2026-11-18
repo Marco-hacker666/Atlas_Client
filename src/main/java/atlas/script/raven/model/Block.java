@@ -10,7 +10,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.ResourceLocation;
 
-/** Raven script API: a block in the world, or a block type by name (2026-11-02). */
 public class Block {
     public String type;
     public String name;
@@ -33,9 +32,7 @@ public class Block {
         this.name = registryName(block);
         this.interactable = interactable(block);
         this.variant = block.getMetaFromState(state);
-        /* A slab or a door works its box out from the world and keeps it on the block object, which every position
-           of that block shares. So only for the block really there (a door a packet is about to place would throw),
-           and only on the client thread: packets come in on the network thread while collisions use those bounds. */
+
         Minecraft mc = Minecraft.getMinecraft();
         if (blockPos != null && mc.theWorld != null && mc.isCallingFromMinecraftThread()
                 && mc.theWorld.getBlockState(blockPos) == state) {
@@ -51,7 +48,6 @@ public class Block {
         }
     }
 
-    /** The block in the world at that position. */
     public Block(int x, int y, int z) {
         this(stateAt(new BlockPos(x, y, z)), new BlockPos(x, y, z));
     }
@@ -60,7 +56,6 @@ public class Block {
         this((int) Math.floor(position.x), (int) Math.floor(position.y), (int) Math.floor(position.z));
     }
 
-    /** A block type by name ("stone", or "minecraft:stone"); no position (-1, -1, -1, as in Raven). */
     public Block(String name) {
         this(typeOf(name).getDefaultState(), null);
         this.x = -1.0;
@@ -84,8 +79,6 @@ public class Block {
         return location == null ? block.getUnlocalizedName() : location.getResourcePath();
     }
 
-    /** What Raven counts as a block that takes a right click: containers, doors, gates, beds, anvils, crafting
-     *  tables (not levers and buttons). */
     static boolean interactable(net.minecraft.block.Block block) {
         return block instanceof BlockContainer || block instanceof BlockDoor || block instanceof BlockFenceGate
                 || block instanceof BlockTrapDoor || block instanceof BlockWorkbench

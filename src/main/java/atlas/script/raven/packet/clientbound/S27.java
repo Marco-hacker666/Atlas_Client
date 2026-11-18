@@ -8,7 +8,6 @@ import net.minecraft.util.BlockPos;
 import java.util.ArrayList;
 import java.util.List;
 
-/** An explosion: where, how strong, the blocks it took, and the push it gives this player. */
 public class S27 extends SPacket {
     public float strength;
     public Vec3 position;

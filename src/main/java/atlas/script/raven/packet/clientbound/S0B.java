@@ -5,7 +5,6 @@ import net.minecraft.entity.Entity;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S0BPacketAnimation;
 
-/** An entity's animation: 0 swing, 1 hurt, 2 wake up, 4 critical, 5 magic critical. */
 public class S0B extends SPacket {
     public int entityId;
     public int type;

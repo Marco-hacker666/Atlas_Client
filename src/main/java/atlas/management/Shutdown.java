@@ -6,31 +6,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * Everything the client does on exit, in one hook and in a fixed order.
- *
- * There used to be three JVM shutdown hooks: the config save, Adaptive's
- * restore-then-Brain-save, and AsyncLog's drain. The JVM starts all hooks at
- * once and in no particular order, so "restore first, then save" -- which
- * Adaptive's comment called not optional -- was never guaranteed: a module
- * switched off for a probe could be written to the config as off. And a
- * value an experiment had only borrowed (an AutoTune trial, a
- * LatencyGovernor cut) had no restore at all, so quitting mid-trial made it
- * the configuration (F-06, F-07, F-26; docs/ARCH-AUDIT-2026-09-28.md).
- *
- * The stages run strictly in order; within a stage, in registration order.
- * One task failing is reported and does not stop the rest.
- */
 public final class Shutdown {
-
     public enum Stage {
-        /** Put back anything temporarily changed: probes, trials, governed values. */
         RESTORE,
-        /** Write the configuration -- after RESTORE, so it holds the chosen values. */
+
         SAVE_CONFIG,
-        /** Other persistent state (Brain). */
+
         SAVE_STATE,
-        /** Last: write out queued log lines, including any the stages above produced. */
+
         FLUSH_LOGS
     }
 
@@ -64,11 +47,6 @@ public final class Shutdown {
         }
     }
 
-    /**
-     * Runs every stage once. Safe to call more than once (only the first
-     * call does anything), so a normal quit could run it on the client thread
-     * and the JVM hook would then find nothing left to do.
-     */
     public static void run() {
         if (!RAN.compareAndSet(false, true)) {
             return;
@@ -90,7 +68,6 @@ public final class Shutdown {
         }
     }
 
-    /** Test support only. */
     static synchronized void resetForTests() {
         TASKS.clear();
         RAN.set(false);

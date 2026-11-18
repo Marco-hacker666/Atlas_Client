@@ -55,17 +55,16 @@ public class NoSlow extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final ModeProperty swordMode = new ModeProperty("Sword Mode", 1, new String[]{"None", "Vanilla", "Hypixel", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "Reuse", "Switch", "Interact", "Blink", "Grim2364", "Grim2371", "Grim-Alternate", "Hit-Window"})
-            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
-               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+
             .hide("Hypixel", "NCP", "NewNCP", "Watchdog", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "HypixelNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19")
-            /* 2026-11-09 (owner): the NG- prefix dropped; configs saying the old names load the new ones. */
+
             .alias("NG-Reuse", "Reuse")
             .alias("NG-Switch", "Switch")
             .alias("NG-Interact", "Interact")
             .alias("NG-Blink", "Blink")
             .alias("NG-Grim2364", "Grim2364")
             .alias("NG-Grim2371", "Grim2371");
-    /* Hit-Window (2026-10-20): the sword up on the server only around the next hit, see NoSlowHitWindow. */
+
     private final java.util.function.BooleanSupplier hwShown = () -> NoSlowHitWindow.MODE.equals(this.swordMode.getModeString());
     public final IntProperty hwOpenHurt = new IntProperty("HW Open Hurt", 2, 0, 8, hwShown);
     public final BooleanProperty hwPingAware = new BooleanProperty("HW Ping Aware", true, hwShown);
@@ -74,11 +73,9 @@ public class NoSlow extends Module {
     public final atlas.property.properties.FloatProperty hwGuardRange = new atlas.property.properties.FloatProperty("HW Guard Range", 3.4F, 2.0F, 6.0F,
             () -> hwShown.getAsBoolean() && this.hwGuard.getValue());
     public final BooleanProperty hwLog = new BooleanProperty("HW Log", true, hwShown);
-    /* 2026-10-26: also steer the block an aura or AutoBlock raises (it used to manage only the right button). */
+
     public final BooleanProperty hwAura = new BooleanProperty("HW Aura Blocks", true, hwShown);
-    /* 2026-10-26 (A2): with Silent Aura's block handed over, who gives way. Hit: a window opens only with the
-       aura's next click at least 3 ticks off and closes a tick before it. Block: the aura holds its click while
-       a window is open. */
+
     public final ModeProperty hwPriority = new ModeProperty("HW Priority", 0, new String[]{"Hit", "Block"},
             () -> hwShown.getAsBoolean() && this.hwAura.getValue());
     private final NoSlowHitWindow hitWindow = new NoSlowHitWindow(this);
@@ -88,20 +85,18 @@ public class NoSlow extends Module {
     public final BooleanProperty swordSprint = new BooleanProperty("Sword Sprint", true, () -> this.swordMode.getValue() != 0);
     public final BooleanProperty onlyKillAuraAutoBlock = new BooleanProperty("Only Kill Aura Auto Block", false, () -> this.swordMode.getValue() != 0);
     public final ModeProperty foodMode = new ModeProperty("Food Mode", 0, new String[]{"None", "Vanilla", "Float", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "Grim-Alternate"})
-            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
-               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+
             .hide("Float", "NCP", "NewNCP", "Watchdog", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "HypixelNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19");
     public final PercentProperty foodMotion = new PercentProperty("Food Motion", 100, () -> this.foodMode.getValue() != 0);
     public final BooleanProperty foodSprint = new BooleanProperty("Food Sprint", true, () -> this.foodMode.getValue() != 0);
     public final ModeProperty bowMode = new ModeProperty("Bow Mode", 0, new String[]{"None", "Vanilla", "Float", "NCP", "NewNCP", "Watchdog", "Intave", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "GrimAC", "HypixelNew", "IntaveNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "Intave14", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19", "Grim-Alternate"})
-            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
-               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+
             .hide("Float", "NCP", "NewNCP", "Watchdog", "Grim", "NewGrim", "Verus", "AAC", "Spartan", "OpalWatchdog", "HypixelNew", "OldGrim", "VanillaNew", "Exhi", "GrimTest", "GrimSemi", "Luckyvn", "OldIntave", "IntaveBlink", "OldIntaveV2", "Vulcan", "Grim19");
     public final PercentProperty bowMotion = new PercentProperty("Bow Motion", 100, () -> this.bowMode.getValue() != 0);
     public final BooleanProperty bowSprint = new BooleanProperty("Bow Sprint", true, () -> this.bowMode.getValue() != 0);
 
     // Miau Client NoSlow modes (ported from miau.module.modules.movement.noslow.*).
-    // MIAU_BASE..MIAU_MAX map to these indices; RAVEN_BASE and up are Raven ports below.
+
     private static final int MIAU_BASE = 3;
     private static final int MIAU_MAX = 12;
     private static final int RAVEN_BASE = 13;
@@ -132,12 +127,8 @@ public class NoSlow extends Module {
     private static final int DONOR_VULCAN = 8;
     private static final int DONOR_GRIM19 = 9;
 
-    /* LiquidBounce NextGen's blocking modes (2026-10-16), ported from
-       features/module/modules/movement/noslow/modes (GPL-3.0, as this client).
-       Sword only: NextGen groups them under "Blocking". Left out: Grim2360 and
-       InvalidHand need an offhand (1.9+), and Intave14 is here already (donor).
-       Timings map NextGen's PlayerNetworkMovementTickEvent onto UpdateEvent:
-       PRE is before this tick's movement packet, POST after it. */
+    // LiquidBounce NextGen's blocking modes , ported from features/module/modules/movement/noslow/modes (GPL-3.0, as this client).
+
     private static final int NG_BASE = 28;
     private static final int NG_REUSE = 0;
     private static final int NG_SWITCH = 1;
@@ -152,19 +143,18 @@ public class NoSlow extends Module {
     public final IntProperty ngBlinkMaxTicks = new IntProperty("NG Blink MaxTicks", 10, 1, 20,
             () -> this.ngIdx(this.swordMode) == NG_BLINK);
     {
-        /* 2026-11-09 (owner): no "NG" in what the menu shows; the config keys stay, so saved values load. */
         this.ngTiming.setLabel("Timing");
         this.ngBlinkMaxTicks.setLabel("Blink MaxTicks");
     }
 
     private final List<Packet<?>> ngBlinkPackets = new ArrayList<Packet<?>>();
     private int ngBlinkTicks;
-    /** Ticks NG-Blink sends movement straight away (after knockback or a correction). */
+
     private int ngBlinkPause;
-    /* Set on the network thread, acted on by the client thread. */
+
     private volatile boolean ngKnocked;
     private volatile boolean ngCorrected;
-    /** Knockback takes ~10 ticks to play out; movement goes straight out meanwhile. */
+
     private static final int NG_KB_PAUSE = 10;
     private static final int NG_CORRECTION_PAUSE = 20;
     private boolean ngFlushing;
@@ -194,31 +184,25 @@ public class NoSlow extends Module {
     public final IntProperty grim19Interval = new IntProperty("Grim19 Interval", 5, 1, 20, () -> swordMode.getValue() == 27 || foodMode.getValue() == 27 || bowMode.getValue() == 27);
     public final BooleanProperty grim19Swap = new BooleanProperty("Grim19 Swap", true, () -> swordMode.getValue() == 27 || foodMode.getValue() == 27 || bowMode.getValue() == 27);
 
-    // inlined BadPacketsComponent (Miau tracks these globally)
     private boolean bpSlot, bpAttack, bpSwing, bpBlock, bpInventory;
     private boolean savedSlot, savedAttack, savedSwing, savedBlock, savedInventory;
 
-    // NewNCP / Intave / Spartan state
     private int newNcpDisable;
     private int intaveDisable;
     private int spartanDisable;
 
-    // Watchdog state
     private int wdOffGroundTicks;
     private boolean wdStop;
     private boolean wdDisable;
 
-    // NewGrim state
     private int newGrimTicks;
 
-    // OpalWatchdog state
     private int opalNextCycleTick = -1;
     private boolean opalRunThisTick;
     private boolean opalStopUse;
     private boolean opalBlocking;
     private int opalSlotChangeTick = -1;
 
-    // Raven-ported NoSlow state (Hypixel air-tick delay plus Intave first-tick edge).
     private int ravenHypOffTicks;
     private boolean ravenHypSend;
     private boolean ravenLastUsing;
@@ -247,7 +231,7 @@ public class NoSlow extends Module {
 
     public NoSlow() {
         super("NoSlow", false, false, "Keeps full speed while blocking or eating.");
-        /* NG Blink holds movement: one holder at a time, never a packet another module has taken (PacketHub). */
+
         atlas.management.PacketHub.register("NoSlow", atlas.management.PacketHub.MOVEMENT,
                 () -> this.ngBlinkPackets.size() + this.grimTestPackets.size() + this.grimSemiPackets.size(), () -> {
                     this.ngBlinkFlush();
@@ -261,11 +245,6 @@ public class NoSlow extends Module {
                 && (!this.onlyKillAuraAutoBlock.getValue() || this.isKillAuraAutoBlocking());
     }
 
-    /**
-     * 2026-10-27: Silent Aura's Rhythm runs the sword block (its own use key, vanilla's slowdown): every sword mode
-     * here stands aside -- no slot swaps, re-uses or releases of its own, no speed back, no Hit-Window windows.
-     * Food and bow modes are untouched.
-     */
     static boolean swordYields() {
         return KillAuraLB.rhythmRuns();
     }
@@ -288,51 +267,32 @@ public class NoSlow extends Module {
         if (!aura.isPlayerBlocking() || !aura.isEnabled()) {
             return false;
         }
-        /* isBlocking() is the fake-block state, never set by LEGIT or
-           SameTick: with "Only Kill Aura Auto Block" on, NoSlow never ran
-           for them and every aura block slowed the player (2026-10-16).
-           isAuraBlocking() is the block the aura raised itself. */
+
         return aura.isBlocking() || aura.isAuraBlocking();
     }
 
-    /** Hit-Window takes Silent Aura's own block (A1: the aura only shows the pose; this mode alone sends). */
     public boolean hitWindowTakesAura() {
         return this.isEnabled() && this.hitWindow.selected() && this.hwAura.getValue();
     }
 
-    /** What the server believes while Hit-Window steers: the sword is up. */
     public boolean hitWindowServerBlocking() {
         return this.hitWindow.slowed();
     }
 
-    /** The aura held a click back because a window had the sword up. */
     public void hitWindowPostponed() {
         this.hitWindow.postponed();
     }
 
-    /**
-     * Whether this tick's move is slowed by the item in use: what EntityPlayerSP.onLivingUpdate is told when it
-     * asks isUsingItem (MixinEntityPlayerSP.isUsing), and what the movement simulation asks too (atlas.sim).
-     */
     public static boolean slowsMove(net.minecraft.client.entity.EntityPlayerSP player) {
         return slowsMove(player, true);
     }
 
-    /**
-     * The same answer for a forecast, changing nothing: the game's own asking counts ticks (NewGrim lets every
-     * second one through), and a forecast that asked through it would shift which real ticks are slowed
-     * (review, PR #36).
-     */
     public static boolean wouldSlowMove(net.minecraft.client.entity.EntityPlayerSP player) {
         return slowsMove(player, false);
     }
 
     private static boolean slowsMove(net.minecraft.client.entity.EntityPlayerSP player, boolean counted) {
         if (KillAuraLB.rhythmRuns()) {
-            /* 2026-10-27: Silent Aura's Rhythm block is a real block the server sees; it moves exactly as vanilla
-               moves with the sword up (slowed, no sprint), never as NoSlow would -- except while Rhythm-Lag holds the
-               movement: the server gets that movement only after the sword is down, so it is made unslowed; and on a
-               Rhythm-FreeRaise tick (2026-10-28), one unslowed move Grim's NoSlow lets through. */
             return !KillAuraLB.rhythmUnslowed() && player.isUsingItem();
         }
         NoSlow noSlow = (NoSlow) atlas.Atlas.moduleManager.modules.get(NoSlow.class);
@@ -352,11 +312,9 @@ public class NoSlow extends Module {
             return false;
         }
         if (this.hitWindow.selected() && ItemUtil.isHoldingSword()) {
-            /* Hit-Window replaces vanilla's slowdown only while it steers the block (slowed() then). */
             return this.hitWindow.managing() && (mc.thePlayer.isUsingItem() || this.hitWindow.delegated());
         }
         if (this.ng2371Prevent && this.ngIdx(this.swordMode) == NG_GRIM2371 && ItemUtil.isHoldingSword()) {
-            /* NG-Grim2371: every third tick is taken slowed. */
             return false;
         }
         if (this.swordMode.getValue() != 2) {
@@ -388,7 +346,6 @@ public class NoSlow extends Module {
 
     @EventTarget
     public void onUpdate(UpdateEvent event) {
-        // BadPacketsComponent bookkeeping: save on PRE, reset on POST (runs even while disabled).
         if (mc.thePlayer != null && mc.theWorld != null) {
             if (event.getType() == EventType.PRE) {
                 this.savedSlot = this.bpSlot;
@@ -448,23 +405,6 @@ public class NoSlow extends Module {
         }
     }
 
-    /*
-     * Grim-Alternate (2026-10-19), from reading GrimAC's NoSlow check
-     * (checks/impl/movement/NoSlow.java, prediction engine):
-     *   - Grim simulates every movement both slowed and not slowed by the
-     *     item (it brute-forces the 1.8 use-item desync), so the movement
-     *     check itself accepts either;
-     *   - its NoSlow check flags only when the best slowed prediction misses
-     *     on two movement ticks in a row (flaggedLastTick), and a matching
-     *     tick resets that.
-     * So every other tick is taken at full speed and the one between at the
-     * vanilla 20 %: about 60 % of walking speed instead of 20 %, with no
-     * packets sent and nothing held, so no lagback from holding. The first
-     * tick of a use is a free one (1.8 is not slowed on it anyway).
-     * The Simulation check (OffsetHandler) takes the best of all those
-     * predictions, flipped item included, so neither tick moves it; that is
-     * also why the factor must be exactly 1.0 or 0.2 (see onLivingUpdate).
-     */
     public static final String GRIM_ALTERNATE = "Grim-Alternate";
     private int alternateTick;
 
@@ -475,7 +415,6 @@ public class NoSlow extends Module {
                 || this.isBowActive() && GRIM_ALTERNATE.equals(this.bowMode.getModeString()));
     }
 
-    /** Whether this tick of an alternating use is the slowed one: ticks 2, 4, 6... */
     static boolean alternateSlowed(int tickOfUse) {
         return tickOfUse % 2 == 0;
     }
@@ -488,8 +427,6 @@ public class NoSlow extends Module {
         }
         if (this.isEnabled() && this.hitWindow.managing() && ItemUtil.isHoldingSword()
                 && (mc.thePlayer.isUsingItem() || this.hitWindow.delegated())) {
-            /* Hit-Window: exactly vanilla while the server has the sword up, full speed while it does not.
-               Sprint is left to vanilla's own path, only dropped on a slowed tick as vanilla drops it. */
             if (this.hitWindow.slowed()) {
                 mc.thePlayer.movementInput.moveForward *= 0.2F;
                 mc.thePlayer.movementInput.moveStrafe *= 0.2F;
@@ -500,10 +437,6 @@ public class NoSlow extends Module {
         if (this.isEnabled() && this.isAnyActive()) {
             float multiplier = (float) this.getMotionMultiplier() / 100.0F;
             if (alternate) {
-                /* Exactly 1.0 or exactly the vanilla 0.2, never the Motion
-                   setting in between: Grim's simulation only tries those two
-                   (and sneaking's 0.3 under them), so any other factor misses
-                   both and is a Simulation flag on every tick. */
                 multiplier = alternateSlowed(++this.alternateTick) ? 0.2F : 1.0F;
             }
             mc.thePlayer.movementInput.moveForward *= multiplier;
@@ -560,7 +493,6 @@ public class NoSlow extends Module {
 
     @EventTarget
     public void onPacket(PacketEvent event) {
-        // BadPacketsComponent tracking (runs regardless of mode).
         if (event.getType() == EventType.SEND) {
             Packet<?> packet = event.getPacket();
             if (packet instanceof C09PacketHeldItemChange) {
@@ -626,21 +558,13 @@ public class NoSlow extends Module {
         }
     }
 
-    /**
-     * A held packet has to be let go of when the world goes away (2026-10-11):
-     * GrimTest and GrimSemi hold packets by design, and a world change or a
-     * reconnect is not a release point the module's own code reaches on its
-     * way. Disabler and Velocity already reset this way on LoadWorldEvent.
-     */
     @EventTarget
     public void onLoadWorld(LoadWorldEvent event) {
-        /* NG-Blink's held movement belongs to the old world: drop it, do not send it. */
         this.ngBlinkPackets.clear();
         this.hitWindow.worldChanged();
         this.onDisabled();
     }
 
-    /** Hit-Window decides each tick before the game reads input and moves. */
     @EventTarget
     public void onTickHitWindow(atlas.events.TickEvent event) {
         if (event.getType() == EventType.PRE && this.isEnabled()) {
@@ -705,8 +629,6 @@ public class NoSlow extends Module {
         }
     }
 
-    // ============ Miau Client NoSlow (ported, compacted) ============
-
     private int miauIdx(ModeProperty property) {
         int v = property.getValue();
         return v >= MIAU_BASE && v <= MIAU_MAX ? v - MIAU_BASE : -1;
@@ -753,7 +675,6 @@ public class NoSlow extends Module {
                 || this.miauIdx(this.bowMode) == mode;
     }
 
-    // Which Miau mode governs the currently held item (-1 if none / not a Miau mode).
     private int heldItemMiauMode() {
         net.minecraft.item.ItemStack held = mc.thePlayer.getHeldItem();
         if (held == null) {
@@ -807,7 +728,6 @@ public class NoSlow extends Module {
         return mc.thePlayer.isUsingItem();
     }
 
-    // Called from MixinEntityPlayerSP: is the held item governed by a Miau mode right now?
     public boolean isMiauAnyActive() {
         if (mc.thePlayer == null || !mc.thePlayer.isUsingItem()) {
             return false;
@@ -823,7 +743,6 @@ public class NoSlow extends Module {
         return 1.0f;
     }
 
-    // Called from MixinEntityPlayerSP to decide whether the vanilla use-item slowdown is skipped.
     public boolean shouldCancelMiauSlowdown() {
         if (!this.isEnabled()) {
             return false;
@@ -843,7 +762,6 @@ public class NoSlow extends Module {
         return true;
     }
 
-    /** What {@link #shouldCancelMiauSlowdown} would answer now, without counting the tick. */
     public boolean wouldCancelMiauSlowdown() {
         if (!this.isEnabled()) {
             return false;
@@ -875,14 +793,11 @@ public class NoSlow extends Module {
         this.savedInventory = false;
     }
 
-    // ---- LiquidBounce NextGen blocking modes (2026-10-16) ----
-
     private int ngIdx(ModeProperty property) {
         int v = property.getValue();
         return v >= NG_BASE && v < NG_BASE + NG_COUNT ? v - NG_BASE : -1;
     }
 
-    /** NextGen's blockingHand != null: blocking with a sword right now. */
     private boolean ngBlocking() {
         return this.isEnabled() && ItemUtil.isHoldingSword() && mc.thePlayer.isUsingItem() && !swordYields()
                 && (!this.onlyKillAuraAutoBlock.getValue() || this.isKillAuraAutoBlocking());
@@ -908,7 +823,6 @@ public class NoSlow extends Module {
         boolean pre = event.getType() == EventType.PRE;
         boolean blocking = this.ngBlocking();
         if (mode == NG_GRIM2371) {
-            /* Two ticks: use the item again, keep full speed. Third tick: slowed. */
             if (pre) {
                 if (blocking) {
                     this.ng2371Tick = (this.ng2371Tick + 1) % 3;
@@ -942,10 +856,10 @@ public class NoSlow extends Module {
             return;
         }
         int slot = mc.thePlayer.inventory.currentItem;
-        int timing = this.ngTiming.getValue(); // 0 PreAndPost, 1 Pre, 2 Post
+        int timing = this.ngTiming.getValue();
         switch (mode) {
             case NG_REUSE:
-                /* Let go before the movement packet, use again after it. */
+
                 if (timing == 0) {
                     if (pre) {
                         this.ngSendRelease();
@@ -958,7 +872,7 @@ public class NoSlow extends Module {
                 }
                 break;
             case NG_SWITCH:
-                /* Another slot before the movement packet, back (and use) after it. */
+
                 if (timing == 0) {
                     if (pre) {
                         this.ngSendSlot((slot + 1) % 8);
@@ -978,7 +892,7 @@ public class NoSlow extends Module {
                 }
                 break;
             case NG_GRIM2364:
-                /* Grim exempts noslow after a slot switch (Grim issue #874). */
+
                 if (pre) {
                     this.ngSendSlot(slot % 8 + 1);
                     this.ngSendSlot(slot % 7 + 2);
@@ -990,28 +904,6 @@ public class NoSlow extends Module {
         }
     }
 
-    /**
-     * NG-Blink: while blocking, the movement packets wait; anything else that
-     * goes out (an attack, a release, a use, a slot change) first sends what
-     * waited, in order. Also let go when the block ends and after NG Blink
-     * MaxTicks.
-     *
-     * 2026-10-16, lagbacks 4-6 ticks after a hit (flags log 18:29-18:30, NoSlow
-     * held-send): the server checks knockback against the transaction replies
-     * around its velocity packet. Those replies went out at once while the
-     * moves before them waited, so the server saw the knockback taken with no
-     * movement, then up to MaxTicks of moves at once. Now a transaction reply
-     * first sends the moves before it, so the server gets them in order and
-     * the reply itself is never late (a first try held the replies in the
-     * queue: Pika kicked with "Unexpected pong response" when a world change
-     * dropped them, BlinkManager's and FakeLag's old lesson), knockback
-     * (S12 for us, S27) sends the
-     * queue and pauses holding for NG_KB_PAUSE ticks, and a correction (S08)
-     * DROPS the queue (those moves are from before the teleport; sending them
-     * after it is a second lagback) and pauses NG_CORRECTION_PAUSE ticks. The
-     * old code also sent the queue from the network thread on S08, racing the
-     * client thread, and then queued the teleport reply (C06) itself.
-     */
     private void ngBlinkOnPacket(PacketEvent event) {
         if (this.ngFlushing) {
             return;
@@ -1028,46 +920,31 @@ public class NoSlow extends Module {
             return;
         }
         if (!"Client thread".equals(Thread.currentThread().getName())) {
-            /* Replies the network thread sends (keep-alives) pass and do not
-               touch the queue, which the client thread owns (BlinkManager draws
-               the same line). */
             return;
         }
         if (this.ngBlinkServerEvents()) {
-            /* This is the first packet after knockback or a correction (the
-               C06 teleport reply among them): it goes now. */
             return;
         }
         if (packet instanceof C00PacketKeepAlive || packet instanceof C01PacketChatMessage) {
             return;
         }
         if (packet instanceof C0FPacketConfirmTransaction) {
-            /* Never held: the moves before it go first, then it, on time.
-               Holding it got "Unexpected pong response -1925 -1922" kicks
-               (18:41 and 18:42) when the queue was dropped on a world change. */
             this.ngBlinkFlush();
             return;
         }
         if (packet instanceof C03PacketPlayer && this.ngIdx(this.swordMode) == NG_BLINK && this.ngBlocking()
                 && this.ngBlinkPause == 0 && this.ngBlinkTicks < this.ngBlinkMaxTicks.getValue()) {
-            /* Through PacketHub (2026-10-18): with FakeLag on as well, the same move was kept by both and
-               sent twice, or the two queues let go out of order. */
             if (atlas.management.PacketHub.take(event, "NoSlow")) {
                 this.ngBlinkPackets.add(packet);
                 return;
             }
             if (event.isCancelled()) {
-                /* Another module has it; what this queue holds stays in order behind nothing new. */
                 return;
             }
         }
         this.ngBlinkFlush();
     }
 
-    /**
-     * Acts, on the client thread, on knockback and corrections the network
-     * thread saw. True when there was one.
-     */
     private boolean ngBlinkServerEvents() {
         if (this.ngCorrected) {
             this.ngCorrected = false;
@@ -1191,7 +1068,6 @@ public class NoSlow extends Module {
         }
     }
 
-    // NewNCP / Intave / Spartan share the same C09-swap bypass; Spartan adds a slot check.
     private int updateMiauC09Bypass(UpdateEvent event, int mode, int disable, boolean spartanSlotCheck) {
         if (event.getType() == EventType.PRE) {
             disable++;
@@ -1222,17 +1098,17 @@ public class NoSlow extends Module {
         if (event.getType() != EventType.PRE) {
             return;
         }
-        // Block-under check — reset disable while standing on a block.
+
         if (mc.theWorld.getBlockState(new BlockPos(mc.thePlayer.posX, mc.thePlayer.posY - 1, mc.thePlayer.posZ)).getBlock() != Blocks.air
                 && !mc.thePlayer.isUsingItem()) {
             this.wdDisable = false;
         }
-        // Slab check — disable no-slow while on a slab.
+
         double posY = mc.thePlayer.posY;
         if (Math.abs(posY - Math.round(posY)) > 0.03 && mc.thePlayer.onGround) {
             this.wdDisable = true;
         }
-        // offGroundTicks tracking for non-sword items (food/bow/potion).
+
         if (mc.thePlayer.isUsingItem()
                 && !(mc.thePlayer.getHeldItem() != null && mc.thePlayer.getHeldItem().getItem() instanceof ItemSword)) {
             if (mc.thePlayer.onGround) {
@@ -1243,18 +1119,17 @@ public class NoSlow extends Module {
             if (this.wdOffGroundTicks >= 2) {
                 this.wdStop = false;
             } else if (mc.thePlayer.onGround && !this.wdDisable) {
-                // PosY anti-flag: offset Y by 1E-14 so Watchdog doesn't detect it.
                 mc.thePlayer.posY += 1E-14;
             }
         }
-        // Cancel movement slowdown for food/bow/potion while not disabled.
+
         if (!this.wdDisable) {
             if (this.miauFoodActive(MIAU_WATCHDOG) || this.miauBowActive(MIAU_WATCHDOG) || this.miauPotionActive(MIAU_WATCHDOG)) {
                 mc.thePlayer.movementInput.moveForward *= 5.0f;
                 mc.thePlayer.movementInput.moveStrafe *= 5.0f;
             }
         }
-        // Sword NoSlow: C09 swap + cancel slowdown.
+
         if (this.miauSwordActive(MIAU_WATCHDOG)) {
             int currentSlot = mc.thePlayer.inventory.currentItem;
             PacketUtil.sendPacket(new C09PacketHeldItemChange(currentSlot % 7 + (int) (Math.random() * 2) + 1));
@@ -1343,7 +1218,7 @@ public class NoSlow extends Module {
         }
     }
 
-    // Ported from Raven HypixelNoSlow.java: hold the place packet, jump, replay it after 4 air ticks.
+    // Ported from Raven HypixelNoSlow.java
     private void updateRavenHypixel() {
         if (this.ravenHypOffTicks == 4 && this.ravenHypSend) {
             this.ravenHypSend = false;
@@ -1353,7 +1228,7 @@ public class NoSlow extends Module {
         }
     }
 
-    // Ported from Raven IntaveNoSlow.java: sword re-place, first-tick release for food.
+    // Ported from Raven IntaveNoSlow.java
     private void updateRavenIntave() {
         if (mc.thePlayer.isUsingItem() && mc.thePlayer.getHeldItem() != null && MoveUtil.isMoving()) {
             if (ItemUtil.isHoldingSword()) {
@@ -1371,7 +1246,7 @@ public class NoSlow extends Module {
         }
     }
 
-    // Ported from Raven OldGrimNoSlow.java and Miau OMOldGrimNoSlow.java: triple slot swap.
+    // Ported from Raven OldGrimNoSlow.java and Miau OMOldGrimNoSlow.java
     private void updateRavenOldGrim() {
         if (mc.thePlayer.isUsingItem() && this.ravenAnyActive(RAVEN_OLD_GRIM)) {
             int currentSlot = mc.thePlayer.inventory.currentItem;
@@ -1742,7 +1617,7 @@ public class NoSlow extends Module {
 
     private void ravenOnPacket(PacketEvent event) {
         if (mc.thePlayer == null) return;
-        // Ported from Raven GrimACNoSlow.java: food-only drop-item bypass.
+        // Ported from Raven GrimACNoSlow.java
         if (this.isRavenModeUsed(RAVEN_GRIMAC)) {
             if (event.getType() == EventType.SEND && event.getPacket() instanceof C08PacketPlayerBlockPlacement) {
                 net.minecraft.item.ItemStack held = mc.thePlayer.getHeldItem();
@@ -1762,7 +1637,7 @@ public class NoSlow extends Module {
                 }
             }
         }
-        // Ported from Raven HypixelNoSlow.java: hold consumable place until air tick 4.
+        // Ported from Raven HypixelNoSlow.java
         if (this.isRavenModeUsed(RAVEN_HYPIXEL)
                 && event.getType() == EventType.SEND
                 && event.getPacket() instanceof C08PacketPlayerBlockPlacement
@@ -1778,7 +1653,6 @@ public class NoSlow extends Module {
         }
     }
 
-    // OpalWatchdog: 3-tick block/release tap-cycle (Opal's WatchdogNoSlow via Miau's 1.8.9 port).
     private void updateMiauOpalWatchdog(UpdateEvent event) {
         if (event.getType() != EventType.PRE) {
             return;
@@ -1789,7 +1663,6 @@ public class NoSlow extends Module {
             return;
         }
 
-        // stopUse: finish 1-tick item-use flicker.
         if (this.opalStopUse) {
             if (mc.thePlayer.isUsingItem()) {
                 this.opalBlock();
@@ -1811,14 +1684,12 @@ public class NoSlow extends Module {
                     this.opalNextCycleTick = age;
                 }
                 if (age >= this.opalNextCycleTick) {
-                    // Cycle tick: release block.
                     if (this.opalBlocking) {
                         this.opalRelease();
                     }
                     this.opalRunThisTick = true;
-                    this.opalNextCycleTick = age + 2; // happen again in 3 ticks
+                    this.opalNextCycleTick = age + 2;
                 } else if (!this.opalBlocking) {
-                    // Off-cycle: keep blocked.
                     this.opalBlock();
                 }
             } else {
@@ -1828,11 +1699,9 @@ public class NoSlow extends Module {
                 }
             }
 
-            // runThisTick: simulate right-click press or cancel.
             if (this.opalRunThisTick && this.miauSwordActive(MIAU_OPAL_WATCHDOG)) {
                 if (rightPressed) {
                     if (!mc.thePlayer.isUsingItem() || !this.opalBlocking) {
-                        // Looking at interactable block or breaking -> skip.
                         if (mc.objectMouseOver != null
                                 && mc.objectMouseOver.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK
                                 && mc.objectMouseOver.getBlockPos() != null) {
@@ -1846,7 +1715,6 @@ public class NoSlow extends Module {
                         this.opalStopUse = true;
                         ((IAccessorKeyBinding) mc.gameSettings.keyBindUseItem).setPressed(true);
                     } else {
-                        // Using item and already blocking: cancel right-click.
                         ((IAccessorKeyBinding) mc.gameSettings.keyBindUseItem).setPressed(false);
                     }
                 } else {
@@ -1855,7 +1723,6 @@ public class NoSlow extends Module {
                 this.opalRunThisTick = false;
             }
         } else {
-            // Non-sword items: cancel slowdown.
             if (this.miauFoodActive(MIAU_OPAL_WATCHDOG) || this.miauBowActive(MIAU_OPAL_WATCHDOG) || this.miauPotionActive(MIAU_OPAL_WATCHDOG)) {
                 mc.thePlayer.movementInput.moveForward *= 5.0f;
                 mc.thePlayer.movementInput.moveStrafe *= 5.0f;
@@ -1864,7 +1731,6 @@ public class NoSlow extends Module {
     }
 
     private void opalOnPacket(PacketEvent event) {
-        // Detect slot change (C09).
         if (event.getType() == EventType.SEND && event.getPacket() instanceof C09PacketHeldItemChange) {
             if (mc.thePlayer.ticksExisted - this.opalSlotChangeTick != 1) {
                 this.opalRelease();
@@ -1872,7 +1738,7 @@ public class NoSlow extends Module {
             }
             this.opalSlotChangeTick = mc.thePlayer.ticksExisted;
         }
-        // Server says player finished eating (status=9).
+
         if (event.getType() == EventType.RECEIVE && event.getPacket() instanceof S19PacketEntityStatus) {
             S19PacketEntityStatus statusPacket = (S19PacketEntityStatus) event.getPacket();
             if (statusPacket.getEntity(mc.theWorld) == mc.thePlayer && statusPacket.getOpCode() == 9) {

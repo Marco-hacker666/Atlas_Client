@@ -8,17 +8,6 @@ import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
-/**
- * Signs what the client sends to the relay (2026-11-17, owner: "the code is public: make sure it is my published
- * client, not a fork, and that nobody can change the packets and send fake data").
- *
- * Official release jars carry a key that is not in the public source: the build adds it from the owner's computer
- * (build.gradle.kts, ~/.atlas/build-key.txt) as atlas/data/fx.bin, masked. Every message is signed with it:
- * HMAC-SHA256 over "path\ntime\nSHA-256(body)" in X-Atlas-Sig, the time in X-Atlas-Time. The relay checks it
- * (report-relay/src/verify.js); a build without the key signs nothing and is shown as unofficial. The time is the
- * relay's (the offset learnt from its answers), so a wrong clock on the player's computer does not break it, and
- * it never repeats, so an old message cannot be sent again.
- */
 public final class BuildSignature {
     private static final byte[] MASK = "atlas-fx-mask-v1".getBytes(StandardCharsets.UTF_8);
     private static final byte[] KEY = load();
@@ -28,17 +17,14 @@ public final class BuildSignature {
     private BuildSignature() {
     }
 
-    /** Whether this jar is an official, signing build. */
     public static boolean official() {
         return KEY != null;
     }
 
-    /** The relay's clock, from one of its answers: seconds. */
     public static void serverTime(long relaySeconds) {
         offsetSeconds = relaySeconds - System.currentTimeMillis() / 1000L;
     }
 
-    /** Adds the signature headers for this exact body (nothing when this is not an official build). */
     public static void sign(HttpURLConnection c, String path, byte[] body) {
         if (KEY == null) {
             return;
@@ -55,7 +41,6 @@ public final class BuildSignature {
             c.setRequestProperty("X-Atlas-Time", Long.toString(t));
             c.setRequestProperty("X-Atlas-Sig", hex(mac.doFinal(message.getBytes(StandardCharsets.UTF_8))));
         } catch (Exception ignored) {
-            // Unsigned: the relay counts it as unofficial.
         }
     }
 

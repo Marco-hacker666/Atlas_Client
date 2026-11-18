@@ -4,16 +4,12 @@ import atlas.script.raven.model.Vec3;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C03PacketPlayer;
 
-/**
- * The movement packet: position null when it carries none (C03/C05), and the look only when it carries one
- * (C05/C06). Which of the four it is follows from the constructor used, or from the packet it came from.
- */
 public class C03 extends CPacket {
     public Vec3 position;
     public float yaw;
     public float pitch;
     public boolean ground;
-    /** bS 17: whether it carries a position and a look; a script may switch either off. */
+
     public boolean moving;
     public boolean rotating;
 
@@ -59,7 +55,6 @@ public class C03 extends CPacket {
         return out;
     }
 
-    /** Whether it carries a look. */
     public boolean isRotating() {
         return this.rotating;
     }

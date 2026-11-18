@@ -3,11 +3,6 @@ package atlas.humanize;
 import java.util.ArrayDeque;
 import java.util.Locale;
 
-/**
- * What a humanized module did lately (2026-10-25): clicks, hits, misses by
- * style, reactions, overshoots and lapses over the last 30 seconds, for the
- * stats line and the log.
- */
 public final class HumanStats {
     private static final long SPAN_MS = 30000L;
 
@@ -15,13 +10,12 @@ public final class HumanStats {
     private static final int CLICK_AIM_OFF = 1;
     private static final int CLICK_SWING_ONLY = 2;
     private static final int CLICK_SKIP = 3;
-    /** A click meant to land whose ray missed anyway. */
+
     private static final int CLICK_UNLUCKY = 4;
 
     private final ArrayDeque<long[]> clicks = new ArrayDeque<long[]>();
     private final ArrayDeque<long[]> reactions = new ArrayDeque<long[]>();
-    /* 2026-10-26 (review): overshoots, undershoots and lapses kept their whole-session counts while the rest of
-       the line was the last 30 s. Now the same window: {time, kind}. */
+
     private static final int AIM_OVER = 0;
     private static final int AIM_UNDER = 1;
     private static final int AIM_LAPSE = 2;
@@ -84,7 +78,6 @@ public final class HumanStats {
         }
     }
 
-    /** Hits / clicks over the last 30 s (-1 with none). Skipped clicks are not clicks. */
     public synchronized double hitRate(long now) {
         trim(now);
         int clicked = 0;
@@ -100,7 +93,6 @@ public final class HumanStats {
         return clicked == 0 ? -1.0 : hits / (double) clicked;
     }
 
-    /** One line: "hit 41% (37/90) | miss aim 30 swing 9 skip 6 unlucky 2 | react 236ms | over 4 under 2 lapse 1". */
     public synchronized String line(long now) {
         trim(now);
         int[] n = new int[5];

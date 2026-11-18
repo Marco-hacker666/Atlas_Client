@@ -1,7 +1,7 @@
 package atlas.config.online;
 
 // Ported from OpenSkid (GPL-3.0), itself adapted from the MiauMinus
-// online-config concept. One cached shared config, as the cache lists it.
+
 public class OnlineConfigEntry {
     private final String id;
     private final String name;

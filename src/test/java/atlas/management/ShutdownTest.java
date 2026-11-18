@@ -10,9 +10,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
-/** The single ordered exit (F-06/F-07/F-26, 2026-09-28). */
 public class ShutdownTest {
-
     private final List<String> ran = new ArrayList<String>();
 
     @Before

@@ -32,8 +32,7 @@ public class Fly extends Module {
     private boolean boostActive = false;
     private boolean timerActive = false;
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"VANILLA", "VANILLA2", "AIR_WALK", "AIR_PLACE", "VULCAN", "MATRIX", "MATRIX_BOW", "MATRIX_TNT", "FAKE", "TEST", "CUSTOM"})
-            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
-               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+
             .hide("VANILLA2", "VULCAN", "MATRIX", "MATRIX_BOW", "MATRIX_TNT", "TEST");
     public final FloatProperty hSpeed = new FloatProperty("horizontal-speed", 1.0F, 0.0F, 100.0F);
     public final FloatProperty vSpeed = new FloatProperty("vertical-speed", 1.0F, 0.0F, 100.0F);
@@ -104,7 +103,7 @@ public class Fly extends Module {
     public void onStrafe(StrafeEvent event) {
         if (this.isEnabled()) {
             int m = this.mode.getValue();
-            // Donor MatrixBowFly/MatrixTNTFly drive motion directly, keep hands off strafe while boosting.
+
             if ((m == 6 || m == 7) && this.boostActive) {
                 return;
             }
@@ -121,19 +120,19 @@ public class Fly extends Module {
         if (this.isEnabled() && event.getType() == EventType.PRE) {
             this.flyTicks++;
             switch (this.mode.getValue()) {
-                case 0: // Donor Vanilla2Fly: classic key-driven fly.
-                case 1: // Donor Vanilla2Fly with ground spoof toggle.
-                case 10: // Donor CustomFly: raw user speeds, no extra logic.
+                case 0:
+                case 1:
+                case 10:
                     this.pollVerticalKeys();
                     break;
-                case 2: // Donor AirWalkFly: hover in place, no block solidity events in Atlas.
+                case 2:
                     this.pollVerticalKeys();
                     if (this.verticalMotion == 0.0 && mc.thePlayer.motionY < 0.0) {
                         mc.thePlayer.motionY = 0.0;
                         this.verticalMotion = 0.0;
                     }
                     break;
-                case 3: // AirPlace: sink slowly while placing blocks below, jump refreshes.
+                case 3:
                     if (mc.thePlayer.onGround) {
                         if (!KeyBindUtil.isKeyDown(mc.gameSettings.keyBindSneak.getKeyCode())) {
                             mc.thePlayer.jump();
@@ -145,7 +144,7 @@ public class Fly extends Module {
                         this.placeBlockBelow();
                     }
                     break;
-                case 4: // Donor VulcanFly: hover, timer kicks in after a flag.
+                case 4:
                     this.pollVerticalKeys();
                     if (this.verticalMotion == 0.0 && mc.thePlayer.motionY < 0.0) {
                         mc.thePlayer.motionY = 0.0;
@@ -157,7 +156,7 @@ public class Fly extends Module {
                         atlas.util.TimerControl.release(this);
                     }
                     break;
-                case 5: // Donor MatrixFly: pin below the takeoff height.
+                case 5:
                     if (mc.thePlayer.posY < (double) this.startY) {
                         mc.thePlayer.motionY = 0.0;
                         this.verticalMotion = 0.0;
@@ -168,8 +167,8 @@ public class Fly extends Module {
                         this.pollVerticalKeys();
                     }
                     break;
-                case 6: // Donor MatrixBowFly: hurt triggers a short glide.
-                case 7: // Donor MatrixTNTFly: hurt triggers boosted glide with auto disable.
+                case 6:
+                case 7:
                     if (!this.boostActive && mc.thePlayer.hurtTime > 0) {
                         this.boostActive = true;
                         this.boostTicks = 0;
@@ -194,14 +193,14 @@ public class Fly extends Module {
                         this.verticalMotion = 0.0;
                     }
                     break;
-                case 8: // Donor FakeFly: gentle damped glide, no scaffold hook in Atlas.
+                case 8:
                     this.pollVerticalKeys();
                     if (!mc.thePlayer.onGround && mc.thePlayer.motionY < -0.15) {
                         mc.thePlayer.motionY = -0.15;
                         this.verticalMotion = -0.15;
                     }
                     break;
-                case 9: // Donor TestFly: clamp sink speed.
+                case 9:
                     if (!mc.thePlayer.onGround) {
                         mc.thePlayer.motionY = Math.max(mc.thePlayer.motionY, this.motionCap.getValue().doubleValue());
                         this.verticalMotion = mc.thePlayer.motionY;

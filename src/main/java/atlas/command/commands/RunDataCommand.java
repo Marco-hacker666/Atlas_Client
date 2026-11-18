@@ -7,7 +7,6 @@ import atlas.util.ChatUtil;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-/** .rundata on|off|status: the anonymous SpeedBlocker run data (RunCollector), 2026-11-01. */
 public class RunDataCommand extends Command {
     public RunDataCommand() {
         super(new ArrayList<String>(Arrays.asList("rundata")));

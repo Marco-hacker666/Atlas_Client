@@ -10,17 +10,9 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-/**
- * .targets on|off|stats|reset: measures the forecasts of other players' movement (atlas.sim.SimTargets) against
- * where they really went, next to the straight line the modules use (2026-11-13). Nothing leaves the game.
- *
- * 2026-11-15 (owner: "make it on by default for me, I forget"): on and off are kept in config/Atlas/targets.txt, and
- * {@link #restore} puts the measuring back on at start when it was on. Off for anyone who never turned it on.
- */
 public class TargetsCommand extends Command {
     private static final File SAVED = new File("./config/Atlas/targets.txt");
 
-    /** At start: measuring on again if .targets on was the last word. */
     public static void restore() {
         try {
             if (SAVED.isFile() && "on".equals(new String(Files.readAllBytes(SAVED.toPath()),

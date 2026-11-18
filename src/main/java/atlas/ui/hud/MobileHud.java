@@ -9,30 +9,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * The HUD on a phone (2026-11-11, owner: avoid the touch buttons, a little
- * smaller, turn off what does not fit). See util.render.DeviceProfile.
- *
- * The first time each element is seen on a phone:
- *   1. if its size is still the default, it is made {@link #SCALE} as big;
- *   2. on the next frame (its new size measured), if it is still where it
- *      was declared, it is moved the shortest way out of the touch zones:
- *      the launcher's buttons sit in the four corners -- the movement pad
- *      bottom left, jump/sneak/attack bottom right, the keyboard, chat and
- *      menu buttons along the top corners.
- * An element the player has moved or resized is left alone, and each element
- * is done once: its id goes into config/Atlas/mobile-hud.txt, so a move the
- * player makes afterwards stays. KeyStrokes (keys a touch screen does not
- * have) is switched off once the same way.
- *
- * Launchers let players move their buttons, so the zones are the usual
- * layout, not a measurement: a HUD element can still be dragged anywhere in
- * the HUD editor.
- */
 public final class MobileHud {
-    /** How big a default-sized element is made on a phone. */
     public static final float SCALE = 0.85F;
-    /** Touch zones as fractions of the screen: {left, top, right, bottom}. */
+
     static final float[][] ZONES = {
             {0.00F, 0.00F, 0.22F, 0.16F},
             {0.78F, 0.00F, 1.00F, 0.16F},
@@ -44,7 +23,7 @@ public final class MobileHud {
     private static final String KEYSTROKES = "module:KeyStrokes";
 
     private static Set<String> done;
-    /** Elements scaled this session, waiting one frame to be measured at the new size. */
+
     private static final Map<String, Boolean> scaled = new HashMap<String, Boolean>();
 
     private MobileHud() {
@@ -65,7 +44,7 @@ public final class MobileHud {
         }
         if (!scaled.containsKey(element.id)) {
             HudLayout.Scaler scaler = element.scaler;
-            /* Customised in either way -- moved or resized -- and it is the player's: neither is changed. */
+
             boolean moved = element.mover == null || !element.mover.atDefault();
             boolean resized = scaler != null && !Float.isNaN(scaler.defaultValue())
                     && Math.abs(scaler.get() - scaler.defaultValue()) >= 0.005F;
@@ -81,7 +60,6 @@ public final class MobileHud {
             }
             scaled.put(element.id, shrink);
             if (shrink) {
-                /* Measured again next frame, at the new size. */
                 return;
             }
         }
@@ -96,12 +74,6 @@ public final class MobileHud {
         save();
     }
 
-    /**
-     * How far to move the rectangle (x, y, w, h) so it covers no touch zone:
-     * the shortest such move that keeps it on screen, {dx, dy}; null when it
-     * is clear already or no short move clears it (more than a third of the
-     * screen, which would put it somewhere the player did not expect).
-     */
     static float[] nudge(float x, float y, float w, float h, float sw, float sh) {
         if (!covers(x, y, w, h, sw, sh)) {
             return null;
@@ -159,7 +131,6 @@ public final class MobileHud {
                 keys.setEnabled(false);
             }
         } catch (RuntimeException ignored) {
-            // Not worth breaking the HUD over.
         }
     }
 
@@ -175,7 +146,6 @@ public final class MobileHud {
                     }
                 }
             } catch (IOException ignored) {
-                // Unreadable: everything is done again, which only touches elements still at their default.
             }
         }
         return done;
@@ -190,7 +160,6 @@ public final class MobileHud {
             Files.write(FILE.toPath(), done.isEmpty() ? new byte[0]
                     : (String.join("\n", done) + "\n").getBytes(StandardCharsets.UTF_8));
         } catch (IOException ignored) {
-            // Done again next start, harmlessly.
         }
     }
 }

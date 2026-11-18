@@ -10,8 +10,7 @@ import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class GlowUtils { // credit: Horaizion
-
+public class GlowUtils {
     private static final int MAX_CACHE = 40;
 
     private static final Map<String, Integer> cache = new LinkedHashMap<String, Integer>(16, 0.75f, true) {
@@ -60,10 +59,8 @@ public class GlowUtils { // credit: Horaizion
         BufferedImage temp = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         BufferedImage output = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
 
-        // Horizontal blur
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-
                 float a = 0, red = 0, green = 0, blue = 0;
 
                 for (int k = -r; k <= r; k++) {
@@ -87,10 +84,8 @@ public class GlowUtils { // credit: Horaizion
             }
         }
 
-        // Vertical blur
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-
                 float a = 0, red = 0, green = 0, blue = 0;
 
                 for (int k = -r; k <= r; k++) {
@@ -118,14 +113,11 @@ public class GlowUtils { // credit: Horaizion
     }
 
     public static void drawGlow(float x, float y, float w, float h, int radius, Color color) {
-
-        // IMPORTANT: remove x,y from cache key
         String key = w + "_" + h + "_" + radius + "_" + color.getRGB();
 
         Integer texture = cache.get(key);
 
         if (texture == null) {
-
             int imgW = (int) w + radius * 2;
             int imgH = (int) h + radius * 2;
 

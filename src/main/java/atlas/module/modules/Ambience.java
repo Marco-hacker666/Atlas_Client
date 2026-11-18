@@ -30,12 +30,6 @@ public final class Ambience extends Module {
                             "Unchanged", "Clear", "Rain", "Heavy Snow", "Light Snow", "Nether Particles"
                     });
 
-
-    /* Whether the server says it is raining. Captured at switch-on and kept
-       current from the weather packets this module otherwise swallows, so
-       switching off can put back the server's weather. It used to force clear
-       skies on every switch-off -- even in "Unchanged" mode -- and they stayed
-       clear until the server next changed the weather. */
     private volatile boolean serverRaining;
 
     public Ambience() {
@@ -56,14 +50,10 @@ public final class Ambience extends Module {
                 mc.theWorld.getWorldInfo().setThundering(false);
             }
         }
-        /* The world time needs nothing: the server sends it every second and
-           this module no longer cancels it once it is off. */
     }
 
     @EventTarget
     public void onRender3D(Render3DEvent event) {
-        /* Without this the world time was pinned to "Time" and every server
-           time update was cancelled whether the module was on or not. */
         if (this.isEnabled() && mc.theWorld != null) {
             mc.theWorld.setWorldTime(
                     (long) (time.getValue() + (System.currentTimeMillis() * speed.getValue())));
@@ -115,9 +105,6 @@ public final class Ambience extends Module {
             S2BPacketChangeGameState s2b = (S2BPacketChangeGameState) event.getPacket();
 
             if (s2b.getGameState() == 1 || s2b.getGameState() == 2) {
-                /* 1 = rain starts, 2 = rain stops: vanilla's handler sets
-                   raining true on 1 and false on 2 (checked in the 1.8.9
-                   NetHandlerPlayClient.handleChangeGameState). */
                 this.serverRaining = s2b.getGameState() == 1;
                 event.setCancelled(true);
             }

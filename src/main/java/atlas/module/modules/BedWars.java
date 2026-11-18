@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): passive chat alerts for enemy gear plus
-// BedWars trap and upgrade window timers.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;

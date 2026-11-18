@@ -7,9 +7,7 @@ import java.util.Random;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** 2026-10-26 review fixes: aim counts share the 30 s window; reset starts the accuracy over. */
 public class HumanStatsWindowTest {
-
     @Test
     public void overshootsAndLapsesLeaveWithTheWindow() {
         HumanStats stats = new HumanStats();

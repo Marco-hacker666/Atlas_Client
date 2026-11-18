@@ -3,7 +3,6 @@ package atlas.script.raven.packet.clientbound;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S3APacketTabComplete;
 
-/** The server's answer to tab completion. */
 public class S3A extends SPacket {
     public String[] matches;
 

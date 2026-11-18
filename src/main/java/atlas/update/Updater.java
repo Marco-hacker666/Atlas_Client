@@ -18,30 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 
-/**
- * Online updates (2026-10-13).
- *
- * On start the client reads update.properties from the newest GitHub release.
- * If that release is newer than the running jar, then depending on the mode:
- *   OFF    -- nothing.
- *   NOTIFY -- a chat line says a new version exists (".update download" gets it).
- *   AUTO   -- the jar is downloaded in the background, its size, hash and
- *             signature are checked, and it is swapped in after the game
- *             closes (UpdateInstaller). The next start runs the new version.
- *
- * Nothing here touches Minecraft classes: messages go out through a
- * listener (UpdateNotifier shows them in chat), so the logic can be tested
- * on its own.
- *
- * Files, all under .minecraft/atlas-update/:
- *   pending/      the downloaded, verified jar waiting for the game to close
- *   installer/    the copy of UpdateInstaller.class that does the swap
- *   backup/       the last few replaced jars
- *   install.log   what the installer did
- * Settings: config/Atlas/updater.properties (mode=auto|notify|off).
- */
 public final class Updater {
-
     public enum Mode { OFF, NOTIFY, AUTO }
 
     public enum State { IDLE, CHECKING, UP_TO_DATE, AVAILABLE, DOWNLOADING, READY, FAILED }
@@ -57,11 +34,7 @@ public final class Updater {
     private static final int CONNECT_TIMEOUT_MS = 8000;
     private static final int READ_TIMEOUT_MS = 20000;
     private static final int MAX_MANIFEST_BYTES = 16 * 1024;
-    /**
-     * Waits before each further attempt, ms (2026-10-29: a connection reset half way, a name that would not
-     * resolve, a stall -- each used to end the update until the next start, and the half-downloaded jar was thrown
-     * away). A jar download goes on from where it stopped.
-     */
+
     static long[] retryDelaysMs = {1000L, 3000L, 8000L};
 
     private static Updater instance;
@@ -80,12 +53,9 @@ public final class Updater {
     private volatile boolean installCancelled;
     private volatile String lastError;
     private volatile File currentJarOverride;
-    /* 2026-10-26: one background check or download at a time. The state checks in checkAsync/downloadAsync were
-       check-then-act: the start-up check and a ".update check" (or ".update mode auto") could both download into
-       the same .part file, and one's failure deleted the other's file. */
+
     private final java.util.concurrent.atomic.AtomicBoolean working = new java.util.concurrent.atomic.AtomicBoolean();
-    /* 2026-10-26: the version ".update cancel" skipped (updater.properties "skip"); null when none. It is not
-       downloaded again on later starts; a newer version, or ".update download", clears it. */
+
     private volatile UpdateVersion skipped;
 
     Updater(File gameDir, String currentVersion, PublicKey key) {
@@ -97,9 +67,6 @@ public final class Updater {
         loadSettings();
     }
 
-    // ------------------------------------------------------------------ setup
-
-    /** Called once from the client's init. Starts a background check unless OFF. */
     public static synchronized Updater start(File gameDir, String currentVersion, Listener listener) {
         if (instance != null) {
             return instance;
@@ -143,8 +110,6 @@ public final class Updater {
             }
         }
     }
-
-    // --------------------------------------------------------------- settings
 
     private void loadSettings() {
         if (!settingsFile.isFile()) {
@@ -207,12 +172,9 @@ public final class Updater {
         UpdateManifest l = latest;
         UpdateVersion skip = skipped;
         if (m == Mode.AUTO && state == State.AVAILABLE && l != null && (skip == null || l.version.isNewerThan(skip))) {
-            /* Switching to auto gets what is waiting, but not a version the player skipped. */
             startDownload(false);
         }
     }
-
-    // ------------------------------------------------------------------ check
 
     public void checkAsync(final boolean manual) {
         if (!working.compareAndSet(false, true)) {
@@ -245,7 +207,6 @@ public final class Updater {
             return;
         }
         if (state == State.READY && pendingJar != null && pendingJar.isFile()) {
-            /* Already downloaded and verified: do not fetch it a second time. */
             if (manual) {
                 say("v" + latest.version + " 已經下載好了，關閉遊戲後會安裝。",
                         "v" + latest.version + " is already downloaded; it installs when the game closes.");
@@ -270,8 +231,6 @@ public final class Updater {
         }
         latest = m;
         if (!UpdateSignature.verify(m, key)) {
-            /* No key in this build, or a signature that does not verify:
-               never install, but the player may still want to know. */
             state = State.AVAILABLE;
             lastError = key == null ? "this build has no update key" : "signature check failed";
             if (key == null) {
@@ -286,7 +245,6 @@ public final class Updater {
         state = State.AVAILABLE;
         UpdateVersion skip = skipped;
         if (skip != null && !m.version.isNewerThan(skip)) {
-            /* Skipped with ".update cancel": not downloaded again; ".update download" still gets it. */
             if (manual) {
                 say("v" + m.version + " 已設定為跳過。要安裝請輸入 .update download。",
                         "v" + m.version + " is skipped. Type .update download to install it anyway.");
@@ -294,7 +252,6 @@ public final class Updater {
             return;
         }
         if (skip != null) {
-            /* A newer version than the skipped one: the skip is over. */
             skipped = null;
             saveSettings();
         }
@@ -316,9 +273,6 @@ public final class Updater {
         }
     }
 
-    // --------------------------------------------------------------- download
-
-    /** A download the player asked for (".update download", or switching to auto): it also undoes a skip. */
     public void downloadAsync() {
         startDownload(true);
     }
@@ -383,13 +337,6 @@ public final class Updater {
                 "§av" + m.version + " is downloaded and verified; it installs when you close the game.§r Type .update cancel to skip this version.");
     }
 
-    // ---------------------------------------------------------------- install
-
-    /**
-     * ".update cancel": not installed when the game closes, and this version is
-     * skipped on later starts too (2026-10-26; it used to come back on the next
-     * start and install then).
-     */
     public void cancelInstall() {
         installCancelled = true;
         UpdateManifest m = latest;
@@ -399,7 +346,6 @@ public final class Updater {
         }
     }
 
-    /** ".update download" after a cancel in the same session: install it after all. */
     public void uncancelInstall() {
         installCancelled = false;
         if (skipped != null) {
@@ -408,7 +354,6 @@ public final class Updater {
         }
     }
 
-    /** The version ".update cancel" skipped, or null. */
     public UpdateVersion getSkipped() {
         return skipped;
     }
@@ -417,14 +362,13 @@ public final class Updater {
         return installCancelled;
     }
 
-    /** Runs while the game shuts down: starts UpdateInstaller and returns at once. */
     void launchInstallerIfReady() {
         File jar = pendingJar;
         File currentJar = currentJar();
         if (state != State.READY || installCancelled || jar == null || !jar.isFile() || currentJar == null) {
             return;
         }
-        /* Check the file once more right before handing it over. */
+
         UpdateManifest m = latest;
         if (m == null || !UpdateSignature.matches(m, jar)) {
             return;
@@ -471,13 +415,12 @@ public final class Updater {
         File bin = new File(System.getProperty("java.home"), "bin");
         boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
         if (windows) {
-            File javaw = new File(bin, "javaw.exe"); // no console window
+            File javaw = new File(bin, "javaw.exe");
             return javaw.isFile() ? javaw.getAbsolutePath() : new File(bin, "java.exe").getAbsolutePath();
         }
         return new File(bin, "java").getAbsolutePath();
     }
 
-    /** On start: drop a download left from an earlier session (it is fetched again if still needed). */
     void cleanStaleFiles() {
         File pendingDir = new File(workDir, "pending");
         File[] files = pendingDir.listFiles();
@@ -489,9 +432,6 @@ public final class Updater {
         }
     }
 
-    // ---------------------------------------------------------- current jar
-
-    /** The jar this class was loaded from, or null in a development run. */
     public File currentJar() {
         if (currentJarOverride != null) {
             return currentJarOverride;
@@ -526,15 +466,13 @@ public final class Updater {
             if (!s.startsWith("file:")) {
                 return null;
             }
-            /* toURI, not URLDecoder: a "+" in the jar name must stay a "+". */
+
             File f = new File(new URL(s).toURI());
             return f.isFile() && f.getName().toLowerCase(Locale.ROOT).endsWith(".jar") ? f : null;
         } catch (Exception e) {
             return null;
         }
     }
-
-    // ---------------------------------------------------------------- network
 
     String manifestUrl() {
         return releasesBase + "/latest/download/" + MANIFEST_NAME;
@@ -544,22 +482,19 @@ public final class Updater {
         return releasesBase + "/download/v" + m.version + "/" + m.file;
     }
 
-    /** A failure another attempt cannot fix: the file is not there, or is not the signed size. */
     static final class PermanentFailure extends IOException {
         PermanentFailure(String message) {
             super(message);
         }
     }
 
-    /** {@code from} > 0: ask for the rest of the file from that byte on. */
     private static URLConnection open(String url, long from) throws IOException {
         URLConnection c = new URL(url).openConnection();
         c.setConnectTimeout(CONNECT_TIMEOUT_MS);
         c.setReadTimeout(READ_TIMEOUT_MS);
         c.setUseCaches(false);
         c.setRequestProperty("User-Agent", "Atlas-Updater");
-        /* 2026-10-22: GitHub answers 406 to Java's default Accept header (text/html, image/gif, image/jpeg and
-           two wildcards) on release downloads; every "update check" failed with HTTP 406. Ask for the file. */
+
         c.setRequestProperty("Accept", "application/octet-stream");
         if (from > 0) {
             c.setRequestProperty("Range", "bytes=" + from + "-");
@@ -569,8 +504,6 @@ public final class Updater {
             h.setInstanceFollowRedirects(true);
             int code = h.getResponseCode();
             if (code == 404) {
-                /* Usually a release just published: its files are attached by
-                   the release Action a minute or two later (2026-10-13). */
                 throw new PermanentFailure("not on the latest release yet (404); it may still be building,"
                         + " try again in a minute or two");
             }
@@ -614,7 +547,6 @@ public final class Updater {
         }
     }
 
-    /** Rethrows {@code failure} when the attempts are used up; else waits this attempt's delay. */
     private static void waitBeforeRetry(int attempt, IOException failure) throws IOException {
         long[] delays = retryDelaysMs;
         if (attempt >= delays.length) {
@@ -628,7 +560,6 @@ public final class Updater {
         }
     }
 
-    /** One attempt, going on from what {@code out} already holds when the server allows it. */
     private static void downloadOnce(String url, File out, long expectedSize) throws IOException {
         long have = out.isFile() ? out.length() : 0L;
         if (have > expectedSize) {
@@ -674,8 +605,6 @@ public final class Updater {
         }
     }
 
-    // ------------------------------------------------------------------ status
-
     public Mode getMode() {
         return mode;
     }
@@ -699,8 +628,6 @@ public final class Updater {
     public boolean hasKey() {
         return key != null;
     }
-
-    // ------------------------------------------------------------ test hooks
 
     void setCurrentJarForTests(File f) {
         currentJarOverride = f;

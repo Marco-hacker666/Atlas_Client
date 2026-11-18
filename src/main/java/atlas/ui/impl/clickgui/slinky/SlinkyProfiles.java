@@ -20,22 +20,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Profiles as the Slinky-style menu shows them: every saved config in
- * config/Atlas, newest first, each with an optional key that loads it.
- *
- * Profiles are the same files {@code .config save/load} uses (Config does the
- * reading and writing), so a profile made here and one made with the command
- * are the same thing. Only the keys are this menu's own; they are kept in
- * config/Atlas/slinky-profiles.txt, one "name TAB key" per line.
- *
- * One instance listens for key presses in game (registered in Atlas) and loads
- * the profile bound to the key.
- */
 public final class SlinkyProfiles {
     static final File DIR = new File("./config/Atlas/");
     private static final File KEYS = new File(DIR, "slinky-profiles.txt");
-    /** Files in the folder that are not profiles. */
+
     private static final String[] NOT_PROFILES = {"atlas-theme"};
 
     public static final SlinkyProfiles INSTANCE = new SlinkyProfiles();
@@ -56,7 +44,6 @@ public final class SlinkyProfiles {
     private SlinkyProfiles() {
     }
 
-    /** Every profile but the default, newest first. */
     static List<Row> list() {
         List<Row> out = new ArrayList<Row>();
         File[] files = DIR.listFiles();
@@ -96,7 +83,6 @@ public final class SlinkyProfiles {
         return new File(DIR, name + ".json").isFile();
     }
 
-    /** "Used today.", "Used 1 day ago.", "Used 4 days ago." */
     static String used(long modified) {
         LocalDate day = Instant.ofEpochMilli(modified).atZone(ZoneId.systemDefault()).toLocalDate();
         long days = Math.max(0L, ChronoUnit.DAYS.between(day, LocalDate.now()));
@@ -137,11 +123,6 @@ public final class SlinkyProfiles {
         }
     }
 
-    /**
-     * What may be typed as a profile name: letters, digits, space, dash,
-     * underscore and dot, at most 32 characters, not starting with a dot.
-     * Anything else could name a file outside the folder.
-     */
     static String clean(String name) {
         StringBuilder sb = new StringBuilder();
         for (char c : name.trim().toCharArray()) {
@@ -160,8 +141,6 @@ public final class SlinkyProfiles {
         ChatUtil.sendFormatted("&7[&cAtlas&7] &7" + message);
     }
 
-    // ---- keys ------------------------------------------------------------
-
     int getKey(String name) {
         readKeys();
         Integer key = this.keys.get(name);
@@ -178,7 +157,6 @@ public final class SlinkyProfiles {
         writeKeys();
     }
 
-    /** Loads the profile bound to a key pressed in game. */
     @EventTarget
     public void onKey(KeyEvent event) {
         readKeys();
@@ -209,7 +187,6 @@ public final class SlinkyProfiles {
                 }
             }
         } catch (Exception ignored) {
-            // No keys, then.
         }
     }
 
@@ -225,7 +202,6 @@ public final class SlinkyProfiles {
                 writer.close();
             }
         } catch (Exception ignored) {
-            // The keys stay for this session.
         }
     }
 }

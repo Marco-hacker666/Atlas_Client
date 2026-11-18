@@ -6,9 +6,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-/** A colour comes back from a config exactly as it was saved (2026-11-09). */
 public class ColorPropertyTest {
-
     private static int roundTrip(int value) {
         ColorProperty saved = new ColorProperty("c", value);
         JsonObject json = new JsonObject();
@@ -26,7 +24,6 @@ public class ColorPropertyTest {
 
     @Test
     public void awtColourWithAlphaRoundTrips() {
-        /* java.awt.Color.GRAY.getRGB(): it used to come back as FF8080, pink with no alpha. */
         assertEquals(0xFF808080, roundTrip(0xFF808080));
         assertEquals(0xFFFFFFFF, roundTrip(0xFFFFFFFF));
     }

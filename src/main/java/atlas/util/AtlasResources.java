@@ -18,18 +18,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-/**
- * The jar's own resources under the "atlas" domain (2026-10-11).
- *
- * FML loads this jar as a "non-mod file" (a coremod with no @Mod container),
- * so it gets no resource pack and every ResourceLocation("atlas:...") failed:
- * all 16 fonts fell back to the system default ("Failed to load font", in
- * the owner's log as well as the collaborator's) and WaterMark's images never
- * loaded. This pack serves those paths straight from the jar. It is added to
- * the game's default packs, so it survives a resource reload, and to the
- * live resource manager, so it works at once. Nothing is announced to a
- * server: it is not a mod container.
- */
 public final class AtlasResources implements IResourcePack {
     private static final Set<String> DOMAINS = Collections.singleton("atlas");
     private static boolean registered;

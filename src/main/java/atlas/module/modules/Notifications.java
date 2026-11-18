@@ -1,8 +1,5 @@
-/*
- * Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0),
- * src/main/java/openskid/module/modules/Notifications.java, 2026-10-05: package openskid -> atlas,
- * OpenSkid -> Atlas. Changes after that are marked in comments.
- */
+// Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0), src/main/java/openskid/module/modules/Notifications.java
+
 package atlas.module.modules;
 
 import atlas.ui.impl.clickgui.atlas.HudPanel;
@@ -30,10 +27,10 @@ public class Notifications extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final IntProperty maxNotifications = new IntProperty("max-notifications", 4, 1, 8);
-    /* Added with the HUD editor (2026-10-05): the stack's shift from the bottom-right corner. 0 = the old place. */
+
     public final IntProperty offsetX = new IntProperty("offset-x", 0, -1000, 1000);
     public final IntProperty offsetY = new IntProperty("offset-y", 0, -1000, 1000);
-    /* 2026-11-09: every HUD element can be resized and have its panel switched off. */
+
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
     public final BooleanProperty background = new BooleanProperty("background", true);
     private CFontRenderer frameFont;
@@ -52,7 +49,6 @@ public class Notifications extends Module {
         List<NotificationManager.NotificationEntry> entries = Atlas.notificationManager.getActive();
         if (entries.isEmpty()) {
             if (HudLayout.isEditing()) {
-                /* Nothing showing: a placeholder the size of one notification. */
                 ScaledResolution res = new ScaledResolution(mc);
                 float h = mc.fontRendererObj.FONT_HEIGHT + 13.0F;
                 float cornerX = res.getScaledWidth() - 8.0F + this.offsetX.getValue();
@@ -77,7 +73,7 @@ public class Notifications extends Module {
         float stackLeft = Float.MAX_VALUE;
         float stackRight = 0.0F;
         int rendered = 0;
-        /* Resized about the stack's bottom-right corner, the corner it grows from. */
+
         float s = this.scale.getValue();
         float cornerX = sr.getScaledWidth() - margin + this.offsetX.getValue();
         HudLayout.beginScaled(cornerX, stackBottom, s);
@@ -129,7 +125,6 @@ public class Notifications extends Module {
         int neutralText = new Color(238, 241, 245, (int) (242 * alpha)).getRGB();
 
         if (!this.background.getValue()) {
-            /* No panel: the text and the progress line only. */
         } else if (HudPanel.active()) {
             HudPanel.panel(renderX, y, renderX + boxWidth, y + boxHeight, true, alpha);
         } else {

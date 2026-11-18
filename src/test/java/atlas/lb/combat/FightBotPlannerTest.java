@@ -8,13 +8,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** The LiquidBounce FightBot's movement planning, and the indicator colors (2026-10-25). */
 public class FightBotPlannerTest {
-
     @Test
     public void yawsFollowMinecraft() {
-        assertEquals(0.0F, FightBotPlanner.yawTo(0, 0, 0, 5), 1e-4); // +z
-        assertEquals(90.0F, FightBotPlanner.yawTo(0, 0, -5, 0), 1e-4); // -x
+        assertEquals(0.0F, FightBotPlanner.yawTo(0, 0, 0, 5), 1e-4);
+        assertEquals(90.0F, FightBotPlanner.yawTo(0, 0, -5, 0), 1e-4);
         double[] d = FightBotPlanner.direction(90.0F);
         assertEquals(-1.0, d[0], 1e-9);
         assertEquals(0.0, d[1], 1e-9);
@@ -24,27 +22,26 @@ public class FightBotPlannerTest {
     public void walkKeysPointAtTheGoal() {
         assertArrayEquals(new int[]{1, 0}, FightBotPlanner.directionalInput(0, 5, 0.0F, 20.0F));
         assertArrayEquals(new int[]{-1, 0}, FightBotPlanner.directionalInput(0, -5, 0.0F, 20.0F));
-        assertArrayEquals(new int[]{0, -1}, FightBotPlanner.directionalInput(-5, 0, 0.0F, 20.0F)); // right
-        assertArrayEquals(new int[]{0, 1}, FightBotPlanner.directionalInput(5, 0, 0.0F, 20.0F)); // left
-        assertArrayEquals(new int[]{1, 1}, FightBotPlanner.directionalInput(5, 5, 0.0F, 20.0F)); // forward-left
+        assertArrayEquals(new int[]{0, -1}, FightBotPlanner.directionalInput(-5, 0, 0.0F, 20.0F));
+        assertArrayEquals(new int[]{0, 1}, FightBotPlanner.directionalInput(5, 0, 0.0F, 20.0F));
+        assertArrayEquals(new int[]{1, 1}, FightBotPlanner.directionalInput(5, 5, 0.0F, 20.0F));
         assertArrayEquals(new int[]{0, 0}, FightBotPlanner.directionalInput(0, 0, 0.0F, 20.0F));
     }
 
     @Test
     public void movementYawOfTheKeys() {
         assertEquals(0.0F, FightBotPlanner.movementYaw(0.0F, 1, 0), 1e-4);
-        assertEquals(-90.0F, FightBotPlanner.movementYaw(0.0F, 0, 1), 1e-4); // left
+        assertEquals(-90.0F, FightBotPlanner.movementYaw(0.0F, 0, 1), 1e-4);
         assertEquals(180.0F, Math.abs(FightBotPlanner.movementYaw(0.0F, -1, 0)), 1e-4);
     }
 
     @Test
     public void theAttackSpotAvoidsWhereTheTargetLooks() {
-        // Target at the origin looking +z (yaw 0), player straight ahead of it at +z.
         double[] spot = FightBotPlanner.attackPosition(0, 0, 0.0F, 3.0, 55.0F, 0, 6, (x, z) -> false);
         float yaw = FightBotPlanner.yawTo(0, 0, spot[0], spot[1]);
         assertTrue("spot at yaw " + yaw, Math.abs(FightBotPlanner.wrap(yaw)) > 55.0F);
         assertEquals(3.0, Math.hypot(spot[0], spot[1]), 1e-6);
-        // Everything blocked: the spot along the target's look.
+
         double[] fallback = FightBotPlanner.attackPosition(0, 0, 0.0F, 3.0, 55.0F, 0, 6, (x, z) -> true);
         assertEquals(0.0, fallback[0], 1e-9);
         assertEquals(3.0, fallback[1], 1e-9);

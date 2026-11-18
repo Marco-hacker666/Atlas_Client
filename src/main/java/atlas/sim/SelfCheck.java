@@ -1,30 +1,8 @@
 package atlas.sim;
 
-/**
- * The question a re-simulating anticheat (GrimAC's way) asks of each move, asked by the client of itself
- * (2026-11-11). From where the last tick left the player, with the yaw the movement packet carried and the sprint and
- * sneak state the server was told, does any keyboard input explain where the player is now? Every combination is
- * tried: forward, none or back, left, none or right, a jump or not, an item's slowdown or not (a sneak's 0.3 on top
- * when sneaking). The smallest distance left over is the offset; 0 means some real input explains the move.
- *
- * Pure: no game. It answers for the position the client really reached, not for what the packets carried (a client
- * leaves out a move under 0.03, a server then has to allow for it), so it is the strict form of the check.
- *
- * 2026-11-12, after reading how GrimAC builds its guesses (its ideas, not its code; Grim is GPL):
- *   - sprinting, the only keys tried are forward ones (W, W A, W D): a sprint with no forward key cannot happen in
- *     1.8 (the client drops the sprint first), and a re-simulating server takes it as cheating ("omni-sprint");
- *   - a hit while sprinting takes the motion across to 0.6 before the move (EntityPlayer.attackTargetEntityWithCurrent
- *     Item), so with attacks sent, 0 up to that many slowdowns (at most 5) are tried;
- *   - a velocity packet for this player (knockback) sets the motion, an explosion adds to it; the client cannot tell
- *     which tick the server meant, so the move is tried with and without it, and the result says which fitted;
- *   - it stops at the first input that fits to a millionth of a block.
- *
- * What it takes from the client and a server would not: the step height, the speeds the last tick set, and whether
- * an item is in use (both are tried). A module that changes one of those is not seen here.
- */
-public final class SelfCheck {
+// Grim is GPL)
 
-    /** Offsets above this are reported. */
+public final class SelfCheck {
     public static final double OFF = 0.001;
 
     private static final float[] AXIS = {-1.0F, 0.0F, 1.0F};
@@ -34,23 +12,21 @@ public final class SelfCheck {
     private SelfCheck() {
     }
 
-    /** The input that came closest, and how close. */
     public static final class Result {
         public double offset = Double.MAX_VALUE;
-        /** -1, 0 or 1 before scaling. */
+
         public float forward;
         public float strafe;
         public boolean jump;
         public boolean usingItem;
-        /** How many hit slowdowns (0.6 across) that input needed. */
+
         public int attackSlows;
-        /** Whether it took the knockback offered, or the explosion. */
+
         public boolean velocity;
         public boolean explosion;
-        /** Where that input ends the tick. */
+
         public PlayerSim end;
 
-        /** The keys as a short word: "W", "S A", "D jump", "none item"... */
         public String keys() {
             StringBuilder out = new StringBuilder();
             if (this.forward > 0.0F) {
@@ -85,48 +61,24 @@ public final class SelfCheck {
         }
     }
 
-    /**
-     * @param before   the state at the end of the last tick (copied, not changed)
-     * @param yaw      the yaw this tick's movement packet carried
-     * @param sprinting the sprint state the server has for this tick
-     * @param sneaking the sneak state the server has for this tick
-     * @param x        where the player is now: the box's middle
-     * @param y        the feet
-     * @param z        the box's middle
-     */
     public static Result check(PlayerSim before, PlayerSim.World world, float yaw, boolean sprinting,
                                boolean sneaking, double x, double y, double z) {
         return check(before, world, yaw, sprinting, sneaking, x, y, z, null);
     }
 
-    /** What else may have acted on the motion before this move. */
     public static final class Extra {
-        /** Attacks sent since the start state was taken. */
         public int attacks;
-        /** A knockback for this player received since then, blocks a tick; null for none. */
+
         public double[] velocity;
-        /** An explosion's push received since then; null for none. */
+
         public double[] explosion;
-        /**
-         * The explosions that came after the knockback (a knockback replaces the motion, so an explosion before it is
-         * lost when it is taken): used with the knockback instead of {@link #explosion} when {@link #ordered}; null
-         * for none after it.
-         */
+
         public double[] explosionAfterVelocity;
         public boolean ordered;
-        /** Try only the starts that take the knockback. */
+
         boolean velocityOnly;
     }
 
-    /**
-     * The look check (2026-11-16; it was MoveModel's, flat ground only, and left out every tick with a wall, water,
-     * a ladder or a knockback): how far the move is from the nearest input at the yaw the packet sent, and at the
-     * camera's. A move that fits the camera and not the packet was turned by a module that did not carry the keys
-     * round with it (LOOK); one that fits neither was pushed (SPEED).
-     *
-     * @param atSent the check's own answer at {@code sentYaw}, already worked out: it is not run twice
-     * @return {at the packet's yaw, at the camera's}
-     */
     public static double[] lookErrors(PlayerSim before, PlayerSim.World world, Result atSent, float sentYaw,
                                       float cameraYaw, boolean sprinting, boolean sneaking, double x, double y,
                                       double z, Extra extra) {
@@ -137,7 +89,6 @@ public final class SelfCheck {
         return new double[]{atSent.offset, camera};
     }
 
-    /** Whether some input with the knockback taken explains the move (whatever explains it without). */
     public static boolean fitsWithVelocity(PlayerSim before, PlayerSim.World world, float yaw, boolean sprinting,
                                            boolean sneaking, double x, double y, double z, Extra extra) {
         if (extra == null || extra.velocity == null) {
@@ -171,7 +122,7 @@ public final class SelfCheck {
                     || extra != null && extra.velocityOnly && !useVelocity) {
                 continue;
             }
-            /* With the knockback, only the explosions after it count (review, PR #38). */
+
             double[] push = !useExplosion ? null
                     : useVelocity && extra.ordered ? extra.explosionAfterVelocity : explosion;
             if (useExplosion && push == null) {
@@ -187,7 +138,6 @@ public final class SelfCheck {
         return best;
     }
 
-    /** Every key, jump and item state from one start; true once one fits (best then holds it). */
     private static boolean tryInputs(Result best, PlayerSim before, PlayerSim.World world, float yaw, boolean sprinting,
                                      boolean sneaking, double x, double y, double z, float[] forwards, double[] velocity,
                                      double[] explosion, int slows) {
@@ -198,8 +148,7 @@ public final class SelfCheck {
                     for (float strafe : AXIS) {
                         PlayerSim sim = before.copy();
                         sim.sprinting = sprinting;
-                        /* The ten ticks between the jumps of a held key are the client's own count: letting the key
-                           go clears it, so a jump on any tick on the ground is one a server has to allow. */
+
                         sim.jumpTicks = 0;
                         if (velocity != null) {
                             sim.motionX = velocity[0];

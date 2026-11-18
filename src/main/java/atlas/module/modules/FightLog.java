@@ -30,36 +30,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
- * One line per fight, to config/Atlas/fights-<stamp>.txt: who, how long, who
- * hit first, hits each way, combos, how many of our hits carried sprint and
- * how far they pushed, how far we were pushed, and how it ended.
- *
- * Asked for 2026-09-25 so that changes meant to win fights can be judged by
- * numbers. HitCheck already showed 98% of swings landing (2026-09-24), so
- * accuracy is not what loses them; on BedFight a fight is lost by going
- * over the edge, which is knockback, dealt and taken. This counts both.
- *
- * - A hit of ours: a swing (C02 ATTACK, as sent) on a player whose hurt time
- *   then starts within 12 ticks. Its sprint is the sprint the server had
- *   when it arrived, from the last C0B sent -- the one that decides the
- *   extra knockback -- not the client's flag.
- * - A hit on us: our hurt time starting with an opponent within 6 blocks,
- *   given to the one we are already fighting, else the nearest.
- * - Knockback: the horizontal speed of the S12 the server sends for the
- *   player hit, within 4 ticks of the hit, when it sends one; and, always,
- *   how far the player hit was carried away from us over the next 6 ticks.
- * - The end: someone dies, drops 10 blocks below where they last took a hit
- *   (the void), or disappears while falling; 8 seconds without a hit either
- *   way; or a world change.
- */
 public class FightLog extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File LOG_DIR = new File("./config/Atlas/");
     private static final SimpleDateFormat FILE_STAMP = new SimpleDateFormat("yyyyMMdd-HHmmss");
     private static final SimpleDateFormat LINE_STAMP = new SimpleDateFormat("HH:mm:ss");
-    /* Room for a hit FakeLag holds back (hold-hits, up to ~7 ticks) on top of
-       the round trip. */
+
     private static final int LAND_WINDOW = 16;
     private static final int KB_WINDOW = 4;
     private static final int PUSH_TICKS = 6;
@@ -81,7 +57,6 @@ public class FightLog extends Module {
         }
     }
 
-    /** A hit of ours whose knockback is still being measured. */
     private static final class Push {
         final int target;
         final int tick;
@@ -126,7 +101,7 @@ public class FightLog extends Module {
     private final List<Swing> swings = new ArrayList<Swing>();
     private final List<Push> pushes = new ArrayList<Push>();
     private final Map<Integer, Integer> lastHurt = new HashMap<Integer, Integer>();
-    /** Horizontal speed of each S12, by entity id, from the network thread. */
+
     private final ConcurrentLinkedQueue<double[]> velocities = new ConcurrentLinkedQueue<double[]>();
     private volatile boolean serverSprinting;
     private int tick;
@@ -168,13 +143,6 @@ public class FightLog extends Module {
         reset();
     }
 
-    // -------------------------------------------------------------- packets
-
-    /* LOWEST, and cancelled sends skipped (F-35, 2026-09-28): an attack that
-       another module cancelled -- a REPEL click merged into a held one, an
-       attack FakeLag queued -- was counted as a swing when it was made, with
-       the sprint state of that moment, and again never when it really left.
-       A held attack is counted when it is sent (noteAttackSent). */
     @EventTarget(Priority.LOWEST)
     public void onPacket(PacketEvent event) {
         if (!this.isEnabled() || mc.theWorld == null) {
@@ -208,15 +176,12 @@ public class FightLog extends Module {
         }
     }
 
-    // ----------------------------------------------------------------- tick
-
     private void noteSwing(Entity entity) {
         if (entity instanceof EntityPlayer && opponent((EntityPlayer) entity)) {
             this.swings.add(new Swing(entity.getEntityId(), this.tick, this.serverSprinting));
         }
     }
 
-    /** An attack sent without an event: a held one, released (FakeLag). Client thread. */
     public static void noteAttackSent(Entity entity) {
         Module module = atlas.Atlas.moduleManager == null ? null
                 : atlas.Atlas.moduleManager.modules.get(FightLog.class);
@@ -251,7 +216,6 @@ public class FightLog extends Module {
         endings();
     }
 
-    /** Opponents whose hurt started this tick, matched to our swings. */
     private void ourHits() {
         for (EntityPlayer player : mc.theWorld.playerEntities) {
             if (player == mc.thePlayer) {
@@ -299,7 +263,6 @@ public class FightLog extends Module {
         }
     }
 
-    /** Our hurt starting this tick, given to an opponent. */
     private void theirHits() {
         int hurt = mc.thePlayer.hurtTime;
         boolean started = hurt > this.ourLastHurt;
@@ -427,9 +390,6 @@ public class FightLog extends Module {
         }
     }
 
-    /* 10 blocks down with ground under them is someone jumping off a tower,
-       not someone going into the void (2026-09-25: "WE FELL" after a 3-0
-       fight). Only an empty column all the way down counts. */
     private static boolean nothingBelow(Entity entity) {
         int x = net.minecraft.util.MathHelper.floor_double(entity.posX);
         int z = net.minecraft.util.MathHelper.floor_double(entity.posZ);
@@ -447,8 +407,6 @@ public class FightLog extends Module {
         }
         this.fights.clear();
     }
-
-    // --------------------------------------------------------------- output
 
     private static String avg(double sum, int n) {
         return n == 0 ? "-" : String.format("%.2f", sum / n);

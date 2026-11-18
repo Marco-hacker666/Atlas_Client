@@ -5,9 +5,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
-/** The opponent's block state around a hit, for HIT-DMG (2026-10-16). */
 public class BlockTraceTest {
-
     @Test
     public void blockNearTheFlinchCounts() {
         BlockTrace trace = new BlockTrace();

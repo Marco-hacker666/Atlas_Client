@@ -6,17 +6,8 @@ import java.util.Locale;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-/**
- * Works out whether a catalog entry is already installed, by looking in
- * {@code mods/} and {@code resourcepacks/}.
- *
- * <p>Ported from OpenSkid (GPL-3.0). The name matching is exposed as pure
- * static helpers ({@link #matchesJarName}, {@link #isPrefixMatch},
- * {@link #isNumberedDuplicate}, {@link #extractPackDescription}) so the tricky
- * cases -- a differently numbered duplicate, an OptiFine build under another
- * {@code _HD_U_} tag, a pack recognised from its {@code pack.mcmeta}
- * description -- are covered by unit tests instead of only by hand.
- */
+// Ported from OpenSkid (GPL-3.0).
+
 public final class SetupScanner {
     private SetupScanner() {
     }
@@ -67,11 +58,6 @@ public final class SetupScanner {
         return false;
     }
 
-    /**
-     * True when {@code candidate} is the entry's own file, a matching
-     * differently-numbered build, or (when the entry asks for it) any build of
-     * the same mod under a different version tag.
-     */
     static boolean matchesJarName(String candidate, SetupEntry entry) {
         if (candidate == null || entry == null || entry.fileName == null) {
             return false;
@@ -87,17 +73,11 @@ public final class SetupScanner {
         return isNumberedDuplicate(name, want);
     }
 
-    /**
-     * OptiFine ships a dozen 1.8.9 builds; {@code preview_OptiFine_1.8.9_HD_U_M6_pre2.jar}
-     * should count as installed when the user has any {@code OptiFine_1.8.9_HD_U_*.jar}.
-     */
     static boolean isPrefixMatch(String name, String want) {
         if (name == null || want == null) {
             return false;
         }
-        // Lower-cased here, not by the caller: the tag we look for ("_HD_U_") is
-        // upper-case, and the original searched for it in an already lower-cased
-        // string, so it never matched a different OptiFine build.
+
         String plain = name.toLowerCase(Locale.ROOT);
         String core = want.toLowerCase(Locale.ROOT);
         if (!plain.endsWith(".jar")) {
@@ -114,12 +94,6 @@ public final class SetupScanner {
         return plain.startsWith(prefix);
     }
 
-    /**
-     * Recognises browser-style duplicates of a jar. Chrome writes
-     * {@code Foo-1.0 (1).jar} and some clients write {@code Foo-1.0.jar (1)};
-     * the original only understood the first, so it kept offering a mod the
-     * user already had under the other name.
-     */
     static boolean isNumberedDuplicate(String name, String want) {
         if (name == null || want == null) {
             return false;
@@ -197,7 +171,6 @@ public final class SetupScanner {
         }
     }
 
-    /** Pulls the {@code "description":"..."} value out of a {@code pack.mcmeta} body. */
     static String extractPackDescription(String raw) {
         if (raw == null) {
             return null;
@@ -215,7 +188,6 @@ public final class SetupScanner {
         return raw.substring(firstQuote + 1, secondQuote);
     }
 
-    /** The older of an exact copy and a numbered duplicate, for cleanup. */
     public static File findDuplicateJar(SetupEntry entry) {
         try {
             if (entry.fileName == null || !entry.fileName.toLowerCase(Locale.ROOT).endsWith(".jar")) {

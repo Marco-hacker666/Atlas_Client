@@ -1,8 +1,5 @@
-/*
- * Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0),
- * src/main/java/openskid/module/modules/ItemTags.java, 2026-10-05: package openskid -> atlas,
- * OpenSkid -> Atlas. Changes after that are marked in comments.
- */
+// Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0), src/main/java/openskid/module/modules/ItemTags.java
+
 package atlas.module.modules;
 
 import atlas.event.EventTarget;
@@ -23,7 +20,7 @@ import net.minecraft.entity.item.EntityItem;
 import net.minecraft.item.ItemStack;
 import org.lwjgl.opengl.GL11;
 
-// Floating name plus count tags over dropped items. Concept adapted from the MiauMinus ItemESP count label.
+// Concept adapted from the MiauMinus ItemESP count label.
 public class ItemTags extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 

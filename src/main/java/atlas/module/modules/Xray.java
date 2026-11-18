@@ -32,8 +32,7 @@ public class Xray extends Module {
     private static final LinkedHashSet<Integer> xrayBlocks;
     private static final LinkedHashSet<Vec3i> caveOffsetsSmall;
     private static final LinkedHashSet<Vec3i> caveOffsetsLarge;
-    /* 2026-10-30 (audit): a concurrent set, not copy-on-write. Chunk-render threads add to it for every
-       matching block they draw, and every add to a CopyOnWriteArraySet copied the whole set. */
+
     public final java.util.Set<BlockPos> trackedBlocks = java.util.concurrent.ConcurrentHashMap.newKeySet();
     public final CopyOnWriteArraySet<BlockPos> pendingBlocks = new CopyOnWriteArraySet<>();
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"SOFT", "FULL"});
@@ -279,8 +278,6 @@ public class Xray extends Module {
 
     @EventTarget
     public void onPacket(PacketEvent event) {
-        /* Collected every ore update while switched off, into a set only a
-           world change emptied. */
         if (this.isEnabled() && event.getType() == EventType.RECEIVE) {
             if (event.getPacket() instanceof S22PacketMultiBlockChange) {
                 for (BlockUpdateData blockUpdateData : ((S22PacketMultiBlockChange) event.getPacket()).getChangedBlocks()) {

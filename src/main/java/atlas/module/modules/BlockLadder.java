@@ -1,8 +1,7 @@
 package atlas.module.modules;
 
 // Ported from OpenSkid (GPL-3.0), itself adapted from MiauMinus
-// ghost/BlockLadder: predicts the landing while falling and puts a ladder on
-// the nearest wall face along the way.
+
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.events.TickEvent;
@@ -94,12 +93,6 @@ public class BlockLadder extends Module {
         this.placeTimer.reset();
     }
 
-    /**
-     * The floor block the fall ends on, or null (none within 100 ticks, or water first). 2026-11-12 (owner: the
-     * simulation by default): where the simulation goes, the fall is the game's own -- the keys held, air control,
-     * what it hits on the way, water and cobwebs -- and the block is the one under the feet where it lands (0.2 down,
-     * as the game picks it). Elsewhere the straight drop from before.
-     */
     private BlockPos predictLanding() {
         if (SimPlayer.supported(mc.thePlayer)) {
             SimPlayer.Snapshot now = SimPlayer.snapshot(mc.thePlayer, PlayerSim.Stage.START);

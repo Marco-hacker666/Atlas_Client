@@ -7,26 +7,16 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Takes what identifies a person out of text that is about to be shared
- * (2026-10-07, for the bug report): the player's own name and UUID, the
- * session token, other players' names, the Windows account and home folder,
- * e-mail addresses, anything shaped like a token, and IPv4 addresses.
- *
- * Pure string work, so it is tested without the game.
- */
 public final class Redactor {
     private static final Pattern EMAIL = Pattern.compile("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}");
-    /* JWT-like (three dot-separated base64url runs) and long bare tokens. */
+
     private static final Pattern JWT = Pattern.compile("[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{8,}");
     private static final Pattern LONG_TOKEN = Pattern.compile("\\b[A-Za-z0-9_-]{40,}\\b");
     private static final Pattern IPV4 = Pattern.compile("\\b(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\b");
-    /* 2026-10-26 (review): IPv6, which went out as it was. Hex groups with "::" or at least five colons, so
-       times ("19:23:01") and Java's "Type::method" (letters around it) are left alone. */
+
     private static final Pattern IPV6 = Pattern.compile(
             "(?<![A-Za-z0-9_:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![A-Za-z0-9_:])");
-    /* 2026-10-26 (review): names the client's own logs write (flags, fights, noslow), so a player no longer on
-       the tab list -- whom the name list cannot know -- is still taken out. */
+
     private static final Pattern LOG_NAME = Pattern.compile(
             "(?<=\\btarget[= ]|\\bFIGHT vs |\\bby |\\bguard )([A-Za-z0-9_]{3,16})\\b");
     private static final Pattern UUID_DASHED = Pattern.compile(
@@ -39,26 +29,17 @@ public final class Redactor {
     private final String home;
     private final String account;
 
-    /**
-     * @param self     the player's own name, or null
-     * @param selfUuid the player's own UUID, with or without dashes, or null
-     * @param token    the session token, or null
-     * @param others   other players' names (the tab list)
-     * @param home     the OS home folder, or null
-     * @param account  the OS account name, or null
-     */
     public Redactor(String self, String selfUuid, String token, Collection<String> others, String home, String account) {
         this.self = blank(self) ? null : self;
         this.selfUuid = blank(selfUuid) ? null : selfUuid.replace("-", "").toLowerCase(Locale.ROOT);
         this.token = blank(token) || token.length() < 8 ? null : token;
         if (others != null) {
             for (String name : others) {
-                /* Two letters would take pieces out of ordinary words. */
                 if (!blank(name) && name.length() >= 3 && !name.equalsIgnoreCase(self)) {
                     this.others.add(name);
                 }
             }
-            /* Longest first, so a name that contains another goes whole. */
+
             this.others.sort((a, b) -> b.length() - a.length());
         }
         this.home = blank(home) ? null : home;
@@ -112,7 +93,6 @@ public final class Redactor {
         return sb.toString();
     }
 
-    /** Loopback stays readable, link-local and unique-local (fe80::/10, fc00::/7) become a LAN address. */
     private static String maskIpv6(String text) {
         Matcher m = IPV6.matcher(text);
         StringBuffer sb = new StringBuffer();
@@ -133,7 +113,6 @@ public final class Redactor {
         return sb.toString();
     }
 
-    /** Keeps loopback and private ranges readable as such; every other address is masked. */
     private static String maskIps(String text) {
         Matcher m = IPV4.matcher(text);
         StringBuffer sb = new StringBuffer();
@@ -146,7 +125,6 @@ public final class Redactor {
         return sb.toString();
     }
 
-    /** Whole-word, case-insensitive: a name inside a longer identifier is left alone. */
     private static String replaceWord(String text, String word, String with) {
         Pattern p = Pattern.compile("(?<![A-Za-z0-9_])" + Pattern.quote(word) + "(?![A-Za-z0-9_])",
                 Pattern.CASE_INSENSITIVE);

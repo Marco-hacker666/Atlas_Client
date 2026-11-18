@@ -70,12 +70,6 @@ public class Chams extends Module {
         super("Chams", false);
     }
 
-    /* Tinting (ChamsColors). Wrapped round RendererLivingEntity.renderModel
-       only -- the body -- so armour and held items, drawn afterwards by the
-       layers, keep their textures. Texture, lighting and the lightmap are
-       off while the model is drawn, so the colour is flat and even through
-       walls; blending is on for the group's fill transparency. What was on
-       before is put back exactly as it was. */
     private static boolean tinting;
     private static boolean lightingWas;
     private static boolean blendWas;

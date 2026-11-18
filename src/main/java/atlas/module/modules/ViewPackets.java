@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
 // Ported from OpenSkid (GPL-3.0), which adapted the MiauMinus misc/ViewPackets
-// direction toggles down to a name filter.
+
 import java.util.Locale;
 
 import atlas.Atlas;

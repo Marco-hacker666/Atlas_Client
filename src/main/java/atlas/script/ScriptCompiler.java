@@ -36,25 +36,8 @@ import java.util.jar.JarOutputStream;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Turns script sources into classes (2026-11-02, owner: "a tab that loads everyone's scripts, Raven's API and ours").
- *
- * Minecraft 1.8.9 runs on Java 8, and the launchers ship a JRE: javac is not there, so ToolProvider has no compiler
- * for nearly every player (Raven's scripts need a JDK for that reason). The JDK's compiler is used when there is
- * one; otherwise the Eclipse compiler (ECJ, which runs on a JRE) is downloaded once from Maven Central into
- * config/Atlas/scripts/.compiler and checked against its SHA-256 before it is ever loaded (owner's choice: download
- * on first use, so the jar stays its size and ECJ's EPL licence stays out of it). ECJ 3.21.0 is class version 52
- * (Java 8) and was tried on the launcher's 8u312 JRE: lambdas, generics, and API classes naming types it cannot
- * see all compile.
- *
- * ECJ's javax.tools front end reads sources from files, not memory, so each source is written under the build
- * folder first; the classes come out next to it.
- *
- * Scripts compile without the game's classes (the jar on the class path is obfuscated), and a compiler weighing
- * overloads reads every signature of that name: new Vec3(0, 64, 0) failed in ECJ on Vec3(net.minecraft.util.Vec3),
- * and javac the same way on same-arity overloads. So the classes this client names are stubbed (2026-11-04): empty
- * classes in a small jar, last on the class path, for compiling only. A script class never loads one.
- */
+// download on first use, so the jar stays its size and ECJ's EPL licence stays out of it).
+
 public final class ScriptCompiler {
     static final String ECJ_VERSION = "3.21.0";
     static final String ECJ_URL = "https://repo1.maven.org/maven2/org/eclipse/jdt/ecj/" + ECJ_VERSION
@@ -63,7 +46,6 @@ public final class ScriptCompiler {
     static final long ECJ_SIZE = 2989263L;
     private static final String ECJ_CLASS = "org.eclipse.jdt.internal.compiler.tool.EclipseCompiler";
 
-    /** Where the compiler is kept; tests point it elsewhere. */
     static File compilerDir = new File("./config/Atlas/scripts/.compiler");
 
     private static JavaCompiler compiler;
@@ -73,13 +55,11 @@ public final class ScriptCompiler {
     private static File gameStubs;
     private static boolean gameStubsMade;
 
-    /** Types in descriptors and generic signatures; the group after the name opens a type's arguments. */
     private static final Pattern TYPE_IN_SIGNATURE = Pattern.compile("L([A-Za-z_][\\w]*(?:/[\\w$]+)+)([;<])");
 
     private ScriptCompiler() {
     }
 
-    /** One source to compile: the file it is written to, and how many lines the wrapper put before the user's. */
     public static final class Unit {
         public final File file;
         public final String code;
@@ -94,7 +74,6 @@ public final class ScriptCompiler {
         }
     }
 
-    /** One error or warning, at the line of the user's file. */
     public static final class Problem {
         public final boolean error;
         public final String file;
@@ -133,7 +112,6 @@ public final class ScriptCompiler {
         }
     }
 
-    /** What the compiler is doing, for the Scripts tab. */
     public static String status() {
         return status;
     }
@@ -142,10 +120,6 @@ public final class ScriptCompiler {
         return downloading;
     }
 
-    /**
-     * The compiler: the JDK's, else ECJ (downloaded the first time). Null when there is none; status() says why.
-     * Blocking (a download, a class load): never on the client thread.
-     */
     static synchronized JavaCompiler get() {
         if (compiler != null) {
             return compiler;
@@ -154,7 +128,6 @@ public final class ScriptCompiler {
         try {
             system = ToolProvider.getSystemJavaCompiler();
         } catch (Throwable ignored) {
-            // A JRE: no tools.jar.
         }
         if (system != null) {
             compiler = system;
@@ -176,7 +149,6 @@ public final class ScriptCompiler {
         }
     }
 
-    /** Downloads ECJ into a temporary file, checks size and SHA-256, and only then moves it into place. */
     private static void download(File jar) throws Exception {
         downloading = true;
         status = "downloading the compiler (3 MB, Maven Central)";
@@ -218,10 +190,6 @@ public final class ScriptCompiler {
         }
     }
 
-    /**
-     * Compiles the units into {@code outDir} against {@code classpath} (plus the running Java's own classes).
-     * Problems come back at the lines of the user's files.
-     */
     static Result compile(JavaCompiler javac, List<Unit> units, File outDir, List<File> classpath) {
         List<Problem> problems = new ArrayList<Problem>();
         try {
@@ -307,10 +275,6 @@ public final class ScriptCompiler {
         return null;
     }
 
-    /**
-     * What scripts compile against: this client's own jar (or classes folder), and the game's libraries -- not the
-     * obfuscated Minecraft jar, whose one-letter classes would only be noise.
-     */
     static List<File> classpath() {
         Set<File> out = new LinkedHashSet<File>();
         File own = codeSource(ScriptCompiler.class);
@@ -321,7 +285,6 @@ public final class ScriptCompiler {
         try {
             minecraft = codeSource(Class.forName("net.minecraft.client.Minecraft"));
         } catch (Throwable ignored) {
-            // Not in a game (tests).
         }
         String path = System.getProperty("java.class.path", "");
         for (String entry : path.split(java.util.regex.Pattern.quote(File.pathSeparator))) {
@@ -335,19 +298,16 @@ public final class ScriptCompiler {
         }
         File stubs = gameStubs(own);
         if (stubs != null) {
-            /* Last: a real class always wins over its stub. */
             out.add(stubs);
         }
         return new ArrayList<File>(out);
     }
 
-    /** One class this client names but does not hold, as a stub has to show it. */
     static final class StubType {
         boolean isInterface;
         int typeParameters;
     }
 
-    /** The stubs, made once a run. Null if that fails: scripts then compile as they did without them. */
     private static synchronized File gameStubs(File own) {
         if (!gameStubsMade) {
             gameStubsMade = true;
@@ -360,7 +320,6 @@ public final class ScriptCompiler {
         return gameStubs;
     }
 
-    /** Every class outside this client and the JDK that this client's own classes name. */
     static Map<String, StubType> stubTypes(File own) throws IOException {
         Map<String, StubType> found = new TreeMap<String, StubType>();
         if (own.isDirectory()) {
@@ -378,7 +337,7 @@ public final class ScriptCompiler {
                 }
             }
         }
-        /* EnumFacing$Axis needs its EnumFacing: compilers look a nested class up through it. */
+
         for (String name : new ArrayList<String>(found.keySet())) {
             for (int dollar = name.indexOf('$', 1); dollar > 0; dollar = name.indexOf('$', dollar + 1)) {
                 stubType(name.substring(0, dollar), found);
@@ -423,7 +382,6 @@ public final class ScriptCompiler {
         return type;
     }
 
-    /** Reads a class file's constant pool: its Class entries, and the types inside its descriptors and signatures. */
     private static void scanClass(byte[] bytes, Map<String, StubType> found) throws IOException {
         DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));
         in.readInt();
@@ -497,7 +455,6 @@ public final class ScriptCompiler {
         }
     }
 
-    /** How many type arguments a signature gives from {@code at}, just past the opening bracket. */
     static int typeArguments(String signature, int at) {
         int count = 0;
         int i = at;
@@ -512,7 +469,6 @@ public final class ScriptCompiler {
             }
             count++;
             if (c != 'L' && c != 'T') {
-                /* The wildcard, or the primitive of an array. */
                 i++;
                 continue;
             }
@@ -532,7 +488,6 @@ public final class ScriptCompiler {
         return 0;
     }
 
-    /** The jar is named by what is in it, so a second game on this folder never finds it half written. */
     static File writeStubs(Map<String, StubType> types, File dir) throws Exception {
         StringBuilder list = new StringBuilder();
         for (Map.Entry<String, StubType> entry : types.entrySet()) {
@@ -563,7 +518,6 @@ public final class ScriptCompiler {
         return jar;
     }
 
-    /** A class file with no members, written by hand: Forge's ASM is not on every path this runs on. */
     static byte[] stubClass(String name, StubType type) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(bytes);
@@ -605,7 +559,6 @@ public final class ScriptCompiler {
         return bytes.toByteArray();
     }
 
-    /** The jar or folder a class was loaded from, or null. */
     static File codeSource(Class<?> type) {
         try {
             java.security.CodeSource source = type.getProtectionDomain().getCodeSource();
@@ -625,7 +578,6 @@ public final class ScriptCompiler {
                 return file.exists() ? file.getAbsoluteFile() : null;
             }
         } catch (Throwable ignored) {
-            // Unknown.
         }
         return null;
     }

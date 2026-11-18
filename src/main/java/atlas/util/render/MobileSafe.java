@@ -10,26 +10,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.Reader;
 
-/**
- * Mobile-safe rendering (2026-10-15): for phones running the game through an
- * OpenGL-to-GLES translation layer (gl4es, Krypton Wrapper; see GlesDetect).
- *
- * While active:
- * - FramebufferCompat.available() is false, so every screen-copy effect (blur,
- *   bloom, the Atlas glass, TargetHUD blur) takes its existing plain fallback;
- * - rounded rectangles are drawn as one triangle fan instead of an SDF shader
- *   (RoundRectGeometry), the Atlas shapes use their old geometry (Liquid);
- * - shader-only extras with no plain form are skipped: the ShadowShader soft
- *   shadow, the HUD glow/blur mask passes, TargetHUD's stencil masks and its
- *   depth-stencil swap of the game's framebuffer;
- * - ESP OUTLINE (a shader over an extra framebuffer) draws as 3D boxes.
- * Off, nothing changes: every check below returns false first.
- *
- * The setting ("mobile-safe": Auto / On / Off, Client Settings > Performance)
- * lives in config/Atlas/atlas-theme.json. Read from the file on first use
- * (the menu may never be opened), pushed by AtlasTheme after that -- the same
- * way as LogUploader's switch.
- */
 public final class MobileSafe {
     public static final String SETTING = "mobile-safe";
     public static final String[] MODES = {"Auto", "On", "Off"};
@@ -44,7 +24,6 @@ public final class MobileSafe {
     private MobileSafe() {
     }
 
-    /** True when the plain, framebuffer-free, shader-free drawing should be used. */
     public static boolean active() {
         int mode = setting;
         if (mode < 0) {
@@ -67,11 +46,6 @@ public final class MobileSafe {
         setting = Math.max(0, Math.min(MODES.length - 1, mode));
     }
 
-    /**
-     * Looks once at the GL strings and the platform. Must run on the thread
-     * holding the GL context (the client thread); called at start-up from
-     * Atlas.init and otherwise from the first render that asks.
-     */
     public static synchronized void detect() {
         if (detectedKnown) {
             return;
@@ -93,7 +67,7 @@ public final class MobileSafe {
             detected = false;
             reason = "desktop GL";
         }
-        /* Without a context every string is null: look again next time. */
+
         detectedKnown = renderer != null || android != null;
         if (detectedKnown) {
             System.out.println("[Atlas] mobile-safe: " + (detected ? "detected " : "not detected, ") + reason
@@ -101,7 +75,6 @@ public final class MobileSafe {
         }
     }
 
-    /** For the bug report: "on (auto: gl4es)", "off (setting)", ... */
     public static String describe() {
         boolean on = active();
         int mode = setting;
@@ -117,10 +90,6 @@ public final class MobileSafe {
         }
     }
 
-    /**
-     * What detection found, whatever the setting says: a translation layer or
-     * Android. DeviceProfile reads it to tell a phone from a PC. Client thread.
-     */
     public static boolean deviceDetected() {
         if (!detectedKnown) {
             detect();
@@ -128,7 +97,6 @@ public final class MobileSafe {
         return detected;
     }
 
-    /** A mode setting saved in atlas-theme.json by its name or index; Auto when missing. */
     public static int readMode(String key, String[] modes) {
         if (!THEME_FILE.isFile()) {
             return GlesDetect.AUTO;
@@ -139,7 +107,7 @@ public final class MobileSafe {
                 JsonObject object = parsed.getAsJsonObject();
                 if (object.has(key)) {
                     JsonElement value = object.get(key);
-                    /* Saved as the mode's name or its index, whichever the theme file uses. */
+
                     if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber()) {
                         return Math.max(0, Math.min(modes.length - 1, value.getAsInt()));
                     }
@@ -152,7 +120,6 @@ public final class MobileSafe {
                 }
             }
         } catch (Exception ignored) {
-            // Unreadable: the default.
         }
         return GlesDetect.AUTO;
     }

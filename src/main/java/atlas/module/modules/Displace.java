@@ -1,6 +1,5 @@
 package atlas.module.modules;
 
-
 import net.minecraft.client.renderer.GlStateManager;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -60,7 +59,7 @@ public class Displace extends Module {
     private static final double ARROW_HEAD_BACKSET = 0.18D;
     private static final double ARROW_HEAD_LENGTH = 0.52D;
     private static final double ARROW_HEAD_HALF_HEIGHT = 0.30D;
-    /** A turn at least this big moves the player sideways enough to take the step back next tick. */
+
     private static final float COMPENSATE_TURN = 45.0F;
     private static final double[] VOID_SCAN_X = new double[VOID_SCAN_DIRECTIONS];
     private static final double[] VOID_SCAN_Z = new double[VOID_SCAN_DIRECTIONS];
@@ -81,34 +80,20 @@ public class Displace extends Module {
     public final BooleanProperty hasKnockback = new BooleanProperty("Has-knockback", false);
     public final BooleanProperty itemWhitelistToggle = new BooleanProperty("Item-whitelist", false);
     public final ItemListProperty itemWhitelist = new ItemListProperty("Whitelisted-items", "");
-    /* 2026-10-22 (owner: "someone says Displace no longer works"). The hit is judged from the turned look,
-       and Grim and Polar check that look's ray against the target's hitbox: 90 degrees off it cannot meet a
-       box about +-9 degrees wide at 2.5 blocks, so the hit is refused and nothing is displaced. On: the turn
-       goes only as far as the look still meets the box (with a margin for the target moving). Off: as before. */
+
     public final BooleanProperty keepHitbox = new BooleanProperty("Keep-hitbox", false);
 
-    /* 2026-11-05 (owner: "fill in Displace", after reading OpenB4, Yuri, Slinky and Raven; behaviour only).
-       Hit-mode Every is what this was: every hit waits a tick behind a turned look. Effective keeps the turn for a hit
-       that can do something: the target at or under Max-hurt-time, this player sprinting or with Knockback, and
-       Hit-cooldown since the last turn. Every other hit goes at once, on the normal look.
-       Angle-random, Direction-lock and Only-facing-away work in both, and are off by default.
-       Direction Random and the strafe ways are for when there is no void to aim for. */
     public final ModeProperty hitMode = new ModeProperty("Hit-mode", 0, new String[] {"Every", "Effective"});
     public final IntProperty maxHurtTime = new IntProperty("Max-hurt-time", 3, 0, 10, () -> hitMode.getValue() == 1 || voidMode());
     public final IntProperty hitCooldown = new IntProperty("Hit-cooldown", 500, 0, 3000, () -> hitMode.getValue() == 1 || voidMode());
-    /* 2026-11-05 (owner: "a Void mode: hit them into the void, only at the edge"). Hitflick mode VOID: only a target
-       with a drop within Void-edge blocks of it, the way clear, turns; the turn goes at the nearest drop, the smaller
-       turn winning a tie; every other hit goes at once. Max-hurt-time and Hit-cooldown apply. Void-max-turn is how far
-       off the line to the target a drop may be; Keep-hitbox caps it at KEEP_HITBOX_TURN, as a wider turn cannot land. */
+
     public final FloatProperty voidEdge = new FloatProperty("Void-edge", 3.0F, 1.0F, 6.0F, Displace::voidMode);
     public final FloatProperty voidMaxTurn = new FloatProperty("Void-max-turn", 90.0F, 10.0F, 150.0F, Displace::voidMode);
     private static final float KEEP_HITBOX_TURN = 25.0F;
     public final FloatProperty angleRandom = new FloatProperty("Angle-random", 0F, 0F, 15F);
     public final BooleanProperty directionLock = new BooleanProperty("Direction-lock", false);
     public final BooleanProperty onlyFacingAway = new BooleanProperty("Only-facing-away", false);
-    /* 2026-11-07 (owner chose "only turn up close"). A look that still has to meet the box can turn about 22 degrees at
-       1 block, 11 at 2 and 8 at 3, so far hits paid the tick for almost nothing. Above this distance the hit goes at
-       once, on the normal look. 0 is off: any distance. */
+
     public final FloatProperty turnRange = new FloatProperty("Turn-range", 0F, 0F, 6F);
 
     private long lastTurnMs = 0L;
@@ -123,10 +108,7 @@ public class Displace extends Module {
     private boolean hasKB = false;
     private boolean compensateNextTick = false;
     private boolean displaceLeft = false;
-    /* 2026-11-04 (owner: "make it work", then "can't every hit count?"). A hit counts from the look the server had last,
-       so a look turned every other tick only ever caught some hits. Now the look follows the hits: every hit is held at
-       the click (holdHit), the look turns in that tick's update, and the hit goes out at the start of the next tick,
-       the first packet after the turned one. It costs each hit one tick, two for KillAura's. */
+
     private Entity heldTarget = null;
     private boolean hitDue = false;
     private boolean sendingHit = false;
@@ -207,7 +189,6 @@ public class Displace extends Module {
         lastStrafe = 0.0F;
     }
 
-    /** The yaw nearest to want, toward it from the target, whose ray from the eyes still meets the target's box. */
     static float clampToHitbox(Entity target, float want, float pitch) {
         double dx = target.posX - mc.thePlayer.posX;
         double dz = target.posZ - mc.thePlayer.posZ;
@@ -217,7 +198,6 @@ public class Displace extends Module {
         float most = Math.abs(diff);
         AxisAlignedBB box = target.getEntityBoundingBox().expand(0.1, 0.1, 0.1);
         if (RotationUtil.rayTrace(box, base, pitch, 6.0) == null) {
-            /* The pitch is off the box too: none of these yaws would count. */
             return base;
         }
         if (RotationUtil.rayTrace(box, base + sign * most, pitch, 6.0) != null) {
@@ -233,7 +213,7 @@ public class Displace extends Module {
                 high = mid;
             }
         }
-        /* The hit goes out next tick, judged from this look; the target moves meanwhile. */
+
         return base + sign * low * 0.75F;
     }
 
@@ -560,13 +540,11 @@ public class Displace extends Module {
         return kbPass || wlPass;
     }
 
-    /** Called for every attack before anything is sent. True: this module sends the hit itself, behind the turned look. */
     public boolean holdHit(Entity target) {
         if (sendingHit || !this.isEnabled() || mc.thePlayer == null || !(target instanceof EntityPlayer)) {
             return false;
         }
         if (heldTarget != null) {
-            /* A second click would land first, along the look before the turn. */
             return target == heldTarget;
         }
         if (Hitflick.standsAside()) {
@@ -603,7 +581,6 @@ public class Displace extends Module {
         return !edge || findEdgeVoidYaw(player) != null;
     }
 
-    /** Hitflick is on its VOID mode. */
     static boolean voidMode() {
         if (Atlas.moduleManager == null) {
             return false;
@@ -612,7 +589,6 @@ public class Displace extends Module {
         return flick != null && flick.mode.getValue() == Hitflick.MODE_VOID;
     }
 
-    /** VOID: the yaw of the knock at the nearest drop past this target, or null when it is not at an edge. */
     private Float findEdgeVoidYaw(EntityPlayer target) {
         float aim = (float) Math.toDegrees(Math.atan2(target.posZ - mc.thePlayer.posZ, target.posX - mc.thePlayer.posX)) - 90.0F;
         float maxTurn = keepHitbox.getValue() ? Math.min(voidMaxTurn.getValue(), KEEP_HITBOX_TURN) : voidMaxTurn.getValue();
@@ -643,7 +619,6 @@ public class Displace extends Module {
         return yawFromForward(bestX, bestZ);
     }
 
-    /** Blocks along this way to the first column with nothing under it, or -1: none within Void-edge, or a wall first. */
     private double edgeDistance(EntityPlayer target, AxisAlignedBB box, double forwardX, double forwardZ) {
         double checked = 0.0D;
         for (double forward = VOID_SCAN_STEP; forward <= voidEdge.getValue() + 1.0E-4D; forward += VOID_SCAN_STEP) {
@@ -658,7 +633,6 @@ public class Displace extends Module {
         return -1.0D;
     }
 
-    /** The direction of the last turn holds for this target (Direction-lock). */
     private boolean directionLocked(EntityPlayer target) {
         return directionLock.getValue()
                 && DisplacePlan.lockHolds(lockedTarget, target.getEntityId(), lastTurnTick, tickCounter);
@@ -840,14 +814,12 @@ public class Displace extends Module {
 
         if (!displaceThisTick || !anyMovementKey()) return;
         if (hasKB) {
-            /* The enchant pushes without a sprint: the keys only keep their way against the turned yaw. */
             if (renderDisplaceYaw != null) {
                 MoveUtil.fixStrafe(renderDisplaceYaw);
             }
             return;
         }
 
-        /* Sprint's part of the knockback needs forward along the turned yaw. */
         mc.thePlayer.movementInput.moveForward = 1;
         compensateNextTick = turnedFar;
     }
@@ -868,8 +840,6 @@ public class Displace extends Module {
         releaseBlinkNextGameTick = true;
     }
 
-
-
     @EventTarget(Priority.LOWEST)
     public void onUpdateLowest(UpdateEvent e) {
         if (!this.isEnabled()) return;
@@ -878,7 +848,7 @@ public class Displace extends Module {
         tickCounter++;
         pruneTargetDelayStates();
         displaceThisTick = false;
-        /* Whatever happens below, a held hit goes out next tick: it is the player's. */
+
         hitDue = heldTarget != null;
 
         if (!passesItemCondition()) {
@@ -902,10 +872,9 @@ public class Displace extends Module {
         boolean locked = directionLocked(target);
         boolean edge = voidMode();
         if (heldTarget != null && !locked) {
-            /* Rolled before the turn, so the side a lock then holds is the side this turn takes. */
             randomLeft = Math.random() < 0.5D;
         }
-        /* VOID always asks afresh: holdHit found a drop now, and the last turn's may be behind the target. */
+
         dynamicVoidYaw =
                 !edge && locked && lockedVoidYaw != null
                         ? lockedVoidYaw
@@ -914,18 +883,16 @@ public class Displace extends Module {
                         : isDynamicAngle()
                         ? findDynamicVoidYaw(target)
                         : findVoid.getValue() ? findStaticVoidYaw(target) : null;
-        /* The keys, not moveStrafing: this module's own step back after a turn sets that, and would pick the next side. */
+
         boolean strafeLeft = mc.gameSettings.keyBindLeft.isKeyDown();
         if (strafeLeft != mc.gameSettings.keyBindRight.isKeyDown()) {
             lastStrafe = strafeLeft ? 1.0F : -1.0F;
         }
-        /* Dynamic with no void in reach did nothing at all, so on open ground the module looked dead: it now turns by
-           Yaw-offset and Direction, as Static does. */
+
         if (dynamicVoidYaw == null) {
             displaceLeft = DisplacePlan.left(direction.getValue(), lastStrafe, randomLeft);
         }
         if (edge && dynamicVoidYaw == null) {
-            /* VOID never turns on open ground. A hit held just before the edge moved away goes on the normal look. */
             renderDisplaceYaw = null;
             renderTarget = null;
             return;
@@ -934,18 +901,17 @@ public class Displace extends Module {
         renderTarget = target;
 
         hasKB = hasKBEnchant;
-        /* A hit held just before a catch began still goes, next tick, on the catch's look. */
+
         if (heldTarget == null || Hitflick.standsAside()) {
             return;
         }
 
         Float turnVoidYaw = dynamicVoidYaw;
-        /* The pitch the server has: with Silent Aura the camera's can be far off the target. */
+
         float[] wanted = Hitflick.humanTurn(renderDisplaceYaw + DisplacePlan.jitter(angleRandom.getValue(), Math.random()),
                 RotationHelper.serverPitch());
         float wantedYaw = keepHitbox.getValue() ? clampToHitbox(target, wanted[0], wanted[1]) : wanted[0];
-        /* Through the shared engine (2026-11-05): whole mouse counts, its wander with Rotations on, and the look handed
-           back gradually after, not in one jump. The hit goes next tick, so the turn gets this one tick. */
+
         float[] look = RotationHelper.request(this, wantedYaw, wanted[1], 100, RotationHelper.MOVE_LOOK, false,
                 RotationHelper.NO_LIMIT, RotationHelper.NO_LIMIT);
         if (look == null) {
@@ -961,13 +927,10 @@ public class Displace extends Module {
         float turn = MathHelper.wrapAngleTo180_float(renderDisplaceYaw - mc.thePlayer.rotationYaw);
         displaceLeft = turn < 0.0F;
         turnedFar = Math.abs(turn) >= COMPENSATE_TURN;
-        /* fixMovement here did nothing: this tick's keys are read after this event. The move has to go along the look
-           the server is told (MOVE_LOOK), and onPostInput sets the keys for it. */
+
         displaceThisTick = true;
     }
 
-    /* 2026-10-31 (audit): a world unload leaves its entities alive (isDead stays false), and one kept here held the
-       whole old world in memory -- for good while this module was off. Dropped when a world loads. */
     @atlas.event.EventTarget(whenDisabled = true)
     public void onWorldDropEntities(atlas.events.LoadWorldEvent event) {
         this.renderTarget = null;

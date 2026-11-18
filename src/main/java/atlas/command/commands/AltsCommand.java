@@ -7,8 +7,8 @@ import net.minecraft.client.Minecraft;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-// Ported from OpenSkid (GPL-3.0): opens the account manager. the client bundles the
-// same account manager library but had no command for its screen.
+// Ported from OpenSkid (GPL-3.0)
+
 public class AltsCommand extends Command {
     public AltsCommand() {
         super(new ArrayList<String>(Arrays.asList("alts", "alt", "altmanager")));

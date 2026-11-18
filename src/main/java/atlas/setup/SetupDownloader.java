@@ -16,23 +16,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Fetches catalog entries into the right folder.
- *
- * <p>Ported from OpenSkid (GPL-3.0), with a few hardening changes:
- *
- * <ul>
- *   <li>A jar or zip must start with the {@code PK} zip magic. Hosts happily
- *       answer 200 with an HTML error page or a login wall, and the original
- *       size-only check saved those into {@code mods/}.</li>
- *   <li>Transient failures retry {#ATTEMPTS} times with a growing backoff.</li>
- *   <li>A download can be cancelled from the UI, mid-transfer.</li>
- *   <li>At most {#MAX_PARALLEL} run at once, so selecting everything does not
- *       open twenty connections to the same CDN.</li>
- *   <li>Downloads land in a {@code .download} temp file and are renamed only
- *       once they are complete and valid.</li>
- * </ul>
- */
+// Ported from OpenSkid (GPL-3.0), with a few hardening changes
+
 public final class SetupDownloader {
     private static final int CONNECT_TIMEOUT_MS = 10000;
     private static final int READ_TIMEOUT_MS = 15000;
@@ -68,7 +53,6 @@ public final class SetupDownloader {
         void onError(String message);
     }
 
-    /** A queued or running download; the UI keeps this to offer a Cancel. */
     public static final class Download {
         private final SetupEntry entry;
         private volatile boolean cancelled;
@@ -100,7 +84,6 @@ public final class SetupDownloader {
                 && entry.url.toLowerCase(Locale.ROOT).startsWith("http");
     }
 
-    /** Queues {@code entry} and returns at once; the listener is told what happens. */
     public static Download downloadAsync(final SetupEntry entry, final ProgressListener listener) {
         final Download handle = new Download(entry);
         POOL.execute(new Runnable() {
@@ -209,9 +192,7 @@ public final class SetupDownloader {
         } finally {
             close(in);
             close(out);
-            // Any failure -- bad content, cancelled, too large, a broken read --
-            // must not leave a half-written .download file behind for the next
-            // attempt or the user to trip over.
+
             if (!valid) {
                 temp.delete();
             }
@@ -234,7 +215,6 @@ public final class SetupDownloader {
             throw new Exception("could not save the file");
         }
         if (entry.source == SetupEntry.Source.OPTIFINE) {
-            /* First OptiFine install by this client: Connected Textures off (OptiFineDefaults). */
             OptiFineDefaults.applyFirstInstall(dir.getAbsoluteFile().getParentFile());
         }
         return dest;
@@ -245,7 +225,6 @@ public final class SetupDownloader {
             return entry.url;
         }
         if (entry.source == SetupEntry.Source.OPTIFINE) {
-            /* optifine.net hands out a per-visit key on its download page. */
             java.util.regex.Matcher key = java.util.regex.Pattern.compile("downloadx\\?f=[^'\"\\s>]+")
                     .matcher(fetchText(entry.url, handle));
             if (!key.find()) {
@@ -261,12 +240,6 @@ public final class SetupDownloader {
         return link;
     }
 
-    /**
-     * Pulls the direct file URL out of a MediaFire share page. Kept separate
-     * from the network code so the two patterns can be tested on saved HTML.
-     *
-     * @return the direct URL, or null when the page has neither form
-     */
     static String extractShareLink(String html) {
         if (html == null) {
             return null;
@@ -282,7 +255,6 @@ public final class SetupDownloader {
         return null;
     }
 
-    /** A catalog file that has to be a zip container: a mod jar or a resource pack. */
     static boolean isArchive(String fileName) {
         if (fileName == null) {
             return false;

@@ -9,9 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** Velocity's Lag mode queue (2026-10-24). */
 public class VelocityLagTest {
-
     @Test
     public void theHoldIsCutToThePingBudget() {
         assertEquals(4, VelocityLag.holdTicks(4, 50, 250));
@@ -30,7 +28,7 @@ public class VelocityLagTest {
         assertEquals(Collections.emptyList(), lag.due(13, 150, 500));
         assertEquals(Arrays.asList("kb", "t1", "t2"), lag.due(14, 200, 500));
         assertFalse(lag.holding());
-        assertFalse(lag.add("t3")); // not holding: not taken
+        assertFalse(lag.add("t3"));
     }
 
     @Test
@@ -58,6 +56,6 @@ public class VelocityLagTest {
         lag.add("t1");
         assertEquals(Arrays.asList("kb", "t1"), lag.drain(50, 500));
         assertEquals(0, lag.size());
-        assertFalse(lag.start("kb2", 1, 3, 100)); // cooling down after the drain too
+        assertFalse(lag.start("kb2", 1, 3, 100));
     }
 }

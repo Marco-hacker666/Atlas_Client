@@ -374,11 +374,11 @@ public class RenderFixes extends Module {
 
         int background = new Color(15, 15, 15, alpha).getRGB();
         int outline = new Color(255, 255, 255, shouldUseShaders() ? 40 : 18).getRGB();
-        
+
         RenderUtil.drawRoundedRect(x, y, width, height, radius, background, true, true, true, true);
         RenderUtil.drawRoundedRectOutline(x, y, width, height, radius, 1.5F,
                 outline, true, true, true, true);
-        
+
         GlStateManager.enableTexture2D();
         GlStateManager.enableAlpha();
         GlStateManager.enableBlend();

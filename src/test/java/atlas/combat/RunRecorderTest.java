@@ -7,10 +7,7 @@ import java.util.List;
 
 import static org.junit.Assert.*;
 
-/** SpeedBlocker's run recorder settles each prediction at its horizons, on fresh server updates (2026-11-02). */
 public class RunRecorderTest {
-
-    /** A sprint along +x, looking along +x, with the server sending a position every second tick. */
     private static void sprint(RunRecorder recorder, int id, int ticks) {
         double v = 0.2806;
         for (int t = 0; t <= ticks; t++) {
@@ -28,12 +25,12 @@ public class RunRecorderTest {
         sprint(recorder, 7, 40);
         assertTrue(rows.size() >= 4);
         String first = rows.get(0);
-        /* Sampled at tick 0; horizon 5 is settled at the first fresh tick past it, 6. */
+
         assertTrue(first, first.startsWith("0,e7,6,"));
-        /* The last cell (engineErr) is empty with no simulation: keep it in the count. */
+
         String[] cells = first.split(",", -1);
         assertEquals(RunRecorder.HEADER.split(",").length, cells.length);
-        /* A steady straight sprint at vanilla speed: the model and the line both land within a few hundredths. */
+
         assertTrue(first, Double.parseDouble(cells[10]) < 0.02);
         assertTrue(first, Double.parseDouble(cells[11]) < 0.02);
         for (String row : rows) {
@@ -62,7 +59,7 @@ public class RunRecorderTest {
     public void theSimulationsAnswerGetsItsOwnColumn() {
         final java.util.List<String> rows = new java.util.ArrayList<String>();
         RunRecorder recorder = new RunRecorder(rows::add);
-        /* A player going 0.2 a tick along x. The simulation is handed a path 0.1 off to the side. */
+
         double[][] engine = new double[RunRecorder.LENGTH][];
         for (int i = 0; i < engine.length; i++) {
             engine[i] = new double[]{0.2 * (double) (i + 1), 0.1};

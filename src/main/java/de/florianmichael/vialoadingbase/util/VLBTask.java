@@ -20,7 +20,6 @@ import com.viaversion.viaversion.api.scheduler.Task;
 import com.viaversion.viaversion.api.scheduler.TaskStatus;
 
 public class VLBTask implements PlatformTask<Task> {
-
   private final Task object;
 
   public VLBTask(Task object) {

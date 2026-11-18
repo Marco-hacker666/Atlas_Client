@@ -8,21 +8,9 @@ import java.lang.reflect.Field;
 
 import static org.junit.Assert.assertEquals;
 
-/**
- * Record mode must not learn the module's own clicks (PR #5 review). The
- * module presses the attack key, vanilla turns that press into clickMouse() in
- * the same tick, and the click comes back through LeftClickMouseEvent -- so
- * onCLick() ignores anything in a tick where the module clicked.
- *
- * The tick handler and the key simulation need a live client, so this drives
- * onCLick() directly with the state the tick would leave behind. The enabled
- * flag is set by reflection: setEnabled() runs onEnabled(), which needs a game.
- */
 public class AutoClickerRecordTest {
-
     private static final int RECORD_MODE = 2;
 
-    /** An enabled AutoClicker in Record mode that has already seen one click. */
     private static AutoClicker recordingClicker() throws Exception {
         AutoClicker autoClicker = new AutoClicker();
         set(autoClicker, Module.class, "enabled", true);
@@ -66,7 +54,7 @@ public class AutoClickerRecordTest {
     @Test
     public void clicksOutsideRecordModeAreIgnored() throws Exception {
         AutoClicker autoClicker = recordingClicker();
-        autoClicker.clickMode.setValue(0); // Normal
+        autoClicker.clickMode.setValue(0);
 
         autoClicker.onCLick(new LeftClickMouseEvent());
 

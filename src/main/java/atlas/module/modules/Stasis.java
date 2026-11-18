@@ -18,7 +18,7 @@ public class Stasis extends Module {
     private double savedMotionZ;
 
     private int tickCounter;
-    private int phase; // 0 = stasis, 1 = release
+    private int phase;
     private static final int STASIS_TICKS = 45;
     private static final int RELEASE_TICKS = 1;
 
@@ -34,7 +34,7 @@ public class Stasis extends Module {
             savedMotionZ = mc.thePlayer.motionZ;
         }
         tickCounter = 0;
-        phase = 0; // freeze straight away
+        phase = 0;
     }
 
     @EventTarget
@@ -107,7 +107,6 @@ public class Stasis extends Module {
             return;
         }
         if (!atlas.management.LagGuard.mayHold("Stasis", false, null)) {
-            /* 2026-10-28 LagGuard: no dropping movement now (after a knockback or a correction, or struck out). */
             return;
         }
 

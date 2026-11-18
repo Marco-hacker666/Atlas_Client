@@ -22,17 +22,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.*;
 
-/**
- * Characterisation tests for EventManager (Phase 1, docs/ARCH-AUDIT-2026-09-28.md).
- *
- * These pin down what the dispatcher does today, including the parts that are
- * surprising (a cancelled event is still delivered to later handlers; dispatch
- * is by exact class). They exist so that a later change to the dispatcher that
- * alters any of it fails here first, on purpose, rather than in a game.
- */
 public class EventManagerTest {
-
-    /** Shared call record; every handler appends "<who>" when it runs. */
     private static final List<String> CALLS = Collections.synchronizedList(new ArrayList<String>());
 
     @Before
@@ -42,9 +32,6 @@ public class EventManagerTest {
         CALLS.clear();
     }
 
-    // ------------------------------------------------------------ fixtures
-
-    /** A module with one plain handler. */
     public static class PlainModule extends Module {
         public PlainModule(String name, boolean enabled) {
             super(name, enabled);
@@ -56,7 +43,6 @@ public class EventManagerTest {
         }
     }
 
-    /** A module whose handler runs while it is switched off. */
     public static class AlwaysModule extends Module {
         public AlwaysModule(String name, boolean enabled) {
             super(name, enabled);
@@ -68,7 +54,6 @@ public class EventManagerTest {
         }
     }
 
-    /** Not a module: never filtered. */
     public static class Listener {
         final String name;
 
@@ -135,7 +120,6 @@ public class EventManagerTest {
         }
     }
 
-    /** Disables another module from inside a handler that runs first. */
     public static class Disabler {
         final Module victim;
 
@@ -166,7 +150,6 @@ public class EventManagerTest {
         }
     }
 
-    /** A subclass of TickEvent. */
     public static class SubTick extends TickEvent {
         public SubTick() {
             super(EventType.PRE);
@@ -178,7 +161,6 @@ public class EventManagerTest {
         public void slow(TickEvent event) {
             long until = System.nanoTime() + 2_000_000L;
             while (System.nanoTime() < until) {
-                // busy for ~2 ms, so the profile has something to report
             }
             CALLS.add("slow");
         }
@@ -193,7 +175,6 @@ public class EventManagerTest {
         }
     }
 
-    /** A packet no list knows about: its cancellation must count. */
     public static class TestPacket implements Packet<INetHandler> {
         @Override
         public void readPacketData(PacketBuffer buf) {
@@ -229,8 +210,6 @@ public class EventManagerTest {
     private static TickEvent tick() {
         return new TickEvent(EventType.PRE);
     }
-
-    // --------------------------------------------------------------- tests
 
     @Test
     public void enabledModuleHandlerRuns() {
@@ -300,9 +279,6 @@ public class EventManagerTest {
 
     @Test
     public void cancelledEventIsStillDeliveredToLaterHandlers() {
-        /* Documented semantic, not a bug to fix silently: cancelling does not
-           stop dispatch. Handlers that must ignore cancelled events check
-           isCancelled() themselves. */
         CancelWatcher watcher = new CancelWatcher();
         EventManager.register(watcher);
         EventManager.register(new Canceller());
@@ -345,7 +321,6 @@ public class EventManagerTest {
 
     @Test
     public void dispatchIsByExactClass() {
-        /* A TickEvent handler does not see a subclass of TickEvent. */
         EventManager.register(new Listener("L"));
         EventManager.call(new SubTick());
         assertTrue(CALLS.isEmpty());
@@ -398,14 +373,14 @@ public class EventManagerTest {
     @Test
     public void handlerTimingIsRecordedAndReset() {
         EventManager.register(new SlowListener());
-        EventManager.takeProfile(1.0, 0); // discard anything earlier
+        EventManager.takeProfile(1.0, 0);
         EventManager.call(tick());
         EventManager.call(tick());
         List<String> profile = EventManager.takeProfile(1.0, 10);
         String joined = String.join("\n", profile);
         assertTrue(joined, joined.contains("SlowListener.slow(TickEvent)"));
         assertTrue(joined, joined.contains("       2 calls"));
-        /* Counters were reset by the take: nothing ran since. */
+
         List<String> again = EventManager.takeProfile(1.0, 10);
         assertFalse(String.join("\n", again).contains("SlowListener"));
     }

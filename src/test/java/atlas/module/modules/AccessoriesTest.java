@@ -8,15 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * What the wearer picked has to be what the module reports and what the menu
- * offers (CrewX port, 2026-10-11): the suffix names the headwear and says when
- * wings are on, and a colour setting only appears once the thing it colours is
- * switched on. The models themselves are drawn in world space and need a
- * running client.
- */
 public class AccessoriesTest {
-
     @Test
     public void nothingIsOfferedWhileEverythingIsOff() {
         Accessories accessories = new Accessories();
@@ -30,7 +22,7 @@ public class AccessoriesTest {
     public void headwearNamesItselfAndUnlocksItsColour() {
         Accessories accessories = new Accessories();
 
-        accessories.headwear.setValue(2); // CROWN
+        accessories.headwear.setValue(2);
 
         assertEquals("CROWN", accessories.getSuffix()[0]);
         assertTrue(accessories.headColor.isVisible());
@@ -47,7 +39,7 @@ public class AccessoriesTest {
         assertEquals("Wings", accessories.getSuffix()[0]);
         assertTrue(accessories.wingColor.isVisible());
 
-        accessories.headwear.setValue(1); // HALO
+        accessories.headwear.setValue(1);
         assertEquals("headwear and wings are both reported", 2, accessories.getSuffix().length);
         assertEquals("HALO", accessories.getSuffix()[0]);
         assertEquals("Wings", accessories.getSuffix()[1]);

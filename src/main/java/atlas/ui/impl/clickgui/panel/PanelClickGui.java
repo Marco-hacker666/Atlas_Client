@@ -38,20 +38,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Panel ClickGUI (2026-10-11, owner request; modelled on Yuri's menu): one
- * dark rounded panel per category side by side, an accent line under each
- * title, modules listed by name (accent when on) with a "+" that opens their
- * settings in place, and a Configs panel to load and save profiles.
- *
- * Every frame the panels are laid out and drawn in one pass, which also
- * records where each clickable thing is ({@link Hit}); clicks are matched
- * against the hits of the frame the player saw.
- *
- * Left click: toggle / set. Right click on a module: open its settings.
- * Right click on a title: fold the panel. Drag a title: move it. Wheel over
- * a panel: scroll it. Panel positions are kept in config/Atlas/panelgui.txt.
- */
 public class PanelClickGui extends GuiScreen {
     private static PanelClickGui instance;
 
@@ -61,7 +47,7 @@ public class PanelClickGui extends GuiScreen {
     private static final float SETTING_H = 15.0F;
     private static final float SLIDER_H = 22.0F;
     private static final float RADIUS = 8.0F;
-    /** A panel shows at most this many module rows, then scrolls. */
+
     private static final int MAX_ROWS = 16;
     private static final File STATE = new File("./config/Atlas/panelgui.txt");
 
@@ -78,7 +64,7 @@ public class PanelClickGui extends GuiScreen {
         final Panel panel;
         final Object target;
         final float x1, y1, x2, y2;
-        /** Sliders: where the track starts and how wide it is. */
+
         float trackX, trackW;
 
         Hit(Kind kind, Panel panel, Object target, float x1, float y1, float x2, float y2) {
@@ -104,11 +90,11 @@ public class PanelClickGui extends GuiScreen {
         boolean folded;
         float scroll;
         float maxScroll;
-        /** The scroll drawn: eases toward {@link #scroll}. */
+
         float shownScroll;
-        /* Geometry of this frame (measure). */
+
         float drawY, body, content, total;
-        /** Height drawn last frame, for hit tests of the whole panel. */
+
         float shownHeight = HEADER;
 
         Panel(String title, List<Module> modules, boolean configs, float x, float y) {
@@ -148,7 +134,7 @@ public class PanelClickGui extends GuiScreen {
     private long openedAt;
     private long lastFrame;
     private float dt = 0.016F;
-    /** Eased values: hover glows, on/off colours, opening settings. */
+
     private final Map<String, Float> anims = new HashMap<>();
 
     private PanelClickGui() {
@@ -200,7 +186,7 @@ public class PanelClickGui extends GuiScreen {
         for (Panel panel : this.panels) {
             panel.shownScroll = panel.scroll;
         }
-        /* Keep every panel's title on screen after a resize. */
+
         ScaledResolution sr = new ScaledResolution(mc);
         for (Panel panel : this.panels) {
             panel.x = Math.max(0.0F, Math.min(sr.getScaledWidth() - WIDTH, panel.x));
@@ -213,8 +199,6 @@ public class PanelClickGui extends GuiScreen {
         return false;
     }
 
-    // ---- look ----------------------------------------------------------
-
     private static int accent() {
         Module module = Atlas.moduleManager.getModule("ClickGUI");
         if (module instanceof ClickGUIModule) {
@@ -225,7 +209,6 @@ public class PanelClickGui extends GuiScreen {
 
     private float fade;
 
-    /** {@code color} with its alpha scaled by the opening fade. */
     private int a(int color) {
         int alpha = Math.round((color >>> 24) * this.fade);
         return (alpha << 24) | (color & 0xFFFFFF);
@@ -269,9 +252,6 @@ public class PanelClickGui extends GuiScreen {
         return s + "..";
     }
 
-    // ---- drawing -------------------------------------------------------
-
-    /** Eases {@code key} toward {@code target}; {@code speed} is per second. */
     private float ease(String key, float target, float speed) {
         Float now = this.anims.get(key);
         float v = now == null ? target : now;
@@ -320,12 +300,10 @@ public class PanelClickGui extends GuiScreen {
             this.hue = null;
         }
 
-        /* The world dims, with a faint wash of the accent from below. */
         this.fade = Math.min(1.0F, elapsed / 180.0F);
         this.drawGradientRect(0, 0, sr.getScaledWidth(), sr.getScaledHeight(),
                 a(0x70000000), a(0x30000000 | accent & 0xFFFFFF));
 
-        /* Each panel drops in a little after the one before it. */
         float[] shown = new float[this.panels.size()];
         for (int i = 0; i < this.panels.size(); i++) {
             Panel panel = this.panels.get(i);
@@ -335,7 +313,6 @@ public class PanelClickGui extends GuiScreen {
             measure(panel, sr, (1.0F - t) * -10.0F);
         }
 
-        /* Frosted glass: the world behind every panel is blurred first. */
         if (atlas.module.modules.RenderFixes.shouldUseShaders()) {
             atlas.util.shader.BlurUtils.prepareBlur();
             for (int i = 0; i < this.panels.size(); i++) {
@@ -371,7 +348,6 @@ public class PanelClickGui extends GuiScreen {
         super.drawScreen(mouseX, mouseY, partialTicks);
     }
 
-    /** Where the panel is this frame, how tall, and how far it scrolls. */
     private void measure(Panel panel, ScaledResolution sr, float offset) {
         panel.drawY = panel.y + offset;
         float content = panel.folded ? 0.0F : contentHeight(panel);
@@ -396,7 +372,7 @@ public class PanelClickGui extends GuiScreen {
 
         atlas.util.shader.ShadowShader.drawShadow(x, y, WIDTH, total, RADIUS, 10.0F, a(0x70000000));
         RenderUtil.drawRoundedRect(x, y, WIDTH, total, RADIUS, a(BG));
-        /* A hairline rim catches the light along the top. */
+
         RenderUtil.drawRoundedRectOutline(x, y, WIDTH, total, RADIUS, 0.5F, a(0x1EFFFFFF), true, true, true, true);
 
         text(titleFont(), panel.title, x + 10.0F, y + 1.0F, HEADER - 4.0F, TEXT);
@@ -408,7 +384,7 @@ public class PanelClickGui extends GuiScreen {
         if (line > 0.01F) {
             float half = (WIDTH - 16.0F) / 2.0F * line;
             float cx = x + WIDTH / 2.0F;
-            /* The accent line, with a soft glow under it. */
+
             RenderUtil.drawRect(cx - half, y + HEADER - 3.0F, cx + half, y + HEADER - 1.5F, a(accent));
             RenderUtil.drawRect(cx - half, y + HEADER - 1.5F, cx + half, y + HEADER + 1.0F, a(0x30000000 | accent & 0xFFFFFF));
         }
@@ -431,7 +407,6 @@ public class PanelClickGui extends GuiScreen {
         RenderUtil.releaseScissor();
 
         if (panel.maxScroll > 0.5F) {
-            /* Fades at the cut edges, so rows slide under instead of being chopped. */
             if (panel.shownScroll > 1.0F) {
                 this.drawGradientRect((int) x + 2, (int) clipTop, (int) (x + WIDTH) - 2, (int) clipTop + 8,
                         a(0xB0121217), 0x00121217);
@@ -457,7 +432,6 @@ public class PanelClickGui extends GuiScreen {
         return on;
     }
 
-    /** A small bar at the bottom left: client, server, FPS and the time. */
     private void drawInfoBar(ScaledResolution sr, int accent) {
         FontRenderer font = smallFont();
         String server = mc.getCurrentServerData() == null || mc.isSingleplayer() ? "Singleplayer"
@@ -509,7 +483,6 @@ public class PanelClickGui extends GuiScreen {
                         a(Math.round(0x16 * glow) << 24 | 0xFFFFFF));
             }
             if (on > 0.01F) {
-                /* A short accent tick at the left of what is on. */
                 float h = (MODULE_H - 8.0F) * on;
                 RenderUtil.drawRoundedRect(x + 5.0F, rowY + MODULE_H / 2.0F - h / 2.0F, 2.0F, h, 1.0F, a(accent));
             }
@@ -529,7 +502,7 @@ public class PanelClickGui extends GuiScreen {
         float start = rowY;
         float full = settingsHeight(settings);
         float height = full * opened;
-        /* The settings unroll: drawn inside their own clip, inside the panel's. */
+
         float innerTop = Math.max(clipTop, start);
         float innerBottom = Math.min(clipBottom, start + height);
         if (innerBottom <= innerTop) {
@@ -543,7 +516,6 @@ public class PanelClickGui extends GuiScreen {
         float left = x + 11.0F;
         float right = x + WIDTH - 10.0F;
 
-        /* The module's own key first. */
         if (visible(rowY, SETTING_H, clipTop, clipBottom)) {
             String key = this.listeningModule == module ? "..." : keyName(module.getKey());
             text(smallFont(), "Bind", left, rowY, SETTING_H, DIM);
@@ -559,7 +531,7 @@ public class PanelClickGui extends GuiScreen {
             }
             rowY += h;
         }
-        /* Back to the panel's own clip. */
+
         Panel owner = panel;
         float panelTop = owner.drawY + HEADER + 1.0F;
         RenderUtil.scissor(x, panelTop, WIDTH, owner.body + 1.0F);
@@ -609,7 +581,7 @@ public class PanelClickGui extends GuiScreen {
             int rgb = ((ColorProperty) property).getValue() & 0xFFFFFF;
             text(font, trim(font, label, right - left - 14.0F), left, rowY, 12.0F, DIM);
             RenderUtil.drawRoundedRect(right - 8.0F, rowY + 2.5F, 8.0F, 7.0F, 2.0F, a(0xFF000000 | rgb));
-            /* A hue bar: drag along it to pick the colour. */
+
             float trackY = rowY + 13.5F;
             float w = right - left;
             int steps = 24;
@@ -639,7 +611,6 @@ public class PanelClickGui extends GuiScreen {
             textRight(font, value, right, rowY, SETTING_H, this.listeningKey == property ? accent : TEXT);
             addHit(Kind.KEY, panel, property, x, rowY, x + WIDTH, rowY + SETTING_H, clipTop, clipBottom);
         } else {
-            /* Lists, files and the like: shown, set from the Atlas menu or a command. */
             String value = String.valueOf(property.getValue());
             text(font, trim(font, label, (right - left) * 0.5F), left, rowY, SETTING_H, FAINT);
             textRight(font, trim(font, value, (right - left) * 0.45F), right, rowY, SETTING_H, FAINT);
@@ -693,8 +664,6 @@ public class PanelClickGui extends GuiScreen {
     private boolean blink() {
         return System.currentTimeMillis() / 500L % 2L == 0L;
     }
-
-    // ---- sizes ---------------------------------------------------------
 
     private float contentHeight(Panel panel) {
         if (panel.configs) {
@@ -753,8 +722,6 @@ public class PanelClickGui extends GuiScreen {
         out.sort(String.CASE_INSENSITIVE_ORDER);
         this.configs = out;
     }
-
-    // ---- numbers -------------------------------------------------------
 
     private static boolean isNumeric(Property<?> property) {
         return property instanceof IntProperty || property instanceof FloatProperty || property instanceof PercentProperty;
@@ -849,8 +816,6 @@ public class PanelClickGui extends GuiScreen {
         this.statusAt = System.currentTimeMillis();
     }
 
-    // ---- input ---------------------------------------------------------
-
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) throws IOException {
         super.mouseClicked(mouseX, mouseY, button);
@@ -861,7 +826,7 @@ public class PanelClickGui extends GuiScreen {
                 break;
             }
         }
-        /* A click anywhere ends typing and key listening. */
+
         boolean wasEditing = this.editingText != null || this.editingName;
         if (wasEditing && (hit == null || hit.kind != Kind.TEXT && hit.kind != Kind.NAME)) {
             commitText();
@@ -1124,8 +1089,6 @@ public class PanelClickGui extends GuiScreen {
             gui.setEnabled(false);
         }
     }
-
-    // ---- where the panels are -----------------------------------------
 
     private static Map<String, float[]> readState() {
         Map<String, float[]> out = new HashMap<>();

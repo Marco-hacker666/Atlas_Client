@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): blocking engine with block-timing modes,
-// APS cadence, smart unblock on self-hurt and NoSlow cooperation.
+// Ported from OpenSkid (GPL-3.0)
+
 import atlas.Atlas;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
@@ -21,7 +21,6 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.network.play.server.S19PacketEntityStatus;
 
 public class AuraAutoBlock extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     private static final int[] APS_VALUES = {3, 5, 7, 10, 14};

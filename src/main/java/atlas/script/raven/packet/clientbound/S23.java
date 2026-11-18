@@ -6,12 +6,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S23PacketBlockChange;
 
-/** A block changing: what is at the position now. */
 public class S23 extends SPacket {
     public Vec3 position;
     public Block block;
 
-    /** The change to whatever is at the position in this side's world. */
     public S23(Vec3 position) {
         super("S23PacketBlockChange");
         this.position = position;

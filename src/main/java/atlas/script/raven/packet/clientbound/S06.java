@@ -3,7 +3,6 @@ package atlas.script.raven.packet.clientbound;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S06PacketUpdateHealth;
 
-/** The player's health and food. */
 public class S06 extends SPacket {
     public float health;
     public float saturation;

@@ -29,9 +29,6 @@ public class FMLLoadingPlugin implements IMixinConfigPlugin {
     }
 
     public void onLoad(String mixinPackage) {
-        /* The earliest client code that runs: move the old data folder before
-           anything reads config/Atlas (2026-10-14). The working directory is
-           the game directory, as for every "./config/..." path. */
         this.mixinPackage = mixinPackage;
         mixinPlugins.add(this);
     }

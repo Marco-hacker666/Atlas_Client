@@ -6,10 +6,6 @@ import net.minecraft.network.play.server.S3EPacketTeams;
 import java.util.ArrayList;
 import java.util.Collection;
 
-/**
- * A scoreboard team: action 0 create, 1 remove, 2 update, 3 add players, 4 remove players. Read only: a script
- * cannot make one of these for client.processPacket (the game builds them from a team object).
- */
 public class S3E extends SPacket {
     public String name;
     public String displayName;

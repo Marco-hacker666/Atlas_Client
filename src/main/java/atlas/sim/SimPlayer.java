@@ -29,40 +29,15 @@ import net.minecraft.world.World;
 
 import java.util.List;
 
-/**
- * The game's side of {@link PlayerSim} (2026-11-11): the player as it is now,
- * the world it moves in, and the keys its next move will get.
- *
- * Both the state and the keys depend on when in the tick the question is
- * asked, and they have to be of the same moment. {@link #snapshot} gives the
- * two together for a {@link PlayerSim.Stage} (2026-11-12; before, a caller
- * picked a state method and a keys method itself and could pair them wrong):
- *   - START, between ticks (TickEvent, UpdateEvent): the whole tick is to
- *     come, and the keys are the ones held;
- *   - INPUT, at MoveInputEvent before the shared look turns the keys
- *     (RotationHelper, LOWEST): the water has pushed, and the keys are
- *     movementInput's as the modules so far left them, with the turn and the
- *     item's slowdown still to come;
- *   - MOVE, at LivingUpdateEvent: only the move is left, and the keys are
- *     movementInput's as they are.
- * The yaw is the one the move runs by: the look's when a module turns the
- * move, else the camera's.
- *
- * What the simulation cannot see: a module that changes the push itself at
- * StrafeEvent or sets the motion (Speed, TargetStrafe, a velocity module),
- * and anything the server does. Ask it about plain walking.
- */
 public final class SimPlayer {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     private SimPlayer() {
     }
 
-    /** The player, the keys of its next move and the world, all of one moment in the tick. */
     public static final class Snapshot {
-        /** A new state each time: tick it freely. Its first tick runs what is left of the game's. */
         public final PlayerSim sim;
-        /** The keys that tick's move gets. A new object: change it to ask "what if". */
+
         public final PlayerSim.Input input;
         public final PlayerSim.World world;
 
@@ -73,12 +48,6 @@ public final class SimPlayer {
         }
     }
 
-    /**
-     * False where the simulation does not cover the move: riding, flying,
-     * no-clip, sleeping, dead (the game then takes no keys). (Water, lava,
-     * ladders, cobwebs, soul sand and slime are covered since 2026-11-12.)
-     * The caller keeps what it did before.
-     */
     public static boolean supported(EntityPlayerSP player) {
         if (player == null || player.worldObj == null || player.movementInput == null) {
             return false;
@@ -87,7 +56,6 @@ public final class SimPlayer {
                 && player.isEntityAlive();
     }
 
-    /** The player, its keys and the world as they are at {@code stage} of the tick; ask only where that is true. */
     public static Snapshot snapshot(EntityPlayerSP player, PlayerSim.Stage stage) {
         PlayerSim sim = state(player);
         sim.stage = stage;
@@ -102,12 +70,10 @@ public final class SimPlayer {
         return new Snapshot(sim, input, world(player.worldObj, player));
     }
 
-    /** The yaw the player's move runs by now: the look's when a module turns the move, else the camera's. */
     public static float moveYaw(EntityPlayerSP player) {
         return RotationState.isActived() ? RotationState.getSmoothedYaw() : player.rotationYaw;
     }
 
-    /** The player now, as between ticks (TickEvent, UpdateEvent). A new object each call: tick it freely. */
     public static PlayerSim state(EntityPlayerSP player) {
         PlayerSim sim = new PlayerSim();
         sim.box = player.getEntityBoundingBox();
@@ -121,7 +87,7 @@ public final class SimPlayer {
         sim.moveSpeed = player.getAIMoveSpeed();
         sim.airSpeed = player.jumpMovementFactor;
         double attribute = player.getEntityAttribute(SharedMonsterAttributes.movementSpeed).getAttributeValue();
-        /* Sprinting multiplies the attribute by 1.3 (its modifier is on while the flag is). */
+
         sim.walkSpeed = player.isSprinting() ? attribute / (1.0 + (double) 0.3F) : attribute;
         PotionEffect jump = player.getActivePotionEffect(Potion.jump);
         sim.jumpBoost = jump == null ? 0.0F : (float) (jump.getAmplifier() + 1) * 0.1F;
@@ -130,8 +96,7 @@ public final class SimPlayer {
         sim.height = player.height;
         sim.sprintTicksLeft = player.sprintingTicksLeft;
         sim.canSprint = (float) player.getFoodStats().getFoodLevel() > 6.0F || player.capabilities.allowFlying;
-        /* The game asks isUsingItem here too, and gets NoSlow's answer (MixinEntityPlayerSP.isUsing); asked here
-           without counting the tick. */
+
         sim.canStartSprint = !NoSlow.wouldSlowMove(player) && !player.isPotionActive(Potion.blindness);
         sim.inWater = player.isInWater();
         sim.inWeb = ((IAccessorEntity) player).getIsInWeb();
@@ -139,7 +104,6 @@ public final class SimPlayer {
         return sim;
     }
 
-    /** The world as {@code self} collides with it (blocks, the border, boats). */
     public static PlayerSim.World world(final World world, final Entity self) {
         return new PlayerSim.World() {
             @Override
@@ -152,7 +116,6 @@ public final class SimPlayer {
                 return world.getBlockState(new BlockPos(x, y, z)).getBlock().slipperiness;
             }
 
-            /* World.handleMaterialAcceleration for water, read only: the flow is summed here, PlayerSim pushes. */
             @Override
             public boolean water(AxisAlignedBB area, double[] flow) {
                 int minX = MathHelper.floor_double(area.minX);
@@ -208,7 +171,6 @@ public final class SimPlayer {
                 return world.getBlockState(new BlockPos(x, y, z)).getBlock() instanceof BlockSlime;
             }
 
-            /* Entity.doBlockCollisions: every cell the area (already in by 0.001) touches, ends included. */
             @Override
             public int touching(AxisAlignedBB area, PlayerSim.Touch kind) {
                 int count = 0;
@@ -225,13 +187,11 @@ public final class SimPlayer {
                 return count;
             }
 
-            /* EntityPlayerSP.isOpenBlockSpace, as Forge left it: one cell. */
             @Override
             public boolean solid(int x, int y, int z) {
                 return world.getBlockState(new BlockPos(x, y, z)).getBlock().isNormalCube();
             }
 
-            /* The test moveEntityWithHeading makes before gravity. */
             @Override
             public boolean loaded(int x, int z) {
                 BlockPos pos = new BlockPos(x, 0, z);
@@ -240,7 +200,6 @@ public final class SimPlayer {
         };
     }
 
-    /** The keys the next move will get, asked before they are read this tick: from the keys held. */
     private static PlayerSim.Input inputAhead(EntityPlayerSP player) {
         PlayerSim.Input in = look(player);
         boolean sneak = mc.gameSettings.keyBindSneak.isKeyDown();
@@ -252,12 +211,10 @@ public final class SimPlayer {
         return turnedAndSlowed(player, in);
     }
 
-    /** The keys this tick's move will get, asked at MoveInputEvent before the shared look turns them. */
     private static PlayerSim.Input inputBeforeMove(EntityPlayerSP player) {
         return turnedAndSlowed(player, held(player));
     }
 
-    /** The keys as they are in movementInput: this tick's move's once they are final. */
     private static PlayerSim.Input inputAsMoved(EntityPlayerSP player) {
         return held(player);
     }
@@ -278,7 +235,6 @@ public final class SimPlayer {
         return in;
     }
 
-    /** What is still to happen to the keys before the move: the shared look's turn, and the item's slowdown. */
     private static PlayerSim.Input turnedAndSlowed(EntityPlayerSP player, PlayerSim.Input in) {
         float[] turned = RotationHelper.get().turnedInput(in.forward, in.strafe);
         in.forward = turned[0];

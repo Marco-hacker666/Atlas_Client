@@ -8,40 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-/**
- * KillAura's "Advanced" rotations: the aim model of Rise 6.9.5's KillAura
- * (Rotation Mode "Advanced"), rewritten here from reading how it behaves --
- * the same steps, the same constants, the same defaults (docs/PAID-CLIENT-GAP.md,
- * 2026-09-28). None of its code is copied.
- *
- * Where our other modes turn at a speed, this one moves a simulated hand:
- *
- * - Where to look (aim point). A point on the target predicted from how the
- *   two players have been moving, which the hand only follows after a
- *   reaction time (180 ms, jittered). Small drifts wait for the reaction;
- *   a big jump is taken sooner. Each update covers part of the way, never
- *   all of it, so the look lags a strafing target the way an eye does.
- * - How to get there (step). A WindMouse: a pull toward the target
- *   ("gravity") plus a wandering push ("wind") that dies down as the target
- *   gets near, a step size that is large far away and shrinks close in,
- *   an occasional short burst of speed, a floor so the last few degrees are
- *   not crawled, and a proportional term.
- * - Overshoot. On a new target far enough away, most of the time the turn
- *   aims just past it and comes back, as a flick does.
- * - Settle. Within the dead zone and on the target, the hand stops for a
- *   couple of ticks instead of trembling on it.
- * - Flick guard. No single tick turns further than a hand can.
- * - Trigger reaction. The first hit on a target waits a human reaction
- *   (95 ms, jittered) after the crosshair lands on it.
- *
- * The caller puts the result on the mouse grid (RotationUtil.gcd) and does
- * the ray casts; everything here is plain arithmetic, so it can be tested.
- *
- * One instance per module. Client thread.
- */
 public final class AdvancedAim {
-
-    /** The model's settings; defaults are Rise's. */
     public static final class Settings {
         public float gravity = 9.0F;
         public float wind = 6.0F;
@@ -75,7 +42,6 @@ public final class AdvancedAim {
 
     private final Random random;
 
-    /* The hand. */
     private float windX;
     private float windY;
     private float velocityX;
@@ -88,13 +54,11 @@ public final class AdvancedAim {
     private float burstStrength;
     private int lastTargetId = NO_TARGET;
 
-    /* The eye. */
     private Vec3 aimPoint;
     private long nextAimUpdate;
     private Vec3 targetMotion = new Vec3(0.0, 0.0, 0.0);
     private Vec3 playerMotion = new Vec3(0.0, 0.0, 0.0);
 
-    /* The finger. */
     private int triggerTargetId = NO_TARGET;
     private boolean triggerArmed;
     private long triggerReadyAt;
@@ -103,12 +67,10 @@ public final class AdvancedAim {
         this(new Random());
     }
 
-    /** With a seeded random, for tests. */
     public AdvancedAim(Random random) {
         this.random = random;
     }
 
-    /** Forget everything: the next target starts from rest. */
     public void reset() {
         this.windX = 0.0F;
         this.windY = 0.0F;
@@ -128,19 +90,11 @@ public final class AdvancedAim {
         disarm();
     }
 
-    // ------------------------------------------------------------ the eye
-
-    /** One tick of both players' movement, smoothed (call once a tick). */
     public void observeMotion(Vec3 targetDelta, Vec3 playerDelta) {
         this.targetMotion = scale(this.targetMotion, 0.72).add(scale(targetDelta, 0.28));
         this.playerMotion = scale(this.playerMotion, 0.76).add(scale(playerDelta, 0.24));
     }
 
-    /**
-     * Where the target will be, relative to how this player is moving: a
-     * point high on its body, led by the smoothed relative motion, kept on
-     * (or just off) its box.
-     */
     public Vec3 predictedPoint(double posX, double posY, double posZ, double height, AxisAlignedBB box,
                                Vec3 eyes, Settings s) {
         double distance = eyes.distanceTo(new Vec3(posX, posY + height * 0.75, posZ));
@@ -151,10 +105,6 @@ public final class AdvancedAim {
         return clampToBox(point, box.expand(0.18, 0.1, 0.18));
     }
 
-    /**
-     * The point the hand is aiming at: it follows where the target is
-     * wanted only after a reaction time, and then only part of the way.
-     */
     public Vec3 aimPoint(Vec3 wanted, AxisAlignedBB box, double distance, long now, Settings s) {
         if (this.aimPoint == null) {
             this.aimPoint = wanted;
@@ -174,7 +124,6 @@ public final class AdvancedAim {
         return this.aimPoint;
     }
 
-    /** Reaction time for the eye; quicker for a jump than for a drift. */
     long reactionDelay(boolean jumped, Settings s) {
         double mean = s.aimReaction;
         double jitter = s.aimReactionJitter;
@@ -185,10 +134,6 @@ public final class AdvancedAim {
         return jittered(mean, jitter, 20L, 700L);
     }
 
-    /**
-     * The points to try, best first when several can hit: the aim point, the
-     * box's middle at eye height, and a grid over the box's faces.
-     */
     public static List<Vec3> candidates(AxisAlignedBB box, Vec3 aim, Vec3 eyes) {
         double[] across = {0.05, 0.25, 0.5, 0.75, 0.95};
         double[] up = {0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95};
@@ -215,21 +160,12 @@ public final class AdvancedAim {
         return points;
     }
 
-    /** The point of the box nearest the eyes, a hair inside it. */
     public static Vec3 nearestInside(AxisAlignedBB box, Vec3 eyes) {
         return new Vec3(clampInset(eyes.xCoord, box.minX + 0.03, box.maxX - 0.03),
                 clampInset(eyes.yCoord, box.minY + 0.03, box.maxY - 0.03),
                 clampInset(eyes.zCoord, box.minZ + 0.03, box.maxZ - 0.03));
     }
 
-    // ------------------------------------------------------------ the hand
-
-    /**
-     * One tick of turning from the current look toward the wanted one.
-     *
-     * @param onTarget whether the current look already lands on the target
-     * @return {yaw, pitch}, before the mouse grid
-     */
     public float[] step(float yaw, float pitch, float wantYaw, float wantPitch, int targetId, boolean onTarget,
                         Settings s) {
         float maxStep = s.maxStep;
@@ -278,7 +214,6 @@ public final class AdvancedAim {
         float safe = Math.max(0.001F, distance);
         float deadzone = s.deadzone;
 
-        /* Settle: on the target and close enough, hold still. */
         if (!overshooting && onTarget && distance <= deadzone) {
             this.holdTicks = Math.max(this.holdTicks, s.holdTicks);
         }
@@ -297,7 +232,6 @@ public final class AdvancedAim {
             return new float[]{yaw, MathHelper.clamp_float(pitch, -90.0F, 90.0F)};
         }
 
-        /* Wind far away, calm close in; the step size follows. */
         float windMagnitude = Math.min(s.wind, distance);
         if (distance >= damped) {
             this.windX = this.windX / SQRT3 + gaussian(windMagnitude / SQRT5, windMagnitude);
@@ -320,7 +254,6 @@ public final class AdvancedAim {
         this.velocityX += this.windX + gravity * dx / safe;
         this.velocityY += this.windY + gravity * dy / safe;
 
-        /* Pace: jitter, and now and then a short burst. */
         float pace = 1.0F;
         if (s.paceJitter > 1.0E-4F) {
             pace += gaussian(s.paceJitter * 0.42F, s.paceJitter);
@@ -356,7 +289,6 @@ public final class AdvancedAim {
             this.velocityY *= 0.94F;
         }
 
-        /* Cruise floor: the last few degrees are not crawled. */
         if (!overshooting && s.cruiseFloor > 0.01F && distance > deadzone * 1.25F && distance < 14.0F) {
             float floor = s.cruiseFloor * (0.86F + this.random.nextFloat() * 0.24F);
             float now = (float) Math.hypot(this.velocityX, this.velocityY);
@@ -367,7 +299,6 @@ public final class AdvancedAim {
             }
         }
 
-        /* Proportional term, larger far away. */
         float far = MathHelper.clamp_float(distance / 45.0F, 0.0F, 1.0F);
         float gain = (0.16F + far * 0.42F) * (0.55F + accuracy * 0.45F);
         gain *= MathHelper.clamp_float(0.88F + (pace - 1.0F) * 0.5F, 0.74F, 1.18F);
@@ -380,7 +311,6 @@ public final class AdvancedAim {
         float outYaw = yaw + this.velocityX + dx * gain;
         float outPitch = MathHelper.clamp_float(pitch + this.velocityY + dy * (gain * 0.85F), -89.9F, 89.9F);
 
-        /* Fine settle: the last degree and a half by fraction, not by force. */
         if (!overshooting && distance < 1.65F) {
             float fraction = (0.56F + accuracy * 0.28F) * (0.94F + this.random.nextFloat() * 0.1F);
             outYaw = yaw + dx * fraction;
@@ -399,7 +329,6 @@ public final class AdvancedAim {
             outPitch = MathHelper.clamp_float(outPitch, -89.9F, 89.9F);
         }
 
-        /* Flick guard: no tick turns further than a hand can. */
         if (s.flickGuard && !overshooting) {
             float fx = MathHelper.wrapAngleTo180_float(outYaw - yaw);
             float fy = outPitch - pitch;
@@ -419,7 +348,6 @@ public final class AdvancedAim {
         return new float[]{outYaw, outPitch};
     }
 
-    /** On a new target far enough off, usually aim just past it first. */
     private void planOvershoot(float yaw, float pitch, float wantYaw, float wantPitch, Settings s) {
         float chance = s.overshootChance;
         if (chance <= 0.0F) {
@@ -446,17 +374,10 @@ public final class AdvancedAim {
         this.overshootTicks = 8 + this.random.nextInt(6);
     }
 
-    /** Whether an overshoot is planned or under way (tests, debugging). */
     public boolean overshooting() {
         return this.overshoot != null;
     }
 
-    // ------------------------------------------------------------ the finger
-
-    /**
-     * Whether the first hit may go: a reaction time after the look first
-     * landed on this target. Looking away re-arms it.
-     */
     public boolean triggerReady(int targetId, boolean onTarget, long now, Settings s) {
         if (!onTarget) {
             disarm();
@@ -472,7 +393,6 @@ public final class AdvancedAim {
         return delay <= 0L;
     }
 
-    /** No target in reach: the next landing waits a reaction again. */
     public void lostTarget() {
         disarm();
     }
@@ -483,15 +403,6 @@ public final class AdvancedAim {
         this.triggerReadyAt = 0L;
     }
 
-    // ------------------------------------------------------------ helpers
-
-    /**
-     * A normal draw of this spread, clamped to +/- max.
-     *
-     * Rise's decompiled source lost the draw's assignment here (it returns
-     * 0, or +max on a rare tail); the clamp around it only makes sense for
-     * this, so this is what is implemented.
-     */
     float gaussian(float spread, float max) {
         if (spread <= 0.0F) {
             return 0.0F;
@@ -501,7 +412,6 @@ public final class AdvancedAim {
         return Math.max(-limit, Math.min(limit, value));
     }
 
-    /** A delay around mean with a normal jitter, clamped. */
     long jittered(double mean, double jitter, long min, long max) {
         double value = mean;
         if (jitter > 1.0E-4) {

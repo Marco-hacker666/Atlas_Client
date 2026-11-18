@@ -5,7 +5,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
 public class TellyRecorderTest {
-
     @Test
     public void angleBytesBecomeDegrees() {
         assertEquals(0.0F, TellyRecorder.angle((byte) 0), 1.0E-6F);

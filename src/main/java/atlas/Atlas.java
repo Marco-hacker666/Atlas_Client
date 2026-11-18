@@ -62,9 +62,9 @@ public class Atlas {
         moduleManager = new ModuleManager();
         notificationManager = new NotificationManager();
         commandManager = new CommandManager();
-        /* Before any font or image: the jar's "atlas:" resources (AtlasResources). */
+
         atlas.util.AtlasResources.register();
-        /* On the client thread with the display up: read the GL strings once (mobile-safe, 2026-10-15). */
+
         atlas.util.render.MobileSafe.detect();
         fontManagers = new FontManagers();
         fontManagers.load();
@@ -78,25 +78,24 @@ public class Atlas {
         EventManager.register(new atlas.management.PerfLog());
         EventManager.register(new atlas.management.HitTimer());
         EventManager.register(new atlas.management.LogUploader());
-        /* 2026-11-17: usage sharing, only after the player agreed in the privacy window (management.UsageReporter). */
+
         EventManager.register(new atlas.management.UsageReporter());
-        /* Other players followed and forecast; holds nothing until something asks (2026-11-13). Before whoever
-           asks it for a forecast in the same tick (review, PR #41). */
+
         EventManager.register(atlas.sim.SimTargets.get());
-        /* 2026-11-15: .targets on is kept across starts. */
+
         atlas.command.commands.TargetsCommand.restore();
-        /* Anonymous SpeedBlocker run data, only with the player's yes (2026-11-01). */
+
         EventManager.register(new atlas.management.RunCollector());
         EventManager.register(new atlas.management.PlaceRotations());
-        /* One definition of "a connection to a server" (Phase 2, 2026-09-28). */
+
         EventManager.register(new atlas.management.ServerSession());
-        /* What action packets this tick has already sent (Rise item 2). */
+
         EventManager.register(new atlas.management.TickActions.Listener());
         EventManager.register(new atlas.util.BugReport.SeenNames());
         EventManager.register(new atlas.util.VanillaInput.Listener());
-        /* When the delay modules may hold at all (LagGuard, 2026-10-28). */
+
         EventManager.register(new atlas.management.LagGuard.Listener());
-        /* Ends holds that outlive their reason (PacketHolds leases, 2026-09-28). */
+
         EventManager.register(new atlas.management.PacketHolds.Watchdog(name -> {
             atlas.module.Module module = moduleManager.getModule(name);
             return module == null || module.isEnabled();
@@ -131,7 +130,7 @@ public class Atlas {
         moduleManager.modules.put(PingSpoof.class, new PingSpoof());
         moduleManager.modules.put(KillEffect.class, new KillEffect());
         moduleManager.modules.put(FallIndicator.class, new FallIndicator());
-        /* Legit bridging 3-in-1: Eagle + BridgeAssist + LegitScaffold combined. */
+
         moduleManager.modules.put(PearlSaver.class, new PearlSaver());
         moduleManager.modules.put(ProjectileAimBot.class, new ProjectileAimBot());
         moduleManager.modules.put(AutoTool.class, new AutoTool());
@@ -178,7 +177,7 @@ public class Atlas {
         moduleManager.modules.put(Disabler.class, new Disabler());
         moduleManager.modules.put(KeepSprint.class, new KeepSprint());
         moduleManager.modules.put(FlagDetector.class, new FlagDetector());
-        /* 2026-11-12: no longer a module -- part of the client, set by Client Settings > Performance > Move check. */
+
         EventManager.register(new atlas.management.MoveCheck());
         moduleManager.modules.put(AntiCheat.class, new AntiCheat());
         moduleManager.modules.put(HitCheck.class, new HitCheck());
@@ -207,12 +206,12 @@ public class Atlas {
         moduleManager.modules.put(InvulnTiming.class, new InvulnTiming());
         moduleManager.modules.put(FlagResponder.class, new FlagResponder());
         moduleManager.modules.put(LatencyGovernor.class, new LatencyGovernor());
-        /* Rise comparison items 4, 6 and 7 (2026-09-28). */
+
         moduleManager.modules.put(KeepRange.class, new KeepRange());
         moduleManager.modules.put(ServerProfiles.class, new ServerProfiles());
         moduleManager.modules.put(HitBox.class, new HitBox());
         moduleManager.modules.put(KillAura.class, new KillAura());
-        /* The rewrite, side by side until it replaces KillAura (2026-10-14). */
+
         moduleManager.modules.put(LagRange.class, new LagRange());
         moduleManager.modules.put(LightningTracker.class, new LightningTracker());
         moduleManager.modules.put(LongJump.class, new LongJump());
@@ -234,7 +233,7 @@ public class Atlas {
         moduleManager.modules.put(BedwarUtils.class, new BedwarUtils());
         moduleManager.modules.put(NoSlow.class, new NoSlow());
         moduleManager.modules.put(NoItemRelease.class, new NoItemRelease());
-        /* From Slinky (2026-10-19), rebuilt here. */
+
         moduleManager.modules.put(FastAccel.class, new FastAccel());
         moduleManager.modules.put(InstantStop.class, new InstantStop());
         moduleManager.modules.put(NullMove.class, new NullMove());
@@ -256,8 +255,8 @@ public class Atlas {
         moduleManager.modules.put(AntiBounce.class, new AntiBounce());
         moduleManager.modules.put(DynamicIsland.class, new DynamicIsland());
         moduleManager.modules.put(Scaffold.class, new Scaffold());
-        /* Ported from OpenSkid (GPL-3.0), 2026-10-05: registered in source, where the
-           Atlas UI jar had patched Atlas.class to do it (PortRegistry). Same place, same order. */
+        // Ported from OpenSkid (GPL-3.0)
+
         moduleManager.modules.put(KeyStrokes.class, new KeyStrokes());
         moduleManager.modules.put(PotionHUD.class, new PotionHUD());
         moduleManager.modules.put(InventoryHUD.class, new InventoryHUD());
@@ -299,7 +298,7 @@ public class Atlas {
         moduleManager.modules.put(ArmorHUD.class, new ArmorHUD());
         moduleManager.modules.put(EffectsHUD.class, new EffectsHUD());
         moduleManager.modules.put(AutoRespawn.class, new AutoRespawn());
-        /* CrewX ports: soup recrafting, the knockback hold, and the cosmetics. */
+
         moduleManager.modules.put(Freeze.class, new Freeze());
         moduleManager.modules.put(ResetVL.class, new ResetVL());
         moduleManager.modules.put(Accessories.class, new Accessories());
@@ -323,7 +322,7 @@ public class Atlas {
         commandManager.commands.add(new TargetCommand());
         commandManager.commands.add(new ToggleCommand());
         commandManager.commands.add(new VclipCommand());
-        /* Online config sharing and the script runtime (Batches 5 and 6). */
+
         commandManager.commands.add(new OnlineConfigCommand());
         commandManager.commands.add(new atlas.command.commands.UserConfigCommand());
         commandManager.commands.add(new atlas.command.commands.SetupCommand());
@@ -332,9 +331,7 @@ public class Atlas {
         commandManager.commands.add(new atlas.command.commands.UpdateCommand());
         for (Module module : moduleManager.modules.values()) {
             ArrayList<Property<?>> properties = new ArrayList<>();
-            /* The Theme groups keep their settings in ThemeStyle, so for them
-               the superclass's fields are read too; every other module stays
-               exactly as before (its own class only). */
+
             ArrayList<Field> fields = new ArrayList<>(java.util.Arrays.asList(module.getClass().getDeclaredFields()));
             if (module instanceof ThemeStyle) {
                 fields.addAll(java.util.Arrays.asList(ThemeStyle.class.getDeclaredFields()));
@@ -351,23 +348,18 @@ public class Atlas {
                     ((Property<?>) obj).setOwner(module);
                     properties.add((Property<?>) obj);
                 } else if (obj instanceof atlas.property.PropertyGroup) {
-                    /* A composite setting (IntRange, FloatRange): its members,
-                       in order, as if they were fields (2026-09-28). */
                     for (Property<?> member : ((atlas.property.PropertyGroup) obj).properties()) {
                         member.setOwner(module);
                         properties.add(member);
                     }
                 }
             }
-            /* Descriptions, headings, hints and menu order (ModuleDocs, 2026-10-04). */
+
             propertyManager.properties.put(module.getClass(),
                     new ArrayList<Property<?>>(atlas.module.ModuleDocs.apply(module, properties)));
             EventManager.register(module);
         }
-        /* The shared server look, after every module (2026-10-31): handlers of one priority run in the order they
-           were registered, so a module asking for a look in its LOWEST handler still asks before the packet is set. */
-        /* Scripts (2026-11-03): one dispatcher for every script's hooks, on Atlas's bus and Forge's; before the
-           shared look, so a look a script asks for at UpdateEvent PRE is asked before the packet is set. */
+
         EventManager.register(atlas.script.ScriptDispatcher.INSTANCE);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(atlas.script.ScriptDispatcher.INSTANCE);
         net.minecraftforge.fml.common.FMLCommonHandler.instance().bus().register(atlas.script.ScriptDispatcher.INSTANCE);
@@ -376,7 +368,7 @@ public class Atlas {
         if (config.file.exists()) {
             config.load();
         }
-        /* Old session logs go, once the keep-days setting is loaded (2026-10-20). */
+
         Logs.cleanOld(((Logs) moduleManager.modules.get(Logs.class)).keepDays.getValue());
         if (friendManager.file.exists()) {
             friendManager.load();
@@ -384,21 +376,13 @@ public class Atlas {
         if (targetManager.file.exists()) {
             targetManager.load();
         }
-        /* The scripts compile on a thread of their own and load into the game once it runs (Scripts tab). */
+
         atlas.script.ScriptManager.get().start();
         FontManager.initializeFonts();
-        /* Menu fonts and Java2D warmed up on a worker while the game loads,
-           so the start screen does not freeze opening (2026-10-13). */
+
         atlas.ui.impl.mainmenu.TextImage.warmUp();
         ClickGuiScreen.getInstance();
 
-        /* On exit the configuration is saved to the profile in use, not
-           always to default.json (F-08, 2026-09-28). The old hook held the
-           "default" instance created above, so after `.config load pika` or a
-           ServerProfiles switch, quitting wrote that profile's values over
-           default.json. Config.lastConfig is the profile last loaded or saved
-           -- the same one `.config save` with no name writes to. Runs after
-           the RESTORE stage, so borrowed values are put back first. */
         atlas.management.Shutdown.register(atlas.management.Shutdown.Stage.SAVE_CONFIG, "config", () -> {
             String name = Config.lastConfig == null || Config.lastConfig.isEmpty() ? "default" : Config.lastConfig;
             new Config(name, false).save();
@@ -407,25 +391,20 @@ public class Atlas {
         me.ksyz.accountmanager.AccountManager.init();
         ViaMCP.create();
 
-        /* Our own name (2026-10-08): "/version.json" found Forge's launcher profile first,
-           which has no "version", so every build said "dev". */
         try (InputStreamReader reader = new InputStreamReader(Objects.requireNonNull(Atlas.class.getResourceAsStream("/atlas-version.json")), StandardCharsets.UTF_8)) {
             JsonObject modInfo = new JsonParser().parse(reader).getAsJsonObject();
             version = modInfo.get("version").getAsString();
         } catch (Exception e) {
             version = "dev";
         }
-        /* Online updates (2026-10-13): checks the latest GitHub release in the
-           background and, in auto mode, swaps the jar after the game closes.
-           See atlas.update.Updater. Never lets a failure stop the client loading. */
+
         try {
             atlas.update.Updater.start(net.minecraft.client.Minecraft.getMinecraft().mcDataDir, version,
                     atlas.update.UpdateNotifier.install());
         } catch (Throwable t) {
             System.err.println("[Atlas] updater did not start: " + t);
         }
-        /* Setup: keep OneConfig's GUI key off RightShift, which is our ClickGUI key,
-           and re-check it whenever a world loads. */
+
         try {
             java.io.File gameDir = net.minecraft.client.Minecraft.getMinecraft().mcDataDir;
             atlas.setup.OneConfigPatcher.run(gameDir);
@@ -456,7 +435,7 @@ public class Atlas {
         EventManager.register(new atlas.anticheat.NoSlowCheck());
         EventManager.register(new atlas.anticheat.KillAuraCheck());
         EventManager.register(new atlas.anticheat.ScaffoldCheck());
-        /* Keys bound to profiles in the Slinky-style menu load them in game. */
+
         EventManager.register(atlas.ui.impl.clickgui.slinky.SlinkyProfiles.INSTANCE);
         anticheatRegistered = true;
     }

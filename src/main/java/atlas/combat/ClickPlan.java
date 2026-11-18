@@ -4,19 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-/**
- * Click times planned ahead in milliseconds and batched into 50 ms ticks, the
- * way Minecraft drains every attack-key press queued since the previous tick.
- * Planning ahead lets the aura ask whether a click will fall on a given future
- * tick (to turn only when the click will come with the turn).
- *
- * Intervals are log-normal around a CPS drawn once per combo (sigma 0.45, the
- * mean, not the median, on the drawn CPS); a combo ends after 250 ms in which
- * nobody used the planned presses.
- *
- * Follows LiquidBounce nextgen's ClickPlan and HumanClickTiming (GPL-3.0,
- * CCBlueX), rewritten for this client (2026-10-14).
- */
+// Follows LiquidBounce nextgen's ClickPlan and HumanClickTiming (GPL-3.0, CCBlueX), rewritten for this client .
+
 public final class ClickPlan {
     public static final long TICK_MS = 50L;
     private static final long HORIZON_MS = 1000L;
@@ -44,7 +33,6 @@ public final class ClickPlan {
         this.random = random;
     }
 
-    /** Changes the CPS range or the per-tick cap; planned presses after this tick are planned again. */
     public void configure(int minCps, int maxCps, int maxPerTick) {
         int lo = Math.max(1, Math.min(minCps, maxCps));
         int hi = Math.max(lo, Math.max(minCps, maxCps));
@@ -58,7 +46,6 @@ public final class ClickPlan {
         }
     }
 
-    /** Starts a new combo with a press at {@code now}. */
     public void reset(long now) {
         this.times.clear();
         this.next = 0;
@@ -71,7 +58,6 @@ public final class ClickPlan {
         this.times.add(now);
     }
 
-    /** Advances to the tick at {@code now} and makes its presses available to {@link #take()}. */
     public void tick(long now) {
         if (this.consumed > 0) {
             this.idleSince = NONE;
@@ -82,7 +68,7 @@ public final class ClickPlan {
                 || this.idleSince != NONE && now - this.idleSince > IDLE_MS) {
             reset(now);
         }
-        // Stay on the 50 ms grid so a look ahead matches what is consumed, unless the tick drifted off it.
+
         long expected = this.tickTime + TICK_MS;
         this.tickTime = Math.abs(now - expected) > TICK_MS ? now : expected;
         planUntil(this.tickTime + HORIZON_MS);
@@ -96,7 +82,6 @@ public final class ClickPlan {
         trim();
     }
 
-    /** Presses that the tick {@code tick} ticks from now will hold (0 = this tick). */
     public int clicksAt(int tick) {
         if (tick <= 0) {
             return this.due;
@@ -117,7 +102,6 @@ public final class ClickPlan {
         return Math.min(count, this.maxPerTick);
     }
 
-    /** Ticks until the next press, 0 if this tick has one; at most 20. */
     public int ticksUntilClick() {
         for (int t = 0; t < 20; t++) {
             if (clicksAt(t) > 0) {
@@ -127,7 +111,6 @@ public final class ClickPlan {
         return 20;
     }
 
-    /** Uses one press of this tick; false when none is left. */
     public boolean take() {
         if (this.consumed >= this.due) {
             return false;

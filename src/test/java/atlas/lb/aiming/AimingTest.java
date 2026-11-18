@@ -10,7 +10,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/** The LiquidBounce aiming port: rotation math, smoothers, the point tracker (2026-10-24). */
 public class AimingTest {
     private static final SmoothContext LIVE = new SmoothContext(true, null, null, 3.0, false);
 
@@ -33,7 +32,7 @@ public class AimingTest {
         Rotation whole = from.towardsLinear(to, 180.0F, 180.0F);
         assertEquals(30.0F, whole.yaw, 1e-4);
         assertEquals(40.0F, whole.pitch, 1e-4);
-        assertEquals(from.yaw, from.towardsLinear(from, 10.0F, 10.0F).yaw, 0.0); // no NaN on a zero delta
+        assertEquals(from.yaw, from.towardsLinear(from, 10.0F, 10.0F).yaw, 0.0);
     }
 
     @Test
@@ -61,7 +60,7 @@ public class AimingTest {
         Rotation from = new Rotation(0.0F, 0.0F);
         Rotation to = new Rotation(90.0F, 0.0F);
         assertEquals(20.0F, linear.process(LIVE, from, to).yaw, 1e-4);
-        assertEquals(4, linear.calculateTicks(LIVE, from, to)); // 20, 40, 60, 80 -> within 2 of 90 after 5 steps
+        assertEquals(4, linear.calculateTicks(LIVE, from, to));
     }
 
     @Test
@@ -95,9 +94,9 @@ public class AimingTest {
         acceleration.yawAccelMin = acceleration.yawAccelMax = 10.0F;
         acceleration.pitchAccelMin = acceleration.pitchAccelMax = 10.0F;
         Rotation previous = new Rotation(0.0F, 0.0F);
-        Rotation current = new Rotation(5.0F, 0.0F); // turned 5 last tick
+        Rotation current = new Rotation(5.0F, 0.0F);
         Rotation next = acceleration.process(new SmoothContext(true, previous, null, 0.0, false), current, new Rotation(90.0F, 0.0F));
-        assertEquals(20.0F, next.yaw, 1e-4); // 5 + 5 last tick + at most 10 more
+        assertEquals(20.0F, next.yaw, 1e-4);
     }
 
     @Test
@@ -109,11 +108,11 @@ public class AimingTest {
         Rotation from = new Rotation(0.0F, 0.0F);
         for (int i = 0; i < 200; i++) {
             Rotation next = assist.process(LIVE, from, new Rotation(40.0F, 20.0F));
-            // yaw: 40 x (0.5 + 0.5 x (1 - 0.6 +- 0.1)) x 1.0 = 26..30; pitch: 20 x 0.65..0.75 x 0.5 = 6.5..7.5
+
             assertTrue("yaw " + next.yaw, next.yaw >= 25.9F && next.yaw <= 30.1F);
             assertTrue("pitch " + next.pitch, next.pitch >= 6.4F && next.pitch <= 7.6F);
         }
-        assertEquals(0.0F, assist.process(LIVE, from, new Rotation(0.8F, 0.5F)).yaw, 1e-4); // dead zone
+        assertEquals(0.0F, assist.process(LIVE, from, new Rotation(0.8F, 0.5F)).yaw, 1e-4);
         assist.verticalSpeed = 0.0F;
         assertEquals(0.0F, assist.process(LIVE, from, new Rotation(40.0F, 20.0F)).pitch, 1e-4);
     }
@@ -124,9 +123,9 @@ public class AimingTest {
         assist.horizontalSpeed = 3.0F;
         assist.smoothing = 0.0F;
         Rotation from = new Rotation(0.0F, 0.0F);
-        Rotation to = new Rotation(30.0F, 0.0F); // to the right
+        Rotation to = new Rotation(30.0F, 0.0F);
         float plain = assist.process(LIVE, from, to).yaw;
-        assist.strafeSide = 1; // strafing left: AimAssist's "side > 0 && strafe > 0"
+        assist.strafeSide = 1;
         float boosted = assist.process(LIVE, from, to).yaw;
         assertTrue(plain + " -> " + boosted, boosted > plain * 1.5F);
         assertTrue(assist.calculateTicks(LIVE, from, to) > 0);
@@ -143,7 +142,7 @@ public class AimingTest {
             assertTrue(p[2] >= 2.7 - 1e-9 && p[2] <= 3.3 + 1e-9);
             assertTrue(p[1] >= -1e-9 && p[1] <= 1.8 + 1e-9);
         }
-        assertNull(PointTracker.projectPointsOnBox(new double[]{0, 1.0, 3.0}, box, 128)); // eye inside
+        assertNull(PointTracker.projectPointsOnBox(new double[]{0, 1.0, 3.0}, box, 128));
     }
 
     @Test
@@ -152,8 +151,8 @@ public class AimingTest {
         double[] eyes = {0, 1.62, 0};
         PointTracker tracker = new PointTracker(new Random(1L));
         PointTracker.Point point = tracker.findPoint(eyes, box);
-        assertEquals(2.7, point.pos[2], 1e-6); // the front face
-        assertEquals(1.62, point.pos[1], 0.1); // level with the eyes
+        assertEquals(2.7, point.pos[2], 1e-6);
+        assertEquals(1.62, point.pos[1], 0.1);
 
         PointTracker noHead = new PointTracker(new Random(1L));
         noHead.exemptParts = PointTracker.PART_HEAD;

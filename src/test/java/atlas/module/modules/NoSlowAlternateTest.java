@@ -4,12 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/**
- * Grim-Alternate never leaves two full-speed ticks in a row (Grim's NoSlow
- * flags on the second), and starts with a free tick.
- */
 public class NoSlowAlternateTest {
-
     @Test
     public void noTwoFreeTicksInARow() {
         boolean lastFree = false;

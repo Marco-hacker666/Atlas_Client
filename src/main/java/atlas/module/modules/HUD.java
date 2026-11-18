@@ -80,12 +80,7 @@ public class HUD extends Module {
             Disabler.class, ClientSpoofer.class, AutoHypixel.class
     ));
     private List<Module> activeModules = new ArrayList<>();
-    /*
-     * JELLO module-list animation (2026-10-08; ArrayList.svelte's
-     * transition:fly x 50px / 200ms and animate:flip 200ms): a row slides in
-     * from the screen edge and fades in when its module turns on, slides back
-     * out and fades when it turns off, and every row eases to its new place.
-     */
+
     private static final class RowAnim {
         float appear;
         float y = Float.NaN;
@@ -93,11 +88,7 @@ public class HUD extends Module {
 
     private final java.util.Map<Module, RowAnim> rowAnims = new java.util.LinkedHashMap<>();
     private long lastRowFrame;
-    /* Each listed module's name, suffix and width, worked out once a tick with
-       the sort that needs them anyway. The render used to redo all three for
-       every module up to three times a frame (glow, blur, text) -- suffix
-       strings built, lower-cased and measured some two thousand times a
-       second at 700 fps -- for values that only change when the tick does. */
+
     private java.util.Map<Module, String> lineName = new java.util.HashMap<>();
     private java.util.Map<Module, String[]> lineSuffix = new java.util.HashMap<>();
     private java.util.Map<Module, Float> lineWidth = new java.util.HashMap<>();
@@ -115,14 +106,9 @@ public class HUD extends Module {
     public final IntProperty offsetX = new IntProperty("offset-x", 2, 0, 255);
     public final IntProperty offsetY = new IntProperty("offset-y", 2, 0, 255);
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 1.5F);
-    /* 2026-11-14: CUSTOM draws the module list from the list-* settings below (atlas.ui.hud.list). */
+
     public final ModeProperty interfaceMode = new ModeProperty("interface", 0, new String[]{"ATLAS", "CREIDA", "CUSTOM"}).alias("atlas", "ATLAS");
-    /**
-     * 2026-10-08: how every HUD element draws its background. JELLO
-     * (default): LiquidBounce's JelloBounce theme -- black at 45%, a soft
-     * dark halo, rounded cards, flush module-list rows (HudPanel). CLASSIC:
-     * each HUD's own older drawing.
-     */
+
     public final ModeProperty hudTheme = new ModeProperty("hud-theme", 0, new String[]{"JELLO", "CLASSIC"});
     public final PercentProperty background = new PercentProperty("background", 25);
     public final IntProperty bgAlpha = new IntProperty("bg-alpha", 120, 0, 255);
@@ -157,13 +143,6 @@ public class HUD extends Module {
     public final FloatProperty cornerRadius = new FloatProperty("corner-radius", 4.0F, 1.0F, 8.0F, () -> rounded.getValue() && !this.customList());
     public final FloatProperty padding = new FloatProperty("padding", 2.0F, 0.0F, 6.0F, () -> !this.customList());
 
-    /*
-     * 2026-11-14 (owner: "different module lists, as customisable as it gets, the best experience"): the module
-     * list of interface CUSTOM. list-style picks one of ten ready-made shapes (ListPresets) and writes the shape
-     * settings below it; change one of those by hand and list-style shows CUSTOM, or the preset it now equals.
-     * Colours, order, animation and the glow are never touched by a preset. The layout is atlas.ui.hud.list,
-     * which has no game in it and is tested and drawn to pictures (ListPreview) without one.
-     */
     public final ModeProperty listStyle = new ModeProperty("list-style", 2, ListPresets.NAMES, this::customList);
     public final ModeProperty listColor = new ModeProperty("list-color", 0, ListStyle.names(ListStyle.Paint.values()), this::customList);
     public final ColorProperty listColor1 = new ColorProperty("list-color-1", 0x55CDFC, () -> this.listPaints("STATIC", "GRADIENT", "TRIPLE", "PALETTE", "PULSE", "FADE"));
@@ -197,28 +176,26 @@ public class HUD extends Module {
     public final PercentProperty listGlowStrength = new PercentProperty("list-glow-strength", 60, () -> this.customList() && this.listGlow.getValue());
     public final FloatProperty listGlowSize = new FloatProperty("list-glow-size", 4.0F, 1.0F, 15.0F, () -> this.customList() && this.listGlow.getValue());
 
-    /** The custom list's settings, in the order above; every one of them is part of a saved look (ThemeFiles). */
     public static final String[] LIST_SETTINGS = {"list-style", "list-color", "list-color-1", "list-color-2",
             "list-color-3", "list-color-4", "list-speed", "list-spread", "list-saturation", "list-brightness",
             "list-text", "list-suffix", "list-text-shadow", "list-background", "list-bg-color", "list-bg-opacity",
             "list-bg-tint", "list-corners", "list-radius", "list-bar", "list-bar-width", "list-pad-x", "list-pad-y",
             "list-gap", "list-sort", "list-animation", "list-anim-time", "list-blur", "list-blur-size", "list-glow",
             "list-glow-strength", "list-glow-size"};
-    /** The settings a list-style preset writes. */
+
     private static final Set<String> LIST_SHAPE = new HashSet<>(Arrays.asList("list-text", "list-suffix",
             "list-text-shadow", "list-background", "list-bg-color", "list-bg-opacity", "list-bg-tint",
             "list-corners", "list-radius", "list-bar", "list-bar-width", "list-pad-x", "list-pad-y", "list-gap",
             "list-blur"));
 
     private final ListAnim listAnim = new ListAnim();
-    /** Filled from the settings every frame. */
+
     private final ListStyle listLook = new ListStyle();
-    /** This tick's rows of the custom list, measured; built with the tick's other caches. */
+
     private List<ListRow> listRows = new ArrayList<>();
     private long lastListFrame;
     private boolean writingListShape;
 
-    /** Whether the module list is the custom one (interface CUSTOM). */
     public boolean customList() {
         return this.interfaceMode.getValue() == 2;
     }
@@ -240,7 +217,6 @@ public class HUD extends Module {
         return false;
     }
 
-    /** The custom list's look as the settings have it now, into {@code s}. */
     private ListStyle readListStyle(ListStyle s) {
         s.right = this.posX.getValue() == 1;
         s.bottom = this.posY.getValue() == 1;
@@ -275,7 +251,6 @@ public class HUD extends Module {
         return s;
     }
 
-    /** Writes the shape settings a preset sets (LIST_SHAPE). */
     private void writeListShape(ListStyle s) {
         this.listText.setValue(s.text.ordinal());
         this.listSuffix.setValue(s.suffix.ordinal());
@@ -294,11 +269,6 @@ public class HUD extends Module {
         this.listBlur.setValue(s.blur);
     }
 
-    /**
-     * list-style picked: its shape is written. A shape setting changed: list-style shows the preset the shape now
-     * equals, or CUSTOM. Not while a config or a saved look is read (Config.loading): the values read are the ones
-     * that count, and the list-style read with them was worked out from them.
-     */
     @Override
     public void verifyValue(String name) {
         super.verifyValue(name);
@@ -334,7 +304,7 @@ public class HUD extends Module {
     CFontRenderer fontRenderer;
     private CFontRenderer nunitoFontRenderer;
     private final net.minecraft.client.gui.FontRenderer mcFont = mc.fontRendererObj;
-    private int lastFontMode = -1; // Cache to prevent unnecessary updates
+    private int lastFontMode = -1;
 
     private String[] getModuleSuffix(Module module) {
         String[] moduleSuffix = module.getSuffix();
@@ -345,7 +315,6 @@ public class HUD extends Module {
         }
         return moduleSuffix;
     }
-
 
     private int getModuleWidth(Module module) {
         if (this.interfaceMode.getValue() == 1) {
@@ -359,10 +328,10 @@ public class HUD extends Module {
     private int calculateStringWidth(String string, String[] arr) {
         int width;
         switch (fontMode.getValue()) {
-            case 0: // SANS
+            case 0:
                 width = fontRenderer.getStringWidth(string);
                 break;
-            case 1: // MINECRAFT
+            case 1:
                 width = mcFont.getStringWidth(string);
                 break;
             default:
@@ -416,32 +385,31 @@ public class HUD extends Module {
     }
 
     private void updateFontRenderer() {
-        // Only update if font mode actually changed
         if (lastFontMode == fontMode.getValue()) {
             return;
         }
 
         CFontRenderer selectedFont;
         switch (fontMode.getValue()) {
-            case 0: // SANS
+            case 0:
                 selectedFont = FontProcess.getFont("sans");
                 break;
-            case 1: // MINECRAFT - handled separately
+            case 1:
                 selectedFont = FontProcess.getFont("sans");
                 break;
-            case 2: // NUNITO
+            case 2:
                 selectedFont = getNunitoFontRenderer();
                 break;
-            case 3: // TENACITY
+            case 3:
                 selectedFont = FontProcess.getFont("tenacity");
                 break;
-            case 4: // TENACITY_BOLD
+            case 4:
                 selectedFont = FontProcess.getFont("tenacity-bold");
                 break;
-            case 5: // SF_PRO
+            case 5:
                 selectedFont = FontProcess.getFont("sf-pro");
                 break;
-            case 6: // GOOGLE_SANS
+            case 6:
                 selectedFont = FontProcess.getFont("google-sans");
                 break;
             default:
@@ -468,18 +436,13 @@ public class HUD extends Module {
         return nunitoFontRenderer;
     }
 
-
     public Color getColor(long time) {
         return this.getColor(time, 0L);
     }
 
-    /**
-     * The HUD's colour for this line, themed by the Interface group -- which
-     * also reaches every render module set to "HUD" colour.
-     */
     public Color getColor(long time, long offset) {
         int accent = atlas.ui.impl.clickgui.atlas.AtlasClickGui.sharedAccent();
-        /* 2026-11-12: Appearance > Colors > accent everywhere (on by default) puts the menu accent here. */
+
         Color own = accent != 0 ? new Color(accent) : this.getOwnColor(time, offset);
         ThemeStyle style = ThemeStyle.active(InterfaceColors.class);
         return style == null ? own : style.color(own, null, (int) Math.min(offset, 1000L));
@@ -555,11 +518,6 @@ public class HUD extends Module {
         }
     }
 
-    /**
-     * The custom list's rows: each listed module's name and tag as shown, measured in the HUD's font. In the order
-     * the modules are registered, not activeModules' widest-first, so list-sort NONE means that order (review,
-     * PR #42); the other sorts are applied to it when drawn.
-     */
     private List<ListRow> buildListRows(java.util.Map<Module, String> names, java.util.Map<Module, String[]> suffixes) {
         List<ListRow> rows = new ArrayList<>();
         for (Module module : Atlas.moduleManager.modules.values()) {
@@ -590,7 +548,6 @@ public class HUD extends Module {
         return new ListGlPainter(this.fontMode.getValue() == 1 ? null : this.fontRenderer, mcFont);
     }
 
-    /** Where a row's colour comes from when the list's colour is HUD or THEME: only the game knows those. */
     private ListColors.Source listSource(ListStyle style, final long time) {
         if (style.paint == ListStyle.Paint.HUD) {
             return index -> this.getColor(time, index).getRGB();
@@ -605,7 +562,6 @@ public class HUD extends Module {
         return null;
     }
 
-    /** The custom module list (interface CUSTOM): laid out by atlas.ui.hud.list, drawn here. */
     private void renderCustomList() {
         ListStyle style = this.readListStyle(this.listLook);
         long now = System.nanoTime();
@@ -617,7 +573,7 @@ public class HUD extends Module {
         if (!rows.isEmpty()) {
             ListFrame frame = ListLayout.frame(style, rows, this.listTextHeight(), time, this.listSource(style, time));
             ScaledResolution sr = new ScaledResolution(mc);
-            /* The corner the list hangs from, offset-x and offset-y in from the screen's. */
+
             float ax = style.right ? (float) sr.getScaledWidth() - this.offsetX.getValue() : (float) this.offsetX.getValue();
             float ay = style.bottom ? (float) sr.getScaledHeight() - this.offsetY.getValue() : (float) this.offsetY.getValue();
             HudLayout.report("HUD.list", "Module list", ax + frame.minX * s, ay + frame.minY * s,
@@ -628,15 +584,11 @@ public class HUD extends Module {
             GlStateManager.translate(ax, ay, 0.0F);
             GlStateManager.scale(s, s, 1.0F);
             ListGlPainter painter = this.listPainter();
-            /* The passes draw their shapes into a buffer of their own, under the list's transform, and need the
-               texture back on before they end (finish). The end draws the result over the whole screen in GUI
-               units, so it runs outside the transform (review, PR #42). Not in mobile-safe mode, as the list's
-               other passes. */
+
             if (!atlas.util.render.MobileSafe.active()) {
                 if (style.glow) {
                     atlas.util.shader.BlurUtils.prepareBloom();
-                    /* The shape at full opacity; how strong the glow is goes to the bloom (2026-11-15): drawn into
-                       the mask with blending, a part-opaque colour would be stored at its alpha squared. */
+
                     frame.paintGlow(painter, 1.0F);
                     painter.finish();
                     GlStateManager.popMatrix();
@@ -667,11 +619,6 @@ public class HUD extends Module {
         GlStateManager.popMatrix();
     }
 
-    /**
-     * A few rows of the custom list as it is drawn now, for the Theme window's preview: hanging from (x, y), the
-     * top right corner for a list on the right of the screen and the top left for one on the left, at a scale of
-     * 1. Returns how far down it reaches.
-     */
     public float drawListPreview(float x, float y, long time) {
         this.updateFontRenderer();
         ListStyle style = this.readListStyle(new ListStyle());
@@ -713,7 +660,6 @@ public class HUD extends Module {
                 || (this.hideMisc.getValue() && MISC_MODULES.contains(moduleClass));
     }
 
-    /** Tells the HUD editor where the module list is: the same geometry the list is drawn with. */
     private void reportListBounds(float x, float y, float height) {
         int count = this.activeModules.size();
         if (count == 0) {
@@ -736,21 +682,14 @@ public class HUD extends Module {
                 HudLayout.ints(this.offsetX, right ? -1 : 1, this.offsetY, bottom ? -1 : 1), HudLayout.scale(this.scale));
     }
 
-    /* 2026-11-14 (owner: "the Theme preview colours are completely unlike the game"): the preview asked
-       getColor for every row, but a JELLO list draws its names white with no edge bar. These answer as the
-       render below does. */
-
-    /** The colour a module-list name is drawn in, as the list draws it. */
     public int listNameColour(long time, long offset) {
         return HudPanel.active() ? 0xFFFFFFFF : this.getColor(time, offset).getRGB();
     }
 
-    /** Whether the list draws its coloured edge bar. */
     public boolean listEdgeBar() {
         return !HudPanel.active() && this.hasSidebar();
     }
 
-    /** The background behind each row when the list is not JELLO: 0 for none. */
     public int listRowBackground() {
         int alpha = (int) (255 * (this.background.getValue().floatValue() / 100.0F));
         return alpha <= 0 ? 0 : (alpha << 24) | 0x0F0F0F;
@@ -765,12 +704,11 @@ public class HUD extends Module {
         return cached != null ? cached : (float) this.calculateStringWidth(this.getModuleName(module), this.getModuleSuffix(module));
     }
 
-    /** This frame's rows: the enabled modules, then those still sliding out; positions eased. */
     private List<Module> animateRows(float rowStep) {
         long now = System.nanoTime();
         float dt = this.lastRowFrame == 0L ? 0.016F : Math.min(0.1F, (now - this.lastRowFrame) / 1.0E9F);
         this.lastRowFrame = now;
-        /* Settles in about 200ms, like the theme's flip. */
+
         float follow = 1.0F - (float) Math.exp(-dt / 0.05F);
         List<Module> rows = new ArrayList<>();
         Set<Module> shown = new HashSet<>(this.activeModules);
@@ -886,9 +824,8 @@ public class HUD extends Module {
 
     @EventTarget(whenDisabled = true)
     public void onRender2D(Render2DEvent event) {
-        // Update font renderer to ensure it uses current setting
         updateFontRenderer();
-        
+
         if (this.chatOutline.getValue() && mc.currentScreen instanceof GuiChat) {
             String text = ((IAccessorGuiChat) mc.currentScreen).getInputField().getText().trim();
             if (Atlas.commandManager != null && Atlas.commandManager.isTypingCommand(text)) {
@@ -930,10 +867,6 @@ public class HUD extends Module {
 
             long l = System.currentTimeMillis();
 
-            /* JELLO draws each row's own background below: the old blur and
-               glow passes would double it. Mobile-safe mode (2026-10-15) skips
-               them too: there both would only draw masks nobody sees, a whole
-               extra pass over the list each, every frame. */
             if (!HudPanel.active() && !atlas.util.render.MobileSafe.active()
                     && (this.glow.getValue() || this.blur.getValue())) {
                 if (this.glow.getValue()) {
@@ -947,12 +880,10 @@ public class HUD extends Module {
                         float bgY1 = currentY / this.scale.getValue() - pad - (this.posY.getValue() == 0 ? (offset == 0L ? 1.0F : 0.0F) : (this.shadow.getValue() ? 1.0F : 0.0F));
                         float bgX2 = x / this.scale.getValue() + 1.0F + pad + (this.posX.getValue() == 0 ? totalWidth : 0.0F);
                         float bgY2 = currentY / this.scale.getValue() + height + pad + (this.posY.getValue() == 0 ? (this.shadow.getValue() ? 1.0F : 0.0F) : (offset == 0L ? 1.0F : 0.0F));
-                        /* 2026-11-15 (owner's screenshot: a big black blob behind the CLASSIC list): this was a
-                           black "drop shadow" whatever glow-color said, and the bloom spread it into a slab. The
-                           glow is the setting's colour: the row's HUD colour (SYNC) or the custom one. */
+
                         int glowRgb = this.glowColorMode.getValue() == 0 ? this.getColor(l, offset).getRGB()
                                 : this.glowCustomColor.getValue();
-                        /* Opaque in the mask: how strong the glow is, glow-alpha, is the bloom's strength. */
+
                         int glowColor = glowRgb | 0xFF000000;
                         if (this.rounded.getValue()) {
                             float bgW = bgX2 - bgX1;
@@ -984,7 +915,7 @@ public class HUD extends Module {
                         float bgY1 = currentY / this.scale.getValue() - pad - (this.posY.getValue() == 0 ? (offset == 0L ? 1.0F : 0.0F) : (this.shadow.getValue() ? 1.0F : 0.0F));
                         float bgX2 = x / this.scale.getValue() + 1.0F + pad + (this.posX.getValue() == 0 ? totalWidth : 0.0F);
                         float bgY2 = currentY / this.scale.getValue() + height + pad + (this.posY.getValue() == 0 ? (this.shadow.getValue() ? 1.0F : 0.0F) : (offset == 0L ? 1.0F : 0.0F));
-                        int blurColor = 0xFFFFFFFF; // White mask for blur
+                        int blurColor = 0xFFFFFFFF;
                         if (this.rounded.getValue()) {
                             float bgW = bgX2 - bgX1;
                             float bgH = bgY2 - bgY1;
@@ -1027,8 +958,7 @@ public class HUD extends Module {
                 String[] moduleSuffix = this.cachedSuffix(module);
                 float totalWidth = this.getModuleRenderWidth(module);
                 boolean jello = HudPanel.active();
-                /* JELLO (ArrayList.svelte): white names, grey tags, no edge bar.
-                   Never below alpha 4: the font would read 0 as opaque. */
+
                 int color = jello ? (Math.max(4, Math.round(rowFade * 255.0F)) << 24) | 0xFFFFFF
                         : this.getColor(l, offset).getRGB();
                 float pad = this.padding.getValue();
@@ -1038,13 +968,10 @@ public class HUD extends Module {
                 float bgY2 = y / this.scale.getValue() + height + pad + (this.posY.getValue() == 0 ? (this.shadow.getValue() ? 1.0F : 0.0F) : (offset == 0L ? 1.0F : 0.0F));
                 RenderUtil.enableRenderState();
                 if (jello) {
-                    /* JELLO: each row a square black-45% slab, flush with the
-                       next, with the theme's soft shadow; 7px a side (3.5 at
-                       GUI scale) where the rows pad 2. */
                     HudPanel.row(bgX1 - 1.5F, bgY1, bgX2 + 1.5F, bgY2, rowFade);
                 } else if (this.background.getValue() > 0) {
                     int alpha = (int) (255 * (this.background.getValue().floatValue() / 100.0F));
-                    int bgColor = UiMode.adapt(new Color(15, 15, 15, alpha).getRGB()); // Glassmorphic dark background
+                    int bgColor = UiMode.adapt(new Color(15, 15, 15, alpha).getRGB());
                     if (this.rounded.getValue()) {
                         float bgW = bgX2 - bgX1;
                         float bgH = bgY2 - bgY1;
@@ -1064,13 +991,12 @@ public class HUD extends Module {
                         RenderUtil.drawRect(bgX1, bgY1, bgX2, bgY2, bgColor);
                     }
                 }
-                
-                // Draw a subtle white edge for glassmorphism instead of a colored sidebar
+
                 if (this.showBar.getValue() && !jello) {
                     int edgeColor = UiMode.adapt(new Color(255, 255, 255, 40).getRGB());
-                    if (this.posX.getValue() == 0) { // Right side
+                    if (this.posX.getValue() == 0) {
                         RenderUtil.drawRect(bgX2 - 1.0F, bgY1, bgX2, bgY2, edgeColor);
-                    } else { // Left side
+                    } else {
                         RenderUtil.drawRect(bgX1, bgY1, bgX1 + 1.0F, bgY2, edgeColor);
                     }
                 }
@@ -1078,13 +1004,13 @@ public class HUD extends Module {
                 RenderUtil.disableRenderState();
                 GlStateManager.disableDepth();
                 if (this.shadow.getValue()) {
-                    if (fontMode.getValue() == 1) { // MINECRAFT
+                    if (fontMode.getValue() == 1) {
                         mcFont.drawStringWithShadow(moduleName, x / this.scale.getValue() - (this.posX.getValue() == 1 ? totalWidth : 0.0F), y / this.scale.getValue(), color);
                     } else {
                         fontRenderer.drawStringWithShadow(moduleName, x / this.scale.getValue() - (this.posX.getValue() == 1 ? totalWidth : 0.0F), y / this.scale.getValue(), color);
                     }
                 } else {
-                    if (fontMode.getValue() == 1) { // MINECRAFT
+                    if (fontMode.getValue() == 1) {
                         mcFont.drawString(
                                 moduleName,
                                 x / this.scale.getValue() - (this.posX.getValue() == 1 ? totalWidth : 0.0F),
@@ -1105,7 +1031,7 @@ public class HUD extends Module {
                 if (this.suffixes.getValue() && moduleSuffix.length > 0) {
                     float width;
                     switch (fontMode.getValue()) {
-                        case 1: // MINECRAFT
+                        case 1:
                             width = (float) mcFont.getStringWidth(moduleName);
                             break;
                         default:
@@ -1115,7 +1041,7 @@ public class HUD extends Module {
                     for (String suffix : moduleSuffix) {
                         String string = this.formatSuffix(suffix);
                         if (this.shadow.getValue()) {
-                            if (fontMode.getValue() == 1) { // MINECRAFT
+                            if (fontMode.getValue() == 1) {
                                 mcFont.drawStringWithShadow(
                                         string,
                                         x / this.scale.getValue() - (this.posX.getValue() == 1 ? totalWidth : 0.0F) + width,
@@ -1131,7 +1057,7 @@ public class HUD extends Module {
                                 );
                             }
                         } else {
-                            if (fontMode.getValue() == 1) { // MINECRAFT
+                            if (fontMode.getValue() == 1) {
                                 mcFont.drawString(
                                         string,
                                         x / this.scale.getValue() - (this.posX.getValue() == 1 ? totalWidth : 0.0F) + width,
@@ -1161,14 +1087,11 @@ public class HUD extends Module {
             this.renderBlinkTimer(l, offset);
             GlStateManager.enableDepth();
             GlStateManager.popMatrix();
-
-
             }
         }
         renderNotifications();
     }
 
-    /** The blink packet count in the middle of the screen; drawn in a matrix scaled by the HUD's scale. */
     private void renderBlinkTimer(long time, long offset) {
         if (this.blinkTimer.getValue()) {
             BlinkModules blinkingModule = Atlas.blinkManager.getBlinkingModule();
@@ -1177,7 +1100,7 @@ public class HUD extends Module {
                 if (movementPacketSize > 0L) {
                     GlStateManager.enableBlend();
                     GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-                    if (fontMode.getValue() == 1) { // MINECRAFT
+                    if (fontMode.getValue() == 1) {
                         mcFont.drawString(
                                 String.valueOf(movementPacketSize),
                                 (float) new ScaledResolution(mc).getScaledWidth() / 2.0F / this.scale.getValue()
@@ -1288,7 +1211,6 @@ public class HUD extends Module {
     }
 
     private String getCreidaWatermarkText() {
-        /* NickHider at the source: this text is drawn a letter at a time, which no font can match a name in. */
         String playerName = NickHider.apply(mc.thePlayer == null ? "Player" : mc.thePlayer.getName());
         String versionText = Atlas.version == null ? "dev" : Atlas.version;
         String time = new SimpleDateFormat("HH:mm:ss").format(new Date());
@@ -1348,7 +1270,7 @@ public class HUD extends Module {
         return !this.creidaFont.getValue() || this.fontMode.getValue() == 1;
     }
 
-    // "Version: x.x.x Username: name" bottom-left line, ported from Miau Client's HUD (Normal mode).
+    // name" bottom-left line, ported from Miau Client's HUD (Normal mode).
     private void renderClientInfo() {
         float fontHeight = this.fontMode.getValue() == 1 ? mcFont.FONT_HEIGHT : fontRenderer.FONT_HEIGHT;
         ScaledResolution sr = new ScaledResolution(mc);
@@ -1431,7 +1353,7 @@ public class HUD extends Module {
         float slide = (1.0F - motion) * 14.0F + (1.0F - alpha) * 5.0F;
         float renderX = x + slide;
         int statusColor = notificationStatusColor(text, alpha);
-        /* 2026-11-12: with accent everywhere, the glass is the Appearance glass colour and the bar the accent. */
+
         int sharedAccent = atlas.ui.impl.clickgui.atlas.AtlasClickGui.sharedAccent();
         int sharedGlass = atlas.ui.impl.clickgui.atlas.AtlasClickGui.sharedGlass();
         int glass = sharedGlass != 0 ? colorWithAlpha(sharedGlass, (int) (150 * alpha))
@@ -1512,7 +1434,7 @@ public class HUD extends Module {
     private int notificationStatusColor(String text, float alpha) {
         String lower = text.toLowerCase(Locale.ROOT);
         int accent = atlas.ui.impl.clickgui.atlas.AtlasClickGui.sharedAccent();
-        /* Enabled and disabled keep green and red: they say something. Anything else takes the accent. */
+
         int rgb = lower.endsWith(" enabled") ? 0x41D982 : lower.endsWith(" disabled") ? 0xFF5C6C
                 : accent != 0 ? accent & 0xFFFFFF : 0xE5E9F0;
         return colorWithAlpha(rgb, (int) (245 * alpha));

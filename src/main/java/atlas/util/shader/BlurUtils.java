@@ -8,10 +8,7 @@ import atlas.util.render.FramebufferCompat;
 public class BlurUtils {
     private static Framebuffer stencilFrameBufferBlur = new Framebuffer(1, 1, false);
     private static Framebuffer stencilFrameBufferBloom = new Framebuffer(1, 1, false);
-    /* Set by a prepare that found framebuffers off (FramebufferCompat): the
-       caller still draws its mask, so colour writes are switched off until
-       the matching end -- the mask must not reach the screen -- and the blur
-       itself is skipped (2026-10-05). */
+
     private static boolean blurMasked;
     private static boolean bloomMasked;
 
@@ -53,7 +50,6 @@ public class BlurUtils {
         bloomEnd(passes, radius, 1.0F);
     }
 
-    /** strength: how opaque the glow is where the mask was solid (0-1). */
     public static void bloomEnd(int passes, float radius, float strength) {
         if (bloomMasked) {
             bloomMasked = false;

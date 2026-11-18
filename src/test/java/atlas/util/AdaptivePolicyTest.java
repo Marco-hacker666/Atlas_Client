@@ -11,13 +11,10 @@ import java.util.Map;
 
 import static org.junit.Assert.*;
 
-/** Adaptive's decision rules (plan step 10, 2026-09-28). */
 public class AdaptivePolicyTest {
-
     private static final long MIN = 60_000L;
     private static final long T0 = 1_800_000_000_000L;
 
-    /** A controllable world for the policy. */
     private static final class World implements AdaptivePolicy.Context {
         long now = T0 + 60L * MIN;
         long sessionStart = T0;
@@ -45,7 +42,6 @@ public class AdaptivePolicyTest {
         }
     }
 
-    /** A suspect: +excess flags/min over an off-rate of 0.1, with the given confidence and sample size. */
     private static Brain.Suspect suspect(String module, double excess, double confidence, long samples, long lastSeen) {
         Brain.Kind kind = new Brain.Kind("LAGBACK|air");
         kind.session = 5;
@@ -103,11 +99,11 @@ public class AdaptivePolicyTest {
         World world = new World();
         world.ineligible.put("Trajectories", "cannot-cause");
         List<Brain.Suspect> suspects = Arrays.asList(
-                suspect("A", 0.2, 1.0, 40L, world.now),                   // below threshold
-                suspect("B", 1.0, 0.3, 40L, world.now),                   // low confidence
-                suspect("C", 1.0, 1.0, 3L, world.now),                    // few samples
-                suspect("D", 1.0, 1.0, 40L, world.now - 30L * 24L * 60L * MIN), // stale
-                strong("Trajectories", world.now),                        // cannot cause a correction
+                suspect("A", 0.2, 1.0, 40L, world.now),
+                suspect("B", 1.0, 0.3, 40L, world.now),
+                suspect("C", 1.0, 1.0, 3L, world.now),
+                suspect("D", 1.0, 1.0, 40L, world.now - 30L * 24L * 60L * MIN),
+                strong("Trajectories", world.now),
                 strong("Velocity", world.now));
         AdaptivePolicy.Outcome outcome = AdaptivePolicy.decide(suspects, settings(), world);
         assertTrue(outcome.acts());
@@ -123,7 +119,7 @@ public class AdaptivePolicyTest {
         kind.session = 5;
         kind.total = 40L;
         kind.lastSeen = world.now;
-        /* A high rate from two flags in a sliver of on-time. */
+
         Brain.Suspect thin = new Brain.Suspect("Reach", kind, 2.0, 2.0, 0.1, 1.0, 60.0, 1.0);
         AdaptivePolicy.Outcome outcome = AdaptivePolicy.decide(Collections.singletonList(thin), settings(), world);
         assertFalse(outcome.acts());
@@ -142,7 +138,6 @@ public class AdaptivePolicyTest {
         epoch.flagsOn = 15.0;
         assertEquals("awaiting-evidence 1", AdaptivePolicy.decide(same, settings(), world).skippedSummary());
 
-        /* Enough play since, and the excess is still there: a second action is justified. */
         epoch.minutesOn = 25.0;
         epoch.flagsOn = 30.0;
         assertTrue(AdaptivePolicy.decide(same, settings(), world).acts());
@@ -154,7 +149,7 @@ public class AdaptivePolicyTest {
         AdaptivePolicy.Epoch epoch = new AdaptivePolicy.Epoch("Reach");
         epoch.acted("LAGBACK|air", world.now, 0.1);
         epoch.minutesOn = 30.0;
-        epoch.flagsOn = 3.0; // 0.1/min: back to the off-side rate
+        epoch.flagsOn = 3.0;
         world.epochs.put("Reach", epoch);
         AdaptivePolicy.Outcome outcome = AdaptivePolicy.decide(
                 Collections.singletonList(strong("Reach", world.now)), settings(), world);
@@ -175,12 +170,6 @@ public class AdaptivePolicyTest {
                 Collections.singletonList(strong("Reach", world.now)), settings(), world).skippedSummary());
     }
 
-    /**
-     * The 2026-09-23 evening, replayed: the same historical suspect offered at
-     * every five-minute round for three hours. The old loop acted every round
-     * (nine "would disable Trajectories" in a row). Now: once, then again
-     * only if the problem persists after it, and never more than the cap.
-     */
     @Test
     public void theRatchetIsGone() {
         for (boolean persists : new boolean[]{false, true}) {
@@ -212,7 +201,6 @@ public class AdaptivePolicyTest {
 
     @Test
     public void historyAloneIsNotEnough() {
-        /* 10:06 on 2026-09-28: strong evidence from days before, none this session. */
         World world = new World();
         Brain.Suspect old = strong("TargetFilter", world.now - 5054L * MIN);
         Brain.Kind kind = new Brain.Kind(old.kind);

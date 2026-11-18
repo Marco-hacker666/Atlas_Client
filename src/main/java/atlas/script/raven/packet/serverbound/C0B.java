@@ -6,10 +6,6 @@ import net.minecraft.network.play.client.C0BPacketEntityAction;
 
 import java.util.Locale;
 
-/**
- * An action of the player: "START_SNEAKING", "STOP_SNEAKING", "STOP_SLEEPING", "START_SPRINTING",
- * "STOP_SPRINTING", "RIDING_JUMP" or "OPEN_INVENTORY"; horsePower for a horse's jump.
- */
 public class C0B extends CPacket {
     public String action;
     public int horsePower;

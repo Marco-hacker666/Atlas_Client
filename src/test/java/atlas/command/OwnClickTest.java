@@ -5,9 +5,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** Only a click this client made may run an Atlas command (2026-10-30, audit; MixinGuiScreen). */
 public class OwnClickTest {
-
     @Test
     public void ourOwnClickIsRecognised() {
         ClickEvent own = CommandManager.ownClick(".config load default");

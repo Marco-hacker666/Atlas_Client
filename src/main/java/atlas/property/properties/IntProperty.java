@@ -41,8 +41,6 @@ public class IntProperty extends Property<Integer> {
         return this.setValue(jsonObject.get(this.getName()).getAsNumber().intValue());
     }
 
-    /* The base, never an override: a trial or a governed cut is not the
-       player's choice and is not saved (Property, plan step 7). */
     @Override
     public void write(JsonObject jsonObject) {
         jsonObject.addProperty(this.getName(), this.getPersistedValue());

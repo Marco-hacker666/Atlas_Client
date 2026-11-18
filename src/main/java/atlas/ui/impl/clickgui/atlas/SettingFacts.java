@@ -11,21 +11,7 @@ import atlas.property.properties.PercentProperty;
 
 import java.util.List;
 
-/**
- * What the menu says about a setting beyond its value (2026-10-23,
- * docs/GUI-AUDIT-2026-10-23.md U5): its default, its range, whether it was
- * changed, and putting it back. Nothing here draws, so it is tested as it is.
- *
- * Only settings whose default is a plain value -- a switch, a number, a mode,
- * a colour, a key, text -- can be compared and reset. A HUD position
- * (DragProperty) holds an object that moves as it is dragged, so its "default"
- * is not a fixed value to go back to; those are left alone.
- *
- * A reset sets the base, the value that is saved, through setValue as any
- * change in the menu does. A tuner's override (AutoTune) stays on top of it.
- */
 public final class SettingFacts {
-
     private SettingFacts() {
     }
 
@@ -34,7 +20,6 @@ public final class SettingFacts {
         return fallback instanceof Boolean || fallback instanceof Number || fallback instanceof String;
     }
 
-    /** Whether the saved value differs from the default. A colour compares its RGB only, as it is saved. */
     public static boolean changed(Property<?> property) {
         if (!resettable(property)) {
             return false;
@@ -47,7 +32,6 @@ public final class SettingFacts {
         return !fallback.equals(base);
     }
 
-    /** Puts a changed setting back to its default. False when it was not changed or refused it. */
     public static boolean reset(Property<?> property) {
         return changed(property) && property.setValue(property.getDefault());
     }
@@ -62,7 +46,6 @@ public final class SettingFacts {
         return count;
     }
 
-    /** Resets every changed setting in the list; returns how many were. */
     static int resetAll(List<Property<?>> properties) {
         int count = 0;
         for (Property<?> property : properties) {
@@ -73,7 +56,6 @@ public final class SettingFacts {
         return count;
     }
 
-    /** A value of this setting as the menu writes it: "On", "3.5", "Full", "40%", "#DD4747". */
     public static String format(Property<?> property, Object value) {
         if (value == null) {
             return "none";
@@ -105,7 +87,6 @@ public final class SettingFacts {
         return format(property, property.getDefault());
     }
 
-    /** "0 to 6.0", "0% to 100%", "4 options"; empty when a setting has no range to tell. */
     public static String range(Property<?> property) {
         if (property instanceof IntProperty) {
             IntProperty p = (IntProperty) property;

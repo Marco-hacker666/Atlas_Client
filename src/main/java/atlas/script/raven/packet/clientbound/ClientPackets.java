@@ -19,7 +19,6 @@ import net.minecraft.network.play.server.S3EPacketTeams;
 import net.minecraft.network.play.server.S45PacketTitle;
 import net.minecraft.network.play.server.S48PacketResourcePackSend;
 
-/** The game's server packets as script packets (2026-11-02); used through PacketHandler. */
 public final class ClientPackets {
     private ClientPackets() {
     }

@@ -12,7 +12,6 @@ import net.minecraft.util.Vec3;
 public class RotationUtil {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-
     public static float serverYaw;
     public static float serverPitch;
     public static boolean customRots;

@@ -64,10 +64,7 @@ public class HitBox extends Module {
         if (mc.getRenderViewEntity() != null && mc.theWorld != null) {
             mc.pointedEntity = null;
             Entity pointedEntity = null;
-            /* Reach's range when Reach is on. This was a fixed 3.0, and the
-               result replaced the mouse-over on every click -- so with both
-               modules on, whatever Reach found beyond 3 blocks was thrown
-               away and HitBox's shorter answer used instead. */
+
             double reach = Reach.effectiveRange();
             this.targetEntity = mc.getRenderViewEntity().rayTrace(reach, partialTicks);
             double distance = reach;
@@ -197,9 +194,6 @@ public class HitBox extends Module {
 
     @EventTarget(value = Priority.HIGH, whenDisabled = true)
     public void onLeftClick(LeftClickMouseEvent event) {
-        /* Only when the expanded boxes actually produced an entity. A block or
-           a miss is vanilla's own answer (or Reach's), and replacing it with
-           this module's copy of it could only lose information. */
         if (this.isEnabled() && !event.isCancelled() && this.targetEntity != null
                 && this.targetEntity.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY) {
             mc.objectMouseOver = this.targetEntity;

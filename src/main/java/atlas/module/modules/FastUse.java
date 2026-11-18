@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): speeds up eating and blocking by finishing
-// the use action early.
+// Ported from OpenSkid (GPL-3.0)
+
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.events.TickEvent;

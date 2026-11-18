@@ -4,12 +4,9 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** SPEED-TELLY's lane (2026-11-04): one direction, every cell next to the last. */
 public class TellyLaneTest {
-
     private static final float[] YAWS = {0F, 45F, 90F, 135F, 180F, -135F, -90F, -45F};
 
-    /** 2026-11-04 (owner: "cannot stack diagonally"): the stairs follow the flight, however lopsided it is. */
     @Test
     public void diagonalStairsReachWhereTheJumpLands() {
         int[][] landings = {{2, 4}, {4, 2}, {3, 3}, {0, 5}, {5, 0}};

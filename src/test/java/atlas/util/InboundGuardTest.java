@@ -7,7 +7,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class InboundGuardTest {
-
     private static String nested(int depth) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < depth; i++) {

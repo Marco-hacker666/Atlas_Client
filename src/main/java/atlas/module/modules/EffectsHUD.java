@@ -23,7 +23,6 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 
-/** A compact, right-aligned list of active potion effects and timers. */
 public class EffectsHUD extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final String[] AMPLIFIERS = {"", " II", " III", " IV", " V", " VI", " VII", " VIII"};
@@ -31,7 +30,7 @@ public class EffectsHUD extends Module {
     public final IntProperty right = new IntProperty("right", 8, 0, 500);
     public final IntProperty y = new IntProperty("y", 32, 0, 400);
     public final BooleanProperty background = new BooleanProperty("background", true);
-    /* 2026-11-09: every HUD element can be resized (here, or with the wheel in the HUD editor). */
+
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
 
     public EffectsHUD() {
@@ -45,7 +44,6 @@ public class EffectsHUD extends Module {
         Collection<PotionEffect> active = mc.thePlayer.getActivePotionEffects();
         if (active.isEmpty()) {
             if (HudLayout.isEditing()) {
-                /* Nothing to show, but still somewhere to put it. */
                 int edge = new ScaledResolution(mc).getScaledWidth() - this.right.getValue();
                 float[] area = HudLayout.scaledRect(edge, this.y.getValue(), this.scale.getValue(), edge - 93,
                         this.y.getValue() - 2, 96, mc.fontRendererObj.FONT_HEIGHT + 4);
@@ -61,14 +59,12 @@ public class EffectsHUD extends Module {
         int rightEdge = resolution.getScaledWidth() - this.right.getValue();
         int drawY = this.y.getValue();
         int widest = 0;
-        /* Resized about its top-right corner, the corner it hangs from. */
+
         float s = this.scale.getValue();
         HudLayout.beginScaled(rightEdge, drawY, s);
         try {
             boolean jello = HudPanel.active() && this.background.getValue();
             if (jello) {
-                /* JelloBounce Effects.svelte: the rows sit in one card, 12px
-                   corners at the top and bottom, no gaps. */
                 int cardWidest = 0;
                 int rows = 0;
                 for (PotionEffect effect : effects) {

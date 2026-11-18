@@ -22,31 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * SF Pro, rasterised for the scale the GUI is actually drawn at.
- *
- * The client's own TTF renderer draws every font at half size from a glyph
- * sheet built at the requested point size. That is exactly one texel per
- * screen pixel at GUI scale 2 and blurry at every other scale, it uses a 2048
- * square sheet per font whatever the size, and its baseline is found by
- * adjusting a y offset until it looks right. This builds each font at
- * {@code size x scale} pixels and draws it at {@code 1 / scale}, so a glyph
- * texel is a screen pixel at any scale; places every glyph from its own
- * measured bounds, so text is centred on its cap height rather than on a
- * guess; and sizes each sheet to what it holds.
- *
- * Latin-1 comes from one sheet built up front. Anything beyond it -- the
- * Chinese descriptions and labels of ModuleDocs -- is rasterised a character
- * at a time on first use from Noto Sans SC, at the same size and scale, into
- * pages that grow as needed (2026-10-05). Until then such strings were drawn
- * whole with the game's unicode pages scaled to this size: 16-pixel bitmaps
- * at a fractional scale, which came out jagged, uneven and broken up. Only a
- * string with a character neither face has -- or when the faces failed to
- * load -- still goes to the game's font.
- */
 final class LiquidFont {
-
-    /** The typeface file, or null for the game's own font. Set by the theme. */
     static String faceFile = "San-Francisco-Pro-Fonts.ttf";
     private static String loadedFace = faceFile;
     private static final int FIRST = 32;
@@ -54,19 +30,16 @@ final class LiquidFont {
     private static final int SHEET_WIDTH = 1024;
     private static final int PAD = 2;
 
-    /* Indexed by size in eighths of a pixel and weight, so a lookup -- a
-       hundred and fifty of them a frame -- makes no string and no garbage. */
     private static final LiquidFont[] CACHE = new LiquidFont[1024];
     private static int cacheScale = -1;
     private static Font face;
     private static boolean faceTried;
-    /* The face for everything beyond Latin-1 (CJK), loaded once; null if it failed. */
+
     private static final String CJK_FILE = "NotoSansSC-Regular.ttf";
     private static Font cjkFace;
     private static boolean cjkFaceTried;
     private static final int PAGE = 1024;
 
-    /** Multiplies the alpha of everything drawn, for the menu fading in. */
     static float alpha = 1.0F;
 
     private final float size;
@@ -86,7 +59,6 @@ final class LiquidFont {
     private final float[] v1 = new float[LAST + 1];
     private final boolean[] present = new boolean[LAST + 1];
 
-    /** One character beyond Latin-1, on one of the pages. */
     private static final class Glyph {
         int texture;
         boolean visible;
@@ -112,7 +84,6 @@ final class LiquidFont {
     static LiquidFont of(float size, boolean bold) {
         int scale = Math.max(1, Liquid.scale());
         if (!java.util.Objects.equals(faceFile, loadedFace)) {
-            /* A different typeface: every sheet is for the old one. */
             loadedFace = faceFile;
             face = null;
             faceTried = false;
@@ -131,7 +102,6 @@ final class LiquidFont {
         return font;
     }
 
-    /** Drops every sheet, for a change of text size: the old sizes will not be asked for again. */
     static void clear() {
         for (int i = 0; i < CACHE.length; i++) {
             if (CACHE[i] != null) {
@@ -149,7 +119,6 @@ final class LiquidFont {
             build(bold);
             this.ok = true;
         } catch (Throwable ignored) {
-            /* Drawn with the game's own font instead; see drawBaseline. */
             this.ok = false;
         }
     }
@@ -182,7 +151,6 @@ final class LiquidFont {
         return cjkFace;
     }
 
-    /** The CJK face at this size and weight, or null when it is not available. */
     private Font cjkFont() {
         if (this.cjkFont == null) {
             Font base = cjkFace();
@@ -207,8 +175,6 @@ final class LiquidFont {
             this.capHeight = metrics.getAscent() * 0.7F / this.scale;
         }
 
-        /* Measure and place every glyph first, so the sheet is exactly as
-           tall as it needs to be. */
         Rectangle[] bounds = new Rectangle[LAST + 1];
         int[] placeX = new int[LAST + 1];
         int[] placeY = new int[LAST + 1];
@@ -247,8 +213,7 @@ final class LiquidFont {
             if (box == null) {
                 continue;
             }
-            /* Drawn with its origin where the box's corner lands at the
-               padded cell corner, so the offsets below are exact. */
+
             g.drawString(String.valueOf((char) c), placeX[c] + PAD - box.x, placeY[c] + PAD - box.y);
             this.present[c] = true;
             this.offsetX[c] = (box.x - PAD) / (float) this.scale;
@@ -285,10 +250,6 @@ final class LiquidFont {
         this.ok = false;
     }
 
-    /**
-     * A character beyond Latin-1, rasterised and uploaded the first time it
-     * is asked for. Must be called on the render thread (it uploads).
-     */
     private Glyph extraGlyph(char c) {
         Glyph glyph = this.extra.get(c);
         if (glyph != null) {
@@ -318,8 +279,6 @@ final class LiquidFont {
             this.pageRow = 0;
         }
         if (this.pages.isEmpty() || this.pageY + h > PAGE) {
-            /* A fresh, cleared page: the space between cells must be clear,
-               or filtering at a cell's edge would pick up garbage. */
             DynamicTexture page = new DynamicTexture(new BufferedImage(PAGE, PAGE, BufferedImage.TYPE_INT_ARGB));
             GlStateManager.bindTexture(page.getGlTextureId());
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
@@ -340,7 +299,7 @@ final class LiquidFont {
         lift(pixels);
         DynamicTexture page = this.pages.get(this.pages.size() - 1);
         GlStateManager.bindTexture(page.getGlTextureId());
-        /* blur = linear filtering, clamp off: the cell's own padding keeps neighbours out. */
+
         TextureUtil.uploadTextureMipmap(new int[][]{pixels}, w, h, this.pageX, this.pageY, true, false);
         GlStateManager.bindTexture(0);
         glyph.texture = page.getGlTextureId();
@@ -366,9 +325,6 @@ final class LiquidFont {
         g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
     }
 
-    /* Light text on a dark translucent surface reads thinner than the same
-       coverage the other way round; lifting the midtones of the coverage a
-       little puts the weight back. */
     private static void lift(int[] pixels) {
         for (int i = 0; i < pixels.length; i++) {
             int a = (pixels[i] >>> 24) & 0xFF;
@@ -384,11 +340,6 @@ final class LiquidFont {
         return c >= FIRST && c <= LAST ? c : '?';
     }
 
-    /**
-     * Whether this font can draw the whole string itself: every character is
-     * Latin-1 or one the CJK face has. Anything else (an emoji, a surrogate
-     * pair) sends the whole string to the game's font, as before.
-     */
     private boolean drawable(String text) {
         if (!this.ok) {
             return false;
@@ -412,7 +363,6 @@ final class LiquidFont {
         return true;
     }
 
-    /** Whether every character is Latin-1 (used for wrapping: no spaces to break CJK at). */
     private static boolean latin(String text) {
         for (int i = 0; i < text.length(); i++) {
             if (text.charAt(i) > LAST) {
@@ -446,13 +396,10 @@ final class LiquidFont {
         return this.ok ? this.capHeight : 7.0F * fallbackScale();
     }
 
-    /* A fallback string is placed by the game font's own cap height, not this
-       sheet's, so it sits on the same centre line as the Latin text. */
     private float capHeightFor(String text) {
         return this.ok && (text == null || drawable(text)) ? this.capHeight : 7.0F * fallbackScale();
     }
 
-    /** Draws with the cap height centred on {@code cy}; returns the width drawn. */
     float draw(String text, float x, float cy, int colour) {
         return drawBaseline(text, x, cy + capHeightFor(text) / 2.0F, colour, 0.0F);
     }
@@ -477,7 +424,7 @@ final class LiquidFont {
         if (text == null || text.isEmpty()) {
             return 0.0F;
         }
-        /* NickHider (2026-11-17): the real name is replaced in every font, not only the game's. */
+
         text = atlas.module.modules.NickHider.apply(text);
         float a = ((colour >>> 24) & 0xFF) / 255.0F * alpha;
         if (a <= 0.003F) {
@@ -497,7 +444,7 @@ final class LiquidFont {
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GlStateManager.disableAlpha();
-        /* Built before the first glBegin: building one uploads to a texture. */
+
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
             if (c > LAST) {
@@ -508,8 +455,7 @@ final class LiquidFont {
         GlStateManager.bindTexture(bound);
         GlStateManager.color(((colour >> 16) & 0xFF) / 255.0F, ((colour >> 8) & 0xFF) / 255.0F,
                 (colour & 0xFF) / 255.0F, a);
-        /* Snapped to the pixel grid, so a glyph texel lands on one screen
-           pixel instead of being smeared across two. */
+
         float pen = Math.round(x * this.scale) / (float) this.scale;
         float base = Math.round(baseline * this.scale) / (float) this.scale;
         GL11.glBegin(GL11.GL_QUADS);
@@ -569,7 +515,6 @@ final class LiquidFont {
         return pen - x;
     }
 
-    /** Cut to fit, with an ellipsis, from the end. */
     String trim(String text, float maxWidth) {
         if (width(text) <= maxWidth) {
             return text;
@@ -581,14 +526,12 @@ final class LiquidFont {
         return out + "...";
     }
 
-    /** Word wrapping to a width. */
     List<String> wrap(String text, float maxWidth) {
         List<String> lines = new ArrayList<String>();
         if (text == null || text.isEmpty()) {
             return lines;
         }
         if (text.indexOf('\n') >= 0) {
-            /* 2026-11-03: a script's problems come one to a line; each line wraps on its own. */
             for (String paragraph : text.split("\n")) {
                 if (!paragraph.trim().isEmpty()) {
                     lines.addAll(this.wrap(paragraph, maxWidth));
@@ -599,7 +542,6 @@ final class LiquidFont {
         StringBuilder line = new StringBuilder();
         for (String word : text.split(" ")) {
             if (!latin(word) && width(word) > maxWidth) {
-                /* Chinese has no spaces to break at: break between characters. */
                 for (int i = 0; i < word.length(); i++) {
                     String attempt = line.toString() + word.charAt(i);
                     if (line.length() > 0 && width(attempt) > maxWidth) {
@@ -629,7 +571,6 @@ final class LiquidFont {
         return Minecraft.getMinecraft().fontRendererObj;
     }
 
-    /** The game's font has a seven-pixel cap height on a nine-pixel line. */
     private float fallbackScale() {
         return this.size / 9.5F;
     }

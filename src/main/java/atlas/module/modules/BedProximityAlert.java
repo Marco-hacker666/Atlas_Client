@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): a passive distance watch around your own bed
-// (or spawn), with per-player re-alert cooldowns. No auto actions.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 

@@ -9,18 +9,10 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.Reader;
 
-/**
- * Dark or light, shared by the Atlas menu and every HUD element.
- *
- * The menu owns the setting ({@code appearance-mode} in atlas-theme.json) and
- * pushes it here every frame it is open. HUD elements only read it, and the
- * first read loads it from that file, so they follow the choice even in a game
- * where the menu has not been opened yet.
- */
 public final class UiMode {
     private static final File THEME_FILE = new File("./config/Atlas/atlas-theme.json");
     private static final String KEY = "appearance-mode";
-    /** How far apart the brightest and dimmest channel may be for a colour to count as neutral. */
+
     private static final int NEUTRAL_SPREAD = 40;
 
     private static boolean light;
@@ -41,13 +33,6 @@ public final class UiMode {
         loaded = true;
     }
 
-    /**
-     * In light mode, swaps the lightness of a neutral colour (black, white or a
-     * grey) and keeps its alpha: a translucent black panel becomes a translucent
-     * white one, white text becomes near-black. Colours with a hue -- accents,
-     * health, potion colours, the theme gradient -- are returned unchanged.
-     * In dark mode every colour is returned unchanged.
-     */
     public static int adapt(int argb) {
         if (!isLight()) {
             return argb;
@@ -87,13 +72,11 @@ public final class UiMode {
                 }
             }
         } catch (Exception ignored) {
-            // Dark, the default.
         } finally {
             if (reader != null) {
                 try {
                     reader.close();
                 } catch (Exception ignored) {
-                    // Nothing further to do.
                 }
             }
         }

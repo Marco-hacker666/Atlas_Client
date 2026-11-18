@@ -15,10 +15,8 @@ import static org.junit.Assert.assertTrue;
 
 public class CombatCoreTest {
     private static final double[] EYES = {0.0, 1.62, 0.0};
-    /** A player's box (0.6 wide, 1.8 tall) three blocks ahead on +Z. */
-    private static final double[] BOX = {-0.3, 0.0, 2.7, 0.3, 1.8, 3.3};
 
-    // ------------------------------------------------------------- geometry
+    private static final double[] BOX = {-0.3, 0.0, 2.7, 0.3, 1.8, 3.3};
 
     @Test
     public void lookingStraightAtTheBoxHitsAndAwayMisses() {
@@ -52,7 +50,6 @@ public class CombatCoreTest {
 
     @Test
     public void nearestPointToALookBesideTheBoxIsOnItsNearEdge() {
-        // Looking 20 degrees to the left (yaw +20 turns toward -X): the nearest spot is on the -X side.
         double[] dir = AimGeometry.direction(20.0F, 0.0F);
         double[] p = AimGeometry.nearestToRay(EYES, dir, BOX, 6.0);
         assertEquals(-0.3, p[0], 1e-3);
@@ -79,8 +76,6 @@ public class CombatCoreTest {
         assertEquals(-20.0F, AimGeometry.wrap(-170.0F, 170.0F), 1e-4F);
         assertEquals(180.0F, AimGeometry.wrap(0.0F, 180.0F), 1e-4F);
     }
-
-    // ------------------------------------------------------------- clicks
 
     @Test
     public void clickPlanAveragesTheChosenCps() {
@@ -125,13 +120,11 @@ public class CombatCoreTest {
             plan.tick(now);
             int predicted = plan.clicksAt(1);
             while (plan.take()) {
-                // used up
             }
             now += 50;
             plan.tick(now);
             assertEquals(predicted, plan.clicksAt(0));
             while (plan.take()) {
-                // used up
             }
             now += 50;
         }
@@ -144,16 +137,14 @@ public class CombatCoreTest {
         plan.tick(0);
         int idleTicks = 0;
         for (long now = 50; now < 2000; now += 50) {
-            plan.tick(now); // nobody takes
+            plan.tick(now);
             idleTicks++;
         }
         assertTrue(idleTicks > 0);
-        // After a gap, a fresh combo starts at once.
+
         plan.tick(5000);
         assertTrue(plan.ticksUntilClick() <= 1);
     }
-
-    // ------------------------------------------------------------- targets
 
     private static TargetPicker.Candidate c(Object key, double dist, boolean inReach) {
         return new TargetPicker.Candidate(key, dist, 20.0, 0.0, 0, inReach);
@@ -177,13 +168,13 @@ public class CombatCoreTest {
         Object b = "b";
         assertSame(a, picker.pick(Arrays.asList(c(a, 2.5, true), c(b, 2.9, true)),
                 TargetPicker.Mode.SINGLE, TargetPicker.Sort.DISTANCE, 0, 0));
-        // b comes closer: single stays on a.
+
         assertSame(a, picker.pick(Arrays.asList(c(a, 2.9, true), c(b, 1.5, true)),
                 TargetPicker.Mode.SINGLE, TargetPicker.Sort.DISTANCE, 0, 50));
-        // a leaves reach while b is in it: switch.
+
         assertSame(b, picker.pick(Arrays.asList(c(a, 4.0, false), c(b, 1.5, true)),
                 TargetPicker.Mode.SINGLE, TargetPicker.Sort.DISTANCE, 0, 100));
-        // nobody left.
+
         assertNull(picker.pick(new ArrayList<TargetPicker.Candidate>(),
                 TargetPicker.Mode.SINGLE, TargetPicker.Sort.DISTANCE, 0, 150));
     }
@@ -200,8 +191,6 @@ public class CombatCoreTest {
         assertSame(b, picker.pick(both, TargetPicker.Mode.SWITCH, TargetPicker.Sort.DISTANCE, 300, 500));
         assertSame(a, picker.pick(both, TargetPicker.Mode.SWITCH, TargetPicker.Sort.DISTANCE, 300, 700));
     }
-
-    // ------------------------------------------------------------- feedback
 
     @Test
     public void threeIgnoredHitsPauseAttacks() {
@@ -236,7 +225,7 @@ public class CombatCoreTest {
                 assertFalse(f.paused(tick));
             }
         }
-        // Rounds 0 (ignored), 1 (hurt: reset), 2, 3, 4 (three ignored): paused.
+
         assertTrue(f.paused(tick));
     }
 

@@ -106,7 +106,6 @@ public class GuiProtocolSelector extends GuiScreen {
   }
 
   class SlotList extends GuiSlot {
-
     public SlotList(Minecraft mc, int width, int height, int top, int bottom) {
       super(mc, width, height, top + 30, bottom, 18);
     }

@@ -1,8 +1,5 @@
-/*
- * Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0),
- * src/main/java/openskid/module/modules/DamageTags.java, 2026-10-05: package openskid -> atlas,
- * OpenSkid -> Atlas. Changes after that are marked in comments.
- */
+// Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0), src/main/java/openskid/module/modules/DamageTags.java
+
 package atlas.module.modules;
 
 import atlas.event.EventTarget;
@@ -30,7 +27,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-// Floating combat numbers. Concept adapted from the raven-bS DamageTags module.
+// Concept adapted from the raven-bS DamageTags module.
 public class DamageTags extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final int MAX_TAGS = 32;

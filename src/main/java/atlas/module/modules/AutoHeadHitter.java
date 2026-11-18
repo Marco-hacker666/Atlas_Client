@@ -20,7 +20,6 @@ import net.minecraft.network.play.client.C0APacketAnimation;
 import net.minecraft.util.*;
 
 public class AutoHeadHitter extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final IntProperty     placeDelay        = new IntProperty    ("place-delay",          10,  0, 100);
@@ -156,18 +155,12 @@ public class AutoHeadHitter extends Module {
         computeAimForStage();
         if (targetBlock == null) return;
 
-        /* 2026-10-31: the turn is the shared engine's (RotationHelper): at most speed on each axis a
-           tick, speeding up from rest, whole mouse counts, keys turned for SILENT, the look handed back when
-           this stops asking. It used to step up to speed on each axis at once, from rest, with no grid. The
-           block is placed along the look the engine returns, the one this tick's packet carries. */
         float[] look = RotationHelper.request(this, aimYaw, aimPitch, ROT_PRIORITY, moveMode(), false,
                 speed.getValue().floatValue());
         if (look == null) return;
         float steppedYaw   = look[0];
         float steppedPitch = look[1];
         if (moveFix.getModeString().equals("REAL")) {
-            /* REAL: the camera turns as well, spread over this tick's frames by
-               RotationManager; the mouse still works (not forced). */
             Atlas.rotationManager.setRotation(steppedYaw, steppedPitch, ROT_PRIORITY, false);
         }
 
@@ -215,7 +208,6 @@ public class AutoHeadHitter extends Module {
         targetHitVec = null;
     }
 
-    /** move-fix as the engine's movement yaw: NONE the camera's, SILENT the look's with the keys turned, REAL the look's. */
     private int moveMode() {
         switch (moveFix.getValue()) {
             case 0:  return RotationHelper.MOVE_CAMERA;

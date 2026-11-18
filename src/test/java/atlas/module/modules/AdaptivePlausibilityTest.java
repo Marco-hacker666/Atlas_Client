@@ -8,9 +8,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** Which modules Adaptive may ever blame (plan step 10, 2026-09-28). */
 public class AdaptivePlausibilityTest {
-
     public static class DrawsOnly extends Module {
         public DrawsOnly() {
             super("DrawsOnly", true);
@@ -35,7 +33,6 @@ public class AdaptivePlausibilityTest {
         }
     }
 
-    /** Works through a mixin, like KeepSprint. */
     public static class MixinOnly extends Module {
         public MixinOnly() {
             super("MixinOnly", true);

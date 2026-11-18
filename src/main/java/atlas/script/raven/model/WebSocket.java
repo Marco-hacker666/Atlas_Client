@@ -17,11 +17,6 @@ import java.util.Collections;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * Raven script API: a WebSocket client (2026-11-02). A script makes one as an anonymous subclass and overrides
- * onOpen / onMessage / onClose / onError, which are called on the socket's own thread. Text frames; ping is
- * answered. Written from RFC 6455 (Raven ships a library for this; Atlas has none).
- */
 public class WebSocket {
     private static final String GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -57,7 +52,6 @@ public class WebSocket {
     public void onError(Exception ex) {
     }
 
-    /** Connects on a thread of its own; with block, waits (up to 10 s) and says whether it is open. */
     public boolean connect(boolean block) {
         if (this.open) {
             return true;
@@ -68,7 +62,6 @@ public class WebSocket {
         thread.setDaemon(true);
         thread.start();
         if (!block) {
-            /* As Raven: started; onOpen says when it is up. */
             return true;
         }
         synchronized (this.openLock) {
@@ -222,7 +215,6 @@ public class WebSocket {
         return line.length() == 0 ? null : line.toString();
     }
 
-    /** A client frame: always masked. */
     private void writeFrame(int opcode, byte[] payload) throws IOException {
         OutputStream stream = this.out;
         if (stream == null) {
@@ -266,13 +258,11 @@ public class WebSocket {
         }
     }
 
-    /** Closes (code 1000); with block, waits for the socket to finish. */
     public void close(boolean block) {
         if (this.open) {
             try {
                 this.writeFrame(0x8, new byte[]{(byte) 0x03, (byte) 0xE8});
             } catch (IOException ignored) {
-                // Closing anyway.
             }
         }
         this.shut(1000, "", false);
@@ -304,7 +294,6 @@ public class WebSocket {
                 current.close();
             }
         } catch (IOException ignored) {
-            // Gone.
         }
         if (wasOpen) {
             this.onClose(code, reason, remote);

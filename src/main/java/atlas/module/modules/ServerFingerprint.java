@@ -33,48 +33,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-/**
- * Records everything a server reveals about itself, and guesses what is
- * checking movement on it.
- *
- * Which anticheat a server runs decides what is safe on it, and the usual way
- * of finding out is to be caught by it. A server volunteers a great deal
- * before that happens: it announces a brand, registers plugin channels, sends
- * keep-alives and transactions on a cadence chosen by whatever wants them, and
- * corrects positions in a shape that differs between implementations. None of
- * that requires probing -- it is all in traffic the client receives anyway,
- * and nothing here sends a packet of its own.
- *
- * The observations are kept separately from the guess, and written out in full.
- * A verdict is a summary of evidence and worth far less than the evidence: the
- * numbers below are what makes a wrong guess correctable later, and what lets
- * two servers be compared without either being identified at all.
- *
- * The signals, and what each is worth:
- *
- *   BRAND. {@code MC|Brand} is whatever the server chose to call itself. A
- *   proxy usually overwrites it, so on a network this names the proxy rather
- *   than the backend -- still useful, rarely decisive.
- *
- *   PLUGIN CHANNELS. Registered channels name the plugins that use them, and
- *   several anticheats register one. This is the strongest single signal there
- *   is, and it costs nothing.
- *
- *   TRANSACTION CADENCE. 1.8 anticheats use the transaction round trip to
- *   place client events in time. Vanilla sends them only when a window needs
- *   confirming; a steady stream on a tick boundary means something is timing
- *   the client, and the interval says how finely.
- *
- *   CORRECTION SHAPE. How large a setback is, whether the fields arrive
- *   relative or absolute, and how many repeat before the client is believed.
- *   Implementations differ visibly here.
- *
- *   TICK HEALTH. Time updates are sent once a server second; drift in their
- *   spacing measures how far behind the server is running, which changes what
- *   every other measurement means.
- */
 public class ServerFingerprint extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File LOG_DIR = new File("./config/Atlas/");
     private static final SimpleDateFormat FILE_STAMP = new SimpleDateFormat("yyyyMMdd-HHmmss");
@@ -82,10 +41,8 @@ public class ServerFingerprint extends Module {
     public final IntProperty reportAfter = new IntProperty("report-after-seconds", 45, 10, 600);
     public final BooleanProperty chat = new BooleanProperty("chat", true);
     public final BooleanProperty logFile = new BooleanProperty("log-file", true);
-    /** Re-report when a new signal arrives after the first verdict. */
-    public final BooleanProperty followUp = new BooleanProperty("follow-up", true);
 
-    // ---- observations -------------------------------------------------
+    public final BooleanProperty followUp = new BooleanProperty("follow-up", true);
 
     private String address = "";
     private String brand = "";
@@ -109,37 +66,31 @@ public class ServerFingerprint extends Module {
     private int corrections0Ground;
     private long lastCorrectionAt;
     private int correctionBursts;
-    /** Corrections excluded as placements rather than policing. */
+
     private int teleports;
     private int lastJoinTick = Integer.MIN_VALUE / 2;
     private int lastTeleportTick = Integer.MIN_VALUE / 2;
-    /** Beyond this a correction is a send, not a setback. */
+
     private static final double TELEPORT_BLOCKS = 8.0;
 
     private final Stats velocityHorizontal = new Stats();
     private final Stats velocityVertical = new Stats();
     private int velocities;
 
-    /* ---- discriminators ------------------------------------------------
-       These are the measurements chosen because implementations differ on
-       them, as opposed to the ones above, which mostly describe the server.
-       An anticheat is identified by how it reacts, not by how it idles. */
-
-    /** Ticks between this client's last outgoing action and the correction. */
     private final Stats reactionTicks = new Stats();
-    /** Corrections that also rewrote the player's rotation. */
+
     private int correctionsWithLook;
-    /** Corrections that snapped Y to a whole block -- a ground re-anchor. */
+
     private int correctionsYSnapped;
-    /** Corrections arriving in the same tick as a zeroing velocity packet. */
+
     private int correctionsWithVelocity;
-    /** Longest train of corrections before the client was believed. */
+
     private int longestTrain;
     private int currentTrain;
-    /** Placements refused by an explicit air block-change, rather than ignored. */
+
     private int placementsRefusedExplicitly;
     private int placementsSent;
-    /** Attacks sent beyond vanilla reach that drew no correction at all. */
+
     private int silentAttacks;
 
     private int tickCounter;
@@ -157,7 +108,6 @@ public class ServerFingerprint extends Module {
                 "Records what a server reveals about itself and names its anticheat");
     }
 
-    /** Running mean and spread without keeping the samples. */
     private static final class Stats {
         int n;
         double sum;
@@ -258,19 +208,12 @@ public class ServerFingerprint extends Module {
         this.logTarget = null;
     }
 
-    // ---- collection ---------------------------------------------------
-
     @EventTarget
     public void onPacket(PacketEvent event) {
         if (!this.isEnabled()) {
             return;
         }
         if (event.getType() == EventType.SEND) {
-            /* When this client last did something the server could object to.
-               The gap between that and the correction is the single most
-               telling number here: an implementation that mitigates in place
-               answers within a round trip, one that accumulates violations
-               before acting answers much later or not at all. */
             Object outgoing = event.getPacket();
             if (outgoing instanceof net.minecraft.network.play.client.C02PacketUseEntity
                     || outgoing instanceof net.minecraft.network.play.client.C07PacketPlayerDigging
@@ -285,14 +228,7 @@ public class ServerFingerprint extends Module {
         if (event.getType() != EventType.RECEIVE) {
             return;
         }
-        /* Everything below changes state that the client thread reads and
-           reports from, so it runs there (F-33, 2026-09-28): it used to run
-           right here on the network thread, with the report iterating the same
-           sets and maps. Only the reading happens here -- the arrival time,
-           and a payload's bytes, which may be gone by the time the client
-           thread gets to them -- and the task is queued ahead of vanilla's own
-           handling of the packet, so a correction is still compared with the
-           position it corrects. */
+
         final Object packet = event.getPacket();
         final long now = System.currentTimeMillis();
 
@@ -309,7 +245,6 @@ public class ServerFingerprint extends Module {
             return;
         }
         if (packet instanceof S12PacketEntityVelocity) {
-            /* Most are for other entities; only our own is recorded. */
             net.minecraft.client.entity.EntityPlayerSP player = mc.thePlayer;
             if (player == null || ((S12PacketEntityVelocity) packet).getEntityID() != player.getEntityId()) {
                 return;
@@ -334,13 +269,6 @@ public class ServerFingerprint extends Module {
         mc.addScheduledTask(task);
     }
 
-    /**
-     * A new session on a different server starts the record over. A proxy
-     * network sends a join for every backend, and those are hops within the
-     * same session; ServerSession tells the two apart (2026-09-28). Before,
-     * this compared addresses itself -- which is how leaving Pika for Hypixel
-     * with the module on filed Hypixel's numbers under Pika until 08:39.
-     */
     @EventTarget
     public void onSession(atlas.events.SessionEvent event) {
         if (event.getType() == atlas.events.SessionEvent.Type.START && event.serverChanged()) {
@@ -348,11 +276,8 @@ public class ServerFingerprint extends Module {
         }
     }
 
-    /** Client thread: one received packet, with the time it arrived. */
     private void handleReceived(Object packet, long now) {
         if (packet instanceof S01PacketJoinGame) {
-            /* The first join of the record starts its clock; the rest are
-               proxy hops, counted. */
             if (this.joinCount == 0) {
                 this.joinedAt = now;
                 this.address = address();
@@ -373,8 +298,7 @@ public class ServerFingerprint extends Module {
         if (packet instanceof S32PacketConfirmTransaction) {
             S32PacketConfirmTransaction transactionPacket = (S32PacketConfirmTransaction) packet;
             this.transactionCount++;
-            /* Window 0 is the player's own inventory, which is what an
-               anticheat uses for timing; a real container has its own id. */
+
             Integer seen = this.transactionWindows.get((int) transactionPacket.getWindowId());
             this.transactionWindows.put((int) transactionPacket.getWindowId(),
                     seen == null ? 1 : seen + 1);
@@ -413,10 +337,6 @@ public class ServerFingerprint extends Module {
         }
 
         if (packet instanceof net.minecraft.network.play.server.S23PacketBlockChange) {
-            /* Whether a refusal is stated or merely implied. Some
-               implementations answer a rejected placement by setting the
-               position back to air; others simply never place it and let the
-               client find out by desyncing. */
             net.minecraft.network.play.server.S23PacketBlockChange change =
                     (net.minecraft.network.play.server.S23PacketBlockChange) packet;
             if (this.tickCounter - this.lastActionTick <= 20
@@ -436,18 +356,11 @@ public class ServerFingerprint extends Module {
         }
     }
 
-    /**
-     * Plugin channels and the brand. Channel registration arrives as a single
-     * payload of null-separated names, and several anticheats register one --
-     * the cheapest identification there is.
-     */
-    /** What one payload said: a brand, or channel names. */
     private static final class Payload {
         String brand;
         final List<String> channels = new ArrayList<String>();
     }
 
-    /** Network thread: reads the payload now, while its buffer is still there. */
     private Payload readPayload(S3FPacketCustomPayload packet) {
         String channel = packet.getChannelName();
         if (channel == null) {
@@ -455,11 +368,6 @@ public class ServerFingerprint extends Module {
         }
         Payload payload = new Payload();
         try {
-            /* Read from a duplicate: same bytes, own reader index. This runs
-               before vanilla's handleCustomPayload, which reads the same
-               buffer; consuming it here is what produced the "readerIndex(23)
-               + length(1) exceeds writerIndex(23)" error on every join that
-               the notes had written off as Pika's malformed payload. */
             if ("MC|Brand".equals(channel)) {
                 PacketBuffer buffer = packet.getBufferData() == null ? null
                         : new PacketBuffer(packet.getBufferData().duplicate());
@@ -486,12 +394,10 @@ public class ServerFingerprint extends Module {
             payload.channels.add(channel);
             return payload;
         } catch (Exception ignored) {
-            // A payload that does not parse is simply not a signal.
             return null;
         }
     }
 
-    /** Client thread: records what readPayload found. */
     private void applyPayload(Payload payload) {
         if (!isEnabled()) {
             return;
@@ -514,12 +420,6 @@ public class ServerFingerprint extends Module {
                 ? packet.getZ() : packet.getZ() - mc.thePlayer.posZ;
         double horizontal = Math.sqrt(dx * dx + dz * dz);
 
-        /* A correction only describes how this server polices movement if it
-           was policing movement. Being placed after a death, an arena change or
-           a lobby send arrives as the same packet and is the majority of them
-           on a practice network -- fifteen join packets in eight minutes here.
-           Counting those put the mean setback at 578 blocks, which is not a
-           measurement of anything. */
         if (mc.thePlayer.isSpectator() || mc.thePlayer.isDead
                 || mc.thePlayer.getHealth() <= 0.0F
                 || this.tickCounter - this.lastJoinTick < 60
@@ -533,8 +433,6 @@ public class ServerFingerprint extends Module {
             return;
         }
         if (this.tickCounter - this.lastTeleportTick < 20) {
-            /* The train of small corrections that settles a teleport belongs to
-               the teleport. */
             this.teleports++;
             return;
         }
@@ -548,9 +446,7 @@ public class ServerFingerprint extends Module {
         } else {
             this.correction.add(horizontal);
         }
-        /* Corrections arriving in a train mean the server kept restating a
-           position the client had not yet accepted; how readily that happens
-           separates implementations. */
+
         boolean newTrain = this.lastCorrectionAt == 0L || now - this.lastCorrectionAt > 1000L;
         if (newTrain) {
             this.correctionBursts++;
@@ -563,25 +459,21 @@ public class ServerFingerprint extends Module {
         }
         this.lastCorrectionAt = now;
 
-        /* How long after this client last did something the answer came. */
         int since = this.tickCounter - this.lastActionTick;
         if (newTrain && since >= 0 && since <= 100) {
             this.reactionTicks.add(since);
         }
-        /* A correction that also rewrites rotation is doing something
-           different from one that only moves the body. */
+
         if (packet.getYaw() != 0.0F || packet.getPitch() != 0.0F) {
             this.correctionsWithLook++;
         }
-        /* Y landing exactly on a block boundary is a ground re-anchor rather
-           than a movement rejection. */
+
         double targetY = (flags != null && flags.contains(S08PacketPlayerPosLook.EnumFlags.Y))
                 ? mc.thePlayer.posY + packet.getY() : packet.getY();
         if (Math.abs(targetY - Math.floor(targetY)) < 1.0E-4) {
             this.correctionsYSnapped++;
         }
-        /* Paired with a velocity packet in the same tick: the server is
-           stopping the player as well as moving them. */
+
         if (this.tickCounter - this.lastVelocityTick <= 1) {
             this.correctionsWithVelocity++;
         }
@@ -622,10 +514,6 @@ public class ServerFingerprint extends Module {
         }
     }
 
-    /**
-     * Name first, then the strings that imply it. Kept as plain substrings so
-     * a channel, a brand and a chat line can all be matched by the same table.
-     */
     private static final String[][] SIGNATURES = {
             {"Polar", "polar"},
             {"Grim", "grim", "grimac"},
@@ -652,8 +540,6 @@ public class ServerFingerprint extends Module {
         return data == null || data.serverIP == null ? "singleplayer" : data.serverIP;
     }
 
-    // ---- reporting ----------------------------------------------------
-
     @EventTarget
     public void onTick(TickEvent event) {
         if (!this.isEnabled() || event.getType() != EventType.PRE
@@ -671,9 +557,7 @@ public class ServerFingerprint extends Module {
             report();
             return;
         }
-        /* Evidence that arrives later is worth as much as evidence that
-           arrived first, and on a network the interesting backend is usually
-           the second one joined. */
+
         if (this.followUp.getValue() && signalCount() > this.reportedSignals) {
             this.reportedSignals = signalCount();
             report();
@@ -685,24 +569,6 @@ public class ServerFingerprint extends Module {
                 + (this.brand.isEmpty() ? 0 : 1);
     }
 
-    /**
-     * What the server's behaviour looks like, independently of what anything
-     * calls itself.
-     *
-     * A brand and a plugin channel are hard evidence but easy to hide, and on a
-     * proxy network they usually describe the proxy rather than the backend.
-     * Behaviour cannot be hidden from the client being acted on: whether
-     * movement is timed with transactions, how quickly an objection arrives,
-     * whether a refusal is stated or left for the client to discover, and
-     * whether a correction stops the player as well as moving them. Those are
-     * what actually differ between implementations, and what makes two servers
-     * comparable when neither has named itself.
-     *
-     * Deliberately not a brand name. Guessing "this is Polar" from timing would
-     * be a guess wearing the clothes of a measurement; the point of writing the
-     * numbers out is that the naming can be done later, by someone holding
-     * several servers' worth of them.
-     */
     private String behaviourClass() {
         StringBuilder sb = new StringBuilder();
         Integer ownWindow = this.transactionWindows.get(0);
@@ -734,7 +600,6 @@ public class ServerFingerprint extends Module {
         return sb.toString();
     }
 
-    /** The guess, with what it rests on, so it can be disagreed with. */
     private String verdict() {
         if (this.hits.isEmpty()) {
             return anonymousVerdict();
@@ -749,13 +614,6 @@ public class ServerFingerprint extends Module {
         return sb.toString();
     }
 
-    /**
-     * What can still be said when nothing named itself.
-     *
-     * A steady stream of transactions on the player's own window is the clearest
-     * unnamed signal there is: vanilla has no reason to send those, so something
-     * is timing the client with them.
-     */
     private String anonymousVerdict() {
         Integer ownWindow = this.transactionWindows.get(0);
         boolean timing = ownWindow != null && ownWindow > 20 && this.transaction.n > 10;
@@ -768,15 +626,6 @@ public class ServerFingerprint extends Module {
         return "nothing observed";
     }
 
-    /**
-     * One row per report, so several servers can be held side by side.
-     *
-     * The long report is for reading one server; comparison is a different job
-     * and a paragraph is the wrong shape for it. Same columns every time, in a
-     * file that only ever grows -- because a single server's numbers mean very
-     * little until there is another server's to hold them against, and the
-     * naming of what is behind them is done by whoever reads the collection.
-     */
     private String csvRow() {
         Integer ownWindow = this.transactionWindows.get(0);
         return String.format(
@@ -819,14 +668,12 @@ public class ServerFingerprint extends Module {
             writer.println(csvRow());
             writer.flush();
         } catch (Exception ignored) {
-            // A missing row is not worth interrupting play for.
         } finally {
             if (writer != null) {
                 writer.close();
             }
         }
     }
-
 
     private void report() {
         String text = buildReport();
@@ -878,11 +725,6 @@ public class ServerFingerprint extends Module {
         return sb.toString();
     }
 
-    /**
-     * One file for every server ever seen, appended to. The point of this
-     * module is the collection: a single server's numbers mean little until
-     * there is another server's to hold them against.
-     */
     private void writeLog(String text) {
         PrintWriter writer = null;
         try {
@@ -899,7 +741,6 @@ public class ServerFingerprint extends Module {
             writer.print(text);
             writer.flush();
         } catch (Exception ignored) {
-            // Never interrupt play for a log line.
         } finally {
             if (writer != null) {
                 writer.close();

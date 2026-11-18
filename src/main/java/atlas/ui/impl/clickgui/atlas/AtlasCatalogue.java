@@ -10,9 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Atlas reads the central module-to-category table used by the other menus. */
 final class AtlasCatalogue {
-
     private AtlasCatalogue() {
     }
 
@@ -25,15 +23,12 @@ final class AtlasCatalogue {
             }
         }
 
-        /* Keep uncategorised modules reachable if one is added before its
-           placement is recorded in ModuleCategories. */
         java.util.Set<Module> listed = new java.util.HashSet<Module>();
         for (List<Module> modules : out.values()) {
             listed.addAll(modules);
         }
         List<Module> other = new ArrayList<Module>();
         for (Module module : Atlas.moduleManager.modules.values()) {
-            /* Scripts have a page of their own (2026-11-03). */
             if (module != null && !listed.contains(module) && !(module instanceof atlas.script.ScriptHost)) {
                 other.add(module);
             }

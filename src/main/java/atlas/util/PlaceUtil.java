@@ -28,47 +28,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Block placement for AutoBlockIn. (Clutch has its own, older and measured;
- * see ENGINEERING-NOTES "Clutch".)
- *
- * History (2026-10-02): a first version of this class, AutoBlockIn and a
- * reduced Clutch was compiled outside the Gradle build, against hand-written
- * stand-ins for the Minecraft classes, and patched straight into the
- * installed jar. In those stand-ins AxisAlignedBB.minX..maxZ and
- * Vec3.xCoord..zCoord were constant fields, so javac inlined every read of
- * them as the literal 0.0 (29 sites), and both modules did nothing. Never
- * compile these classes any other way than through Gradle.
- *
- * Timing. UpdateEvent PRE runs at the head of EntityPlayerSP.onUpdate: the
- * player has not moved yet this tick, so the eyes are where the server has
- * them, and the movement packet of this tick has not gone out. A click sent
- * here is followed by that packet, and Grim's RotationPlace ("post-flying")
- * judges the click by the rotation in it, from the position at the click --
- * as vanilla does, whose click always uses the look about to be sent.
- *
- * Corrected 2026-10-02 (22:07-22:11 on test.ccbluex.net, every AutoBlockIn
- * block but the last flagged): this used to click along the rotation the
- * server already had and then send the turn toward the next target in the
- * same tick's packet. The caller now casts the ray along the rotation it is
- * about to send, and clicks only if that ray hits.
- */
 public final class PlaceUtil {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    /** How far inside a face the aim points sit. */
     public static final double INSET = 0.1;
-    /** Aim points per face edge minus one: a 5x5 grid. */
+
     public static final int GRID = 4;
-    /** Rays one search may cast before it gives up for this tick. */
+
     public static final int MAX_RAYS = 96;
-    /** Rays one support face may fail before its remaining points are skipped. */
+
     private static final int MAX_FACE_MISSES = 4;
 
     private PlaceUtil() {
     }
-
-    /* ---- geometry ------------------------------------------------------- */
 
     public static MovingObjectPosition ray(Vec3 eye, float yaw, float pitch, double reach) {
         float cosYaw = MathHelper.cos(-yaw * 0.017453292F - (float) Math.PI);
@@ -79,7 +51,6 @@ public final class PlaceUtil {
         return mc.theWorld.rayTraceBlocks(eye, end, false, false, false);
     }
 
-    /** Rotation from the eye to a point, the yaw kept within 180 of refYaw. */
     public static float[] rotationsTo(Vec3 eye, Vec3 target, float refYaw) {
         double dx = target.xCoord - eye.xCoord;
         double dy = target.yCoord - eye.yCoord;
@@ -90,18 +61,12 @@ public final class PlaceUtil {
         return new float[]{yaw, MathHelper.clamp_float(pitch, -90.0F, 90.0F)};
     }
 
-    /** Angular distance between two rotations, in degrees. */
     public static double angle(float yaw, float pitch, float toYaw, float toPitch) {
         float dYaw = MathHelper.wrapAngleTo180_float(toYaw - yaw);
         float dPitch = toPitch - pitch;
         return Math.sqrt(dYaw * dYaw + dPitch * dPitch);
     }
 
-    /**
-     * One turn toward a rotation, at most maxStep degrees along the straight
-     * line: yaw and pitch are scaled together, so both arrive on the same
-     * tick (proportional, no randomness). Snapped to the mouse grid.
-     */
     public static float[] step(float yaw, float pitch, float toYaw, float toPitch, float maxStep) {
         float dYaw = MathHelper.wrapAngleTo180_float(toYaw - yaw);
         float dPitch = toPitch - pitch;
@@ -129,40 +94,26 @@ public final class PlaceUtil {
                 pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1));
     }
 
-    /** A block that can be clicked to place against without opening anything. */
     public static boolean clickable(BlockPos pos) {
         return !BlockUtil.isReplaceable(pos) && !BlockUtil.isInteractable(pos);
     }
-
-    /* ---- items ---------------------------------------------------------- */
 
     public static boolean usableBlock(ItemStack stack) {
         if (stack == null || stack.stackSize <= 0 || !(stack.getItem() instanceof ItemBlock)) {
             return false;
         }
         Block block = ((ItemBlock) stack.getItem()).getBlock();
-        /* Never TNT, sand/gravel, or anything with a tile entity (chests and
-           the like): an ItemBlock alone is not something safe to wall with. */
+
         return block.isFullCube() && block.getMaterial().isSolid() && block != Blocks.tnt
                 && !(block instanceof BlockFalling) && !(block instanceof ITileEntityProvider)
                 && !BlockUtil.isInteractable(block);
     }
 
-    /** ItemBlock.canPlaceBlockOnSide: the support/face pair is accepted and nothing (no entity) is in the way. */
     public static boolean canPlace(ItemStack stack, BlockPos support, EnumFacing face) {
         return usableBlock(stack)
                 && ((ItemBlock) stack.getItem()).canPlaceBlockOnSide(mc.theWorld, support, face, mc.thePlayer, stack);
     }
 
-    /* Lower preferred (2026-11-01, moved here from AutoBlockIn so SpeedBlocker
-       chooses the same material). It was once keyed by getUnlocalizedName()
-       strings and five of nine never matched (whiteStone, wood, stainedGlass,
-       clayHardened, clayHardenedStained), so end stone, planks and clay were
-       never chosen. A constant that does not exist is a compile error; a
-       string that does not exist is silence (NOTES 4.5). Comparisons, not a
-       static map: a map's initialiser would touch Blocks when this class is
-       loaded, and the geometry tests load it before the game has a registry. */
-    /** Anything else usableBlock accepts, used only when nothing listed is in the hotbar. */
     private static final int FALLBACK_SCORE = 100;
 
     private static int blockScore(Block block) {
@@ -187,7 +138,6 @@ public final class PlaceUtil {
         return FALLBACK_SCORE;
     }
 
-    /** The hotbar slot with the best-scored usable block, the held one on a tie; -1 if none. */
     public static int bestBlockSlot() {
         if (mc.thePlayer == null) {
             return -1;
@@ -209,21 +159,18 @@ public final class PlaceUtil {
         return best;
     }
 
-    /* ---- aims ----------------------------------------------------------- */
-
-    /** A support block, the face to click on it, and the rotation that hits it. */
     public static final class Aim {
         public final BlockPos support;
         public final EnumFacing face;
-        /** Where the block appears: support offset by face. */
+
         public final BlockPos cell;
         public final float yaw;
         public final float pitch;
-        /** Degrees of turning from the rotation the search started at. */
+
         public final double cost;
-        /** True when the starting rotation itself hits this face: no turn needed. */
+
         public final boolean current;
-        /** Set once verified by a ray; null for an unverified candidate. */
+
         public final Vec3 hitVec;
 
         Aim(BlockPos support, EnumFacing face, float yaw, float pitch, double cost, boolean current, Vec3 hitVec) {
@@ -253,7 +200,6 @@ public final class PlaceUtil {
         }
     }
 
-    /** A support block and face, the unit a failed click invalidates. */
     public static final class FaceKey {
         public final BlockPos support;
         public final EnumFacing face;
@@ -278,7 +224,6 @@ public final class PlaceUtil {
         }
     }
 
-    /** What the last search did, for the debug trace. */
     public static final class Stats {
         public int candidates;
         public int rays;
@@ -291,10 +236,6 @@ public final class PlaceUtil {
         }
     }
 
-    /**
-     * The aim a ray from this rotation already lands on, if it places into
-     * one of the goals and is placeable; null otherwise.
-     */
     public static Aim fromRotation(Collection<BlockPos> goals, Vec3 eye, double reach, float yaw, float pitch,
                                    ItemStack stack, Set<FaceKey> excluded) {
         MovingObjectPosition hit = ray(eye, yaw, pitch, reach);
@@ -310,7 +251,6 @@ public final class PlaceUtil {
         return new Aim(support, face, yaw, pitch, 0.0, true, hit.hitVec);
     }
 
-    /** Whether a ray at this rotation hits exactly this support block and face. */
     public static MovingObjectPosition verify(Vec3 eye, double reach, float yaw, float pitch, BlockPos support, EnumFacing face) {
         MovingObjectPosition hit = ray(eye, yaw, pitch, reach);
         if (hit != null && hit.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK
@@ -320,22 +260,6 @@ public final class PlaceUtil {
         return null;
     }
 
-    /**
-     * The cheapest placement into any of the goals, measured as turning from
-     * (yaw, pitch):
-     *
-     *  1. if a ray at (yaw, pitch) already places into a goal, that, at cost 0
-     *     -- the rotation is kept;
-     *  2. else the locked aim, if it is still valid (its cell still a goal,
-     *     its face not excluded, still placeable and its ray still hitting) --
-     *     so a target is not swapped for a marginally cheaper one every tick;
-     *  3. else every grid point on every visible support face next to a goal,
-     *     in increasing turn cost, raycast in that order: the first whose ray
-     *     hits its own support block and face is the cheapest valid one.
-     *
-     * Bounded: at most MAX_RAYS rays, and a face is dropped after
-     * MAX_FACE_MISSES misses.
-     */
     public static Aim bestAim(Collection<BlockPos> goalList, Vec3 eye, double reach, float yaw, float pitch,
                               Aim locked, ItemStack stack, Set<FaceKey> excluded, Stats stats) {
         if (goalList.isEmpty()) {
@@ -406,7 +330,6 @@ public final class PlaceUtil {
         return null;
     }
 
-    /** Grid points on one face of a support block, if the face looks toward the eye. */
     private static void addFace(List<Aim> out, BlockPos support, EnumFacing face, Vec3 eye, double reach,
                                 float yaw, float pitch) {
         int fx = face.getFrontOffsetX();
@@ -415,7 +338,7 @@ public final class PlaceUtil {
         double planeX = fx > 0 ? support.getX() + 1 : support.getX();
         double planeY = fy > 0 ? support.getY() + 1 : support.getY();
         double planeZ = fz > 0 ? support.getZ() + 1 : support.getZ();
-        /* A face can only be hit from the side it faces. */
+
         if (fx != 0 && (eye.xCoord - planeX) * fx <= 0.0
                 || fy != 0 && (eye.yCoord - planeY) * fy <= 0.0
                 || fz != 0 && (eye.zCoord - planeZ) * fz <= 0.0) {
@@ -439,11 +362,6 @@ public final class PlaceUtil {
         }
     }
 
-    /**
-     * Sends the placement. Returns PlayerControllerMP.onPlayerRightClick's
-     * own answer; the arm is swung only when it is true. False means nothing
-     * was placed and the caller must treat the aim as failed.
-     */
     public static boolean click(Aim aim) {
         ItemStack stack = mc.thePlayer.inventory.getCurrentItem();
         if (aim.hitVec == null || !canPlace(stack, aim.support, aim.face)) {
@@ -457,20 +375,6 @@ public final class PlaceUtil {
         return placed;
     }
 
-    /* ---- debug trace ---------------------------------------------------- */
-
-    /**
-     * Stage-by-stage trace, only while the module's debug switch is on.
-     *
-     * Every line goes to config/Atlas/placedebug-<time>.txt, written on the
-     * log thread. Chat gets at most CHAT_PER_SECOND lines a second, and only
-     * while the module's debug-chat switch is on (2026-10-16): chat lines
-     * cost real frames with chat mods installed (Patcher, compact chat and
-     * the like re-lay out the whole chat for each line), and a player
-     * reported 200 -> 90 fps with AutoBlockIn's debug on. A stage repeating the same message is
-     * written again only after REPEAT_TICKS, so a module sitting in one state
-     * leaves one line every two seconds, not twenty.
-     */
     public static final class Trace {
         private static final File LOG_DIR = new File("./config/Atlas/");
         private static final SimpleDateFormat FILE_STAMP = new SimpleDateFormat("yyyyMMdd-HHmmss");
@@ -480,7 +384,7 @@ public final class PlaceUtil {
 
         private final String tag;
         private final BooleanProperty enabled;
-        /** Also to chat; null or off: the file only. */
+
         private final BooleanProperty chat;
         private final Map<String, String> lastMessage = new HashMap<String, String>();
         private final Map<String, Integer> lastTick = new HashMap<String, Integer>();
@@ -531,7 +435,6 @@ public final class PlaceUtil {
             }
         }
 
-        /** Forgets what was said, so the next run's stages print again. */
         public void reset() {
             this.lastMessage.clear();
             this.lastTick.clear();

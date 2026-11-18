@@ -10,9 +10,7 @@ import java.util.Map;
 
 import static org.junit.Assert.*;
 
-/** The menu's toasts and its key-conflict check (2026-10-23, GUI redesign M1). */
 public class ToastsAndKeysTest {
-
     @Test
     public void toastsExpireProblemsLast() {
         Toasts toasts = new Toasts();

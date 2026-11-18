@@ -47,9 +47,9 @@ public class Velocity extends Module {
     private boolean pressed = false;
     private boolean hasReceivedVelocity = false;
     private int ticksSinceVelocity = -1;
-    /** Jump reset holds the jump key (handleJumpReset); given back on every way out. */
+
     private boolean jumpForced;
-    /** IntaveTimer moved the game timer off 1.0. */
+
     private boolean intaveTimerSet;
 
     private boolean ShouldJump = false;
@@ -75,7 +75,7 @@ public class Velocity extends Module {
     private int delayTickCounter = 0;
     private boolean delayActive = false;
     private int delayChanceCounter = 0;
-    // Appended splits state (10-17). Existing 0-9 fields untouched.
+
     private boolean tickPending = false;
     private int tickCounter = 0;
     private int tickChanceCounter = 0;
@@ -89,15 +89,10 @@ public class Velocity extends Module {
     private boolean oldGrimHolding = false;
     private boolean oldGrimAttacked = false;
 
-    /** The share of the knockback kept for a percentage setting, varied when jitter is on. */
     private double share(int percent) {
         return this.jitter.getValue() ? jittered(percent, this.jitterRandom.nextDouble()) : percent / 100.0;
     }
 
-    /**
-     * A percentage as a share, moved by up to +-0.03 for {@code random} in
-     * [0, 1) and kept in [0, 1]; 100 and above are left whole.
-     */
     static double jittered(int percent, double random) {
         if (percent >= 100) {
             return percent / 100.0;
@@ -107,18 +102,14 @@ public class Velocity extends Module {
     }
 
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"Vanilla", "Jump", "Hypixel", "Slap_Attack", "Intave", "GrimAC", "Matrix", "PolarJump", "Legit", "OldDelay", "Tick", "Zip", "Karhu", "MatrixReverse", "MatrixFull", "Intave14", "XZSwitch", "OldGrim", "Vulcan", "BlocksMC", "GrimC03", "IntaveTimer", "Delay", "Polar"})
-            /* 2026-10-31 (owner's consolidation): four modes left -- Vanilla, Hypixel, Delay, Polar. Delay is the
-               former Lag (index 22: own knockback and the replies after it held, the Vape-style freeze); the old
-               Delay (index 9) is OldDelay, retired. A config naming Lag or Delay gets this Delay; any retired mode
-               becomes Polar. Indices are unchanged, so the code below still compares the same numbers. */
+
             .alias("Lag", "Delay")
             .retire("Polar", "Jump", "Slap_Attack", "Intave", "GrimAC", "Matrix", "PolarJump", "Legit", "OldDelay",
                     "Tick", "Zip", "Karhu", "MatrixReverse", "MatrixFull", "Intave14", "XZSwitch", "OldGrim", "Vulcan",
                     "BlocksMC", "GrimC03", "IntaveTimer");
 
     public final PercentProperty chance = new PercentProperty("chance", 100, () -> mode.getValue() <= 1);
-    /* Lag (2026-10-24, VelocityLag, after Rise's DelayVelocity): own knockback and the transactions after it
-       (explosions too) wait lag-ticks, then reach the game in order; everything else flows. */
+
     private static final int LAG = 22;
     public final IntProperty lagTicks = new IntProperty("lag-ticks", 4, 1, 20, () -> mode.getValue() == LAG);
     public final PercentProperty lagChance = new PercentProperty("lag-chance", 100, () -> mode.getValue() == LAG);
@@ -126,10 +117,7 @@ public class Velocity extends Module {
     public final IntProperty lagPingBudget = new IntProperty("lag-ping-budget", 250, 0, 600, () -> mode.getValue() == LAG);
     public final IntProperty lagCooldown = new IntProperty("lag-cooldown", 500, 0, 3000, () -> mode.getValue() == LAG);
     public final BooleanProperty lagOnlyInFight = new BooleanProperty("lag-only-in-fight", true, () -> mode.getValue() == LAG);
-    /* Polar (2026-10-26, VelocityPolarPlan): no motion change and no held packet. A knockback may be answered by a
-       sprint counter-hit before the tick's movement -- Silent Aura's vanilla click along the look the server already
-       has, so 1.8's own attack code takes 40 % off the speed in the order a hand makes it -- and/or a jump reset on
-       the knockback tick, at a capped, uneven rate. */
+
     private static final int POLAR = 23;
     public final PercentProperty polarCounterChance = new PercentProperty("polar-counter-chance", 70, () -> mode.getValue() == POLAR);
     public final PercentProperty polarJumpChance = new PercentProperty("polar-jump-chance", 60, () -> mode.getValue() == POLAR);
@@ -142,11 +130,11 @@ public class Velocity extends Module {
     public final BooleanProperty polarOnlyInFight = new BooleanProperty("polar-only-in-fight", true, () -> mode.getValue() == POLAR);
     private final VelocityPolarPlan polarPlan = new VelocityPolarPlan();
     private final java.util.Random polarRandom = new java.util.Random();
-    /** Ticks until the counter-hit, -1 for none. */
+
     private int polarCounterIn = -1;
     private boolean polarJumpPending;
     private int polarJumpAge;
-    /** Answers of the last knockback still to happen, and whether one did. */
+
     private int polarOutstanding;
     private boolean polarLanded;
     private static final int LAG_MAX_QUEUE = 200;
@@ -156,13 +144,7 @@ public class Velocity extends Module {
     public final PercentProperty vertical = new PercentProperty("vertical", 100, () -> mode.getValue() == 0);
     public final PercentProperty explosionHorizontal = new PercentProperty("explosions-horizontal", 100, () -> mode.getValue() == 0);
     public final PercentProperty explosionVertical = new PercentProperty("explosions-vertical", 100, () -> mode.getValue() == 0);
-    /*
-     * 2026-10-23 (owner): each reduced hit takes its percentage +-3, so the
-     * result is never exactly the set fraction (an exact 0 or 40%). Only a
-     * reduction is varied: a setting of 100 stays a full hit. A check that
-     * predicts the knockback (Grim) flags any reduction, varied or not; this
-     * only changes the ratio a statistical check would see.
-     */
+
     public final BooleanProperty jitter = new BooleanProperty("jitter", false, () -> mode.getValue() == 0);
     private final java.util.Random jitterRandom = new java.util.Random();
 
@@ -191,61 +173,61 @@ public class Velocity extends Module {
     public final BooleanProperty fakeCheck = new BooleanProperty("fake-check", true);
     public final BooleanProperty debugLog = new BooleanProperty("debug-log", false);
 
-    // Ported from S+ IntaveVelocity.java: attack-time XZ scale plus optional reset jump.
+    // Ported from S+ IntaveVelocity.java
     public final FloatProperty intaveXZ = new FloatProperty("intave-xz", 0.6F, 0.0F, 1.0F, () -> mode.getValue() == 4);
     public final FloatProperty intaveSprintXZ = new FloatProperty("intave-sprint-xz", 0.6F, 0.0F, 1.0F, () -> mode.getValue() == 4);
     public final PercentProperty intaveChance = new PercentProperty("intave-chance", 100, () -> mode.getValue() == 4);
     public final BooleanProperty intaveJump = new BooleanProperty("intave-jump", false, () -> mode.getValue() == 4);
     public final PercentProperty intaveJumpChance = new PercentProperty("intave-jump-chance", 80, () -> mode.getValue() == 4 && intaveJump.getValue());
-    // Ported from S+ GrimACVelocity.java: sprint-restart plus burst attack reduces.
+    // Ported from S+ GrimACVelocity.java
     public final IntProperty grimAttacks = new IntProperty("grim-attacks", 4, 1, 10, () -> mode.getValue() == 5);
     public final IntProperty grimTimes = new IntProperty("grim-times", 1, 1, 5, () -> mode.getValue() == 5);
     public final BooleanProperty grimOnlyMoving = new BooleanProperty("grim-only-moving", false, () -> mode.getValue() == 5);
-    // Ported from S+ MatrixSimpleVelocity.java + MatrixVelocity.java: packet scale plus tiered attack reduce.
+    // Ported from S+ MatrixSimpleVelocity.java + MatrixVelocity.java
     public final FloatProperty matrixScale = new FloatProperty("matrix-scale", 0.36F, 0.0F, 1.0F, () -> mode.getValue() == 6);
     public final FloatProperty matrixGroundScale = new FloatProperty("matrix-ground-scale", 0.9F, 0.0F, 1.0F, () -> mode.getValue() == 6);
-    // Ported from S+ PolarJumpVelocity.java: jump at a randomised hurt time.
+    // Ported from S+ PolarJumpVelocity.java
     public final BooleanProperty polarForceChange = new BooleanProperty("polar-force-change", true, () -> mode.getValue() == 7);
     public final IntProperty polarHurtTarget = new IntProperty("polar-hurt-count", 5, 1, 10, () -> mode.getValue() == 7 && polarForceChange.getValue());
-    // Ported from S+ LegitVelocity.java: chance-based reset jump with liquid guard.
+    // Ported from S+ LegitVelocity.java
     public final PercentProperty legitChance = new PercentProperty("legit-chance", 80, () -> mode.getValue() == 8);
     public final BooleanProperty legitJumpInInv = new BooleanProperty("legit-jump-in-inv", false, () -> mode.getValue() == 8);
     public final BooleanProperty legitIgnoreLiquid = new BooleanProperty("legit-ignore-liquid", true, () -> mode.getValue() == 8);
-    // Ported from MiauMinus NewVelocity.java Delay mode: hold the packet, apply scaled motion late.
+    // Ported from MiauMinus NewVelocity.java Delay mode
     public final IntProperty delayTicksProp = new IntProperty("delay-ticks", 3, 1, 20, () -> mode.getValue() == 9);
     public final PercentProperty delayChanceProp = new PercentProperty("delay-chance", 100, () -> mode.getValue() == 9);
     public final FloatProperty delayHorizontalProp = new FloatProperty("delay-horizontal", 0.0F, -1.0F, 1.0F, () -> mode.getValue() == 9);
     public final FloatProperty delayVerticalProp = new FloatProperty("delay-vertical", 0.0F, -1.0F, 1.0F, () -> mode.getValue() == 9);
-    // Adapted from S+ TickVelocity.java: delayed post-hurt scale (scheduler replaced by tick counter).
+    // Adapted from S+ TickVelocity.java
     public final PercentProperty tickHorizontalProp = new PercentProperty("tick-horizontal", 0, () -> mode.getValue() == 10);
     public final PercentProperty tickVerticalProp = new PercentProperty("tick-vertical", 100, () -> mode.getValue() == 10);
     public final IntProperty tickDelayProp = new IntProperty("tick-delay", 2, 1, 10, () -> mode.getValue() == 10);
     public final PercentProperty tickChanceProp = new PercentProperty("tick-chance", 100, () -> mode.getValue() == 10);
-    // Adapted from S+ ZipVelocity.java, simplified experimental: hold S12, release on attack/timeout. S32 buffering omitted.
+    // Adapted from S+ ZipVelocity.java, simplified experimental
     public final IntProperty zipDelayProp = new IntProperty("zip-delay", 20, 4, 200, () -> mode.getValue() == 11);
     public final BooleanProperty zipStopOnAttack = new BooleanProperty("zip-stop-on-attack", true, () -> mode.getValue() == 11);
     public final PercentProperty zipHorizontalProp = new PercentProperty("zip-horizontal", 0, () -> mode.getValue() == 11);
     public final PercentProperty zipVerticalProp = new PercentProperty("zip-vertical", 100, () -> mode.getValue() == 11);
-    // Adapted from S+ KarhuVelocity.java + Miau KarhuVelocity.java, experimental: hurt-windowed damp only, bounding-box part omitted.
+    // Adapted from S+ KarhuVelocity.java + Miau KarhuVelocity.java, experimental
     public final IntProperty karhuStartProp = new IntProperty("karhu-start", 10, 1, 10, () -> mode.getValue() == 12);
     public final IntProperty karhuStopProp = new IntProperty("karhu-stop", 0, 0, 9, () -> mode.getValue() == 12);
     public final FloatProperty karhuFactorProp = new FloatProperty("karhu-factor", 0.6F, 0.0F, 1.0F, () -> mode.getValue() == 12);
-    // Adapted from S+ MatrixReverseVelocity.java: negative XZ scale.
+    // Adapted from S+ MatrixReverseVelocity.java
     public final FloatProperty matrixReverseXZProp = new FloatProperty("matrix-reverse-xz", -0.3F, -1.0F, 1.0F, () -> mode.getValue() == 13);
     public final PercentProperty matrixReverseChanceProp = new PercentProperty("matrix-reverse-chance", 100, () -> mode.getValue() == 13);
-    // Adapted from S+ MatrixFullVelocity.java: pre scale plus post damp.
+    // Adapted from S+ MatrixFullVelocity.java
     public final FloatProperty matrixFullXZProp = new FloatProperty("matrix-full-xz", 0.4F, 0.0F, 1.0F, () -> mode.getValue() == 14);
     public final FloatProperty matrixFullGroundProp = new FloatProperty("matrix-full-ground", 0.8F, 0.0F, 1.0F, () -> mode.getValue() == 14);
     public final FloatProperty matrixFullYProp = new FloatProperty("matrix-full-y", 0.6F, 0.0F, 1.0F, () -> mode.getValue() == 14);
-    // Adapted from S+ Intave14Velocity.java + Miau Intave14Velocity.java phased reduces, simplified: hurt-gated packet scale.
+    // Adapted from S+ Intave14Velocity.java + Miau Intave14Velocity.java phased reduces, simplified
     public final IntProperty intave14HurtProp = new IntProperty("intave14-hurt", 9, 1, 10, () -> mode.getValue() == 15);
     public final FloatProperty intave14FactorProp = new FloatProperty("intave14-factor", 0.15F, 0.0F, 1.0F, () -> mode.getValue() == 15);
     public final PercentProperty intave14VerticalProp = new PercentProperty("intave14-vertical", 100, () -> mode.getValue() == 15);
     public final PercentProperty intave14ChanceProp = new PercentProperty("intave14-chance", 100, () -> mode.getValue() == 15);
-    // Adapted from Miau NewVelocity.java XZSwitch mode: swap X/Z.
+    // Adapted from Miau NewVelocity.java XZSwitch mode
     public final PercentProperty xzChanceProp = new PercentProperty("xz-chance", 100, () -> mode.getValue() == 16);
     public final BooleanProperty xzOnlyMoving = new BooleanProperty("xz-only-moving", true, () -> mode.getValue() == 16);
-    // Adapted from Miau OldGrimVelocity.java + NewVelocity handleOldGrim, experimental: cancel strong S12, burst on update.
+    // Adapted from Miau OldGrimVelocity.java + NewVelocity handleOldGrim, experimental
     public final IntProperty oldGrimAttacksProp = new IntProperty("oldgrim-attacks", 6, 1, 12, () -> mode.getValue() == 17);
     public final FloatProperty oldGrimReduceProp = new FloatProperty("oldgrim-reduce", 0.5F, 0.0F, 1.0F, () -> mode.getValue() == 17);
     public final FloatProperty oldGrimRangeProp = new FloatProperty("oldgrim-range", 3.0F, 0.0F, 6.0F, () -> mode.getValue() == 17);
@@ -320,9 +302,6 @@ public class Velocity extends Module {
                             this.jumpFlag = event.getY() > 0.0;
                         }
 
-                        /* Jump (2026-10-23, as Slinky's): the knockback is left whole and only
-                           the jump key is pressed (onLivingUpdate), so every motion the server
-                           sees is one vanilla physics gives a jump. */
                         boolean keyOnly = this.mode.getValue() == 1;
                         double h = keyOnly ? 1.0 : share(this.horizontal.getValue());
                         double v = keyOnly ? 1.0 : share(this.vertical.getValue());
@@ -378,11 +357,11 @@ public class Velocity extends Module {
                         mc.thePlayer.jump();
                     }
                 } else if (this.mode.getValue() == 10) {
-                    // Adapted from S+ TickVelocity: arm delayed apply, applied in onTick.
+                    // Adapted from S+ TickVelocity
                     this.tickCounter = 0;
                     this.tickPending = true;
                 } else if (this.mode.getValue() == 11) {
-                    // Adapted from S+ ZipVelocity, simplified experimental: hold KB here, release on attack/timeout. S32 buffering omitted.
+                    // Adapted from S+ ZipVelocity, simplified experimental
                     this.zipMotionX = event.getX();
                     this.zipMotionY = event.getY();
                     this.zipMotionZ = event.getZ();
@@ -392,7 +371,7 @@ public class Velocity extends Module {
                     this.zipHolding = true;
                     this.zipTicks = 0;
                 } else if (this.mode.getValue() == 17) {
-                    // Adapted from Miau OldGrimVelocity, experimental: cancel strong KB here, burst in onUpdate.
+                    // Adapted from Miau OldGrimVelocity, experimental
                     if (Math.hypot(event.getX(), event.getZ()) <= 0.125) return;
                     event.setX(mc.thePlayer.motionX);
                     event.setY(mc.thePlayer.motionY);
@@ -468,7 +447,7 @@ public class Velocity extends Module {
             mc.thePlayer.setSprinting(false);
             this.matrixReduced = true;
         } else if (this.mode.getValue() == 11) {
-            // Adapted from S+ ZipVelocity stop-on-attack, simplified: release held KB.
+            // Adapted from S+ ZipVelocity stop-on-attack, simplified
             if (this.zipHolding && this.zipStopOnAttack.getValue() && mc.thePlayer.hurtTime > 0) {
                 mc.thePlayer.motionX = this.zipMotionX * (double) this.zipHorizontalProp.getValue() / 100.0;
                 mc.thePlayer.motionZ = this.zipMotionZ * (double) this.zipHorizontalProp.getValue() / 100.0;
@@ -535,7 +514,7 @@ public class Velocity extends Module {
             }
         }
         if (this.mode.getValue() == 10 && this.tickPending) {
-            // Adapted from S+ TickVelocity: tick-delayed scale instead of scheduler.
+            // Adapted from S+ TickVelocity
             this.tickCounter++;
             if (this.tickCounter >= this.tickDelayProp.getValue()) {
                 this.tickChanceCounter = (this.tickChanceCounter % 100) + this.tickChanceProp.getValue();
@@ -580,14 +559,11 @@ public class Velocity extends Module {
 
         Scaffold scaffold = (Scaffold) Atlas.moduleManager.getModule(Scaffold.class);
         if (mc.thePlayer == null || mc.currentScreen instanceof GuiInventory || scaffold.isEnabled()) {
-            /* 2026-10-30 (audit): leaving here between the press (ticks 0-2) and the give-back (4-9) left the jump
-               key held -- the player hopped until they tapped space. */
             this.releaseForcedJump();
             return;
         }
         if (this.ticksSinceVelocity >= 0) {
             if (this.ticksSinceVelocity == 0) {
-                /* Whether the player holds space (isPressed() took a queued press and meant something else). */
                 this.pressed = KeyBindUtil.isKeyDown(mc.gameSettings.keyBindJump.getKeyCode());
             }
             if (this.ticksSinceVelocity <= 2 && mc.thePlayer.onGround) {
@@ -602,7 +578,6 @@ public class Velocity extends Module {
         }
     }
 
-    /** The jump key as the player holds it, if this module pressed it. */
     private void releaseForcedJump() {
         if (this.jumpForced) {
             this.jumpForced = false;
@@ -614,7 +589,6 @@ public class Velocity extends Module {
 
     @EventTarget
     public void onLivingUpdate(LivingUpdateEvent event) {
-        // also checks Mode 2 with the hypixelJump option on
         boolean isMode1 = this.mode.getValue() == 1;
         boolean isMode2Jump = this.mode.getValue() == 2 && this.hypixelJump.getValue();
         boolean isMode4Jump = this.mode.getValue() == 4 && this.intaveJump.getValue()
@@ -750,7 +724,7 @@ public class Velocity extends Module {
         }
 
         if (this.mode.getValue() == 17 && event.getType() == EventType.PRE) {
-            // Adapted from Miau OldGrimVelocity, experimental: burst after cancelled strong S12.
+            // Adapted from Miau OldGrimVelocity, experimental
             if (mc.thePlayer != null && mc.thePlayer.hurtTime == 0) {
                 this.oldGrimHolding = false;
                 this.oldGrimAttacked = false;
@@ -803,14 +777,11 @@ public class Velocity extends Module {
                 }
             }
         } else if (event.getType() == EventType.PRE && this.intaveTimerSet) {
-            /* 2026-10-30 (audit): paused (S held, crosshair off the target) or another mode now, mid-hurt: the 5x
-               (or 0.3x) used to stay until the module was switched off. */
             this.intaveTimerSet = false;
             this.resetAppendedTimer();
         }
     }
 
-    /** Lag: takes own knockback, transactions and explosions into the queue (network thread). */
     @EventTarget(atlas.event.types.Priority.HIGH)
     public void onLagPacket(PacketEvent event) {
         if (!this.isEnabled() || event.isCancelled() || event.getType() != EventType.RECEIVE
@@ -819,7 +790,6 @@ public class Velocity extends Module {
         }
         Packet<?> packet = event.getPacket();
         if (packet instanceof net.minecraft.network.play.server.S08PacketPlayerPosLook) {
-            /* A correction is judged after what came before it: let the queue go first, in order. */
             this.lagRelease(this.lag.drain(System.currentTimeMillis(), this.lagCooldown.getValue()));
             return;
         }
@@ -847,12 +817,10 @@ public class Velocity extends Module {
         }
     }
 
-    /** Whether this mode holds packets back (Lag), for the menu's conflict warnings. */
     public boolean holdsPackets() {
         return this.mode.getValue() == LAG;
     }
 
-    /** Another player close enough to be fighting: within 6 blocks, not a bot or a teammate. */
     private boolean lagInFight() {
         for (net.minecraft.entity.player.EntityPlayer player : mc.theWorld.playerEntities) {
             if (player != mc.thePlayer && mc.thePlayer.getDistanceToEntity(player) <= 6.0F
@@ -863,7 +831,6 @@ public class Velocity extends Module {
         return false;
     }
 
-    /** Hands queued packets to the game in order (on the network thread vanilla re-queues them, in order). */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void lagRelease(java.util.List<Packet<?>> packets) {
         if (packets.isEmpty()) {
@@ -876,7 +843,6 @@ public class Velocity extends Module {
                     ((Packet) packet).processPacket(mc.getNetHandler());
                 }
             } catch (net.minecraft.network.ThreadQuickExitException ignored) {
-                // Rescheduled onto the client thread by vanilla, in order; not an error.
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -1057,14 +1023,6 @@ public class Velocity extends Module {
         }
     }
 
-    /**
-     * Whether a knockback-reducing hit on the aura's target could be a real
-     * one (2026-10-04): the target's hitbox within the aura's attack range,
-     * and the look last sent to the server on it. The aura keeps a target out
-     * to its autoblock range (6 blocks by default), and the reduce hits used
-     * to go out at whatever distance and whatever angle that target was --
-     * an attack packet no reach or hitbox check passes.
-     */
     private boolean canReduceHit(KillAura killAura, UpdateEvent event) {
         EntityLivingBase target = killAura.getTarget();
         if (target == null) {
@@ -1125,9 +1083,6 @@ public class Velocity extends Module {
         this.dig = false;
     }
 
-    // ---- Polar ----------------------------------------------------------
-
-    /** Velocity is on in Polar mode (JumpReset stands aside then: one module answers a knockback). */
     public boolean polarActive() {
         return this.isEnabled() && this.mode.getValue() == POLAR;
     }
@@ -1163,7 +1118,6 @@ public class Velocity extends Module {
         }
     }
 
-    /** One answer went out (or could not): when none of this knockback's did, the plan does not count it. */
     private void polarResolved(boolean happened) {
         if (this.polarOutstanding <= 0) {
             return;
@@ -1180,14 +1134,12 @@ public class Velocity extends Module {
         this.polarOutstanding = 0;
     }
 
-    /** Start of the tick, before the player moves: the counter-hit goes out here, where vanilla clicks. */
     @EventTarget
     public void onPolarTick(TickEvent event) {
         if (event.getType() != EventType.PRE || mc.thePlayer == null || this.mode.getValue() != POLAR) {
             return;
         }
         if (this.polarJumpPending && ++this.polarJumpAge > 1) {
-            /* Only the knockback tick can reset. */
             this.polarJumpPending = false;
             this.polarResolved(false);
         }
@@ -1222,12 +1174,10 @@ public class Velocity extends Module {
     public void onPolarPacket(PacketEvent event) {
         if (event.getType() == EventType.RECEIVE && this.mode.getValue() == POLAR
                 && event.getPacket() instanceof net.minecraft.network.play.server.S08PacketPlayerPosLook) {
-            /* Set back: nothing planned for the old position goes out. */
             this.polarClear();
         }
     }
 
-    /** Places and states a jump would be wrong or pointless in (as JumpReset's). */
     private boolean polarJumpBlocked() {
         if (mc.thePlayer.isPotionActive(Potion.jump) || mc.thePlayer.isInWater() || mc.thePlayer.isInLava()
                 || mc.thePlayer.isOnLadder() || mc.thePlayer.capabilities.isFlying
@@ -1238,7 +1188,6 @@ public class Velocity extends Module {
         return scaffold != null && scaffold.isEnabled();
     }
 
-    /** The sprint jump's 0.2 push along the jump's yaw takes at least 3 % off the horizontal knockback (as JumpReset's). */
     private boolean polarJumpHelps(double kbX, double kbZ) {
         double kb = Math.sqrt(kbX * kbX + kbZ * kbZ);
         if (kb < 1.0E-3) {
@@ -1308,7 +1257,7 @@ public class Velocity extends Module {
         this.intaveTimerSet = false;
         this.polarClear();
         this.polarPlan.reset();
-        /* Lag: nothing held may be lost -- the transactions above all. */
+
         this.lagRelease(this.lag.drain(System.currentTimeMillis(), 0));
         this.pendingExplosion = false;
         this.allowNext = true;

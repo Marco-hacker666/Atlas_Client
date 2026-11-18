@@ -12,13 +12,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * NearMiss (2026-11-08): the near misses Intave PreAttack wants (4 in 100 attacks) and the band their look must be in
- * (off the box grown by 0.05, on the one grown by 0.25), against a player-sized box 3 blocks ahead.
- */
 public class NearMissTest {
-
-    /** A player's box, feet at (0, 64, 3). */
     private static final AxisAlignedBB BOX = new AxisAlignedBB(-0.3, 64.0, 2.7, 0.3, 65.8, 3.3);
     private static final Vec3 EYES = new Vec3(0.0, 65.62, 0.0);
 
@@ -58,7 +52,6 @@ public class NearMissTest {
         assertNull(new NearMiss(new Random(1)).aimPoint(EYES, BOX.offset(0.0, 0.0, 3.0), 1));
     }
 
-    /** Over windows of 100 attacks, at least REQUIRED near misses each, spaced, all of them on immune clicks. */
     @Test
     public void keepsThePaceOnImmuneClicks() {
         NearMiss nearMiss = new NearMiss();

@@ -13,12 +13,7 @@ import java.util.List;
 
 import static org.junit.Assert.*;
 
-/**
- * Migrates a copy of the real Pika brain-1 file, when it is present on this
- * machine (skipped elsewhere). The original is never touched.
- */
 public class BrainRealFileTest {
-
     private static final File REAL = new File("../config/Atlas/brain-play.pika-network.net.txt");
 
     @Rule

@@ -1,10 +1,5 @@
 package atlas.script.raven.model;
 
-/**
- * Raven script API: what this tick's movement packet will say (2026-11-02). Given to onPreMotion; what the script
- * changes is sent: the look through the shared rotation engine, the position and ground flag on the packet itself,
- * sprint and sneak as the player's own state.
- */
 public class PlayerState {
     public double x;
     public double y;
@@ -27,7 +22,6 @@ public class PlayerState {
         this.isSneaking = isSneaking;
     }
 
-    /** From {x, y, z, yaw, pitch, onGround, isSprinting, isSneaking}. */
     public PlayerState(Object[] state) {
         this(((Number) state[0]).doubleValue(), ((Number) state[1]).doubleValue(), ((Number) state[2]).doubleValue(),
                 ((Number) state[3]).floatValue(), ((Number) state[4]).floatValue(), (Boolean) state[5],

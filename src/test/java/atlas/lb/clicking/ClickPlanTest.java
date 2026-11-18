@@ -12,9 +12,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** LiquidBounce NextGen's ClickPlanTest, ported (2026-10-24). */
 public class ClickPlanTest {
-
     private static ClickPlan humanPlan(int min, int max, int maxPerTick) {
         ClickPlan plan = new ClickPlan(new HumanClickTiming(), new Random(1337L));
         plan.setCps(min, max);
@@ -22,7 +20,6 @@ public class ClickPlanTest {
         return plan;
     }
 
-    /** Ticks {@code ticks} times, 50 ms apart, using every press; presses consumed per tick. */
     private static int[] run(ClickPlan plan, int ticks, IntConsumer onTick) {
         int[] consumed = new int[ticks];
         for (int tick = 0; tick < ticks; tick++) {
@@ -125,7 +122,6 @@ public class ClickPlanTest {
             ClickPlan plan = humanPlan(25, 30, cap);
             long now = 0L;
             for (int tick = 0; tick < 5000; tick++) {
-                /* A late tick collapses several windows into one. */
                 now += tick % 97 == 0 ? 3 * ClickPlan.TICK_MS : ClickPlan.TICK_MS;
                 plan.tick(now);
                 for (int n = 0; n <= 20; n++) {
@@ -146,7 +142,7 @@ public class ClickPlanTest {
         for (int tick = 0; tick < ticks; tick++) {
             plan.tick(tick * ClickPlan.TICK_MS);
             consumed[tick] = plan.clicksAt(0);
-            /* An air click sets missTime as vanilla's clickMouse on a miss. */
+
             int clicks = plan.consume(() -> missTime[0] <= 0, () -> {
                 missTime[0] = 10;
                 return true;
@@ -171,7 +167,7 @@ public class ClickPlanTest {
         Clicker clicker = new Clicker(new Random(1L));
         assertEquals(20, clicker.ticksUntilClick());
         assertTrue(!clicker.isClickTick());
-        /* And the first real tick still plans normally. */
+
         plan.tick(0L);
         boolean any = false;
         for (int n = 0; n <= 20; n++) {
@@ -192,7 +188,7 @@ public class ClickPlanTest {
         }
         assertTrue("combo is " + plan.comboMs() + " ms", plan.comboMs() < 250);
     }
-    /** 2026-11-05: AttackOnDamage's click: a press on a tick with none planned, this tick only, spent like any other. */
+
     @Test
     public void anEnforcedClickComesOnlyWhereItIsAskedFor() {
         Clicker clicker = new Clicker(new Random(1L));

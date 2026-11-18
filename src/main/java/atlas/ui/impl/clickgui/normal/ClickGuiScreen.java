@@ -35,10 +35,6 @@ public class ClickGuiScreen extends GuiScreen {
     public ClickGuiScreen() {
         this.frames = new ArrayList<>();
 
-        /* One frame per category, in LiquidBounce's order, from the one table
-           that says which module is where (ModuleCategories, 2026-09-28).
-           This used to be five hand-kept lists; a module missing from them
-           was in no menu -- Atlas reads these frames too. */
         int currentX = 20;
         int currentY = 20;
         int frameWidth = 110;

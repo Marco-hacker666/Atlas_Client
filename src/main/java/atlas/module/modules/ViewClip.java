@@ -10,15 +10,11 @@ import atlas.property.properties.FloatProperty;
 import atlas.property.properties.ModeProperty;
 import net.minecraft.client.Minecraft;
 
-// Camera visuals. Adapted from raven donors ExtendCamera (distance),
-// NoCameraClip (clip bypass), FallView (fall gating) and Holdlook
-// (third-person save/restore). Rewritten for the client APIs.
-// The camera math lives here; MixinEntityRenderer and MixinVisGraph read
-// isNoClipActive() to decide whether the camera may pass through blocks.
+// Adapted from raven donors ExtendCamera (distance)
+
 public class ViewClip extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    // No modes existed before. FALL is appended at END. Never reorder.
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"CAMERA", "VANILLA", "FALL"});
     public final FloatProperty distance = new FloatProperty("distance", 4.0F, 1.0F, 12.0F);
     public final BooleanProperty noClip = new BooleanProperty("no-clip", true);
@@ -27,7 +23,7 @@ public class ViewClip extends Module {
 
     private static Field distanceField;
     private static Field distanceTempField;
-    /** The renderer class the two fields above were resolved for. */
+
     private static Class<?> resolvedRenderer;
 
     private float savedFov = -1.0F;
@@ -86,13 +82,6 @@ public class ViewClip extends Module {
         }
     }
 
-    /**
-     * Whether the camera may pass through blocks right now: the module is on,
-     * "no-clip" is on, and the mode is not VANILLA (which means "leave the
-     * camera exactly as vanilla has it"). MixinEntityRenderer (setupFog) and
-     * MixinVisGraph ask this rather than isEnabled(), so the setting and the
-     * VANILLA mode both do what they say.
-     */
     public boolean isNoClipActive() {
         return this.isEnabled() && this.noClip.getValue() && this.mode.getValue() != 1;
     }
@@ -209,14 +198,6 @@ public class ViewClip extends Module {
         }
     }
 
-    /**
-     * Resolves the two distance fields for the renderer actually running, once
-     * per renderer class (2026-10-11). Resolving from a static initializer
-     * found the fields on vanilla EntityRenderer only, because no renderer
-     * exists while the class loads; the renderer that ends up running may be a
-     * subclass anyway -- OptiFine and shaders builds replace it -- so the
-     * lookup is deferred to the first use and re-run if the class changes.
-     */
     private static void resolveDistanceFields() {
         Class<?> live = (mc != null && mc.entityRenderer != null)
                 ? mc.entityRenderer.getClass()
@@ -229,13 +210,6 @@ public class ViewClip extends Module {
         distanceTempField = findField(live, "thirdPersonDistanceTemp", "field_78437_w");
     }
 
-    /**
-     * The named field on {@code cls} or the nearest superclass declaring it, by
-     * deobfuscated name first and SRG name second. getDeclaredField only sees
-     * the class it is called on, so walking up is what finds a field a subclass
-     * inherits; a Field found on a superclass still reads and writes subclass
-     * instances.
-     */
     private static Field findField(Class<?> cls, String deobf, String searge) {
         for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
             Field f = declaredField(c, deobf);

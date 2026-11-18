@@ -7,12 +7,7 @@ import atlas.property.properties.FloatProperty;
 import atlas.property.properties.IntProperty;
 import atlas.property.properties.ModeProperty;
 
-/**
- * Animations Module
- * Original logic by syuto/animations-1.6, integrated into Uzi
- */
 public class Animations extends Module {
-
     private static final String[] MODES = new String[]{"VANILLA", "EXHIBITION", "ETB", "SIGMA", "DORTWARE", "PLAIN",
             "SPIN", "AVATAR", "SWONG", "SWANG", "SWANK", "STYLES",
             "NUDGE", "PUNCH", "JIGSAW", "SLIDE",

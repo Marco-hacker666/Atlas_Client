@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
 // Ported from OpenSkid (GPL-3.0), itself adapted from MiauMinus misc/StaffDetector
-// (tablist watch) and a per-server watch with an optional auto-lobby.
+
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;

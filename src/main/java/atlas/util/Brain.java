@@ -22,79 +22,28 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.LongSupplier;
 
-/**
- * What this client has learned about a server, kept between sessions.
- *
- * Everything the diagnostics produced so far was thrown away when the game
- * closed. That put a ceiling on all of it: a flag rate measured over ten
- * minutes has error bars wider than most of the effects worth finding, and a
- * question like "does this module actually cause corrections here" cannot be
- * answered inside one game at all. It needs hours, and hours mean a file.
- *
- * The model is deliberately small and explicit. For every kind of flag, and for
- * every module, it holds four numbers: how long that module was on, how many
- * flags of that kind arrived while it was, how long it was off, and how many
- * arrived then. That is enough to ask the only question that matters -- is the
- * rate higher with it than without -- and it needs no understanding of what any
- * module does.
- *
- * KINDS ARE NOT A LIST. A flag's kind is derived from what was observable when
- * it arrived and used as a key; a server that starts objecting to something new
- * produces a new key on its own.
- *
- * COMPARISON NEEDS BOTH SIDES. Time with a module off is as valuable as time
- * with it on. Confidence is bounded by whichever side has less evidence.
- *
- * EVIDENCE AGES (plan step 9, 2026-09-28). Every count and every minute loses
- * half its weight every {@link #HALF_LIFE_DAYS} days. A rate is then a weighted
- * average that follows the server as it changes -- an anticheat update, a
- * different route -- instead of being outvoted forever by what was true a
- * month ago, and confidence, which rests on the weighted minutes, falls as the
- * evidence behind it gets old. Nothing is deleted: the lifetime count of each
- * kind is kept undecayed beside it, and so are first and last seen. Three
- * horizons are therefore visible for every kind: lifetime (total), recent
- * (the decayed count) and this session (session).
- *
- * THE FILE (brain-2). Written to a temporary file and moved into place, so a
- * crash mid-write leaves the previous file intact. It names its server, the
- * time its decayed numbers refer to, and ends with an "end" line, so a
- * truncated file is recognised. A file that does not read cleanly is copied to
- * backups/brain/ before anything is written over it; its good lines are still
- * used. A brain-1 file is migrated (its evidence aged from the time it was last
- * written) and the original kept in backups/brain/. Before this, a failed read
- * cleared everything and the next save overwrote the file, and an unrecognised
- * version was "left alone" only until the next save replaced it (F-15, F-16).
- * It stays plain text and hand-editable: deleting a line is still the way to
- * drop a conclusion.
- */
 public final class Brain {
-
     private static final String VERSION = "brain-2";
     private static final String VERSION_1 = "brain-1";
 
-    /** Evidence loses half its weight in this many days (the user's choice, 2026-09-28). */
     public static final double HALF_LIFE_DAYS = 14.0;
     private static final double HALF_LIFE_MS = HALF_LIFE_DAYS * 24.0 * 3600.0 * 1000.0;
-    /** Ageing is applied at most this often; within it the error is negligible. */
+
     private static final long DECAY_EVERY_MS = 60_000L;
 
-    /** Minutes on each side before a comparison is allowed to mean anything. */
     public static final double MIN_MINUTES_PER_SIDE = 4.0;
-    /** Beyond this, new combinations are folded into their label. */
+
     private static final int MAX_KINDS = 120;
 
     private static volatile File dir = new File("./config/Atlas/");
     private static volatile File archive = new File("./backups/brain/");
     private static volatile LongSupplier clock = System::currentTimeMillis;
 
-    /* Flags are recorded from the network thread and exposure from the client
-       thread, so every map here is touched by both; all access is under the
-       class lock (the synchronized statics). */
     private static String serverKey = "unknown";
     private static final Map<String, Kind> KINDS = new LinkedHashMap<String, Kind>();
     private static final Map<String, Exposure> EXPOSURE = new LinkedHashMap<String, Exposure>();
     private static boolean dirty;
-    /** The time the decayed numbers refer to. */
+
     private static long asOf;
     private static long sessionStartedAt;
     private static double sessionMinutes;
@@ -103,18 +52,17 @@ public final class Brain {
     private Brain() {
     }
 
-    /** Flags of one kind, split by which modules were on at the time. */
     public static final class Kind {
         public final String signature;
-        /** Lifetime count, never decayed: the sample size. */
+
         public long total;
-        /** Decayed count: the recent evidence. */
+
         public double recent;
-        /** Count since the current session began. */
+
         public int session;
         public long firstSeen;
         public long lastSeen;
-        /** {flagsWhileOn, flagsWhileOff} per module, decayed. */
+
         public final Map<String, double[]> perModule = new LinkedHashMap<String, double[]>();
 
         Kind(String signature) {
@@ -131,7 +79,6 @@ public final class Brain {
         }
     }
 
-    /** Minutes a module has spent switched on and switched off, decayed. */
     public static final class Exposure {
         public double minutesOn;
         public double minutesOff;
@@ -147,8 +94,6 @@ public final class Brain {
             return copy;
         }
     }
-
-    // ---- recording ----------------------------------------------------
 
     public static synchronized void setServer(String key) {
         if (key == null || key.isEmpty()) {
@@ -170,7 +115,6 @@ public final class Brain {
         return serverKey;
     }
 
-    /** Starts the "this session" counters over (a new connection). */
     public static synchronized void beginSession() {
         sessionStartedAt = clock.getAsLong();
         sessionMinutes = 0.0;
@@ -179,7 +123,6 @@ public final class Brain {
         }
     }
 
-    /** Adds elapsed time to every module's on or off total. */
     public static synchronized void noteExposure(Map<String, Boolean> moduleStates, double minutes) {
         if (minutes <= 0.0) {
             return;
@@ -204,19 +147,11 @@ public final class Brain {
         dirty = true;
     }
 
-    /**
-     * One flag of the given kind, credited against every module by whether it
-     * was on. Nothing is attributed to a cause here -- this only records the
-     * coincidence, and the arithmetic that turns coincidences into a suspect
-     * happens when someone asks.
-     */
     public static synchronized void noteFlag(String signature, int count, Map<String, Boolean> moduleStates) {
         long now = clock.getAsLong();
         decayTo(now, false);
         Kind kind = KINDS.get(signature);
         if (kind == null && KINDS.size() >= MAX_KINDS) {
-            /* Past the cap new combinations are folded into their label alone,
-               which keeps the common kinds sharp. */
             signature = signature.indexOf('|') < 0 ? signature
                     : signature.substring(0, signature.indexOf('|')) + "|other";
             kind = KINDS.get(signature);
@@ -241,7 +176,6 @@ public final class Brain {
         dirty = true;
     }
 
-    /** Ages every decayed number to {@code now}; only every minute unless forced. */
     private static void decayTo(long now, boolean force) {
         if (asOf == 0L) {
             asOf = now;
@@ -266,27 +200,24 @@ public final class Brain {
         asOf = now;
     }
 
-    // ---- asking -------------------------------------------------------
-
-    /** A module's excess flag rate, with how much evidence it rests on. */
     public static final class Suspect {
         public final String module;
         public final String kind;
         public final double rateOn;
         public final double rateOff;
         public final double confidence;
-        /** Lifetime flags of this kind. */
+
         public final long samples;
-        /** Decayed flags of this kind. */
+
         public final double recent;
-        /** Flags of this kind this session. */
+
         public final int session;
-        /** Weighted minutes with the module on and off. */
+
         public final double minutesOn;
         public final double minutesOff;
-        /** Flags of this kind while the module was on (weighted). */
+
         public final double flagsOn;
-        /** When a flag of this kind was last seen. */
+
         public final long lastSeen;
 
         Suspect(String module, Kind kind, double flagsOn, double rateOn, double rateOff,
@@ -305,7 +236,6 @@ public final class Brain {
             this.lastSeen = kind.lastSeen;
         }
 
-        /** Flags per minute this module appears to add. */
         public double excess() {
             return this.rateOn - this.rateOff;
         }
@@ -319,15 +249,6 @@ public final class Brain {
         }
     }
 
-    /**
-     * Modules whose presence coincides with more flags than their absence,
-     * strongest first.
-     *
-     * Confidence is the smaller side's (weighted) evidence measured against the
-     * minimum, capped at one. It is not a p-value and is not claimed to be: it
-     * exists so that a conclusion drawn from almost no time without a module --
-     * or from time long past -- is visibly weak rather than silently wrong.
-     */
     public static synchronized List<Suspect> suspects(double minExcess) {
         decayTo(clock.getAsLong(), true);
         List<Suspect> found = new ArrayList<Suspect>();
@@ -359,7 +280,6 @@ public final class Brain {
         return found;
     }
 
-    /** The module with the least (weighted) evidence on its thinner side. */
     public static synchronized String leastKnown(List<String> candidates) {
         decayTo(clock.getAsLong(), true);
         String worst = null;
@@ -376,7 +296,6 @@ public final class Brain {
         return worstMinutes >= MIN_MINUTES_PER_SIDE * 4.0 ? null : worst;
     }
 
-    /** A copy; null if the module has never been seen. */
     public static synchronized Exposure exposure(String module) {
         Exposure exposure = EXPOSURE.get(module);
         return exposure == null ? null : exposure.copy();
@@ -386,7 +305,6 @@ public final class Brain {
         return KINDS.size();
     }
 
-    /** A snapshot of the kinds (the Kind objects are live; read them, do not change them). */
     public static synchronized Map<String, Kind> kinds() {
         return Collections.unmodifiableMap(new LinkedHashMap<String, Kind>(KINDS));
     }
@@ -399,18 +317,14 @@ public final class Brain {
         return sessionStartedAt;
     }
 
-    /** What went wrong with the last read or write of the file; "" when nothing did. */
     public static synchronized String lastProblem() {
         return lastProblem;
     }
-
-    // ---- persistence --------------------------------------------------
 
     private static File file() {
         return new File(dir, "brain-" + serverKey + ".txt");
     }
 
-    /** Written to a temporary file and moved into place: never half a file. */
     public static synchronized void save() {
         if (!dirty || KINDS.isEmpty() && EXPOSURE.isEmpty()) {
             return;
@@ -458,14 +372,12 @@ public final class Brain {
             }
             dirty = false;
         } catch (Exception e) {
-            // Losing what was learned is bad; crashing the game over it is worse.
             lastProblem = "save failed: " + e;
         } finally {
             if (writer != null) {
                 writer.close();
             }
             if (temp.exists()) {
-                //noinspection ResultOfMethodCallIgnored
                 temp.delete();
             }
         }
@@ -495,17 +407,12 @@ public final class Brain {
         if (VERSION.equals(header)) {
             readV2(source, lines, now);
         } else if (VERSION_1.equals(header)) {
-            /* Migrated, not guessed at: brain-1 had no clock, so its numbers
-               are taken as of the time the file was last written, and aged
-               from there. The original is kept. */
             keepAside(source, "v1");
             asOf = source.lastModified() > 0L ? source.lastModified() : now;
             int bad = readRecords(lines, 1, asOf, false);
             lastProblem = "migrated from brain-1" + (bad > 0 ? ", " + bad + " unreadable lines" : "");
             dirty = true;
         } else {
-            /* Not a version this knows. Kept aside rather than overwritten by
-               the next save -- that is what used to happen to it. */
             keepAside(source, "unknown");
             lastProblem = "unknown format '" + header + "', kept in backups/brain";
             asOf = now;
@@ -526,16 +433,12 @@ public final class Brain {
                 try {
                     fileAsOf = Long.parseLong(parts[1].trim());
                 } catch (NumberFormatException ignored) {
-                    // handled below
                 }
             } else if (!"halflife-days".equals(parts[0])) {
                 break;
             }
         }
         if (fileServer != null && !fileServer.equals(serverKey)) {
-            /* Another server's evidence under this server's name (a renamed
-               file). Using it would be exactly the contamination this exists
-               to prevent. */
             keepAside(source, "foreign");
             lastProblem = "file is for '" + fileServer + "', kept in backups/brain";
             asOf = now;
@@ -545,15 +448,12 @@ public final class Brain {
         boolean ended = !lines.isEmpty() && "end".equals(lines.get(lines.size() - 1).trim());
         int bad = readRecords(lines, index, asOf, true);
         if (bad > 0 || !ended) {
-            /* Whatever read cleanly is still evidence -- every line stands on
-               its own -- but the file as found is kept before it is replaced. */
             keepAside(source, "corrupt");
             lastProblem = (ended ? "" : "truncated, ") + bad + " unreadable lines; original kept in backups/brain";
             dirty = true;
         }
     }
 
-    /** Reads E/K/F records from {@code from}; returns how many lines could not be read. */
     private static int readRecords(List<String> lines, int from, long stamp, boolean v2) {
         int bad = 0;
         for (int i = from; i < lines.size(); i++) {
@@ -610,7 +510,6 @@ public final class Brain {
         return lines;
     }
 
-    /** Copies a file into backups/brain/ under a name saying why; never deletes. */
     private static void keepAside(File source, String reason) {
         try {
             File into = archive;
@@ -621,7 +520,6 @@ public final class Brain {
             File copy = new File(into, source.getName() + "." + reason + "-" + stamp);
             Files.copy(source.toPath(), copy.toPath(), StandardCopyOption.REPLACE_EXISTING);
         } catch (Exception ignored) {
-            // Nothing more can be done; the original is still in place until the next save.
         }
     }
 
@@ -632,9 +530,6 @@ public final class Brain {
         save();
     }
 
-    // ---- test support --------------------------------------------------
-
-    /** Test support only: where files go, and what time it is. */
     static synchronized void useForTests(File data, File archiveDir, LongSupplier testClock) {
         dir = data;
         archive = archiveDir;

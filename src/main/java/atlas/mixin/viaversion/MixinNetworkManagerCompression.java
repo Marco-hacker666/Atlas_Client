@@ -11,7 +11,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(NetworkManager.class)
 public class MixinNetworkManagerCompression {
-
   @Shadow private Channel channel;
 
   @Inject(method = "setCompressionTreshold", at = @At("RETURN"))

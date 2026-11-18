@@ -4,7 +4,6 @@ import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S02PacketChat;
 import net.minecraft.util.ChatComponentText;
 
-/** A chat line: type 0 chat, 1 system, 2 above the hotbar; the message without formatting. */
 public class S02 extends SPacket {
     public byte type;
     public String message;

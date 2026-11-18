@@ -5,27 +5,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * A script file as the compiler sees it (2026-11-02). Both kinds are written the same way, as the body of a class
- * -- fields and methods, no class around them -- and are wrapped here:
- *
- *  - Raven bS 16: extends atlas.script.raven.RavenScript, which carries Raven bS's API (client, world, modules,
- *    render, gl, inventory, keybinds, util, config, bridge) under the same names, with Raven's imports and its
- *    models and packets (Entity, Vec3, C03, S12 ...) importable by their simple names. A Raven script runs unchanged.
- *  - Raven bS 17: extends atlas.script.raven.Raven17Script, which adds what bS 17 added.
- *  - Atlas: extends atlas.script.api.AtlasScript, which is all of that plus this client's own: real settings in
- *    the menu, the shared rotation engine, other modules, raw events.
- *
- * Lines at the top that start with "import " are moved above the class, so a script may import what it likes
- * (Raven's own wrapper allows none). The user's lines keep their numbers: a moved import leaves a blank line.
- *
- * Each script compiles into package {@value #PACKAGE}, with a host module class of its own beside it (the menu,
- * the config and the key handler find modules and their settings by class).
- */
 public final class ScriptSource {
     public static final String PACKAGE = "atlasscripts";
 
-    /** Raven bS puts these imports before every script; its scripts rely on them. */
     static final List<String> RAVEN_IMPORTS = Arrays.asList(
             "java.awt.Color", "java.util.Collections", "java.util.List", "java.util.ArrayList", "java.util.Arrays",
             "java.util.Map", "java.util.Set", "java.util.HashMap", "java.util.HashSet",
@@ -41,14 +23,13 @@ public final class ScriptSource {
     private ScriptSource() {
     }
 
-    /** A wrapped script: the code, the class names, how many lines come before the user's first. */
     public static final class Wrapped {
         public final String scriptClass;
         public final String hostClass;
         public final String code;
         public final String hostCode;
         public final int headerLines;
-        /** A problem found before compiling (an unsupported line), or null. */
+
         public final String problem;
 
         Wrapped(String scriptClass, String hostClass, String code, String hostCode, int headerLines, String problem) {
@@ -61,7 +42,6 @@ public final class ScriptSource {
         }
     }
 
-    /** A Java identifier made from the script's name, unique per load ({@code generation}). */
     static String classId(String name, int generation) {
         StringBuilder out = new StringBuilder();
         for (char c : name.toCharArray()) {
@@ -79,8 +59,6 @@ public final class ScriptSource {
         String hostClass = "sh_" + id;
         String base = kind.base;
         if (kind.bs17()) {
-            /* bS 17 (ScriptSourceTransformer): a class the script declares that holds an enum or an interface
-               becomes static, which Java 8 asks of it. Inserting a word keeps every line where it was. */
             source = NestedTypes.makeStatic(source);
         }
 
@@ -91,7 +69,6 @@ public final class ScriptSource {
         for (int i = 0; i < lines.length; i++) {
             String trimmed = lines[i].trim();
             if (trimmed.startsWith("load - \"") || trimmed.startsWith("load -\"")) {
-                /* Raven fetches code from a URL here. Not done: what runs would change after it was read. */
                 problem = "line " + (i + 1) + ": \"load - url\" is not supported; paste that code into the file";
                 lines[i] = "";
                 continue;
@@ -134,8 +111,7 @@ public final class ScriptSource {
         for (int i = 0; i < lines.length; i++) {
             code.append(lines[i]).append('\n');
         }
-        /* OpenB4's getScriptName(), which scripts written for that Raven fork call. Added here, after the user's lines,
-           only when one is called and the script has none: a script may well declare its own. */
+
         if (source.contains("getScriptName") && !OWN_SCRIPT_NAME.matcher(source).find()) {
             code.append("public static String getScriptName() { return scriptName; }\n");
         }
@@ -158,7 +134,6 @@ public final class ScriptSource {
         return lines;
     }
 
-    /** A Java string literal. */
     static String quote(String text) {
         StringBuilder out = new StringBuilder("\"");
         for (char c : text.toCharArray()) {
@@ -173,7 +148,6 @@ public final class ScriptSource {
         return out.append('"').toString();
     }
 
-    /** A new file's contents. */
     public static String template(ScriptKind kind) {
         if (kind == ScriptKind.RAVEN17) {
             return "// A Raven bS 17 script: bS 17's API (client, world, modules, render, gl, keybinds, inventory ...)\n"

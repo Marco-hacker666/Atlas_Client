@@ -3,17 +3,7 @@ package atlas.ui.impl.clickgui.atlas;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Short messages shown inside the menu (2026-10-23, docs/GUI-AUDIT-2026-10-23.md
- * U7): what a click did, or why it could not. They used to go to chat, which
- * sits half hidden behind the menu and its blur.
- *
- * At most three at once; the oldest goes when a fourth arrives. The same text
- * again restarts its toast instead of stacking a copy. Problems stay longer
- * than results.
- */
 final class Toasts {
-
     enum Kind { INFO, OK, WARN, ERROR }
 
     static final class Toast {
@@ -21,7 +11,7 @@ final class Toasts {
         final Kind kind;
         final long at;
         final long life;
-        /** What a click on it does besides dismissing it (an Undo); null for nothing. */
+
         final Runnable action;
 
         Toast(String text, Kind kind, long at, Runnable action) {
@@ -45,7 +35,6 @@ final class Toasts {
         add(text, kind, now, null);
     }
 
-    /** A toast a click acts on: it stays at least six seconds, to give the click time. */
     void add(String text, Kind kind, long now, Runnable action) {
         if (text == null || text.isEmpty()) {
             return;
@@ -61,7 +50,6 @@ final class Toasts {
         }
     }
 
-    /** The toasts still showing, oldest first. */
     List<Toast> visible(long now) {
         for (int i = this.shown.size() - 1; i >= 0; i--) {
             Toast toast = this.shown.get(i);

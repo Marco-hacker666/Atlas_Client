@@ -5,7 +5,6 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class HitSelectGateTest {
-
     @Test
     public void onlyAHurtSoonAfterOurAttackOnThatTargetCounts() {
         HitSelectGate gate = new HitSelectGate();
@@ -70,7 +69,6 @@ public class HitSelectGateTest {
         assertFalse("hit once: not a first hit", gate.waiting(1, 1300L, 200L));
     }
 
-    /** Knockback ends a wait: it must not start a new one for the next hit. */
     @Test
     public void knockbackDuringAWaitLetsTheNextHitGo() {
         HitSelectGate gate = new HitSelectGate();

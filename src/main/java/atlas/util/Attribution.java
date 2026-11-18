@@ -8,55 +8,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * Who most plausibly caused one server correction, and how sure that is
- * (plan step 12, docs/ARCH-AUDIT-2026-09-28.md).
- *
- * The old blame named every module that did anything in the two seconds
- * before a correction, once each, and FlagResponder switched off whichever
- * collected five names in thirty seconds. That is a count of activity, not of
- * cause: Backtrack holding forty packets of OTHER players' movement -- which
- * cannot move this player -- was named on every flag in a fight, exactly as
- * often as a Blink releasing a queue of this player's own positions (flags of
- * 2026-09-28, 09:41: "Backtrackx41 BLINKx2"). Evidence here is weighed:
- *
- *   BY KIND. Withholding or releasing this player's own movement is what a
- *   correction is usually about (1.0); holding this player's own knockback or
- *   position (0.8); a placement (0.5), a dig (0.4), a sprint or sneak toggle
- *   (0.3), an attack (0.2); holding other entities' packets (0.1); a swing
- *   (0.05).
- *
- *   BY TIME. Each action counts less the longer before the correction it
- *   happened (time constant one second), and nothing outside the window
- *   counts at all.
- *
- *   NOT BY VOLUME. Many actions of one kind approach that kind's weight and
- *   no further: forty held entity packets are still "held entity packets".
- *
- * And the answer can be "not sure". A share of every correction is left to an
- * UNKNOWN cause -- the server, the route, vanilla movement, a module that
- * acts without packets -- and the verdict is:
- *   SINGLE              one module holds at least half, and twice the next;
- *   MULTIPLE_CANDIDATES two or more are close, none decisive;
- *   INCONCLUSIVE        something was going on, but nothing strongly;
- *   UNKNOWN             nothing in the window at all.
- * Only SINGLE should ever be acted on.
- *
- * Pure: records in, result out.
- */
 public final class Attribution {
-
     public enum Verdict { SINGLE, MULTIPLE_CANDIDATES, INCONCLUSIVE, UNKNOWN }
 
-    /** The weight left to causes the ledger cannot see. */
     public static final double UNKNOWN_PRIOR = 0.5;
-    /** Time constant of the recency weight. */
+
     public static final double TAU_MS = 1000.0;
 
     private Attribution() {
     }
 
-    /** How plausibly an action of this kind moves the player's server-side position. */
     public static double weight(String kind) {
         if (kind == null) {
             return 0.2;
@@ -66,9 +27,7 @@ public final class Attribution {
             case "release":
             case "move-packet":
                 return 1.0;
-            /* 2026-10-11 (ActionWatch): changing the motion, the ground state
-               or the timer moves the server-side position; a turn mostly does
-               not, but it is what rotation checks look at. */
+
             case "move":
             case "timer":
                 return 0.9;
@@ -98,7 +57,7 @@ public final class Attribution {
         public final String module;
         public final double score;
         public final double confidence;
-        /** Actions considered, by kind, with counts. */
+
         public final Map<String, Integer> kinds;
 
         Candidate(String module, double score, double confidence, Map<String, Integer> kinds) {
@@ -122,11 +81,11 @@ public final class Attribution {
 
     public static final class Result {
         public final Verdict verdict;
-        /** Strongest first. */
+
         public final List<Candidate> candidates;
-        /** The share left to an unseen cause. */
+
         public final double unknownShare;
-        /** Why the verdict is what it is. */
+
         public final String reason;
 
         Result(Verdict verdict, List<Candidate> candidates, double unknownShare, String reason) {
@@ -136,17 +95,14 @@ public final class Attribution {
             this.reason = reason;
         }
 
-        /** The strongest candidate, or null. */
         public Candidate top() {
             return this.candidates.isEmpty() ? null : this.candidates.get(0);
         }
 
-        /** The one module to blame: only for SINGLE. */
         public String culprit() {
             return this.verdict == Verdict.SINGLE ? top().module : null;
         }
 
-        /** "SINGLE Blink 57% (held-send x2) | AutoClicker 12% (attack x3) | unknown 25%" */
         public String describe(int max) {
             StringBuilder sb = new StringBuilder(this.verdict.name());
             int shown = 0;
@@ -165,11 +121,6 @@ public final class Attribution {
         }
     }
 
-    /**
-     * A correction whose cause is known outright -- a refused block and the
-     * module whose click sent it (2026-10-04) -- rather than weighed from the
-     * window: SINGLE, all of it, nothing left to an unseen cause.
-     */
     public static Result direct(String module, String kind) {
         Map<String, Integer> kinds = new LinkedHashMap<String, Integer>();
         kinds.put(kind, 1);
@@ -178,11 +129,7 @@ public final class Attribution {
         return new Result(Verdict.SINGLE, candidates, 0.0, module + " " + kind);
     }
 
-    /**
-     * Weighs the records in the {@code window} before {@code at}.
-     */
     public static Result attribute(List<ActionLedger.Record> records, long at, long window) {
-        /* module -> kind -> summed recency, and counts */
         Map<String, Map<String, double[]>> byModule = new LinkedHashMap<String, Map<String, double[]>>();
         for (ActionLedger.Record record : records) {
             long age = at - record.at;
@@ -211,7 +158,6 @@ public final class Attribution {
             double score = 0.0;
             Map<String, Integer> kindCounts = new LinkedHashMap<String, Integer>();
             for (Map.Entry<String, double[]> kind : module.getValue().entrySet()) {
-                /* Saturating: many of one kind approach the kind's weight. */
                 score += weight(kind.getKey()) * (1.0 - Math.exp(-kind.getValue()[0]));
                 kindCounts.put(kind.getKey(), (int) kind.getValue()[1]);
             }

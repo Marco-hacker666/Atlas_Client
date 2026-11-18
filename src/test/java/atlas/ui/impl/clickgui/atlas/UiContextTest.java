@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** The menu's hit registry and motion, moved into UiContext (2026-10-23, GUI redesign M2). */
 public class UiContextTest {
-
     @Test
     public void theNewestHitUnderThePointerWins() {
         UiContext ui = new UiContext();

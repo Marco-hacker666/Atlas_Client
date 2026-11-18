@@ -7,17 +7,6 @@ import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.PercentProperty;
 import net.minecraft.client.Minecraft;
 
-/**
- * Reaches walking speed sooner (2026-10-19, Slinky's Fast Accel rebuilt).
- *
- * On the ground the speed a held direction settles at is a geometric series:
- * each tick adds the input step and keeps 0.546 of the old motion (0.91
- * drag x 0.6 ground friction). Right after moveFlying this computes that
- * settling speed for the keys held (plus 0.2 on a sprint jump) and, while
- * the player is below it, moves the speed boost of the remaining way toward
- * it in the current direction. It never goes past what holding the keys
- * would reach anyway; it only gets there in fewer ticks.
- */
 public class FastAccel extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
@@ -29,7 +18,6 @@ public class FastAccel extends Module {
         super("FastAccel", false);
     }
 
-    /** The speed holding these keys settles at on the ground. */
     public static double limit(float sideways, float forward, float factor, boolean sprintJump) {
         float length = (float) Math.sqrt(sideways * sideways + forward * forward);
         float denominator = !Float.isNaN(length) && !(length >= 1.0F) ? 1.0F : length;

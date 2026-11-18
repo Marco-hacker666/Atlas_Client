@@ -1,7 +1,6 @@
 package atlas.util.font;
 
 public interface IFont {
-
     void drawString(String text, double x, double y, int color, boolean dropShadow);
 
     void drawString(String text, double x, double y, int color);
@@ -21,5 +20,4 @@ public interface IFont {
     double height();
 
     void drawString(String text, double x, double y, CenterMode centerMode, boolean dropShadow, int color);
-
 }

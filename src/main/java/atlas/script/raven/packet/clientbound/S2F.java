@@ -4,7 +4,6 @@ import atlas.script.raven.model.ItemStack;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S2FPacketSetSlot;
 
-/** The server setting one slot of a window (-1 / -1 for the item on the cursor). */
 public class S2F extends SPacket {
     public int windowId;
     public int slot;

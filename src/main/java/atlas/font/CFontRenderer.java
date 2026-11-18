@@ -15,10 +15,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-
 public class CFontRenderer extends CFont {
     private static final char SECTION = '§';
-    /** new Color(20, 20, 20, 200).getRGB(), once. */
+
     private static final int SHADOW_MASK = 0xC8141414;
 
     protected CFont.CharData[] boldChars = new CFont.CharData[256];
@@ -126,7 +125,6 @@ public class CFontRenderer extends CFont {
     }
 
     public float drawString(String text, double x, double y, int color, boolean shadow) {
-        /* NickHider (2026-11-17): the real name is replaced in every font, not only the game's. */
         text = atlas.module.modules.NickHider.apply(text);
         Minecraft mc = Minecraft.getMinecraft();
         x -= 1;
@@ -173,9 +171,6 @@ public class CFontRenderer extends CFont {
 
             GlStateManager.bindTexture(tex.getGlTextureId());
 
-            /* 2026-10-22 (plan item 14): glyphs are batched into one glBegin/glEnd run, ended before anything
-               that must not happen inside one (a texture bind, a line); it was a draw call per glyph. Same
-               triangles, same order, same colours. */
             boolean batch = false;
             for (int i = 0; i < size; i++) {
                 char character = text.charAt(i);
@@ -516,7 +511,6 @@ public class CFontRenderer extends CFont {
             }
         }
 
-        // Classloader fallback — works inside JARs even when Minecraft's ResourceManager isn't ready
         String[] classpathPaths = new String[]{
                 "/assets/atlas/font/" + fontFileName,
                 "/assets/atlas/font/" + lowerCaseFileName,
@@ -581,5 +575,4 @@ public class CFontRenderer extends CFont {
     public float getMiddleOfBox(float height) {
         return height / 2f - getHeight() / 2f;
     }
-
 }

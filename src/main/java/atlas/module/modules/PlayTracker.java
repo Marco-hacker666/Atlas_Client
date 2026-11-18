@@ -23,29 +23,15 @@ import java.io.OutputStream;
 import java.time.LocalDate;
 import java.util.Properties;
 
-/**
- * A small HUD: how long has been played and how many games (2026-10-04).
- *
- * Time counts while in a world (any server, or singleplayer), for this launch
- * and for today. Games are read from chat by util/MatchChat -- a start, or a
- * result with no start seen -- with wins and losses where the server says
- * which. Today's and all-time numbers are kept in
- * config/Atlas/playtracker.txt (saved every minute, after every result and at
- * shutdown), so they survive a restart; a new day starts today's from zero.
- *
- * It records whether or not the HUD is shown; switching the module off only
- * hides it.
- */
 public class PlayTracker extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File FILE = new File("./config/Atlas/playtracker.txt");
     private static final long SAVE_EVERY_MS = 60000L;
-    /* "MATCH START!" and "Game starts in 1..." are one game, five seconds apart. */
+
     private static final long START_DEDUPE_MS = 15000L;
-    /* Hypixel says it in chat and in a title. */
+
     private static final long RESULT_DEDUPE_MS = 5000L;
-    /* A gap longer than this (a freeze, a long load) is not counted as play. */
+
     private static final long MAX_TICK_GAP_MS = 1000L;
 
     public final IntProperty x = new IntProperty("x", 5, 0, 2000);
@@ -53,9 +39,7 @@ public class PlayTracker extends Module {
     public final BooleanProperty showToday = new BooleanProperty("show-today", true);
     public final BooleanProperty showResults = new BooleanProperty("show-wins", true);
     public final IntProperty backgroundAlpha = new IntProperty("background-alpha", 120, 0, 255);
-    /* A third line when the server looks to be cutting this client's hits
-       (FlagDetector's mitigation check, 2026-10-04); "mitigation-always"
-       shows it as "none" the rest of the time. */
+
     public final BooleanProperty showMitigation = new BooleanProperty("show-mitigation", true);
     public final BooleanProperty mitigationAlways = new BooleanProperty("mitigation-always", false,
             this.showMitigation::getValue);
@@ -89,8 +73,6 @@ public class PlayTracker extends Module {
         super("PlayTracker", true, false, "Small HUD: time played and games played (this launch and today)");
         atlas.management.Shutdown.register(atlas.management.Shutdown.Stage.SAVE_STATE, "PlayTracker", this::save);
     }
-
-    // ---------------------------------------------------------------- counting
 
     @EventTarget(whenDisabled = true)
     public void onTick(TickEvent event) {
@@ -183,7 +165,6 @@ public class PlayTracker extends Module {
         }
         this.lastResultAt = now;
         if (!this.inGame) {
-            /* A result with no start seen: the game still happened. */
             countGame();
         }
         this.inGame = false;
@@ -220,8 +201,6 @@ public class PlayTracker extends Module {
         }
     }
 
-    // ------------------------------------------------------------------- file
-
     private void load() {
         if (this.loaded) {
             return;
@@ -243,7 +222,6 @@ public class PlayTracker extends Module {
             this.totalWins = Integer.parseInt(p.getProperty("total-wins", "0"));
             this.totalLosses = Integer.parseInt(p.getProperty("total-losses", "0"));
         } catch (Exception ignored) {
-            /* A damaged file starts the counts over rather than the game failing. */
         }
     }
 
@@ -274,8 +252,6 @@ public class PlayTracker extends Module {
         } catch (Exception ignored) {
         }
     }
-
-    // --------------------------------------------------------------------- HUD
 
     @EventTarget
     public void onRender2D(Render2DEvent event) {
@@ -308,11 +284,6 @@ public class PlayTracker extends Module {
         }
     }
 
-    /**
-     * "Damage cut" from FlagDetector: recent hits far under what vanilla must
-     * do, or a run of hits the server ignored. Null when there is nothing to
-     * say and mitigation-always is off, or FlagDetector is off.
-     */
     private String mitigationLine() {
         FlagDetector detector = (FlagDetector) atlas.Atlas.moduleManager.modules.get(FlagDetector.class);
         if (detector == null || !detector.isEnabled() || !detector.detectLowDamage.getValue()) {
@@ -330,7 +301,6 @@ public class PlayTracker extends Module {
         return this.mitigationAlways.getValue() ? "§bMitigation §anone" : null;
     }
 
-    /** h:mm:ss */
     private static String clock(long ms) {
         long s = ms / 1000L;
         return String.format("%d:%02d:%02d", s / 3600L, s / 60L % 60L, s % 60L);

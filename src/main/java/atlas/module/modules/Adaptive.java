@@ -25,102 +25,30 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Learns which modules this server objects to, and turns the worst of them
- * down, over hours rather than minutes.
- *
- * Everything before this reacted. {@code FlagResponder} switched off whatever
- * had been named a few times in the last half minute; {@code AutoTune} tried a
- * setting for five minutes and kept it if the score went up. Both are honest
- * about the short run and both are badly wrong in the long run, for the same
- * reason: a half-hour of play is a handful of samples of a noisy process, and
- * acting on it confuses a bad fight with a bad setting.
- *
- * What is different here is only that the evidence is allowed to accumulate,
- * and that time is deliberately spent gathering the half of it that does not
- * arrive by itself.
- *
- * THE MEASUREMENT. For every kind of flag and every module, {@link Brain}
- * keeps how many arrived while that module was on and how many while it was
- * off, against how long each lasted. A module that adds nothing shows the same
- * rate either way, however many flags happen around it; one that causes flags
- * shows a higher rate on than off, and the difference is in flags per minute --
- * a number that can be traded against what the module is worth.
- *
- * THE COST. The off side never accumulates on its own. Something has to spend
- * time deliberately without a module, playing worse, to find out what it does.
- * That is what {@code probe-minutes} buys, it is the only way the comparison
- * can exist, and it is why this is slow: the answer is bought in minutes of
- * play, and there is no way to get it cheaper.
- *
- * ADAPTING. Nothing here knows what any module does. A module is a name with a
- * switch and possibly a number, and the kinds of flag are keys derived from
- * circumstance rather than a list. So a module added later, or a server that
- * begins objecting to something new, is handled the same as everything else --
- * it appears as a new name or a new key and starts accumulating evidence. That
- * is the whole of the claim: not that this is clever, but that it does not need
- * to be told anything to keep working.
- *
- * WHAT IT WILL NOT DO. It will not act below its confidence threshold, will not
- * touch a protected module, moves one thing at a time, writes every decision to
- * a file with the numbers behind it, and restores everything it changed when
- * switched off. A system that adjusts a configuration without being auditable
- * is not a smaller problem than the one it is solving.
- */
 public class Adaptive extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File LOG_DIR = new File("./config/Atlas/");
     private static final SimpleDateFormat LINE_STAMP = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-    /** Flags per minute a module must add before it is worth acting on. */
     public final FloatProperty threshold = new FloatProperty("excess-threshold", 0.35F, 0.05F, 5.0F);
-    /** Evidence required, as the confidence Brain reports. */
+
     public final FloatProperty minConfidence = new FloatProperty("min-confidence", 0.55F, 0.1F, 1.0F);
-    /** Minutes to spend without a module to learn what it costs. */
+
     public final IntProperty probeMinutes = new IntProperty("probe-minutes", 8, 2, 60);
-    /** Minutes between decisions, so one bad stretch cannot cascade. */
+
     public final IntProperty decideMinutes = new IntProperty("decide-minutes", 5, 1, 60);
-    /**
-     * Report conclusions without acting on them.
-     *
-     * This covers decisions only. Probing is not a decision -- it is the
-     * measurement the decisions are made from, and a probe that does not
-     * actually switch the module off measures nothing: the off side stays at
-     * zero, the module never stops being the least understood one, and the
-     * same probe repeats forever. That is exactly what happened the first
-     * evening this ran. Probing therefore ignores this setting, and
-     * {@code probe} is the switch for turning it off.
-     */
+
     public final BooleanProperty dryRun = new BooleanProperty("dry-run", false);
-    /** Spend time without modules to gather the comparison. */
+
     public final BooleanProperty probe = new BooleanProperty("probe", true);
     public final BooleanProperty chat = new BooleanProperty("chat", true);
-    /**
-     * Restrict probing to the modules worth the play time.
-     *
-     * Probing is the only expensive part of this: it costs minutes of playing
-     * with something switched off, one module at a time, and those minutes come
-     * out of the same budget as the game. Studying everything enabled means
-     * spending the budget evenly over modules that could not possibly cause a
-     * position correction, and reaching a conclusion about the ones that could
-     * several days later than necessary.
-     *
-     * Modules outside this list are still recorded -- their coincidence with
-     * every flag accumulates exactly as before, for free, from ordinary play.
-     * They are simply never chosen as the thing to switch off. Passive evidence
-     * is weaker, but it costs nothing, and for a module that is never going to
-     * be the answer that is the right trade.
-     *
-     * Empty means probe anything eligible.
-     */
-    /** Lifetime flags of a kind before it can justify anything (plan step 10). */
+
     public final IntProperty minFlags = new IntProperty("min-flags", 8, 1, 200);
-    /** No decision or probe this many minutes into a connection. */
+
     public final IntProperty warmupMinutes = new IntProperty("warmup-minutes", 3, 0, 30);
-    /** Actions on one module until the server changes. */
+
     public final IntProperty maxActs = new IntProperty("max-acts", 2, 1, 10);
-    /** Minutes with a module on, after acting on it, before acting on it again. */
+
     public final IntProperty reactMinutes = new IntProperty("react-minutes", 20, 5, 180);
 
     public final atlas.property.properties.TextProperty focus =
@@ -129,13 +57,6 @@ public class Adaptive extends Module {
                             + "InvulnTiming,Velocity,WTap,KnockbackDelay,Reach,SilentAura,"
                             + "LagRange,Blink,ServerLag,FakeLag,AntiDebuff,AutoSwap");
 
-    /**
-     * Never probed, never switched off, never counted as a suspect: the
-     * instruments, and anything that cannot produce a server correction. The
-     * only list in the system, and it says what must not be touched rather than
-     * what may be -- so a module nobody thought about is eligible by default
-     * instead of invisible by default.
-     */
     private static final String[] PROTECTED = {
             "Adaptive", "Debug", "FlagDetector", "FlagResponder", "HitCheck",
             "LatencyCrosshair", "LatencyGovernor", "ServerFingerprint", "AutoTune",
@@ -155,30 +76,23 @@ public class Adaptive extends Module {
     private String currentServer = "";
     private final java.util.Set<String> unprobeable = new java.util.HashSet<String>();
     private File logTarget;
-    /** Since the last action on each module (AdaptivePolicy.Epoch); cleared when the server changes. */
+
     private final Map<String, AdaptivePolicy.Epoch> epochs =
             new java.util.concurrent.ConcurrentHashMap<String, AdaptivePolicy.Epoch>();
-    /** The last HOLD line written, so an unchanged reason is not written every round. */
+
     private String lastHold;
-    /** The most recent decisions, newest last, for diagnostics. */
+
     private final java.util.ArrayDeque<String> decisions = new java.util.ArrayDeque<String>();
 
     public Adaptive() {
         super("Adaptive", false, false,
                 "Learns which modules this server objects to and turns them down");
-        /* The client saves its configuration on exit. A probe that is still
-           running at that moment is a module switched off for measurement --
-           and it would be written to the config as though it had been switched
-           off on purpose, silently, permanently. Restoring first is not
-           optional, and it cannot wait for onDisabled because quitting never
-           calls it. This used to be a hook of its own, racing the config
-           save's; Shutdown now runs RESTORE strictly before SAVE_CONFIG. */
+
         atlas.management.Shutdown.register(atlas.management.Shutdown.Stage.RESTORE, "Adaptive.restore",
                 this::restoreAll);
         atlas.management.Shutdown.register(atlas.management.Shutdown.Stage.SAVE_STATE, "Brain", Brain::save);
     }
 
-    /** Puts back everything switched off for measurement. */
     private void restoreAll() {
         for (Map.Entry<String, Boolean> entry : this.restore.entrySet()) {
             Module module = Atlas.moduleManager.getModule(entry.getKey());
@@ -188,15 +102,12 @@ public class Adaptive extends Module {
         }
         this.restore.clear();
         this.probing = null;
-        /* Numbers turned down come back too (F-20). They used to be written
-           straight into the settings, so this -- which only knew about
-           switched-off modules -- left every knob where it had been turned. */
+
         releaseKnobs();
     }
 
     private static void releaseKnobs() {
         if (Atlas.moduleManager == null) {
-            /* No client (a test or a headless run): nothing was turned down. */
             return;
         }
         Module reach = Atlas.moduleManager.modules.get(Reach.class);
@@ -232,8 +143,6 @@ public class Adaptive extends Module {
         Brain.setServer(this.currentServer);
         Module tuner = Atlas.moduleManager.modules.get(AutoTune.class);
         if (tuner != null && tuner.isEnabled()) {
-            /* Both adjust the same numbers from different evidence, and each
-               reads the other's change as the effect of its own. */
             say("&cAutoTune is on -- both tune the same settings, turn one off");
         }
         say(String.format("&7learning on &f%s&7 -- &f%d&7 flag kinds known",
@@ -242,9 +151,6 @@ public class Adaptive extends Module {
 
     @Override
     public void onDisabled() {
-        /* Anything switched off to measure it goes back on, and what was
-           learned is written out. Ending an experiment must not silently
-           become a configuration change. */
         restoreAll();
         Brain.save();
     }
@@ -258,7 +164,6 @@ public class Adaptive extends Module {
         return false;
     }
 
-    /** Whether this module is one the focus list says is worth paying for. */
     private boolean inFocus(String name) {
         String raw = this.focus.getValue();
         if (raw == null || raw.trim().isEmpty()) {
@@ -268,7 +173,7 @@ public class Adaptive extends Module {
             if (entry.trim().equalsIgnoreCase(name)) {
                 return true;
             }
-            /* A name written before a rename, or without its space. */
+
             Module named = Atlas.moduleManager.getModule(entry.trim());
             if (named != null && named.getName().equals(name)) {
                 return true;
@@ -283,9 +188,6 @@ public class Adaptive extends Module {
     }
 
     private String serverKey() {
-        /* Connected: that server. Not connected (switched on in a menu): the
-           last server's file stays loaded on purpose -- no evidence accrues
-           outside a world, and the next session's START switches it anyway. */
         String key = atlas.management.ServerSession.currentServerKey();
         if (key == null) {
             key = atlas.management.ServerSession.lastServerKey();
@@ -297,20 +199,11 @@ public class Adaptive extends Module {
         return data == null || data.serverIP == null ? "singleplayer" : data.serverIP;
     }
 
-    /**
-     * The knowledge file is per server, and a network moves you between them
-     * without this module being touched. Driven by ServerSession since
-     * 2026-09-28; it used to poll the address every tick, which agreed with
-     * nothing else about when the server had changed.
-     */
     @EventTarget
     public void onSession(atlas.events.SessionEvent event) {
         if (event.getType() == atlas.events.SessionEvent.Type.START) {
             String key = event.getSession().serverKey();
             if (!key.equalsIgnoreCase(this.currentServer)) {
-                /* What was decided about the last server is about the last
-                   server: its cuts and switched-off modules go back, and the
-                   per-module memory starts over. */
                 endProbe();
                 restoreAll();
                 this.epochs.clear();
@@ -322,12 +215,10 @@ public class Adaptive extends Module {
             }
             Brain.beginSession();
         } else if (event.getType() == atlas.events.SessionEvent.Type.END) {
-            /* A disconnect is a natural point to write out what was learned. */
             Brain.save();
         }
     }
 
-    /** Every module that could plausibly be a cause, and whether it is on. */
     private Map<String, Boolean> snapshotStates() {
         Map<String, Boolean> snapshot = new LinkedHashMap<String, Boolean>();
         for (Module module : Atlas.moduleManager.modules.values()) {
@@ -340,21 +231,16 @@ public class Adaptive extends Module {
         return snapshot;
     }
 
-    /** Called by FlagDetector for every violation it reports. */
     public static void observeFlag(String signature, int count) {
         Module module = Atlas.moduleManager.modules.get(Adaptive.class);
         if (!(module instanceof Adaptive) || !module.isEnabled()) {
             return;
         }
-        /* Called from the network thread. Building a fresh snapshot rather
-           than reusing the field the client thread is also writing: sharing it
-           meant two threads iterating and clearing the same map, which fails
-           inside the packet handler rather than anywhere findable. */
+
         Brain.noteFlag(signature, count, ((Adaptive) module).snapshotStates());
         ((Adaptive) module).noteEpochFlag(signature, count);
     }
 
-    /** Flags of the kind last acted on, while the module acted on is on: the evidence after. */
     private void noteEpochFlag(String signature, int count) {
         for (AdaptivePolicy.Epoch epoch : this.epochs.values()) {
             if (signature.equals(epoch.kind)) {
@@ -373,11 +259,7 @@ public class Adaptive extends Module {
             return;
         }
         long now = System.currentTimeMillis();
-        /* The server switch is handled in onSession. */
 
-        /* Time only counts while actually in a world. A client sitting in a
-           menu accumulates minutes that no flag could ever have arrived in,
-           and those minutes would dilute every rate in the model. */
         double minutes = (now - this.lastSample) / 60000.0;
         if (minutes > 0.0 && minutes < 1.0) {
             Brain.noteExposure(snapshotStates(), minutes);
@@ -402,10 +284,6 @@ public class Adaptive extends Module {
         decide();
     }
 
-    /**
-     * Act on the best-supported suspect, or else go and buy evidence about
-     * whichever module is least understood.
-     */
     private void decide() {
         if (this.probing != null) {
             return;
@@ -484,15 +362,6 @@ public class Adaptive extends Module {
         };
     }
 
-    /* ---- plausibility ---------------------------------------------------
-       The 2026-09-23/24 log named Trajectories, Tracers and NoHurtCam as the
-       causes of lagbacks -- modules that only draw. They were on during the
-       same games as the real causes, so the coincidence counts were real; the
-       conclusion was not. A module whose every handler is a render event
-       cannot move the player or send a packet, and is never acted on. A
-       module with no handlers at all works through mixins, which can change
-       movement (KeepSprint does), so it stays a suspect -- except the few
-       listed here that only change what is drawn. */
     private static final java.util.Set<String> RENDER_EVENTS = new java.util.HashSet<String>(
             java.util.Arrays.asList("Render2DEvent", "Render3DEvent", "RenderLivingEvent", "ResizeEvent"));
     private static final String[] COSMETIC = {"NoHurtCam", "ItemPhysics", "Animations", "Capes", "ViewClip",
@@ -500,10 +369,6 @@ public class Adaptive extends Module {
     private static final Map<Class<?>, Boolean> CAN_CAUSE =
             new java.util.concurrent.ConcurrentHashMap<Class<?>, Boolean>();
 
-    /* Modules that are only settings read by others -- targeting rules,
-       themes, colours, GUI choices. They change what other modules do, never
-       how the player moves, and switching one off would change something
-       unrelated to the evidence. (TargetFilter was the 10:06 dry-run pick.) */
     private static final String[] SETTINGS = {
             "TargetFilter", "Theme", "GuiModule", "ClickGUIModule", "Debug"
     };
@@ -548,13 +413,6 @@ public class Adaptive extends Module {
         return result;
     }
 
-    /**
-     * Turning a module down rather than off, where it has something to turn
-     * down. The step is proportional to how much the evidence says it is
-     * costing, so a module adding a tenth of a flag per minute is nudged and
-     * one adding three is cut hard -- the alternative, a fixed step, either
-     * takes all evening to help or overshoots on the first decision.
-     */
     private void act(Module module, Brain.Suspect suspect, AdaptivePolicy.Outcome outcome) {
         double severity = Math.min(1.0, suspect.excess() / 2.0) * suspect.confidence;
         String detail;
@@ -584,9 +442,7 @@ public class Adaptive extends Module {
                 detail = "disabled " + module.getName();
             }
         }
-        /* The evidence a second action on this module must rest on starts
-           now -- in dry-run too, so the log shows what would really happen
-           rather than the same line every round. */
+
         AdaptivePolicy.Epoch epoch = this.epochs.get(suspect.module);
         if (epoch == null) {
             epoch = new AdaptivePolicy.Epoch(suspect.module);
@@ -595,8 +451,6 @@ public class Adaptive extends Module {
         epoch.acted(suspect.kind, System.currentTimeMillis(), suspect.rateOff);
         this.actions++;
 
-        /* Everything behind the decision, one line: what was observed, what
-           it rests on, who is suspected and how surely, what changed and why. */
         long seenAgo = Math.max(0L, System.currentTimeMillis() - suspect.lastSeen) / 60000L;
         String record = String.format(java.util.Locale.ROOT,
                 "DECIDE  %s | detector=FlagDetector kind=%s suspect=%s excess=%.2f/min on=%.2f off=%.2f"
@@ -619,20 +473,12 @@ public class Adaptive extends Module {
                 detail, suspect.excess(), suspect.kind, suspect.confidence * 100.0));
     }
 
-    /** The most recent decisions, oldest first. */
     public List<String> recentDecisions() {
         synchronized (this.decisions) {
             return new ArrayList<String>(this.decisions);
         }
     }
 
-    /**
-     * Switch one module off for a while purely to find out what it is worth.
-     *
-     * Chosen as the one with the least time on its thinner side, which is the
-     * measurement that most limits every conclusion. Nothing is learned about a
-     * module that is never absent.
-     */
     private void beginProbe() {
         List<String> candidates = new ArrayList<String>();
         for (Module module : Atlas.moduleManager.modules.values()) {
@@ -675,10 +521,7 @@ public class Adaptive extends Module {
         if (module != null && Boolean.TRUE.equals(was)) {
             module.setEnabled(true);
         }
-        /* A probe that bought no evidence is a probe that will be chosen again
-           immediately, and again after that. Whatever the reason -- the module
-           refused to switch off, or the world was never entered -- it is set
-           aside rather than retried in a loop. */
+
         if (offMinutes(target) - this.probeStartedOff < 0.5) {
             this.unprobeable.add(target);
             log("SKIP    " + target + " gained no off-time while probed; not probing it again");
@@ -691,9 +534,6 @@ public class Adaptive extends Module {
         Brain.save();
     }
 
-    // ---- knobs --------------------------------------------------------
-
-    /** A single number that makes a module less aggressive as it goes down. */
     private static final class Adjustable {
         final String label;
         final double floor;
@@ -708,7 +548,6 @@ public class Adaptive extends Module {
             this.target = target;
         }
 
-        /** Where this has it: its own override, else the player's value. */
         double get() {
             atlas.property.Property<?> property = this.target.get();
             Object value = property.overrideOf(OWNER);
@@ -718,8 +557,6 @@ public class Adaptive extends Module {
             return ((Number) value).doubleValue();
         }
 
-        /* A LEARNED override (plan step 7), not a write: never saved, and
-           released when this module is switched off. */
         void set(double value) {
             double bounded = Math.max(this.floor, value);
             this.target.get().override(atlas.property.Property.Source.LEARNED, OWNER, this.integral
@@ -728,12 +565,6 @@ public class Adaptive extends Module {
         }
     }
 
-    /**
-     * The one place that knows anything specific about a module, and it is
-     * optional: a module without an entry here is simply switched off instead
-     * of turned down, which is what happens to every module added later until
-     * someone decides it deserves a gentler treatment.
-     */
     private Adjustable knobFor(Module module) {
         if (module instanceof Reach) {
             final Reach reach = (Reach) module;
@@ -750,8 +581,6 @@ public class Adaptive extends Module {
         }
         return null;
     }
-
-    // ---- output -------------------------------------------------------
 
     private void say(String message) {
         if (this.chat.getValue()) {
@@ -775,7 +604,6 @@ public class Adaptive extends Module {
             writer.println(LINE_STAMP.format(new Date()) + "  [" + Brain.server() + "]  " + line);
             writer.flush();
         } catch (Exception ignored) {
-            // A lost line must not end the run.
         } finally {
             if (writer != null) {
                 writer.close();

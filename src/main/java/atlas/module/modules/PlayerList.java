@@ -1,11 +1,7 @@
-/*
- * Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0),
- * src/main/java/openskid/module/modules/PlayerList.java, 2026-10-05: package openskid -> atlas,
- * OpenSkid -> Atlas. Changes after that are marked in comments.
- */
+// Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0), src/main/java/openskid/module/modules/PlayerList.java
+
 package atlas.module.modules;
 
-// Tablist HUD with name or ping sort plus a game-mode filter. Render shape follows FKCounter.
 import atlas.ui.impl.clickgui.atlas.HudPanel;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -106,7 +102,7 @@ public class PlayerList extends Module {
         for (String line : shown) {
             width = Math.max(width, mc.fontRendererObj.getStringWidth(EnumChatFormatting.getTextWithoutFormattingCodes(line)));
         }
-        /* HUD editor (2026-10-05): report where this is drawn, so the editor can find and drag it. */
+
         HudLayout.report("PlayerList", placeholder ? "PlayerList (empty)" : "PlayerList", baseX - 2.0F * scaleValue,
                 baseY - 2.0F * scaleValue, (width + 4) * scaleValue, (shown.size() * lineHeight + 2) * scaleValue,
                 HudLayout.ints(this.offsetX, 1, this.offsetY, 1), HudLayout.scale(this.scale));

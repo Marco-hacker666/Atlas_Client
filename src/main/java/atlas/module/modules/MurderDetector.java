@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): held-item scan plus chat flags and a
-// traitor id set for Hypixel Murder Mystery.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;

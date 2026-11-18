@@ -41,100 +41,36 @@ import net.minecraft.util.Vec3;
 import java.lang.reflect.Field;
 import java.util.List;
 
-/**
- * Your knockback lands late (2026-10-27 rebuild, owner: "no flags -- the
- * server must believe the latency is real").
- *
- * Everything here is on the receive side: what the server sent is processed
- * later. The server cannot see when this client processes a packet; it sees
- * only the answers -- transaction replies, keep-alive replies, and movement
- * that does or does not show the knockback. A real slow connection makes
- * those answers late together, in the order the packets came, and its delay
- * moves smoothly. Anything else is a fingerprint:
- *  - the old hold kept the knockback and the transactions behind it, but let
- *    keep-alives answer on time and let block changes through: transaction
- *    ping jumped while keep-alive ping did not, and the client acted on block
- *    changes the server's transaction clock said it had not had yet;
- *  - it was only ever late right after a velocity packet: the reply to the
- *    transaction that brackets each knockback was late, no other -- the
- *    correlation a velocity check is built to find;
- *  - it let the queue out from the movement update, after this tick's clicks
- *    had gone, where vanilla processes packets before the tick;
- *  - RealtimeDamage let the hurt arrive two ticks before the push, so
- *    JumpReset jumped before there was anything to reset.
- *
- * Steady: while in a fight, the whole incoming stream runs a
- * set delay late -- every packet, in order, keep-alives and transactions
- * included -- the delay ramping in and out a few milliseconds a tick and
- * wandering a little, as a real round trip does. The knockback is late
- * because everything is: there is no reply the server can single out.
- *
- * Spike (the default since 2026-10-29): the old idea, made consistent: a hold
- * opens on a knockback and everything that arrives behind it waits with it, in
- * order, keep-alives and block changes included (HoldOthers and
- * HoldTransactions still narrow it). Its defaults follow the commercial
- * client's lag-on-hit studied 2026-10-29 (owner's request; behaviour only):
- * 40 % of pushes, at least 475 ms apart, only with an enemy within 5 blocks
- * and 90 degrees; 50-100 ms in the air, 200-250 ms after three ticks on the
- * ground; no early end on drift or on an upward push, no water check. The one
- * difference asked for: a ping budget (LatencyBudget 450), so on a slow
- * connection the hold shrinks instead of stacking on the ping.
- *
- * In both, held packets go out from a thread of their own the moment they are
- * due, through vanilla's own handlers, which queue them for the client thread:
- * they are processed where vanilla processes packets, at the start of the next
- * frame, before the tick. A correction, a respawn, a join or a disconnect lets
- * everything out first; a catch (Arbiter) ends it; a new world drops it.
- *
- * LagGuard (2026-10-29): Steady, and Spike with HoldOthers, hold the whole
- * stream in order, so LagGuard lets them run through the knockback window (a
- * slow connection does not speed up when it is hit) and they ramp to its
- * allowance instead of being cut: nothing in the pause after a correction or
- * once struck out. Spike with only the push held is stopped in the window --
- * a lone late push is the fingerprint.
- *
- * Not seen by other modules: a held packet goes out past the event bus, so a
- * module that reacts to the velocity packet itself (Velocity) does not see a
- * knockback this module held.
- */
 public class KnockbackDelay extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     private static final int STEADY = 0;
     private static final int SPIKE = 1;
-    /* 2026-10-30 (after Slinky's Knockback Delay, owner: "the limit may be higher, not everything that strict"): a hold
-       only while in the air -- the push is late where a late push cannot show -- for AirMax times a log-normal
-       factor (0.75-1.35) drawn each time, the whole stream held as in Spike. No vertical, cooldown or drift limit. */
+
     private static final int AIR = 2;
     public final ModeProperty mode = new ModeProperty("Mode", SPIKE, new String[]{"Steady", "Spike", "Air"});
     private final java.util.function.BooleanSupplier steady = () -> this.mode.getValue() == STEADY;
     private final java.util.function.BooleanSupplier spike = () -> this.mode.getValue() == SPIKE;
     private final java.util.function.BooleanSupplier air = () -> this.mode.getValue() == AIR;
 
-    /** Steady: how late the whole stream runs while in a fight, ms. */
     public final IntProperty steadyDelay = new IntProperty("SteadyDelay", 100, 0, 400, this.steady);
-    /** Steady: the most the delay changes in one tick, ms -- the ramp in and out of a fight. */
+
     public final IntProperty ramp = new IntProperty("Ramp", 10, 2, 50, this.steady);
 
     public final IntProperty airDelay = new IntProperty("AirDelay", 75, 0, 1000, this.spike);
     public final IntProperty groundDelay = new IntProperty("GroundDelay", 225, 0, 1000, this.spike);
-    /** Spike: half-width of the window each delay is drawn from. Steady: how far the delay wanders. */
+
     public final IntProperty randomize = new IntProperty("Randomize", 25, 0, 200);
-    /** Consecutive grounded ticks before the ground figure replaces the air one. */
+
     public final IntProperty groundTicks = new IntProperty("GroundTicks", 3, 1, 20, this.spike);
     public final IntProperty cooldown = new IntProperty("Cooldown", 475, 0, 2000, this.spike);
     public final IntProperty chance = new IntProperty("Chance", 40, 0, 100, this.spike);
-    /** Air: the typical hold, ms (each one is drawn around it, 0.75x-1.35x). */
+
     public final IntProperty airMax = new IntProperty("AirMax", 100, 10, 400, this.air);
     public final IntProperty airChance = new IntProperty("AirChance", 100, 0, 100, this.air);
 
-    /** Spike: blocks of drift allowed before the hold ends early, whatever the timer says. */
     public final FloatProperty maxDivergence = new FloatProperty("MaxDivergence", 3.0F, 0.1F, 3.0F, this.spike);
-    /**
-     * Total staleness the server's view is allowed, ms. The round trip
-     * already spends part of it; the delay may only use what is left.
-     */
+
     public final IntProperty latencyBudget = new IntProperty("LatencyBudget", 450, 100, 1200);
     public final BooleanProperty pingAware = new BooleanProperty("PingAware", true);
 
@@ -144,31 +80,25 @@ public class KnockbackDelay extends Module {
     public final FloatProperty targetFov = new FloatProperty("TargetFOV", 90.0F, 10.0F, 360.0F,
             this.requireTarget::getValue);
 
-    /** Spike: hold the rest of the stream behind the knockback (as real latency does), or only the knockback. */
     public final BooleanProperty holdOthers = new BooleanProperty("HoldOthers", true, this.spike);
-    /** Spike: knockback with a larger upward part than this is not held. */
+
     public final FloatProperty maxVertical = new FloatProperty("MaxVertical", 2.0F, 0.0F, 2.0F, this.spike);
 
     public final BooleanProperty waterCheck = new BooleanProperty("WaterCheck", false);
-    /**
-     * Your own hurt goes through on time. Off is what a slow connection does
-     * (hurt and push arrive together, so JumpReset jumps on the push); on
-     * makes the hit feel immediate but the push two ticks after it.
-     */
+
     public final BooleanProperty realtimeDamage = new BooleanProperty("RealtimeDamage", false);
     public final BooleanProperty onlySwords = new BooleanProperty("OnlySwords", false);
     public final BooleanProperty requireAttackKey = new BooleanProperty("RequireAttackKey", false);
     public final BooleanProperty onlyInAir = new BooleanProperty("OnlyInAir", false, this.spike);
-    /** Spike with HoldOthers off: the transactions behind the push still wait with it. */
+
     public final BooleanProperty holdTransactions = new BooleanProperty("HoldTransactions", true,
             () -> this.spike.getAsBoolean() && !this.holdOthers.getValue());
 
     private final DelayLine<Packet<?>> line = new DelayLine<Packet<?>>();
-    /** One hold and release at a time: the network thread holding, the release thread and the client thread letting out. */
+
     private final Object lock = new Object();
     private final LatencyRamp latency = new LatencyRamp();
 
-    /* Written on the client thread, read on the others. */
     private volatile long releaseAt;
     private volatile long lastTrigger;
     private volatile int groundedTicks;
@@ -176,7 +106,7 @@ public class KnockbackDelay extends Module {
     private volatile int delayBase;
     private volatile int selfEntityId = Integer.MIN_VALUE;
     private volatile int delayCeiling = Integer.MAX_VALUE;
-    /** Steady: the delay now, ms (ramped). */
+
     private volatile long steadyNow;
 
     private boolean divergenceArmed;
@@ -191,9 +121,8 @@ public class KnockbackDelay extends Module {
         super("KnockbackDelay", false, false,
                 "Holds incoming knockback for a short window so the push lands late");
 
-        /* Incoming holder: one at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
         atlas.management.PacketHub.registerIncoming("KnockbackDelay", () -> this.line.size(), this::flush);
-        /* What is held, for PacketHolds (plan step 13). */
+
         atlas.management.PacketHolds.register(() -> {
             int count = this.line.size();
             if (count == 0) {
@@ -208,7 +137,6 @@ public class KnockbackDelay extends Module {
                 return getName();
             }
 
-            /* The longest any packet may wait, and a second more. */
             @Override
             public long ceilingMs() {
                 return Math.max(Math.max(Math.max(airDelay.getValue(), groundDelay.getValue()), steadyDelay.getValue()),
@@ -254,12 +182,10 @@ public class KnockbackDelay extends Module {
         this.steadyNow = 0L;
     }
 
-    /** Packets currently withheld, for whatever is reporting on causes. */
     public int heldCount() {
         return this.line.size();
     }
 
-    /** A new world: what is held belongs to the one left (a respawn or join already let it out in order). */
     @EventTarget(whenDisabled = true)
     public void onLoadWorld(LoadWorldEvent event) {
         synchronized (this.lock) {
@@ -271,9 +197,6 @@ public class KnockbackDelay extends Module {
         this.steadyNow = 0L;
     }
 
-    // ---- the client thread, once a tick ------------------------------------
-
-    /** Start of the tick: the world-dependent decisions, so the packet handler never reads the world. */
     @EventTarget(Priority.HIGH)
     public void onTick(TickEvent event) {
         if (event.getType() != EventType.PRE || mc.thePlayer == null || mc.theWorld == null) {
@@ -287,7 +210,6 @@ public class KnockbackDelay extends Module {
             return;
         }
         if (mc.currentScreen != null || mc.thePlayer.isDead || Arbiter.catching()) {
-            /* A catch (see Arbiter) simulates the fall from the knockback as it arrives. */
             if (Arbiter.catching() && !this.line.isEmpty()) {
                 Arbiter.yielded(this.getName());
             }
@@ -313,11 +235,6 @@ public class KnockbackDelay extends Module {
         }
     }
 
-    /**
-     * Spike: ends the hold once the two views of this player have drifted far
-     * enough to be worth correcting -- distance, not time, is what the server
-     * acts on.
-     */
     private void trackDivergence() {
         if (!this.divergenceArmed) {
             this.divergenceArmed = true;
@@ -332,7 +249,6 @@ public class KnockbackDelay extends Module {
         this.lastZ = mc.thePlayer.posZ;
         this.divergence += Math.sqrt(dx * dx + dz * dz);
         if (this.divergence > this.maxDivergence.getValue()) {
-            /* Due now: the release thread lets it out, in order. */
             this.releaseAt = 1L;
         }
     }
@@ -366,20 +282,16 @@ public class KnockbackDelay extends Module {
         this.conditionsMet = !this.requireTarget.getValue() || this.findTarget() != null;
     }
 
-    /** What the round trip leaves for the delay; at or below zero, nothing is held. */
     private int computeCeiling() {
         if (!this.pingAware.getValue()) {
             return Integer.MAX_VALUE;
         }
         int ping = Ping.own();
         if (ping <= 0) {
-            /* No usable reading: the conservative figure. */
             return Math.min(this.airDelay.getValue(), this.steadyDelay.getValue());
         }
         return this.latencyBudget.getValue() - ping;
     }
-
-    // ---- the network thread ------------------------------------------------
 
     @EventTarget(Priority.HIGHEST)
     public void onPacket(PacketEvent event) {
@@ -389,8 +301,6 @@ public class KnockbackDelay extends Module {
         Packet<?> packet = event.getPacket();
         if (packet instanceof S08PacketPlayerPosLook || packet instanceof S07PacketRespawn
                 || packet instanceof S01PacketJoinGame || packet instanceof S40PacketDisconnect) {
-            /* The server stating where this player is, or a new world: everything held goes first, in order,
-               and this one after it, on time. */
             this.flush();
             return;
         }
@@ -404,7 +314,6 @@ public class KnockbackDelay extends Module {
         synchronized (this.lock) {
             boolean holding = !this.line.isEmpty();
             if (this.realtimeDamage.getValue() && isOwnHurt(packet)) {
-                /* Through on time, ahead of what is held (RealtimeDamage). */
                 return;
             }
             if (this.mode.getValue() == STEADY) {
@@ -422,12 +331,9 @@ public class KnockbackDelay extends Module {
             boolean push = this.isPlayerKnockbackPacket(packet);
             boolean others = this.mode.getValue() == AIR || this.holdOthers.getValue();
             if (!others && !push && !(packet instanceof S32PacketConfirmTransaction && this.holdTransactions.getValue())) {
-                /* HoldOthers off: only the push (and the replies behind it) are late. */
                 return;
             }
             if (push) {
-                /* A second push inside the window: both go on time, in order (two in one flush would
-                   overwrite the first). */
                 this.releaseAt = 1L;
             }
             this.hold(event, packet);
@@ -454,11 +360,6 @@ public class KnockbackDelay extends Module {
         atlas.util.ActionLedger.note(this.getName(), "held-self");
     }
 
-    /**
-     * Holds this packet behind the rest. Refused (another holder took it, or
-     * PingFix keeps keep-alives on time): a keep-alive just goes ahead; anything
-     * else is let out with all before it, so the order holds.
-     */
     private void hold(PacketEvent event, Packet<?> packet) {
         if (atlas.management.PacketHub.take(event, "KnockbackDelay")) {
             this.line.add(packet, System.currentTimeMillis());
@@ -477,7 +378,6 @@ public class KnockbackDelay extends Module {
                 && statusEntityId((S19PacketEntityStatus) packet) == this.selfEntityId;
     }
 
-    /** Spreads the figure the client thread settled over the randomize window. */
     private int rollDelay() {
         int base = Math.min(this.delayBase, this.delayCeiling);
         if (base <= 0) {
@@ -496,7 +396,6 @@ public class KnockbackDelay extends Module {
         return Math.max(0, Math.min(delay, this.delayCeiling));
     }
 
-    /** The part safe to decide on the network thread: a clock, a dice roll, a flag set on tick. */
     private boolean canStart() {
         if (!this.conditionsMet) {
             return false;
@@ -510,7 +409,6 @@ public class KnockbackDelay extends Module {
         return RandomUtil.nextInt(0, 100) <= this.chance.getValue();
     }
 
-    /** The packet's subject, without asking the world to resolve it. */
     private static int statusEntityId(S19PacketEntityStatus status) {
         try {
             if (STATUS_ENTITY_ID == null) {
@@ -524,13 +422,11 @@ public class KnockbackDelay extends Module {
         }
     }
 
-    /** A push this module is willing to hold, as opposed to merely one aimed here. */
     private boolean isHoldablePush(Packet<?> packet) {
         if (!this.isPlayerKnockbackPacket(packet)) {
             return false;
         }
         if (packet instanceof S12PacketEntityVelocity) {
-            /* The wire format is blocks per tick scaled by 8000. */
             double motionY = ((S12PacketEntityVelocity) packet).getMotionY() / 8000.0;
             return this.mode.getValue() == AIR || motionY <= this.maxVertical.getValue();
         }
@@ -550,18 +446,8 @@ public class KnockbackDelay extends Module {
         return false;
     }
 
-    // ---- letting out -------------------------------------------------------
-
-    /** The client thread asked for everything to go: the release thread does it (see flush). */
     private volatile boolean flushRequested;
 
-    /**
-     * Everything held, in order. Off the client thread it goes now: each
-     * handler queues itself for the client thread behind what was let out
-     * before. On the client thread a handler would run at once, ahead of
-     * packets already queued for the next frame -- so there it is handed to
-     * the release thread instead, which lets it out a millisecond later.
-     */
     private void flush() {
         if (mc.isCallingFromMinecraftThread()) {
             this.flushRequested = true;
@@ -584,7 +470,6 @@ public class KnockbackDelay extends Module {
         }
     }
 
-    /** What is due now: Steady by each packet's arrival and the delay now, Spike all at once when the hold ends. */
     private void releaseDue() {
         synchronized (this.lock) {
             if (this.line.isEmpty()) {
@@ -609,11 +494,6 @@ public class KnockbackDelay extends Module {
         }
     }
 
-    /**
-     * Vanilla's handler, from whichever thread lets the packet out: off the
-     * client thread it queues itself for the client thread (and says so with
-     * ThreadQuickExitException), in the order handed over.
-     */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void processPacketSilent(Packet<?> packet) {
         try {
@@ -621,13 +501,11 @@ public class KnockbackDelay extends Module {
                 ((Packet) packet).processPacket(mc.getNetHandler());
             }
         } catch (net.minecraft.network.ThreadQuickExitException ignored) {
-            // Queued for the client thread by vanilla, in order; not an error.
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    /** One daemon thread for every instance's lifetime: lets packets out the moment they are due. */
     private void startReleaser() {
         synchronized (KnockbackDelay.class) {
             if (releaser != null && releaser.isAlive()) {
@@ -656,13 +534,6 @@ public class KnockbackDelay extends Module {
         }
     }
 
-    // ---- the fight -----------------------------------------------------------
-
-    /**
-     * Whatever the client is already fighting, falling back to a scan. The
-     * aura's own target is preferred because it has already applied the
-     * client's team, friend and bot filtering.
-     */
     private Entity findTarget() {
         KillAura killAura = (KillAura) Atlas.moduleManager.modules.get(KillAura.class);
         if (killAura != null && killAura.isEnabled()) {

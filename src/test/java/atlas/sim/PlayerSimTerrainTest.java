@@ -15,14 +15,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Water, lava, ladders, cobwebs, soul sand and slime in the movement simulation (2026-11-12), against the speeds the
- * game is known for: sinking and swimming at 0.1 a tick, climbing a ladder at 0.1176 and sliding down it at 0.15.
- */
 public class PlayerSimTerrainTest {
     private static final double RESTING_FALL = -0.0784000015258789;
 
-    /** Boxes, and cells of the kinds the simulation asks about. */
     private static final class Terrain implements PlayerSim.World {
         final List<AxisAlignedBB> solid = new ArrayList<AxisAlignedBB>();
         final Set<String> water = new HashSet<String>();
@@ -42,7 +37,6 @@ public class PlayerSimTerrainTest {
             return this;
         }
 
-        /** Cells x1..x2, y1..y2, z1..z2 (inclusive) into {@code set}. */
         Terrain fill(Set<String> set, int x1, int y1, int z1, int x2, int y2, int z2) {
             for (int x = x1; x <= x2; x++) {
                 for (int y = y1; y <= y2; y++) {
@@ -70,7 +64,6 @@ public class PlayerSimTerrainTest {
             return this.slime.contains(key(x, y, z)) ? 0.8F : 0.6F;
         }
 
-        /* Source blocks: getLiquidHeightPercent(0) is 1/9. */
         @Override
         public boolean water(AxisAlignedBB area, double[] flow) {
             boolean in = false;
@@ -161,7 +154,6 @@ public class PlayerSimTerrainTest {
         return in;
     }
 
-    /** Ticks {@code ticks} times; the move of the last tick, {dx, dy}. */
     private static double[] run(PlayerSim sim, PlayerSim.World world, PlayerSim.Input in, int ticks) {
         double dx = 0.0;
         double dy = 0.0;
@@ -175,7 +167,6 @@ public class PlayerSimTerrainTest {
         return new double[]{dx, dy};
     }
 
-    /** A pool of still water, its bottom at y = -40, wide and deep. */
     private static Terrain pool() {
         Terrain t = new Terrain().box(-100, -41, -100, 100, -40, 100);
         return t.fill(t.water, -60, -40, -10, 60, 10, 10);
@@ -195,7 +186,6 @@ public class PlayerSimTerrainTest {
 
     @Test
     public void swimmingAcrossIsAboutTwoBlocksASecond() {
-        /* 0.8 drag and 0.02 of push: 0.0196 / 0.2 = 0.098 a tick. */
         double[] move = run(at(0, -20, 0, false), pool(), keys(1.0F, true, false), 60);
         assertEquals(0.098, move[0], 1.0E-4);
     }
@@ -215,13 +205,12 @@ public class PlayerSimTerrainTest {
             t.flow.put(cell, new double[]{2.0, 0.0, 0.0});
         }
         double[] move = run(at(0, -20, 0, false), t, keys(0, true, false), 60);
-        /* 0.014 a tick against 0.8 drag: 0.014 / 0.2. */
+
         assertEquals(0.07, move[0], 1.0E-4);
     }
 
     @Test
     public void aWallInWaterIsClimbedWhenThereIsAirAbove() {
-        /* Water up to y = 0, a block wall at x = 1 reaching y = 0.5: swimming into it at the surface hops out. */
         Terrain t = new Terrain().box(-100, -41, -100, 100, -40, 100).box(1, -40, -100, 100, 0.5, 100);
         t.fill(t.water, -60, -40, -10, 0, -1, 10);
         PlayerSim sim = at(0.5, -1.2, 0, false);
@@ -238,11 +227,10 @@ public class PlayerSimTerrainTest {
         Terrain t = new Terrain().box(-100, -41, -100, 100, -40, 100);
         t.fill(t.lava, -60, -40, -10, 60, 10, 10);
         double[] move = run(at(0, -20, 0, false), t, keys(1.0F, true, false), 60);
-        /* 0.5 drag: 0.0196 / 0.5. */
+
         assertEquals(0.0392, move[0], 1.0E-4);
     }
 
-    /** A wall at x = 1 with a ladder on its west face (x 0.875..1) up to y = 20. */
     private static Terrain ladderWall() {
         Terrain t = new Terrain().box(-100, -1, -100, 100, 0, 100).box(1, 0, -100, 2, 30, 100)
                 .box(0.875, 0, -0.5, 1, 20, 0.5);
@@ -275,7 +263,7 @@ public class PlayerSimTerrainTest {
         PlayerSim sim = at(0, 0, 0, true);
         double[] move = run(sim, t, keys(1.0F, false, false), 30);
         assertTrue(sim.inWeb);
-        /* The motion is zeroed every move, so each tick's push (0.098) is all there is: a quarter of it. */
+
         assertEquals(0.0245, move[0], 1.0E-4);
     }
 
@@ -291,19 +279,17 @@ public class PlayerSimTerrainTest {
         }
         assertTrue(sim.inWeb);
         double[] move = run(sim, t, keys(0, false, false), 3);
-        /* From then on each tick's fall is 0.05 of the 0.0784 a tick of gravity leaves. */
+
         assertEquals(-0.0784 * 0.05, move[1], 1.0E-5);
     }
 
     private static Terrain soulSand() {
-        /* Soul sand is 0.875 high: the player stands in it and touches it every move. */
         Terrain t = new Terrain().box(-100, -1, -100, 100, 0.875, 100);
         return t.fill(t.soulSand, -60, 0, -5, 60, 0, 5);
     }
 
     @Test
     public void soulSandTakesTheMotionAcrossToFourTenths() {
-        /* Inside one block: one touch, the motion left after the move is 0.4 of it, then friction. */
         PlayerSim sim = at(0.5, 0.875, 0.5, true);
         sim.tick(soulSand(), keys(1.0F, false, false));
         assertEquals(0.098 * 0.4 * 0.546, sim.motionX, 1.0E-5);
@@ -311,7 +297,6 @@ public class PlayerSimTerrainTest {
 
     @Test
     public void soulSandActsOncePerBlockTouched() {
-        /* On the corner of four blocks the 0.4 is taken four times, as the game does it block by block. */
         PlayerSim sim = at(0.0, 0.875, 0.0, true);
         sim.tick(soulSand(), keys(0.1F, false, false));
         assertEquals(0.0098 * Math.pow(0.4, 4) * 0.546, sim.motionX, 1.0E-6);
@@ -369,7 +354,6 @@ public class PlayerSimTerrainTest {
         assertFalse(Double.isNaN(onSlime));
     }
 
-    /** Water from y = -40 up to the cell under y = 0, flowing as given; a floor far below. */
     private static Terrain flowingPool(double flowX, double flowZ) {
         Terrain t = new Terrain().box(-100, -41, -100, 100, -40, 100);
         t.fill(t.water, -60, -40, -10, 60, -1, 10);
@@ -381,9 +365,6 @@ public class PlayerSimTerrainTest {
 
     @Test
     public void theTickAPlayerEntersFlowingWaterItIsAlreadyPushed() {
-        /* 2026-11-12, from the game's code (EntityLivingBase.updateFallState): not in water before the move, the
-           player asks again where the move ended. Falling a block from y 0.5, the box is in the water after the
-           move: pushed 0.014 at once (then the air's 0.91), and again at the start of the next tick. */
         Terrain t = flowingPool(2.0, 0.0);
         PlayerSim sim = at(0.5, 0.5, 0.5, false);
         sim.motionY = -1.0;
@@ -397,8 +378,6 @@ public class PlayerSimTerrainTest {
 
     @Test
     public void theFlowIsDividedByItsLengthAsAFloat() {
-        /* Vec3.normalize takes the length through MathHelper.sqrt_double, a float. One cell counted, flowing (1, 1):
-           each axis gets 1 / (float) sqrt 2 of the 0.014, not 1 / sqrt 2. */
         Terrain t = flowingPool(1.0, 1.0);
         PlayerSim sim = at(0.5, 0.5, 0.5, false);
         sim.motionY = -1.0;
@@ -411,7 +390,6 @@ public class PlayerSimTerrainTest {
 
     @Test
     public void aWallHitWhileEnteringWaterStillClearsThatMotion() {
-        /* The push of the entry comes before the game clears the motion a wall stopped: nothing of it is left. */
         Terrain t = flowingPool(2.0, 0.0);
         t.box(0.9, -40, -100, 100, 40, 100);
         PlayerSim sim = at(0.5, 0.5, 0.5, false);
@@ -425,8 +403,6 @@ public class PlayerSimTerrainTest {
 
     @Test
     public void aWorldWithABlockAddedKeepsTheRestOfTheTerrain() {
-        /* 2026-11-12: SimWorlds.withBlock passed on only the boxes and the slipperiness, so in it the water, the
-           ladders, the cobwebs and the slime were gone. */
         Terrain t = pool();
         t.ladder.add(Terrain.key(3, 0, 3));
         t.slime.add(Terrain.key(4, 0, 4));
@@ -440,34 +416,33 @@ public class PlayerSimTerrainTest {
         assertTrue(with.climbable(3, 0, 3));
         assertTrue(with.slime(4, 0, 4));
         assertEquals(1, with.touching(new AxisAlignedBB(5.2, 0.2, 5.2, 5.8, 0.8, 5.8), PlayerSim.Touch.WEB));
-        /* The added cell: a full cube, with a box, and not a ladder even where the base had one. */
+
         assertTrue(with.solid(3, 5, 3));
         assertFalse(with.solid(3, 6, 3));
         assertFalse(with.boxes(new AxisAlignedBB(3.2, 5.2, 3.2, 3.8, 5.8, 3.8)).isEmpty());
         assertFalse(SimWorlds.withBlock(t, 3, 0, 3).climbable(3, 0, 3));
         assertFalse(SimWorlds.withBlock(t, 4, 0, 4).slime(4, 0, 4));
-        /* And a player in it still sinks through the water as in the base. */
+
         double[] move = run(at(0, 0, 0, false), with, keys(0, false, false), 60);
         assertEquals(-0.1, move[1], 1.0E-4);
     }
 
     @Test
     public void aStateTakenAfterTheFlowPushIsNotPushedAgain() {
-        /* Review, PR #37: taken inside the tick (handleWaterMovement done), the first move carries no second push. */
         Terrain t = pool();
         for (String cell : t.water) {
             t.flow.put(cell, new double[]{2.0, 0.0, 0.0});
         }
         PlayerSim between = at(0, -20, 0, false);
         PlayerSim inside = between.copy();
-        /* As SimPlayer gives it inside the tick: the game has already found the water. */
+
         inside.stage = PlayerSim.Stage.INPUT;
         inside.inWater = true;
         between.tick(t, keys(0, false, false));
         inside.tick(t, keys(0, false, false));
         assertEquals(0.014, between.x() - inside.x(), 1.0E-9);
         assertEquals(PlayerSim.Stage.START, inside.stage);
-        /* From the second tick on, both are pushed. */
+
         double a = between.x();
         double b = inside.x();
         between.tick(t, keys(0, false, false));

@@ -3,7 +3,6 @@ package atlas.script.raven.packet.serverbound;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C0APacketAnimation;
 
-/** A swing of the arm. */
 public class C0A extends CPacket {
     public C0A() {
         super("C0APacketAnimation");

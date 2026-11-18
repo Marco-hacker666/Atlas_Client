@@ -13,28 +13,25 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.init.Items;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemFood;
-import atlas.mixin.IAccessorKeyBinding; // Import IAccessorKeyBinding
-
+import atlas.mixin.IAccessorKeyBinding;
 
 public class AutoGapple extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final PercentProperty healthPercentage = new PercentProperty("Health-Percent", 50); // Default to 50%
-    public final BooleanProperty eatInCombat = new BooleanProperty("Eat-In-Combat", false); // Default to false
+    public final PercentProperty healthPercentage = new PercentProperty("Health-Percent", 50);
+    public final BooleanProperty eatInCombat = new BooleanProperty("Eat-In-Combat", false);
 
-    // New fields for continuous eating simulation
     private boolean isEating = false;
     private int eatTickCount = 0;
-    private static final int EAT_DURATION_TICKS = 32; // Roughly 1.6 seconds (20 ticks/sec * 1.6)
+    private static final int EAT_DURATION_TICKS = 32;
     private int originalHotbarSlot = -1;
 
     public AutoGapple() {
-        super("Gapple", false, false); // Name, default enabled (false), default hidden (false)
+        super("Gapple", false, false);
     }
 
     @Override
     public void onEnabled() {
-        // Reset state when module is enabled
         isEating = false;
         eatTickCount = 0;
         originalHotbarSlot = -1;
@@ -43,11 +40,10 @@ public class AutoGapple extends Module {
 
     @Override
     public void onDisabled() {
-        // Ensure right-click is released if module is disabled during eating
         if (isEating) {
             releaseUseKey();
         }
-        /* 2026-10-31 (audit): switched off mid-action, the hand stayed on the item it had swapped to. */
+
         if (originalHotbarSlot >= 0 && originalHotbarSlot < 9 && mc.thePlayer != null && mc.thePlayer.inventory.currentItem != originalHotbarSlot) {
             mc.thePlayer.inventory.currentItem = originalHotbarSlot;
         }
@@ -57,17 +53,10 @@ public class AutoGapple extends Module {
         super.onDisabled();
     }
 
-    /**
-     * Hands the use key back to the physical mouse button rather than forcing
-     * it up, so a right click the player is really holding survives.
-     */
     private static void releaseUseKey() {
         KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
     }
 
-    /* The tick handler below cannot run without a world, so leaving one
-       mid-eat left the simulated right click held and isEating set, to be
-       resumed on whatever the next world handed us. */
     @EventTarget(whenDisabled = true)
     public void onLoadWorld(LoadWorldEvent event) {
         if (isEating) {
@@ -84,7 +73,6 @@ public class AutoGapple extends Module {
             return;
         }
 
-
         if (event.getType() != EventType.PRE) {
             return;
         }
@@ -93,16 +81,12 @@ public class AutoGapple extends Module {
             return;
         }
 
-        // --- Continuous Eating Logic ---
         if (isEating) {
-            // Check if player is still holding the golden apple
             ItemStack heldItem = mc.thePlayer.getHeldItem();
             if (heldItem == null || heldItem.getItem() != Items.golden_apple) {
-                // Golden apple was consumed or switched away mid-eating, stop eating simulation
                 releaseUseKey();
                 isEating = false;
 
-                // Restore original slot if it was valid
                 if (originalHotbarSlot != -1 && mc.thePlayer.inventory.currentItem != originalHotbarSlot) {
                     mc.thePlayer.inventory.currentItem = originalHotbarSlot;
                     mc.playerController.updateController();
@@ -114,12 +98,10 @@ public class AutoGapple extends Module {
 
             eatTickCount++;
 
-
             if (eatTickCount >= EAT_DURATION_TICKS) {
                 releaseUseKey();
                 isEating = false;
 
-                // Restore original slot
                 if (originalHotbarSlot != -1 && mc.thePlayer.inventory.currentItem != originalHotbarSlot) {
                     mc.thePlayer.inventory.currentItem = originalHotbarSlot;
                     mc.playerController.updateController();
@@ -127,14 +109,11 @@ public class AutoGapple extends Module {
                 originalHotbarSlot = -1;
                 eatTickCount = 0;
             }
-            return; // Don't try to start eating again if already eating
+            return;
         }
-        // --- End Continuous Eating Logic ---
 
-        // Only proceed if not currently eating
         if (!isEating) {
             if (!eatInCombat.getValue() && Atlas.playerStateManager.isInCombat()) {
-
                 return;
             }
 
@@ -143,32 +122,25 @@ public class AutoGapple extends Module {
             float healthPercent = (currentHealth / maxHealth) * 100.0F;
 
             if (healthPercent <= healthPercentage.getValue().floatValue()) {
-
                 int gappleSlot = findGappleInHotbar();
 
                 if (gappleSlot != -1) {
+                    originalHotbarSlot = mc.thePlayer.inventory.currentItem;
+                    mc.thePlayer.inventory.currentItem = gappleSlot;
+                    mc.playerController.updateController();
 
-
-                    // Start eating process
-                    originalHotbarSlot = mc.thePlayer.inventory.currentItem; // Store original slot
-                    mc.thePlayer.inventory.currentItem = gappleSlot; // Select GApple
-                    mc.playerController.updateController(); // Update controller
-
-                    ((IAccessorKeyBinding) mc.gameSettings.keyBindUseItem).setPressed(true); // Simulate holding right-click
+                    ((IAccessorKeyBinding) mc.gameSettings.keyBindUseItem).setPressed(true);
                     isEating = true;
-                    eatTickCount = 0; // Reset tick count for new eating process
-
+                    eatTickCount = 0;
                 } else {
-
                 }
             } else {
-
             }
         }
     }
 
     private int findGappleInHotbar() {
-        for (int i = 0; i < 9; i++) { // Iterate through hotbar slots (0-8)
+        for (int i = 0; i < 9; i++) {
             ItemStack stack = mc.thePlayer.inventory.mainInventory[i];
             if (stack != null && stack.getItem() instanceof ItemFood) {
                 if (stack.getItem() == Items.golden_apple) {
@@ -176,6 +148,6 @@ public class AutoGapple extends Module {
                 }
             }
         }
-        return -1; // No Golden Apple found
+        return -1;
     }
 }

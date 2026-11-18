@@ -3,10 +3,6 @@ package atlas.util.animations.impl;
 import atlas.util.animations.Direction;
 import atlas.util.animations.impl.Easing;
 
-/**
- * Animation utility for smooth value transitions. Uses easing functions to provide smooth
- * interpolation between values.
- */
 public class Animation {
     private Easing easing;
     private long millis;
@@ -42,11 +38,6 @@ public class Animation {
         this.direction = direction;
     }
 
-    /**
-     * Updates the animation by using the easing function and time
-     *
-     * @param destinationValue the value that the animation is going to reach
-     */
     public void run(float destinationValue) {
         this.millis = System.currentTimeMillis();
         if (this.destinationValue != destinationValue) {
@@ -69,16 +60,10 @@ public class Animation {
         }
     }
 
-    /**
-     * Returns the progress of the animation
-     *
-     * @return value between 0 and 1
-     */
     public double getProgress() {
         return (double) (System.currentTimeMillis() - this.startTime) / (double) this.duration;
     }
 
-    /** Resets the animation to the start value */
     public void reset() {
         this.startTime = System.currentTimeMillis();
         this.startValue = value;

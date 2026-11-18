@@ -1,8 +1,3 @@
-//
-// Source code recreated from a .class file by IntelliJ IDEA
-// (powered by FernFlower decompiler)
-//
-
 package atlas.module.modules;
 
 import atlas.event.EventTarget;
@@ -68,7 +63,6 @@ public class FastBow extends Module {
                             }
                     }
                 }
-
             }
         }
     }

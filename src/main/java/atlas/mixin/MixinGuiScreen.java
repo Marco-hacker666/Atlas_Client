@@ -13,12 +13,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/**
- * Clicked chat and book text (2026-10-30, audit). A RUN_COMMAND click is sent
- * as chat, and Atlas takes its commands from outgoing chat, so a server's
- * clickable line could run any of them. One that would is dropped unless
- * this client made it (CommandManager.ownClick).
- */
 @SideOnly(Side.CLIENT)
 @Mixin(value = {GuiScreen.class}, priority = 9999)
 public abstract class MixinGuiScreen {
@@ -37,8 +31,6 @@ public abstract class MixinGuiScreen {
         cir.setReturnValue(true);
     }
 
-    /* 2026-11-03: Raven's onKeyPress(char, int) for scripts -- a key in an open screen, which a script may keep
-       from the screen (Raven's KeyPressEvent, at the same place). */
     @Inject(method = {"handleKeyboardInput"}, at = {@At("HEAD")}, cancellable = true)
     private void atlas$scriptKeyPress(org.spongepowered.asm.mixin.injection.callback.CallbackInfo callbackInfo) {
         if (atlas.script.ScriptDispatcher.INSTANCE.onScreenKey(org.lwjgl.input.Keyboard.getEventCharacter(),

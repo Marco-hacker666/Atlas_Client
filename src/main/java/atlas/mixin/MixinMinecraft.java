@@ -40,9 +40,6 @@ public abstract class MixinMinecraft {
     @Shadow
     public net.minecraft.client.settings.GameSettings gameSettings;
 
-    /* 2026-10-12: vanilla holds every screen without a world to 30 fps, which
-       made the animated start screen stutter. Our menu and the setup screen
-       run at the player's own frame limit (at least 60). */
     @Inject(method = {"getLimitFramerate"}, at = {@At("HEAD")}, cancellable = true)
     private void menuFramerate(CallbackInfoReturnable<Integer> callbackInfo) {
         if (this.theWorld == null && (this.currentScreen instanceof AtlasMainMenu
@@ -136,7 +133,7 @@ public abstract class MixinMinecraft {
         if (Atlas.moduleManager != null && atlas.module.ModuleBundle.of(atlas.module.modules.NoHitDelay.class).isEnabled()) {
             this.leftClickCounter = 0;
         }
-        /* 2026-10-26 (VanillaInput): a click a module pressed this tick takes its crosshair, in order. */
+
         net.minecraft.util.MovingObjectPosition managed = atlas.util.VanillaInput.nextAttack();
         LeftClickMouseEvent event = new LeftClickMouseEvent();
         EventManager.call(event);
@@ -167,10 +164,9 @@ public abstract class MixinMinecraft {
             callbackInfo.cancel();
             return;
         }
-        /* ItemUseFix: while a block is being broken, the game ignores right
-           click; it is told it is not breaking for this one call. */
+
         atlas.module.modules.ItemUseFix.beforeRightClick();
-        /* 2026-10-27 (V3): a sword's right click while an aura fights goes along its look (VanillaInput.applyUse). */
+
         atlas.util.VanillaInput.applyUse();
     }
 
@@ -190,7 +186,6 @@ public abstract class MixinMinecraft {
     )
     private void sendClickBlockToController(CallbackInfo callbackInfo) {
         if (atlas.util.VanillaInput.holdsBlockBreaking()) {
-            /* 2026-10-27: an aura fights along its own look; the camera's crosshair digs nothing meanwhile. */
             callbackInfo.cancel();
             this.playerController.resetBlockRemoving();
             return;
@@ -217,8 +212,6 @@ public abstract class MixinMinecraft {
         }
     }
 
-    /* 2026-11-03: scripts. Raven bS 17's onKey (every key going down or up, before the client handles it), and
-       Raven's onPrePlayerInteract (each tick, before the clicks are handled) -- at the places Raven fires them. */
     @Inject(
             method = {"runTick"},
             at = @At(
@@ -243,8 +236,6 @@ public abstract class MixinMinecraft {
         atlas.script.ScriptDispatcher.INSTANCE.onPreInteract();
     }
 
-    /* 2026-11-03 (full check): Raven's onGuiUpdate, where Raven fires it -- the head of displayGuiScreen, with the
-       screen asked for or the one closing, before Forge's GuiOpenEvent puts the main menu in place of a null. */
     @Inject(
             method = {"displayGuiScreen"},
             at = {@At("HEAD")}

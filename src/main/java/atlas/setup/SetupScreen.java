@@ -18,15 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * The setup screen: tick what you want, it downloads into {@code mods/} and
- * {@code resourcepacks/} for you.
- *
- * <p>Ported from OpenSkid (GPL-3.0) and integrated with this client: the cards
- * follow the Atlas light/dark mode, downloads can be cancelled, and each
- * running row shows its transfer speed and remaining time instead of a bare
- * byte count.
- */
+// Ported from OpenSkid (GPL-3.0) and integrated with this client
+
 public class SetupScreen extends GuiScreen {
     private static final int ROW_H = 30;
     private static final int CARD_W = 440;
@@ -525,7 +518,6 @@ public class SetupScreen extends GuiScreen {
         }
     }
 
-    /** "42% · 1.4 MB/s · 8s left" while downloading, "downloading" before the first sample. */
     private String transferDetail(SetupEntry entry) {
         Long done = progress.get(entry);
         if (done == null) {

@@ -21,7 +21,6 @@ import java.io.File;
 import java.util.logging.Logger;
 
 public class ViaRewindPlatformImpl implements ViaRewindPlatform {
-
   private final File directory;
 
   public ViaRewindPlatformImpl(final File directory) {

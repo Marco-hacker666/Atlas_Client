@@ -13,7 +13,6 @@ import java.util.Set;
 import static atlas.config.Config.mc;
 
 public class FontUtil {
-
     public static Font getResource(Map<String, Font> locationMap, String location, int size) {
         Font font;
 

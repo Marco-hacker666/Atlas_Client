@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** The bow/throw aim (2026-10-31, LiquidBounce's faceTrajectory): right angles, and never NaN. */
 public class TrajectoryAimTest {
-
     @Test
     public void bowSpeedFollowsVanillaDraw() {
         assertEquals(0.0F, TrajectoryAim.bowVelocity(0), 1.0E-6F);
@@ -32,7 +30,7 @@ public class TrajectoryAimTest {
         float[] far = TrajectoryAim.solve(0.0, 0.0, 40.0, 1.0F, TrajectoryAim.ARROW_GRAVITY);
         assertNotNull(near);
         assertNotNull(far);
-        /* Minecraft pitch: negative is up. Farther needs more lift. */
+
         assertTrue(near[1] < 0.0F);
         assertTrue(far[1] < near[1]);
     }

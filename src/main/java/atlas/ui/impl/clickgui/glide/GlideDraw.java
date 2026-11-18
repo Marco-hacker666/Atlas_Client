@@ -14,13 +14,7 @@ import org.lwjgl.opengl.GL11;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Text and small drawing helpers shared by the Glide screen and its settings
- * rows: the style's fonts (with the vanilla font as fallback), trimming and
- * wrapping, a clip stack, and gradients the vanilla screen lacks.
- */
 final class GlideDraw {
-    /** Open clip rectangles, innermost last: {x1, y1, x2, y2}. */
     private static final List<float[]> CLIPS = new ArrayList<float[]>();
 
     private GlideDraw() {
@@ -38,7 +32,6 @@ final class GlideDraw {
         return FontManager.productSans16;
     }
 
-    /** {@code s} centred in a band {@code height} tall starting at {@code top}. */
     static void text(FontRenderer font, String s, float x, float top, float height, int color) {
         if ((color >>> 24) < 4) {
             return;
@@ -72,7 +65,6 @@ final class GlideDraw {
         return s + "..";
     }
 
-    /** The end of {@code s} that fits in {@code max}: a field being typed in shows where the caret is. */
     static String tail(FontRenderer font, String s, float max) {
         while (s.length() > 1 && width(font, s) > max) {
             s = s.substring(1);
@@ -106,9 +98,6 @@ final class GlideDraw {
         return name == null ? "#" + key : name;
     }
 
-    // ---- clipping ------------------------------------------------------
-
-    /** Clips to this rectangle, inside whatever clip is already open. */
     static void pushClip(float x1, float y1, float x2, float y2) {
         if (!CLIPS.isEmpty()) {
             float[] outer = CLIPS.get(CLIPS.size() - 1);
@@ -133,7 +122,6 @@ final class GlideDraw {
         }
     }
 
-    /** The innermost clip's top and bottom, or the whole screen's. */
     static float clipTop() {
         return CLIPS.isEmpty() ? -1.0E6F : CLIPS.get(CLIPS.size() - 1)[1];
     }
@@ -142,7 +130,6 @@ final class GlideDraw {
         return CLIPS.isEmpty() ? 1.0E6F : CLIPS.get(CLIPS.size() - 1)[3];
     }
 
-    /** Drops every clip (a frame that threw half-way must not leave one open). */
     static void resetClips() {
         CLIPS.clear();
         RenderUtil.releaseScissor();
@@ -150,7 +137,6 @@ final class GlideDraw {
 
     private static void apply(float[] clip) {
         if (clip[2] - clip[0] < 0.5F || clip[3] - clip[1] < 0.5F) {
-            /* Nothing may draw: a 1x1 clip off the corner of the screen. */
             GL11.glEnable(GL11.GL_SCISSOR_TEST);
             GL11.glScissor(0, 0, 0, 0);
             return;
@@ -158,19 +144,14 @@ final class GlideDraw {
         RenderUtil.scissor(clip[0], clip[1], clip[2] - clip[0], clip[3] - clip[1]);
     }
 
-    // ---- gradients -----------------------------------------------------
-
-    /** A rectangle shading from {@code left} to {@code right} (ARGB). */
     static void gradientH(float x1, float y1, float x2, float y2, int left, int right) {
         quad(x1, y1, x2, y2, left, right, right, left);
     }
 
-    /** A rectangle shading from {@code top} to {@code bottom} (ARGB). */
     static void gradientV(float x1, float y1, float x2, float y2, int top, int bottom) {
         quad(x1, y1, x2, y2, top, top, bottom, bottom);
     }
 
-    /** Corner colours in the order top-left, top-right, bottom-right, bottom-left. */
     private static void quad(float x1, float y1, float x2, float y2, int tl, int tr, int br, int bl) {
         GlStateManager.disableTexture2D();
         GlStateManager.enableBlend();

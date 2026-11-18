@@ -7,9 +7,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/** KillAura's Yuri auto-block modes (2026-10-24). */
 public class KillAuraYuriTest {
-
     private static KillAuraYuri.Plan step(KillAuraYuri y, int mode, double dist, int hurt, long msToClick) {
         return y.step(mode, true, dist, hurt, false, 4, msToClick, false);
     }
@@ -17,14 +15,14 @@ public class KillAuraYuriTest {
     @Test
     public void hypixelBlocksOneTickAfterTheClickAndLetsGoBeforeTheNext() {
         KillAuraYuri y = new KillAuraYuri();
-        KillAuraYuri.Plan p = step(y, KillAuraYuri.HYPIXEL, 2.5, 0, 40); // click due within 50 ms: mark
+        KillAuraYuri.Plan p = step(y, KillAuraYuri.HYPIXEL, 2.5, 0, 40);
         assertFalse(p.block);
-        p = step(y, KillAuraYuri.HYPIXEL, 2.5, 0, 0); // the click tick: still marked, nothing
+        p = step(y, KillAuraYuri.HYPIXEL, 2.5, 0, 0);
         assertFalse(p.block);
-        p = step(y, KillAuraYuri.HYPIXEL, 2.5, 0, 125); // the tick after: up
+        p = step(y, KillAuraYuri.HYPIXEL, 2.5, 0, 125);
         assertTrue(p.block);
         assertTrue(y.blocking);
-        p = step(y, KillAuraYuri.HYPIXEL, 2.5, 0, 75); // next tick: let go
+        p = step(y, KillAuraYuri.HYPIXEL, 2.5, 0, 75);
         assertTrue(p.release);
         assertFalse(p.block);
         assertFalse(y.blocking);
@@ -46,9 +44,9 @@ public class KillAuraYuriTest {
         assertFalse(p.mayClick);
         p = step(y, KillAuraYuri.LEGIT, 2.0, 3, 0);
         assertEquals(Boolean.FALSE, p.useKey);
-        assertTrue(p.mayClick); // a tick with the key up came first
+        assertTrue(p.mayClick);
         p = step(y, KillAuraYuri.LEGIT, 3.5, 8, 0);
-        assertEquals(Boolean.FALSE, p.useKey); // beyond 3 blocks
+        assertEquals(Boolean.FALSE, p.useKey);
     }
 
     @Test

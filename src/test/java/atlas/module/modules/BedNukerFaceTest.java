@@ -7,7 +7,6 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-/** BedNuker's dig face falls back to the target's side toward the eye (2026-10-20). */
 public class BedNukerFaceTest {
     private static final BlockPos BLOCK = new BlockPos(10, 64, 10);
 

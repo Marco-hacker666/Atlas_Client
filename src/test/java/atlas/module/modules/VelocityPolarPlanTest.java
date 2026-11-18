@@ -8,9 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** Velocity Polar's decisions (2026-10-26). */
 public class VelocityPolarPlanTest {
-
     private static VelocityPolarPlan always() {
         VelocityPolarPlan p = new VelocityPolarPlan();
         p.counterChance = 100;

@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): automatically places blocks when aiming at
-// a valid face, after the aim has held still for a set number of frames.
+// Ported from OpenSkid (GPL-3.0)
+
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.events.TickEvent;

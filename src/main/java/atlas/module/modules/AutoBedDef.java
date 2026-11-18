@@ -38,35 +38,7 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Covers your own bed with blocks: both sides, both ends, then the top.
- *
- * 2026-10-27 (report: "AutoBedDef does not work"), what was wrong:
- *  - any bed within 8 blocks was "ours" -- an enemy's too, so with BedNuker
- *    it walled up the bed being broken. Now the first bed found in a world is
- *    yours (you spawn next to it, the waiting lobby has none) and only that one
- *    is covered (own-bed-only; off: the nearest bed, as before).
- *  - near a bed the hand was forced onto wool every tick, and every scroll
- *    was cancelled while the module was on, covered bed or not: no sword in a
- *    fight at home. Now the block is taken only while there is a block to
- *    place, and the slot you had (or scrolled to meanwhile) comes back after.
- *  - only wool counted: no wool, nothing happened. Now any full solid block
- *    (wool first) unless wool-only.
- *  - the top went onto the bed with sneaking faked on the client only: the
- *    server, never told, used the bed instead ("you can only sleep at night")
- *    and the client showed a block that was not there. Now the sneak is real
- *    (held through the movement input, so the server gets it a tick before the
- *    click), and a block beside is clicked instead when there is one.
- *  - the top's aim picked the spot FARTHEST from the current look; now the
- *    nearest, as for the sides.
- *  - the click was checked against a look guessed from this module's own
- *    numbers; with a module of higher priority turning (Clutch, Scaffold) the
- *    server had another one. Now it is checked against the look the server
- *    last received (the movement packet's, UpdateEvent POST).
- *  - range 5 by default: past vanilla's 4.5 block reach. Default 4.5 now.
- */
 public class AutoBedDef extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final FloatProperty range = new FloatProperty("range", 4.5f, 3.0f, 7.0f);
@@ -82,7 +54,6 @@ public class AutoBedDef extends Module {
     private static final int ROT_PRIORITY = 6;
     private static final int BED_SEARCH_RADIUS = 12;
 
-    /** The look the server last received (the movement packet's). */
     private float sentYaw;
     private float sentPitch;
     private float aimYaw;
@@ -91,17 +62,17 @@ public class AutoBedDef extends Module {
     private BlockPos targetBlock;
     private EnumFacing targetFacing;
     private Vec3 targetHitVec;
-    /** The click goes onto the bed's top: the server must know we sneak, or it uses the bed. */
+
     private boolean needSneak;
 
     private long lastPlaceTime = 0;
-    /** The slot to give back once nothing is left to place; -1: the hand is the player's. */
+
     private int restoreSlot = -1;
     private float progress = 0f;
 
     private BlockPos lockedBedFoot = null;
     private EnumFacing lockedBedFacing = null;
-    /** A bed was taken as ours in this world: once it is gone, no other bed is. */
+
     private boolean bedSeen;
 
     public AutoBedDef() {
@@ -132,8 +103,6 @@ public class AutoBedDef extends Module {
         lockedBedFacing = null;
     }
 
-    /* Tick PRE runs before the update that would recompute these, so on the
-       first tick of a new world the old world's target was still live. */
     @EventTarget(whenDisabled = true)
     public void onLoadWorld(LoadWorldEvent event) {
         resetTarget();
@@ -150,7 +119,6 @@ public class AutoBedDef extends Module {
         targetHitVec = null;
     }
 
-    /** Nothing to place now: no target, no sneak, the player's slot back. */
     private void idle() {
         resetTarget();
         needSneak = false;
@@ -198,7 +166,6 @@ public class AutoBedDef extends Module {
         boolean isRoof = nextIdx >= 6;
         computePlacement(defensePositions.get(nextIdx), isRoof);
         if (targetBlock == null) {
-            /* Not reachable from here: the hand stays the player's. */
             idle();
             return;
         }
@@ -209,20 +176,13 @@ public class AutoBedDef extends Module {
             mc.thePlayer.inventory.currentItem = blockSlot;
         }
 
-        /* 2026-10-31: the turn is the shared engine's (RotationHelper): at most speed on each axis a
-           tick, speeding up from rest, whole mouse counts, keys turned for SILENT, the look handed back when
-           this stops asking. It used to step up to speed on each axis at once, from rest, with no grid. The
-           click still goes at the start of the next tick, along the look the server then has (onTick). */
         float[] look = RotationHelper.request(this, aimYaw, aimPitch, ROT_PRIORITY, moveMode(), false,
                 (float) speed.getValue());
         if (look != null && moveFix.getModeString().equals("REAL")) {
-            /* REAL: the camera turns as well, spread over this tick's frames by
-               RotationManager; the mouse still works (not forced). */
             Atlas.rotationManager.setRotation(look[0], look[1], ROT_PRIORITY, false);
         }
     }
 
-    /** move-fix as the engine's movement yaw: NONE the camera's, SILENT the look's with the keys turned, REAL the look's. */
     private int moveMode() {
         switch (moveFix.getValue()) {
             case 0:
@@ -234,7 +194,6 @@ public class AutoBedDef extends Module {
         }
     }
 
-    /** Start of the tick, before vanilla's input: the click, along the look the server already has. */
     @EventTarget(Priority.HIGH)
     public void onTick(TickEvent event) {
         if (!isEnabled()) return;
@@ -245,7 +204,6 @@ public class AutoBedDef extends Module {
 
         if (!withinRotationTolerance(sentYaw, sentPitch, aimYaw, aimPitch)) return;
         if (needSneak && !mc.thePlayer.isSneaking()) {
-            /* The sneak goes to the server with this tick's movement; the click next tick. */
             return;
         }
 
@@ -286,15 +244,12 @@ public class AutoBedDef extends Module {
     public void onMove(MoveInputEvent event) {
         if (!isEnabled() || mc.thePlayer == null) return;
         if (needSneak && !mc.thePlayer.movementInput.sneak) {
-            /* A real sneak, slowed as vanilla slows it, so the server knows before the click on the bed. */
             mc.thePlayer.movementInput.sneak = true;
             mc.thePlayer.movementInput.moveStrafe *= 0.3F;
             mc.thePlayer.movementInput.moveForward *= 0.3F;
         }
-        /* SILENT's keys are turned by the shared engine (RotationHelper) now. */
     }
 
-    /** While the hand holds our block, a scroll picks the slot that comes back after. */
     @EventTarget
     public void onSwap(SwapItemEvent event) {
         if (isEnabled() && restoreSlot != -1) {
@@ -424,12 +379,6 @@ public class AutoBedDef extends Module {
         return -1;
     }
 
-    /**
-     * The click that puts a block at {@code wantPlace}: the face of a block
-     * next to it, reachable along a look that lands there. The nearest look
-     * to the current one wins; a bed is clicked only for the top and only
-     * when nothing else is there (it needs the sneak).
-     */
     private void computePlacement(BlockPos wantPlace, boolean isRoof) {
         resetTarget();
         needSneak = false;
@@ -538,7 +487,6 @@ public class AutoBedDef extends Module {
         return dy <= rotTol.getValue() && dp <= rotTol.getValue();
     }
 
-    /** Wool first; else (unless wool-only) any full solid block that places plainly. */
     private int findBlockSlot() {
         int other = -1;
         for (int slot = 0; slot < 9; slot++) {
@@ -602,12 +550,10 @@ public class AutoBedDef extends Module {
         else return new Color(85, 255, 85);
     }
 
-    /** The slot the player has: the one that comes back while our block is in hand. */
     public int getSlot() {
         return restoreSlot != -1 ? restoreSlot : mc.thePlayer != null ? mc.thePlayer.inventory.currentItem : -1;
     }
 
-    /* Merged modules (2026-10-11, ModuleBundle). */
     public final atlas.module.ModuleBundle defenderMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.BedDefender(), "defender", "Bed defender", false);
     public final atlas.module.ModuleBundle autoBedMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.AutoBed(), "auto-bed", "Bed protection", false);
 }

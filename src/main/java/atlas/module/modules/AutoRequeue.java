@@ -1,6 +1,6 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): delayed play-again queue driven by chat.
+// Ported from OpenSkid (GPL-3.0)
 import java.util.Locale;
 
 import atlas.Atlas;

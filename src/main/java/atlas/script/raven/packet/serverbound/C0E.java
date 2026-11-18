@@ -5,7 +5,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C0EPacketClickWindow;
 
-/** A click in a container window; the action number is the window's next one when it is sent. */
 public class C0E extends CPacket {
     public int windowId;
     public int slot;

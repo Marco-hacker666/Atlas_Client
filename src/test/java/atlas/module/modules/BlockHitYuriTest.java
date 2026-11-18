@@ -6,9 +6,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** AutoBlock's Yuri mode (2026-10-24). */
 public class BlockHitYuriTest {
-
     @Test
     public void aModeStandsAsideOnlyForAnAuraBlockingAlone() {
         assertTrue(BlockHitYuri.standsAside(false, true));

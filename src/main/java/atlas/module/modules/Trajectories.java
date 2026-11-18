@@ -158,8 +158,6 @@ public class Trajectories extends Module {
                 );
             }
             if (trajectoryPoints.size() > 1) {
-                /* Green where it would hit someone. Themed by the Projectiles
-                   group; opacity still applies on top of its transparency. */
                 Color lineColor = new Color(hasHitEntity ? 85 : 255, 255, hasHitEntity ? 85 : 255,
                         (int) (this.opacity.getValue().floatValue() / 100.0F * 255.0F));
                 float lineWidth = 1.5F;

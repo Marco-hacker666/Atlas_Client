@@ -1,15 +1,8 @@
 package me.ksyz.accountmanager.auth;
 
-/*
- * This file is derived from https://github.com/ksyzov/AccountManager.
- * Originally licensed under the GNU LGPL.
- *
- * This modified version is licensed under the GNU GPL v3.
- */
+// Originally licensed under the GNU LGPL.
+
 public class Account {
-    // Account types. Microsoft and Cookie accounts both hold real Minecraft
-    // tokens and log in through the Microsoft flow; Cracked accounts hold only
-    // a username and log in offline without any network request.
     public static final String TYPE_MICROSOFT = "microsoft";
     public static final String TYPE_CRACKED = "cracked";
     public static final String TYPE_COOKIE = "cookie";
@@ -44,9 +37,6 @@ public class Account {
         this.type = (type == null || type.isEmpty()) ? TYPE_MICROSOFT : type;
     }
 
-    /**
-     * Creates an offline (cracked) account that only carries a username.
-     */
     public static Account cracked(String username) {
         return new Account("", "", username, 0L, "", "", TYPE_CRACKED);
     }

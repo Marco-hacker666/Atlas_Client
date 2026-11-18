@@ -13,22 +13,7 @@ import net.minecraft.world.World;
 
 import java.util.function.Predicate;
 
-/**
- * Which way to knock a target so it lands somewhere bad for it (2026-09-28,
- * item 7 of the Rise comparison; Rise's "Knockback Displacement", rewritten
- * from what it does -- same directions, steps, hazards and scores).
- *
- * In 1.8 a sprint hit (or a Knockback enchant) adds a push along the
- * attacker's yaw, on top of the push away from the attacker. So the yaw the
- * server has for this player when a hit lands chooses part of where the
- * target goes. This looks around the target -- 32 directions, out to 5
- * blocks in 0.35 steps, stopping at walls -- for lava, cobweb, fire, cactus,
- * the void, a deep drop, a ditch or water, scores each by how bad it is and
- * how near, and gives the yaw toward the best, if it is worth it.
- */
 public final class KnockbackPlanner {
-
-    /** A plan: the yaw that pushes toward the best hazard found. */
     public static final class Plan {
         public final int targetId;
         public final float yaw;
@@ -50,19 +35,17 @@ public final class KnockbackPlanner {
         }
     }
 
-    /** Below this, no hazard is worth steering for. */
     public static final double MIN_SCORE = 45.0;
     private static final int DIRECTIONS = 32;
     private static final double FIRST_STEP = 0.8;
     private static final double LAST_STEP = 5.0;
     private static final double STEP = 0.35;
-    /** How far down a drop is looked for. */
+
     private static final int DROP_SEARCH = 24;
 
     private KnockbackPlanner() {
     }
 
-    /** The best plan around this target, or null when nothing scores MIN_SCORE. */
     public static Plan plan(World world, EntityLivingBase target) {
         if (world == null || target == null) {
             return null;
@@ -117,10 +100,6 @@ public final class KnockbackPlanner {
         return new Plan(target.getEntityId(), yawToward(dx, dz), distance, score, hazard);
     }
 
-    /**
-     * How bad a hazard at this distance is. Pure, for tests. Worse and
-     * nearer scores higher; MIN_SCORE is the floor worth acting on.
-     */
     public static double score(String hazard, double distance, double drop) {
         switch (hazard) {
             case "Lava":
@@ -144,15 +123,10 @@ public final class KnockbackPlanner {
         }
     }
 
-    /** The yaw whose look points along (dx, dz). */
     public static float yawToward(double dx, double dz) {
         return (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0F;
     }
 
-    /**
-     * How far below the box the first solid surface is; -1 when there is
-     * none within the search (a column of nothing under any corner).
-     */
     private static double dropDistance(World world, AxisAlignedBB box, int search) {
         int minX = MathHelper.floor_double(box.minX + 1.0E-4);
         int maxX = MathHelper.floor_double(box.maxX - 1.0E-4);
@@ -205,17 +179,12 @@ public final class KnockbackPlanner {
         return false;
     }
 
-    /**
-     * Falling into a crit: fall distance, in the air, on the way down, not on
-     * a ladder, in water, blind or riding. A crit is worth more than the push.
-     */
     public static boolean fallingCrit(EntityLivingBase player) {
         return player != null && player.fallDistance > 0.0F && !player.onGround && !player.isOnLadder()
                 && !player.isInWater() && !player.isPotionActive(net.minecraft.potion.Potion.blindness)
                 && player.ridingEntity == null && player.motionY < 0.0;
     }
 
-    /** A knockback source this hit would have: sprinting, or a Knockback enchant. */
     public static boolean hasKnockbackSource(EntityLivingBase attacker, int knockbackEnchant) {
         return attacker != null && (attacker.isSprinting() || knockbackEnchant > 0);
     }

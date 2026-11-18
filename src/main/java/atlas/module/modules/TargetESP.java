@@ -1,6 +1,4 @@
-// not rat bro XD
 package atlas.module.modules;
-
 
 import net.minecraft.client.renderer.GlStateManager;
 import atlas.Atlas;
@@ -20,25 +18,22 @@ import org.lwjgl.opengl.GL11;
 import java.awt.*;
 
 public class TargetESP extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    // ── Color palette ────────────────────────────────────────────────────────
     private static final int[] COLORS = {
-            0xFF4FC3F7, // Sky Blue
-            0xFF81C784, // Green
-            0xFFFF8A65, // Orange
-            0xFFBA68C8, // Purple
-            0xFFFFD54F, // Yellow
-            0xFFFF6B6B, // Red
-            0xFF4DB6AC, // Teal
-            0xFFFFFFFF, // White
+            0xFF4FC3F7,
+            0xFF81C784,
+            0xFFFF8A65,
+            0xFFBA68C8,
+            0xFFFFD54F,
+            0xFFFF6B6B,
+            0xFF4DB6AC,
+            0xFFFFFFFF,
     };
     private static final String[] COLOR_NAMES = {
             "Sky Blue", "Green", "Orange", "Purple", "Yellow", "Red", "Teal", "White"
     };
 
-    // Module properties
     public final ModeProperty style;
     public final ModeProperty hatStyle;
     public final ModeProperty color;
@@ -58,11 +53,9 @@ public class TargetESP extends Module {
         this.fadeSpeed = new FloatProperty("FadeSpeed", 1.0f, 0.1f, 5.0f, () -> fade.getValue());
     }
 
-    // Fade wave state
     private long lastFadeMs = -1;
     private float fadePhase = 0f;
 
-    // ── Color resolution ─────────────────────────────────────────────────────
     private Color getBaseColor() {
         int idx = color.getValue();
         if (idx < 0 || idx >= COLORS.length) idx = 0;
@@ -90,7 +83,6 @@ public class TargetESP extends Module {
         Color base = getBaseColor();
         if (!fade.getValue()) return base;
 
-        // Fade between the base color and a darker version of it
         float t = (float) (0.5 + 0.5 * Math.sin(fadePhase));
         int r = (int) (base.getRed()   * (0.3f + 0.7f * t));
         int g = (int) (base.getGreen() * (0.3f + 0.7f * t));
@@ -102,11 +94,10 @@ public class TargetESP extends Module {
         );
     }
 
-    // ── Rendering ─────────────────────────────────────────────────────────────
     @EventTarget
     public void onRender(Render3DEvent event) {
         if (!this.isEnabled()) return;
-        /* TargetOrbit marks the target while it is on (2026-10-18). */
+
         if (TargetOrbit.active()) return;
 
         EntityLivingBase target = atlas.util.Auras.target();
@@ -135,7 +126,6 @@ public class TargetESP extends Module {
         RenderUtil.disableRenderState();
     }
 
-    // ── Box style ─────────────────────────────────────────────────────────────
     private void renderBox(EntityLivingBase entity, int r, int g, int b, float a, float partialTicks) {
         int alpha = (int) (a * 200);
         RenderUtil.drawEntityBoundingBox(entity, r, g, b, alpha, 2.0F, 0.05 * size.getValue());
@@ -147,7 +137,6 @@ public class TargetESP extends Module {
         GlStateManager.disableBlend();
     }
 
-    // ── Hat styles ────────────────────────────────────────────────────────────
     private void renderHat(EntityLivingBase entity, int r, int g, int b, float a, float partialTicks) {
         double ex = lerp(entity.posX, entity.lastTickPosX, partialTicks)
                 - ((IAccessorRenderManager) mc.getRenderManager()).getRenderPosX();
@@ -184,7 +173,6 @@ public class TargetESP extends Module {
         GL11.glPopMatrix();
     }
 
-    // ── FLAT hat (top hat) ────────────────────────────────────────────────────
     private void drawFlatHat(double hw, float r, float g, float b, float a) {
         double gap    = 0.04;
         double hatH   = 0.35;
@@ -192,18 +180,16 @@ public class TargetESP extends Module {
         double brimH  = 0.06;
         double tb     = gap + brimH;
 
-        // Brim faces
         GlStateManager.color(r, g, b, a * 0.85f);
         GL11.glBegin(GL11.GL_QUADS);
         quad(-hw-brimX, gap, -hw-brimX,  hw+brimX, gap, -hw-brimX,  hw+brimX, tb, -hw-brimX, -hw-brimX, tb, -hw-brimX);
         quad( hw+brimX, gap,  hw+brimX, -hw-brimX, gap,  hw+brimX, -hw-brimX, tb,  hw+brimX,  hw+brimX, tb,  hw+brimX);
         quad(-hw-brimX, gap, -hw-brimX, -hw-brimX, gap,  hw+brimX, -hw-brimX, tb,  hw+brimX, -hw-brimX, tb, -hw-brimX);
         quad( hw+brimX, gap,  hw+brimX,  hw+brimX, gap, -hw-brimX,  hw+brimX, tb, -hw-brimX,  hw+brimX, tb,  hw+brimX);
-        // Brim top
+
         quad(-hw-brimX, gap, -hw-brimX,  hw+brimX, gap, -hw-brimX,  hw+brimX, gap,  hw+brimX, -hw-brimX, gap,  hw+brimX);
         GL11.glEnd();
 
-        // Body
         GlStateManager.color(r, g, b, a * 0.75f);
         GL11.glBegin(GL11.GL_QUADS);
         quad(-hw, tb, -hw,  hw, tb, -hw,  hw, tb+hatH, -hw, -hw, tb+hatH, -hw);
@@ -213,7 +199,6 @@ public class TargetESP extends Module {
         quad(-hw, tb+hatH, -hw,  hw, tb+hatH, -hw,  hw, tb+hatH,  hw, -hw, tb+hatH,  hw);
         GL11.glEnd();
 
-        // Edges
         GlStateManager.color(r, g, b, 1.0f);
         GL11.glBegin(GL11.GL_LINE_LOOP);
         GL11.glVertex3d(-hw, tb+hatH, -hw); GL11.glVertex3d( hw, tb+hatH, -hw);
@@ -221,7 +206,6 @@ public class TargetESP extends Module {
         GL11.glEnd();
     }
 
-    // ── PYRAMID hat ───────────────────────────────────────────────────────────
     private void drawPyramidHat(double hw, float r, float g, float b, float a) {
         double gap = 0.04, h = 0.6;
         GlStateManager.color(r, g, b, a * 0.75f);
@@ -242,7 +226,6 @@ public class TargetESP extends Module {
         GL11.glEnd();
     }
 
-    // ── CHINA hat (smooth conical straw hat) ──────────────────────────────────
     private void drawChinaHat(double hw, float r, float g, float b, float a) {
         int segments = 24;
         double gap   = 0.04;
@@ -251,7 +234,6 @@ public class TargetESP extends Module {
         double brimDrop = -0.08 * size.getValue();
         double brimH = 0.025 * size.getValue();
 
-        // Filled cone body (smooth)
         GlStateManager.color(r, g, b, a * 0.72f);
         GL11.glBegin(GL11.GL_TRIANGLES);
         for (int i = 0; i < segments; i++) {
@@ -263,7 +245,6 @@ public class TargetESP extends Module {
         }
         GL11.glEnd();
 
-        // Brim ring (flat annulus)
         GlStateManager.color(r, g, b, a * 0.65f);
         GL11.glBegin(GL11.GL_QUAD_STRIP);
         double innerR = hw * 0.85;
@@ -275,7 +256,6 @@ public class TargetESP extends Module {
         }
         GL11.glEnd();
 
-        // Smooth outline on brim edge
         GlStateManager.color(r, g, b, 1.0f);
         GL11.glBegin(GL11.GL_LINE_LOOP);
         for (int i = 0; i < segments; i++) {
@@ -285,7 +265,6 @@ public class TargetESP extends Module {
         GL11.glEnd();
     }
 
-    // ── CROWN hat ─────────────────────────────────────────────────────────────
     private void drawCrownHat(double hw, float r, float g, float b, float a) {
         double gap   = 0.04;
         double baseH = 0.12;
@@ -324,7 +303,6 @@ public class TargetESP extends Module {
         GL11.glEnd();
     }
 
-    // ── GL helpers ────────────────────────────────────────────────────────────
     private static void quad(double x1,double y1,double z1, double x2,double y2,double z2,
                              double x3,double y3,double z3, double x4,double y4,double z4) {
         GL11.glVertex3d(x1,y1,z1); GL11.glVertex3d(x2,y2,z2);

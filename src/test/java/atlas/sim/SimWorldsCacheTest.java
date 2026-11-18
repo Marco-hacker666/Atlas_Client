@@ -13,13 +13,7 @@ import java.util.Random;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The cached world gives the base's answers to the bit (2026-11-16): the same runs on both, compared tick by tick,
- * in a world with steps, slabs, fences, walls, water, lava, cobwebs and soul sand, asked the way the game asks.
- */
 public class SimWorldsCacheTest {
-
-    /** A world of cells, its area questions answered over the cells the game's own would scan. */
     private static final class Cells implements PlayerSim.World {
         final Map<Long, AxisAlignedBB[]> solid = new HashMap<Long, AxisAlignedBB[]>();
         final Map<Long, Character> kind = new HashMap<Long, Character>();
@@ -47,7 +41,7 @@ public class SimWorldsCacheTest {
         public List<AxisAlignedBB> boxes(AxisAlignedBB area) {
             this.boxQueries++;
             List<AxisAlignedBB> out = new ArrayList<AxisAlignedBB>();
-            /* World.getCollidingBoundingBoxes: the cells from minY - 1, each block's boxes that touch the area. */
+
             for (int x = MathHelper.floor_double(area.minX); x < MathHelper.floor_double(area.maxX + 1.0); x++) {
                 for (int z = MathHelper.floor_double(area.minZ); z < MathHelper.floor_double(area.maxZ + 1.0); z++) {
                     for (int y = MathHelper.floor_double(area.minY) - 1; y < MathHelper.floor_double(area.maxY + 1.0); y++) {
@@ -90,7 +84,7 @@ public class SimWorldsCacheTest {
                     for (int z = MathHelper.floor_double(area.minZ); z < MathHelper.floor_double(area.maxZ + 1.0); z++) {
                         if (this.at(x, y, z) == 'w' && maxY >= y + 1 - 0.11) {
                             in = true;
-                            /* A flow of its own for each cell, so a wrong set of cells would show. */
+
                             flow[0] += 0.01 * ((x * 7 + z) % 3 - 1);
                             flow[2] += 0.01 * ((z * 5 + x) % 3 - 1);
                         }
@@ -144,7 +138,6 @@ public class SimWorldsCacheTest {
         }
     }
 
-    /** Ground, and round the start a course of everything the cache has to get right. */
     private static Cells course(long seed) {
         Cells world = new Cells();
         Random random = new Random(seed);
@@ -213,7 +206,7 @@ public class SimWorldsCacheTest {
             Cells counted = course(seed);
             PlayerSim.World cached = SimWorlds.cached(counted);
             Random random = new Random(seed * 31);
-            /* Many runs from one place, as a fit or the ways out make them. */
+
             for (int run = 0; run < 25; run++) {
                 PlayerSim a = standing();
                 PlayerSim b = standing();
@@ -235,7 +228,7 @@ public class SimWorldsCacheTest {
             baseQueries += base.boxQueries + base.areaQueries;
             cachedQueries += counted.boxQueries + counted.areaQueries;
         }
-        /* What it is for: far fewer questions of the base. */
+
         assertTrue(cachedQueries + " of " + baseQueries, cachedQueries * 5 < baseQueries);
     }
 

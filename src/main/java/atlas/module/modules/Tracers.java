@@ -54,7 +54,6 @@ public class Tracers extends Module {
         }
     }
 
-    /** Themed by the Tracers group, friends and marked targets excepted; opacity still applies on top. */
     private Color getEntityColor(EntityPlayer entityPlayer, float alpha) {
         Color own = this.ownEntityColor(entityPlayer, alpha);
         if (TeamUtil.isFriend(entityPlayer) || TeamUtil.isTarget(entityPlayer)) {

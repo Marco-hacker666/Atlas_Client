@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): switches to the strongest weapon when
-// attacking, with optional enchant weighting and a switch-back mode.
+// Ported from OpenSkid (GPL-3.0)
+
 import atlas.Atlas;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;

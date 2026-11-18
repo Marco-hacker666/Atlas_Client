@@ -5,7 +5,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
 public class AutoBlockSlinkyTest {
-
     @Test
     public void wholeTimesAreExact() {
         assertEquals(5, AutoBlockSlinky.ticks(5.0F, 0.0F));

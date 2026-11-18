@@ -13,13 +13,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.*;
 
-/**
- * Every module the client registers has exactly one category, and the table names
- * nothing that is not registered (2026-09-28). Seven modules once sat in no
- * menu because the category lists were kept by hand.
- */
 public class ModuleCategoriesTest {
-
     private static Set<String> registered() throws Exception {
         String source = new String(Files.readAllBytes(Paths.get("src/main/java/atlas/Atlas.java")), StandardCharsets.UTF_8);
         Matcher matcher = Pattern.compile("moduleManager\\.modules\\.put\\((\\w+)\\.class").matcher(source);

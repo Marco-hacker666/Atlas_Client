@@ -13,7 +13,6 @@ import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL20.*;
 
 public class ShaderUtils {
-
     public final int programID;
     private final String kawaseUpGlow = "#version 120\n" +
             "\n" +
@@ -406,14 +405,12 @@ public class ShaderUtils {
 
             int vertexShaderID;
             try {
-                // Try to load from resource manager first (for dev environment)
                 if (vertexShaderLoc.equals("minecraft:shaders/vertex.vsh")) {
                     vertexShaderID = createShader(new ByteArrayInputStream(vertexShader.getBytes()), GL_VERTEX_SHADER);
                 } else {
                     vertexShaderID = createShader(mc.getResourceManager().getResource(new ResourceLocation(vertexShaderLoc)).getInputStream(), GL_VERTEX_SHADER);
                 }
             } catch (Exception e) {
-                // Fallback to embedded vertex shader
                 System.err.println("Failed to load vertex shader from resource, using embedded fallback: " + e.getMessage());
                 vertexShaderID = createShader(new ByteArrayInputStream(vertexShader.getBytes()), GL_VERTEX_SHADER);
             }

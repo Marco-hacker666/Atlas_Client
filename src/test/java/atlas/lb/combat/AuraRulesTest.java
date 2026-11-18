@@ -6,9 +6,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** The LiquidBounce aura's requirements, criticals and ranges on 1.8 (2026-10-25). */
 public class AuraRulesTest {
-
     @Test
     public void requirementsAreAllOfTheChosenOnes() {
         assertTrue(AuraRules.requirementsMet(0, false, false, false, false, true));
@@ -33,9 +31,8 @@ public class AuraRulesTest {
 
     @Test
     public void smartWaitsDuringARiseThatComesDownToACrit() {
-        // Jumping from the ground, landing 12 ticks later: after the apex (~5 ticks), so wait.
         assertFalse(AuraRules.criticalAllows(AuraRules.CRITS_SMART, true, true, 0.0, 0.0F, false, 12));
-        // Landing before the apex (a ceiling, a step up): no crit to wait for.
+
         assertTrue(AuraRules.criticalAllows(AuraRules.CRITS_SMART, true, true, 0.0, 0.0F, false, 2));
     }
 

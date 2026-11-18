@@ -5,10 +5,7 @@ import org.lwjgl.input.Keyboard;
 
 import static org.junit.Assert.*;
 
-/** The menu's shared text field (2026-10-23, GUI redesign M1). */
 public class TextInputTest {
-
-    /** Every character four units wide. */
     private static final TextLayout.Width MONO = s -> s.length() * 4.0F;
 
     private static TextInput.Result type(TextInput input, String text) {
@@ -135,7 +132,6 @@ public class TextInputTest {
 
     @Test
     public void altGrCharactersAreTyped() {
-        /* AltGr reaches the screen as Control+Alt; '@' is AltGr+Q on a German keyboard. */
         TextInput input = new TextInput(0, false);
         assertEquals(TextInput.Result.EDITED, input.key('@', Keyboard.KEY_Q, true, null));
         assertEquals("@", input.text());

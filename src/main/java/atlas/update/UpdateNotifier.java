@@ -11,14 +11,7 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
- * Shows Updater messages in chat. The check runs at startup, before any
- * world is loaded and there is no chat to write to, so messages wait here
- * until the player is in a world. Chinese or English follows the menu
- * language (Client Settings).
- */
 public final class UpdateNotifier implements Updater.Listener {
-
     private final ConcurrentLinkedQueue<String[]> queue = new ConcurrentLinkedQueue<String[]>();
 
     public static UpdateNotifier install() {
@@ -43,11 +36,6 @@ public final class UpdateNotifier implements Updater.Listener {
         }
     }
 
-    /**
-     * The menu language. ModuleDocs only learns it once the ClickGUI has been
-     * drawn, which has usually not happened yet when the startup check
-     * reports, so the saved menu settings are read as well.
-     */
     public static boolean english() {
         if (ModuleDocs.isEnglish()) {
             return true;

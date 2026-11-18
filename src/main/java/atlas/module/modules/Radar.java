@@ -35,9 +35,7 @@ public class Radar extends Module {
     public final ColorProperty fillColor = new ColorProperty("fill-color", Color.GRAY.getRGB());
     public final ColorProperty outlineColor = new ColorProperty("outline-color", Color.DARK_GRAY.getRGB());
     public final ColorProperty crossColor = new ColorProperty("cross-color", Color.LIGHT_GRAY.getRGB());
-    /* 2026-11-09: its own size (it used to borrow the HUD module's, which also
-       scaled its offsets), and the disc behind it can be switched off, as every
-       HUD element's background can. Dragged in the HUD editor like the others. */
+
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
     public final BooleanProperty background = new BooleanProperty("background", true);
     public Radar() {
@@ -62,7 +60,6 @@ public class Radar extends Module {
         }
     }
 
-    /** Themed by the Players group, friends and marked targets excepted. */
     private Color getEntityColor(EntityPlayer entityPlayer) {
         Color own = this.ownEntityColor(entityPlayer);
         if (TeamUtil.isFriend(entityPlayer) || TeamUtil.isTarget(entityPlayer)) {
@@ -112,7 +109,7 @@ public class Radar extends Module {
         }
 
         float s = this.scale.getValue();
-        /* The disc, plus the N/E/S/W letters just outside it. */
+
         float reach = (radarRadius.getValue() + 9.0F) * s;
         HudLayout.report("Radar", "Radar", (float) centerX - reach, (float) centerY - reach, reach * 2.0F,
                 reach * 2.0F, this.mover(sr), HudLayout.scale(this.scale));
@@ -136,7 +133,6 @@ public class Radar extends Module {
         int crossLines = crossColor.getValue();
         ThemeStyle widget = ThemeStyle.active(WidgetColors.class);
         if (widget != null) {
-            /* WidgetColors: the disc takes the fill, rim and cross the line colour. */
             discColor = widget.fill(fill, null, 0).getRGB();
             rimColor = widget.line(new Color(outlineColor.getValue()), null, 1).getRGB();
             crossLines = widget.line(new Color(crossColor.getValue()), null, 2).getRGB();
@@ -158,7 +154,6 @@ public class Radar extends Module {
             double py = relY * scale;
 
             RenderUtil.fillCircle(px, py, dotRadius.getValue(), 12, getEntityColor(player).getRGB());
-
         }
         if (this.showPVP.getValue()) {
             double dx = - mc.thePlayer.posX;
@@ -187,11 +182,6 @@ public class Radar extends Module {
         GlStateManager.popMatrix();
     }
 
-    /**
-     * Moves the radar by its offsets, which count from the corner its
-     * position names. A centred radar has no offsets: the first move turns it
-     * into a top-left one at the same place, so it can be dragged too.
-     */
     private HudLayout.Mover mover(final ScaledResolution sr) {
         return (dx, dy) -> {
             if (this.position.getValue() == 4) {
@@ -210,7 +200,6 @@ public class Radar extends Module {
                                        int fillColor,
                                        int outlineColor,
                                        int crossColor) {
-
         GlStateManager.enableBlend();
         GlStateManager.disableTexture2D();
         GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);

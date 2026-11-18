@@ -13,7 +13,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class NoSlowCheck {
-
     private final Map<String, Long> guardingStartTicks = new HashMap<>();
     private static final Minecraft mc = Minecraft.getMinecraft();
 

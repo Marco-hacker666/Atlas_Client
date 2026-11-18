@@ -1,8 +1,5 @@
-/*
- * Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0),
- * src/main/java/openskid/module/modules/InventoryHUD.java, 2026-10-05: package openskid -> atlas,
- * OpenSkid -> Atlas. Changes after that are marked in comments.
- */
+// Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0), src/main/java/openskid/module/modules/InventoryHUD.java
+
 package atlas.module.modules;
 
 import atlas.ui.impl.clickgui.atlas.HudPanel;
@@ -23,7 +20,7 @@ import net.minecraft.item.ItemStack;
 
 import java.awt.Color;
 
-// Armor plus hotbar status panel. Concept adapted from the Expo InventoryHUD module.
+// Concept adapted from the Expo InventoryHUD module.
 public class InventoryHUD extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final int SLOT = 18;
@@ -103,7 +100,7 @@ public class InventoryHUD extends Module {
             default:
                 break;
         }
-        /* HUD editor (2026-10-05): report where this is drawn, so the editor can find and drag it. */
+
         HudLayout.report("InventoryHUD", "InventoryHUD", x, y, boxW * sc, boxH * sc,
                 HudLayout.ints(offX, posX.getValue() == 2 ? -1 : 1, offY, posY.getValue() == 2 ? -1 : 1),
                 HudLayout.scale(this.scale));

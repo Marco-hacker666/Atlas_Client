@@ -1,12 +1,9 @@
-/*
- * Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0),
- * src/main/java/openskid/module/modules/ClosestPlayerHUD.java, 2026-10-05: package openskid -> atlas,
- * OpenSkid -> Atlas. Changes after that are marked in comments.
- */
+// Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0), src/main/java/openskid/module/modules/ClosestPlayerHUD.java
+
 package atlas.module.modules;
 
 // Adapted from Expo ClosestPlayerHUD (nearest player per scoreboard team, own team first).
-// Rebuilt with openskid TeamUtil bot checks and BedTracker style HUD props. No pasted code.
+
 import atlas.ui.impl.clickgui.atlas.HudPanel;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
@@ -147,7 +144,7 @@ public class ClosestPlayerHUD extends Module {
         }
         float scaleValue = this.scale.getValue();
         int height = lines.size() * 10;
-        /* HUD editor (2026-10-05): report where this is drawn, so the editor can find and drag it. */
+
         HudLayout.report("ClosestPlayerHUD", "ClosestPlayerHUD", this.offsetX.getValue() - 2.0F * scaleValue,
                 this.offsetY.getValue() - 2.0F * scaleValue, (width + 4) * scaleValue, (height + 2) * scaleValue,
                 HudLayout.ints(this.offsetX, 1, this.offsetY, 1), HudLayout.scale(this.scale));

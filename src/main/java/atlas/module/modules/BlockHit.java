@@ -15,31 +15,19 @@ import atlas.util.KeyBindUtil;
 import atlas.util.TimerUtil;
 
 public class BlockHit extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
-    /* 2026-10-09 (Vape 4.21's BlockHit modes): "Rhythm" is shown as Predict
-       -- it is the port of Vape's Predict -- and the old swing-watching
-       Predict, decorative at high ping by its own note, is hidden as "Swing".
-       Manual is new. Indices are unchanged (3 = swing, 4 = rhythm). */
-    /* 2026-10-19: "Slinky" added and made the default (owner: "fix my
-       AutoBlock the way Slinky does it"); the module is shown as AutoBlock.
-       Saved configs keep the mode they name. */
+
     private final ModeProperty mode = new ModeProperty("Mode", 6,
             new String[]{"Helper", "Auto", "Lag", "Swing", "Predict", "Manual", "Slinky", "Full", "Yuri", "Raven", "Crab"})
             .hide("Swing")
-            /* 2026-10-31 (owner's consolidation): Auto, Lag, Swing and Predict retired; a config naming one gets Full. */
+
             .retire("Full", "Auto", "Lag", "Swing", "Predict")
             .alias("Rhythm", "Full")
-            /* 2026-11-09 (owner: "merge Slinky and Crab"): one engine, AutoBlockSlinky; a config naming Crab gets Slinky. */
+
             .retire("Slinky", "Crab");
-    /* ---- Slinky: Slinky's Auto Block (and Crab's Block Hit, the same thing), step for step; see AutoBlockSlinky.
-       With an enemy in range and the attack key held, the sword goes up with a click, stays up max-hold-ticks,
-       and comes down; the next block waits 10 ticks, or until a hit lands on you, and only while your hurt time
-       is at most max-hurt-time. Optionally, on lowering, every outgoing packet is held for lag-ticks (lag-chance
-       of the time), let go the moment you attack. */
+
     private final java.util.function.BooleanSupplier slinky = () -> this.modeIndex() == 6;
-    /* ---- Yuri (2026-10-24, BlockHitYuri): after your hit, the use key down
-       combo-delay ms later (forward held), up block-delay ms after that. */
+
     private final java.util.function.BooleanSupplier yuriMode = () -> this.modeIndex() == 8;
     private final FloatProperty yRange = new FloatProperty("yuri-range", 3.0F, 1.0F, 6.0F, yuriMode);
     private final PercentProperty yChance = new PercentProperty("yuri-chance", 100, yuriMode);
@@ -51,10 +39,10 @@ public class BlockHit extends Module {
     final BooleanProperty sRequireLeft = new BooleanProperty("require-left-click", true, slinky);
     final BooleanProperty sRequireRight = new BooleanProperty("require-right-click", false, slinky);
     final BooleanProperty sRequireDamage = new BooleanProperty("require-damage", false, slinky);
-    /* 2026-11-05 (OpenB4): a hold of a fixed length is a rhythm; and a pause after lowering spaces the block out. */
+
     final IntProperty sRandomHold = new IntProperty("random-hold-ticks", 0, 0, 5, slinky);
     final IntProperty sCooldown = new IntProperty("block-cooldown-ms", 0, 0, 500, slinky);
-    /* 2026-11-09: as the original, the hurt-time limit applies always, not only with require-damage. */
+
     final IntProperty sHurt = new IntProperty("max-hurt-time", 6, 1, 10, slinky);
     final BooleanProperty sFake = new BooleanProperty("fake-animation", false, slinky);
     final BooleanProperty sFakeInRange = new BooleanProperty("fake-animation-in-range", false,
@@ -66,11 +54,7 @@ public class BlockHit extends Module {
             () -> slinky.getAsBoolean() && this.sLagChance.getValue() > 0);
     final BooleanProperty sLagReblock = new BooleanProperty("lag-reblock", false,
             () -> slinky.getAsBoolean() && this.sLagChance.getValue() > 0);
-    /* ---- Raven (2026-10-31, owner: "make me Raven's auto block"): Raven bS's Autoblock with its settings and
-       defaults, see AutoBlockRaven. Right click held: block-hits while attacking an enemy in range, a plain block
-       otherwise. Defaults for the owner (Pika/Polar, ~220 ms ping), not Raven's: range 3.5 (Raven 4.0), max-hold
-       100 ms (150: a hit every 3 ticks, not 4), max-hurt-time 300 ms (200: up a tick earlier for the ping), lag-chance
-       0 (100: every outgoing packet held is a pattern Polar can see; raise it to try). */
+
     private final java.util.function.BooleanSupplier ravenMode = () -> this.modeIndex() == 9;
     final FloatProperty ravenRange = new FloatProperty("raven-range", 3.5F, 2.0F, 6.0F, ravenMode);
     final IntProperty ravenMaxHold = new IntProperty("raven-max-hold-ms", 100, 50, 500, ravenMode);
@@ -86,10 +70,9 @@ public class BlockHit extends Module {
     final BooleanProperty ravenBlockAgain = new BooleanProperty("raven-block-again-immediately", true,
             () -> ravenMode.getAsBoolean() && this.ravenLagChance.getValue() > 0);
     final BooleanProperty ravenAnimation = new BooleanProperty("raven-block-animation", true, ravenMode);
-    /* 2026-11-05 (owner: "build what the others have"; OpenB4 and Raven bS, behaviour only). Off by default. */
-    /* Off: right click has to be held, as Raven. On: no button needed, an enemy in range is enough. */
+
     final BooleanProperty ravenAuto = new BooleanProperty("raven-auto", false, ravenMode);
-    /* 2026-11-08: raven-auto's threat-, reaction- and ping-aware timing (RavenAutoPlan); off gives the old square wave. */
+
     final BooleanProperty ravenAutoHuman = new BooleanProperty("raven-auto-human", true,
             () -> ravenMode.getAsBoolean() && this.ravenAuto.getValue());
     final IntProperty ravenRandomHold = new IntProperty("raven-random-hold-ms", 0, 0, 300, ravenMode);
@@ -101,15 +84,12 @@ public class BlockHit extends Module {
     final BooleanProperty ravenForceAttack = new BooleanProperty("raven-force-attack", false, ravenMode);
     final BooleanProperty ravenMobs = new BooleanProperty("raven-mobs", false, ravenMode);
     private final AutoBlockRaven raven = new AutoBlockRaven(this);
-    /* ---- Slinky's engine (2026-11-09, owner: "merge Slinky and Crab"): see AutoBlockSlinky. Crab is retired
-       into Slinky (a config naming Crab loads Slinky). */
+
     private final AutoBlockSlinky slinkyEngine = new AutoBlockSlinky(this);
-    /* ---- Full (2026-10-21): sword up whenever an enemy is in range, every hit swapped in within
-       one tick (release, hit, block again), so the server has it up for every hit taken. See AutoBlockFull. */
+
     private final java.util.function.BooleanSupplier full = () -> this.modeIndex() == 7;
     final FloatProperty fullRange = new FloatProperty("full-range", 3.5F, 2.0F, 6.0F, full);
-    /* Second version (2026-10-21): vanilla block-hit order only, and the sword up only when it protects
-       (windows before the next hit, guard, in the air). full-blink is gone (Grim PacketOrderI / NoSlow). */
+
     final ModeProperty fullStyle = new ModeProperty("full-style", 1, new String[]{"Always", "Smart"}, full);
     final IntProperty fullOpenHurt = new IntProperty("full-open-hurt", 1, 0, 9,
             () -> full.getAsBoolean() && this.fullStyle.getValue() == 1);
@@ -121,16 +101,11 @@ public class BlockHit extends Module {
             () -> full.getAsBoolean() && this.fullStyle.getValue() == 1);
     final BooleanProperty fullAir = new BooleanProperty("full-air", false,
             () -> full.getAsBoolean() && this.fullStyle.getValue() == 1);
-    /* Defaults from the owner's 10-21 Pika games (2.6.1): guard and air off -- a raised sword ends sprinting,
-       so blocking in the air cost the sprint on landing, and guard kept it up for a third of every approach. */
+
     final BooleanProperty fullLog = new BooleanProperty("full-log", true, full);
     private final AutoBlockFull fullBlock = new AutoBlockFull(this);
     private static AutoBlockFull fullInstance;
-    /* ---- Manual (Vape's Manual) ------------------------------------------
-       Block hits paced by this player's own clicks: after a hit with a sword,
-       ManualChance of the time the use key goes down for one tick (Vape: 50
-       ms), as a player tapping right click after left click. Blocks per
-       second = CPS x chance. Does nothing while KillAura blocks by itself. */
+
     private final PercentProperty manualChance = new PercentProperty("ManualChance", 80,
             () -> this.modeIndex() == 5);
     private int manualTicks;
@@ -147,82 +122,28 @@ public class BlockHit extends Module {
     private final BooleanProperty smart = new BooleanProperty("Smart", true, () -> this.modeIndex() == 1);
     private final BooleanProperty autoBlockRange = new BooleanProperty("AutoBlockRange", true, () -> this.modeIndex() == 1);
     private final FloatProperty range = new FloatProperty("Range", 3.0f, 1f, 4f, () -> autoBlockRange.getValue() && this.modeIndex() == 1);
-    /* ---- Predict --------------------------------------------------------
-
-       The other three modes all block because this player swung. This one
-       blocks because somebody else did, which is the only one of the four
-       that can put the shield up before the damage rather than after it.
-
-       The signal is the start of an opponent's swing animation, taken the
-       same way the anticheat package already takes it when it is looking for
-       other people's autoblock: swingProgress has just left zero. That is one
-       tick wide and it is the earliest warning this client gets.
-
-       BE HONEST ABOUT WHAT IT IS WORTH AT HIGH PING. The swing animation
-       reaches us by way of the server, so by the time it arrives the attacker
-       has already been swinging for their latency plus ours. At two hundred
-       milliseconds each way the hit is usually resolved server side before
-       the animation is drawn here, and blocking afterwards protects nothing.
-       Predict is worth having on a good connection and is close to decorative
-       on a bad one; it is not a setting that turns two hundred and twenty
-       millisecond ping into an advantage. */
 
     private final FloatProperty predictRange = new FloatProperty("PredictRange", 4.0f, 2.0f, 8.0f,
             () -> this.modeIndex() == 3);
-    /** Ticks the block is held once a swing has been seen. */
+
     private final IntProperty predictHold = new IntProperty("PredictHold", 4, 1, 12,
             () -> this.modeIndex() == 3);
-    /**
-     * How far off from facing this player an attacker may be and still count.
-     *
-     * A swing is not evidence of an attack on anyone in particular -- people
-     * mine, break beds and swing at air constantly, and blocking for every one
-     * of them is both useless and a very legible pattern. The cone is measured
-     * from the attacker's yaw toward this player.
-     */
+
     private final IntProperty predictAngle = new IntProperty("PredictAngle", 70, 10, 180,
             () -> this.modeIndex() == 3);
-    /**
-     * Chance of reacting to any given swing.
-     *
-     * Reacting to every single one is the tell. A hand misses some.
-     */
+
     private final PercentProperty predictChance = new PercentProperty("PredictChance", 80,
             () -> this.modeIndex() == 3);
 
     private int predictTicks = 0;
 
-    /* ---- Rhythm ---------------------------------------------------------
-
-       After Vape's Predict (studied 2026-09-25), written here from what it
-       does. Where Predict above waits to see an opponent swing -- too late at
-       this ping, as its own note says -- this one never looks at the
-       opponent. It reads this player's own damage.
-
-       A hit makes this player immune for ten ticks: hurtResistantTime goes to
-       twenty and damage lands again only once it is back to ten. That is
-       server time, known here the moment the hurt arrives, and an opponent
-       trading hits hits again as soon as it allows. So the block goes up in
-       the last few ticks before this player can be hurt again -- early by
-       RhythmEarly, plus the measured round trip (HitTimer) so it is up on the
-       server in time -- and stays RhythmHold ticks past it if nothing
-       arrives. Once three or more hits have come at a steady interval
-       (250-1500 ms apart), the block is timed to that interval instead:
-       from just before the next one is due to RhythmHold ticks after.
-
-       Only with a sword and an opponent within six blocks. A 1.8 block
-       halves the damage; it also stops attacks while it is up, which is the
-       price. */
     private final IntProperty rhythmEarly = new IntProperty("RhythmEarly", 50, 0, 500,
             () -> this.modeIndex() == 4);
     private final BooleanProperty rhythmPing = new BooleanProperty("RhythmPing", true,
             () -> this.modeIndex() == 4);
     private final IntProperty rhythmHold = new IntProperty("RhythmHold", 1, 0, 10,
             () -> this.modeIndex() == 4);
-    /* The longest one block may stay up, in ticks; after that it comes down
-       and stays down until the next hit. At 230 ms the first version held
-       about eight ticks a round -- 0.4 s every half second with no attacks
-       -- and felt like it (2026-09-25). */
+
     private final IntProperty rhythmMax = new IntProperty("RhythmMax", 5, 1, 20,
             () -> this.modeIndex() == 4);
     private int rhythmHeld;
@@ -249,9 +170,8 @@ public class BlockHit extends Module {
     public BlockHit() {
         super("AutoBlock", false, false);
         fullInstance = this.fullBlock;
-    } //67:D
+    }
 
-    /** Full has the use key: AutoClicker's clicks wait while the sword is up. */
     static boolean fullManaging() {
         AutoBlockFull full = fullInstance;
         return full != null && full.managing();
@@ -269,44 +189,26 @@ public class BlockHit extends Module {
         }
     }
 
-    /**
-     * Ends the delay only if this module set it (2026-10-19). It used to set
-     * LagManager's delay to 0 on every tick in every mode but Lag, so with
-     * AutoBlock on, LagRange's delay was wiped each tick and LagRange did
-     * nothing.
-     */
     private void clearOwnDelay() {
         if ("BlockHit".equals(Atlas.lagManager.holder()) && Atlas.lagManager.getDelay() != 0) {
             Atlas.lagManager.setDelay(0);
         }
     }
 
-    /* 2026-10-26 (owner: "add my AutoBlock modes to Silent Aura"): Silent Aura's BlockMode can name one of this
-       module's modes. The module then runs that mode for the aura -- switched on or not, with its own settings --
-       and while it does, that mode wins over the module's own Mode. -1 when no aura is driving it. */
     private int drivenMode = -1;
 
-    /** The mode in effect: the one Silent Aura drives, else this module's own. */
     private int modeIndex() {
         return this.drivenMode >= 0 ? this.drivenMode : this.mode.getValue();
     }
 
-    /** Runs while switched on, or while Silent Aura drives a mode through it (EventManager asks this). */
     @Override
     public boolean isRunning() {
         if (this.drivenMode < 0 && KillAuraLB.rhythmRuns()) {
-            /* 2026-10-27: Silent Aura's Rhythm has the use key and the sword block; this module, switched on by
-               itself, would raise and lower the same sword against it. */
             return false;
         }
         return super.isRunning() || this.drivenMode >= 0 && mc.thePlayer != null;
     }
 
-    /**
-     * Silent Aura runs {@code modeIndex} (an index into Mode) through this
-     * module; -1 stops. A change lets go of whatever the old mode held (the
-     * use key, a lag, a predicted block) before the new one starts.
-     */
     public void driveFromAura(int modeIndex) {
         if (modeIndex == this.drivenMode) {
             return;
@@ -319,16 +221,10 @@ public class BlockHit extends Module {
         }
     }
 
-    /**
-     * The aura has the sword itself, so a mode of this module must keep its hands off: two owners of one use key raise
-     * and lower it against each other (2026-11-05, Yuri beside BlockMode Basic). Not when the aura drives this mode:
-     * then this mode is the aura's block, and standing aside would leave none.
-     */
     boolean auraBlocksAlone() {
         return BlockHitYuri.standsAside(this.drivenMode >= 0, atlas.util.Auras.blocksByItself());
     }
 
-    /** The mode index Silent Aura drives, or -1. */
     public int drivenMode() {
         return this.drivenMode;
     }
@@ -348,8 +244,7 @@ public class BlockHit extends Module {
             this.manualTicks = 0;
             KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
         }
-        /* Switched off mid-block would otherwise leave the use key held down
-           by this module with nothing left to release it. */
+
         stopPredict();
         if (this.rhythmBlocking) {
             rhythmBlock(false);
@@ -360,7 +255,6 @@ public class BlockHit extends Module {
         this.raven.reset(true);
         this.fullBlock.reset();
     }
-
 
     @EventTarget
     public void onTick(TickEvent event) {
@@ -393,10 +287,7 @@ public class BlockHit extends Module {
                     target = null;
                     return;
                 }
-                /* BlockHitChance is a percentage (0-100) but Math.random()
-                   returns 0..1, so the original comparison could never be
-                   true for any chance above 0 -- the roll never skipped, and
-                   at 0 it skipped every time. Scale the roll to match. */
+
                 if (Math.random() * 100.0 > chance.getValue()) {
                     reset();
                     return;
@@ -457,11 +348,7 @@ public class BlockHit extends Module {
                 if (mc.thePlayer.hurtTime == 10) {
                     blockTicks = 1;
                 }
-                /* The delay used to be re-applied on every tick while only
-                   ever cleared at the end of a block window, so outside combat
-                   it was never cleared at all: selecting this mode held every
-                   outgoing packet back permanently. Confine it to the window
-                   it is meant to cover. */
+
                 if (blockTicks >= 1) {
                     Atlas.lagManager.setDelay(delayPacketTick.getValue());
                     KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), true);
@@ -480,7 +367,6 @@ public class BlockHit extends Module {
                 predict();
             }
             if (this.manualTicks > 0 && --this.manualTicks == 0) {
-                /* Back to whatever the player is really holding. */
                 KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
             }
             if (this.modeIndex() == 4) {
@@ -501,12 +387,8 @@ public class BlockHit extends Module {
         }
     }
 
-    // ---- Slinky ------------------------------------------------------------
-
-    /** Within this box distance an enemy counts whatever the view angle. */
     private static final double CLOSE_ANY_ANGLE = 1.5;
 
-    /** The enemy within range: the one under the crosshair, else the nearest within 70 degrees of the view (any angle when close). */
     net.minecraft.entity.player.EntityPlayer blockTarget(float range) {
         if (mc.objectMouseOver != null
                 && mc.objectMouseOver.entityHit instanceof net.minecraft.entity.player.EntityPlayer) {
@@ -526,8 +408,7 @@ public class BlockHit extends Module {
             if (distance > bestDistance) {
                 continue;
             }
-            /* Hugging: the angle to the feet is 60-70 degrees down, outside the cone, and Full let go while the
-               enemy was closest (10-30 19:22, "no enemy in range" at 0.34 and 0.64). Anyone this close can hit. */
+
             if (distance <= CLOSE_ANY_ANGLE) {
                 bestDistance = distance;
                 best = player;
@@ -555,7 +436,6 @@ public class BlockHit extends Module {
                 && !atlas.util.TeamUtil.isSameTeam(player) && !atlas.util.TeamUtil.isBot(player);
     }
 
-    /** Eyes to the nearest point of the box (grown by 0.1), as Slinky measures. */
     static double boxDistance(net.minecraft.entity.Entity entity) {
         net.minecraft.util.AxisAlignedBB box = entity.getEntityBoundingBox().expand(0.1, 0.1, 0.1);
         double ex = mc.thePlayer.posX;
@@ -567,7 +447,6 @@ public class BlockHit extends Module {
         return Math.sqrt(x * x + y * y + z * z);
     }
 
-    /** While held packets wait, a right click must not raise the sword on its own. */
     @EventTarget
     public void onSlinkyRightClick(atlas.events.RightClickMouseEvent event) {
         if (this.isRunning() && (this.slinkyEngine.lagging() || this.raven.lagging() || this.modeIndex() == 9 && this.raven.cancelsUse())
@@ -576,7 +455,6 @@ public class BlockHit extends Module {
         }
     }
 
-    /** Raven: an attack lets the held packets go first, and the sword goes straight back up. */
     @EventTarget(atlas.event.types.Priority.HIGHEST)
     public void onRavenPacket(atlas.events.PacketEvent event) {
         if (this.modeIndex() == 9 || this.raven.lagging()) {
@@ -587,14 +465,6 @@ public class BlockHit extends Module {
         }
     }
 
-    /**
-     * Blocks in response to somebody else starting a swing.
-     *
-     * A commitment, once made, runs to the end of its window without being
-     * re-decided: a block that flickers on and off as the animation flag
-     * moves is both useless against the hit and a pattern nothing else
-     * produces.
-     */
     private void predict() {
         if (!ItemUtil.isHoldingSword()) {
             stopPredict();
@@ -632,8 +502,7 @@ public class BlockHit extends Module {
             rhythmBlock(false);
             return;
         }
-        /* One way, not the round trip: the block only has to reach the
-           server before the next hit does. */
+
         long early = this.rhythmEarly.getValue()
                 + (this.rhythmPing.getValue() && atlas.management.HitTimer.get() != null
                 ? atlas.management.HitTimer.get().averageDelay() / 2L : 0L) + 50L;
@@ -648,7 +517,6 @@ public class BlockHit extends Module {
             this.holdUntil = 0L;
             want = inWindow;
         } else if (this.rhythmBlocking) {
-            /* Damageable now and nothing has come: hold a little, then drop. */
             if (this.holdUntil == 0L) {
                 this.holdUntil = now + this.rhythmHold.getValue() * 50L;
             }
@@ -657,10 +525,6 @@ public class BlockHit extends Module {
             want = false;
         }
         if (want && canLandHit()) {
-            /* A block stops attacks. With the attack held on someone who can
-               be hurt right now, the hit is worth more than the block; the
-               block is only for the ticks a swing would be wasted anyway
-               (2026-09-25: "can't attack while it blocks" was the complaint). */
             want = false;
         }
         if (this.rhythmSpent) {
@@ -672,10 +536,7 @@ public class BlockHit extends Module {
         rhythmBlock(want);
     }
 
-    /** Attack held, crosshair on a living target, and that target can be hurt by a hit sent now. */
     private boolean canLandHit() {
-        /* The physical button, not the key binding: AutoClicker flips the
-           binding off and on every click. */
         int code = mc.gameSettings.keyBindAttack.getKeyCode();
         boolean held = code < 0 ? org.lwjgl.input.Mouse.isButtonDown(code + 100)
                 : org.lwjgl.input.Keyboard.isKeyDown(code);
@@ -694,7 +555,6 @@ public class BlockHit extends Module {
                 this.nextInterval = (this.nextInterval + 1) % this.damageIntervals.length;
                 this.intervalCount = Math.min(this.damageIntervals.length, this.intervalCount + 1);
             } else {
-                /* A gap or a double: the rhythm has broken. */
                 this.intervalCount = 0;
                 this.nextInterval = 0;
             }
@@ -746,12 +606,6 @@ public class BlockHit extends Module {
         }
     }
 
-    /**
-     * The nearest opponent who has just begun a swing aimed roughly this way.
-     *
-     * swingProgress leaving zero is true for exactly one tick, which is what
-     * makes it usable as an edge rather than a state.
-     */
     private net.minecraft.entity.player.EntityPlayer incomingSwing() {
         for (Object object : mc.theWorld.playerEntities) {
             if (!(object instanceof net.minecraft.entity.player.EntityPlayer)) {
@@ -783,7 +637,6 @@ public class BlockHit extends Module {
         return null;
     }
 
-    /** How far the attacker's yaw is from pointing at this player, in degrees. */
     private double angleToMe(net.minecraft.entity.player.EntityPlayer player) {
         double dx = mc.thePlayer.posX - player.posX;
         double dz = mc.thePlayer.posZ - player.posZ;
@@ -815,8 +668,6 @@ public class BlockHit extends Module {
 
     @EventTarget
     public void onAttack(AttackEvent event) {
-        /* Hitting a boat, minecart or item frame with a sword used to throw a
-           ClassCastException here. */
         if (this.isRunning() && ItemUtil.isHoldingSword() && event.getTarget() instanceof EntityLivingBase) {
             attacking = true;
             attackTicks = 0;
@@ -837,7 +688,6 @@ public class BlockHit extends Module {
         }
     }
 
-    /* Yuri: after this tick's input, as Yuri's motion event, so the tick's own clicks count as actions. */
     @EventTarget
     public void onYuriUpdate(atlas.events.UpdateEvent event) {
         if (event.getType() != EventType.PRE || mc.thePlayer == null) {
@@ -868,11 +718,8 @@ public class BlockHit extends Module {
         return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getModeString())};
     }
 
-    /* Merged modules (2026-10-11, ModuleBundle). */
     public final atlas.module.ModuleBundle autoBlockMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.AuraAutoBlock(), "auto-block", "Aura auto block", false);
 
-    /* 2026-10-31 (audit): a world unload leaves its entities alive (isDead stays false), and one kept here held the
-       whole old world in memory -- for good while this module was off. Dropped when a world loads. */
     @atlas.event.EventTarget(whenDisabled = true)
     public void onWorldDropEntities(atlas.events.LoadWorldEvent event) {
         this.target = null;

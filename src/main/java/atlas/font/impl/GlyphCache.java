@@ -15,9 +15,6 @@ import java.nio.IntBuffer;
 import java.util.*;
 import java.util.List;
 
-/**
- * The GlyphCache class is responsible for caching pre-rendered images of every glyph using OpenGL textures.
- */
 public class GlyphCache {
     private static final int TEXTURE_WIDTH = 256;
     private static final int TEXTURE_HEIGHT = 256;

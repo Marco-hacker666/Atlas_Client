@@ -41,55 +41,37 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Walls the player in: the ring around the body first, then whatever support
- * a ring cell needs, then the roof, then the roof's support.
- *
- * Each tick (UpdateEvent PRE, before this tick's movement packet): plan the
- * cheapest placement in the first tier that has one, take one turn toward it,
- * and click if a ray along that turned rotation hits it -- the rotation the
- * movement packet right after the click carries, which is what the server
- * (Grim RotationPlace) judges the click by. See PlaceUtil for the timing.
- *
- * A click that onPlayerRightClick answers false placed nothing: its support
- * face is set aside for a moment and the next plan picks another. A cell
- * failing that way max-retries times, or refused by the server that many
- * times, is left alone for retry-cooldown.
- */
 public class AutoBlockIn extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final int PRIORITY = 6;
     private static final EnumFacing[] HORIZONTAL = {EnumFacing.NORTH, EnumFacing.SOUTH, EnumFacing.WEST, EnumFacing.EAST};
-    /** Ticks a support face is skipped after a click on it was answered false. */
+
     private static final int FAILED_FACE_TICKS = 10;
-    /** Ticks a placement waits for the server's answer before it is forgotten. */
+
     private static final int ANSWER_TICKS = 30;
 
     public final FloatProperty range = new FloatProperty("range", 4.5F, 3.0F, 6.0F);
-    /** Degrees of turn per tick. */
+
     public final IntProperty speed = new IntProperty("speed", 45, 5, 180);
     public final IntProperty placeInterval = new IntProperty("place-interval", 1, 1, 5);
     public final IntProperty swapDelay = new IntProperty("swap-delay", 1, 0, 3);
     public final IntProperty maxRetries = new IntProperty("max-retries", 3, 1, 10);
-    /** Milliseconds a refused cell is left alone. */
+
     public final IntProperty retryCooldown = new IntProperty("retry-cooldown", 2000, 250, 10000);
     public final BooleanProperty autoDisable = new BooleanProperty("auto-disable", true);
     public final ModeProperty moveFix = new ModeProperty("move-fix", 1, new String[]{"NONE", "SILENT", "STRICT", "REAL"});
     public final BooleanProperty itemSpoof = new BooleanProperty("item-spoof", true);
     public final BooleanProperty showProgress = new BooleanProperty("show-progress", true);
     public final BooleanProperty debug = new BooleanProperty("debug", false);
-    /* 2026-10-16: debug writes its file only; chat is this separate switch.
-       Up to four chat lines a second cost a player with chat mods more than
-       half their frames (200 -> 90 fps). */
+
     public final BooleanProperty debugChat = new BooleanProperty("debug-chat", false, this.debug::getValue);
 
-    /** Placements sent and not yet answered: cell -> tick sent. */
     private final Map<BlockPos, Integer> pending = new ConcurrentHashMap<BlockPos, Integer>();
-    /** Failures per cell, client (click false) and server (stated back as air). */
+
     private final Map<BlockPos, Integer> attempts = new ConcurrentHashMap<BlockPos, Integer>();
-    /** Cells left alone until this time (ms). */
+
     private final Map<BlockPos, Long> refusedUntil = new ConcurrentHashMap<BlockPos, Long>();
-    /** Support faces whose click was answered false: key -> tick they may be used again. */
+
     private final Map<PlaceUtil.FaceKey, Integer> failedFaces = new ConcurrentHashMap<PlaceUtil.FaceKey, Integer>();
 
     private final PlaceUtil.Stats stats = new PlaceUtil.Stats();
@@ -102,9 +84,7 @@ public class AutoBlockIn extends Module {
     private int swapWait;
     private int lastSlot = -1;
     private float progress;
-    /* Yaw steps, for Grim DuplicateRotPlace (its memory is server-side, so
-       these are kept across enables): the last non-zero one sent, and the one
-       that was last when a block was placed. */
+
     private float lastTurn;
     private float placedTurn = -1.0F;
 
@@ -216,7 +196,6 @@ public class AutoBlockIn extends Module {
         }
         ItemStack stack = mc.thePlayer.inventory.getCurrentItem();
 
-        /* The rotation and eye position the server holds. */
         float serverYaw = event.getYaw();
         float serverPitch = event.getPitch();
         Vec3 eye = mc.thePlayer.getPositionEyes(1.0F);
@@ -230,16 +209,13 @@ public class AutoBlockIn extends Module {
             }
             return;
         }
-        /* The rotation this tick's movement packet will carry. */
+
         float[] rotation = aim.current ? new float[]{serverYaw, serverPitch}
                 : PlaceUtil.step(serverYaw, serverPitch, aim.yaw, aim.pitch, this.speed.getValue());
         float turn = Math.abs(MathHelper.wrapAngleTo180_float(rotation[0] - serverYaw));
-        /* Also against the server's own memory (PlaceRotations, 2026-10-04). */
+
         if (turn > 2.0F && (Math.abs(turn - this.placedTurn) < 1.0E-3F
                 || atlas.management.PlaceRotations.wouldDuplicate(rotation[0]))) {
-            /* Grim DuplicateRotPlace flags a placement whose yaw step equals the
-               one before the previous placement; symmetric walls make equal
-               steps likely. One mouse count more breaks the tie. */
             double gcd = atlas.util.RotationUtil.gcd();
             rotation[0] += Math.signum(MathHelper.wrapAngleTo180_float(rotation[0] - serverYaw))
                     * (float) (gcd > 0.0 ? gcd : 0.01);
@@ -249,13 +225,6 @@ public class AutoBlockIn extends Module {
             this.lastTurn = turn;
         }
 
-        /* The click goes out now, before this tick's movement packet, and the
-           server judges it by the rotation that packet carries, from where the
-           player is now (Grim RotationPlace "post-flying"; vanilla does the
-           same: the click uses the look about to be sent). So the ray is cast
-           along `rotation`. Clicking along the rotation the server already had
-           and then turning toward the next cell in the same packet got every
-           block but the last flagged (2026-10-02 22:07 and 22:11). */
         if (this.swapWait <= 0 && now - this.lastPlaceTick >= this.placeInterval.getValue()) {
             MovingObjectPosition hit = PlaceUtil.verify(eye, reach, rotation[0], rotation[1], aim.support, aim.face);
             if (hit != null) {
@@ -281,16 +250,10 @@ public class AutoBlockIn extends Module {
         event.setRotation(rotation[0], rotation[1], PRIORITY);
         event.setPervRotation(this.moveFix.getValue() != 0 ? rotation[0] : mc.thePlayer.rotationYaw, PRIORITY);
         if (this.moveFix.getModeString().equals("REAL")) {
-            /* REAL: the camera turns as well, spread over this tick's frames by
-               RotationManager; the mouse still works (not forced). */
             Atlas.rotationManager.setRotation(rotation[0], rotation[1], PRIORITY, false);
         }
     }
 
-    /**
-     * The cheapest valid aim in the first tier that has one:
-     * walls, support for walls, roof, support for the roof.
-     */
     private PlaceUtil.Aim plan(List<BlockPos> body, Set<BlockPos> bodySet, List<BlockPos> sides, List<BlockPos> roofs,
                                Vec3 eye, double reach, float yaw, float pitch, ItemStack stack, int now) {
         Set<PlaceUtil.FaceKey> excluded = this.failedFaces.keySet();
@@ -327,7 +290,6 @@ public class AutoBlockIn extends Module {
         return null;
     }
 
-    /** A click answered false: drop this face for a moment, count it against the cell. */
     private void invalidate(PlaceUtil.Aim aim, int now, String why) {
         this.failedFaces.put(aim.key(), now + FAILED_FACE_TICKS);
         this.locked = null;
@@ -341,18 +303,12 @@ public class AutoBlockIn extends Module {
     private void refuse(BlockPos cell) {
         this.refusedUntil.put(cell, System.currentTimeMillis() + this.retryCooldown.getValue());
         this.attempts.remove(cell);
-        /* onPacket calls this on the network thread; the trace writes chat,
-           which must only be touched from the client thread. */
+
         if (mc.isCallingFromMinecraftThread()) {
             this.trace.log(this.tick, "refused", fmt(cell) + " for " + this.retryCooldown.getValue() + "ms");
         }
     }
 
-    /**
-     * The player's own right click while walling in is a second placement
-     * between two movement packets (Grim MultiPlace), often against a block
-     * the server has not applied yet (AirLiquidPlace).
-     */
     @EventTarget
     public void onRightClick(RightClickMouseEvent event) {
         if (this.isEnabled()) {
@@ -380,10 +336,6 @@ public class AutoBlockIn extends Module {
         }
     }
 
-    /**
-     * The server's answers. Runs on the network thread, so it reads the new
-     * state from the packet and touches only the concurrent maps.
-     */
     @EventTarget
     public void onPacket(PacketEvent event) {
         if (!this.isEnabled() || event.getType() != EventType.RECEIVE) {
@@ -425,9 +377,6 @@ public class AutoBlockIn extends Module {
                 sr.getScaledHeight() / 5.0F * 2.0F, color | 0xBF000000, true);
     }
 
-    /* ---- goals ---------------------------------------------------------- */
-
-    /** Cells the player's bounding box occupies. */
     private List<BlockPos> bodyCells() {
         AxisAlignedBB box = mc.thePlayer.getEntityBoundingBox();
         int x0 = MathHelper.floor_double(box.minX);
@@ -447,7 +396,6 @@ public class AutoBlockIn extends Module {
         return cells;
     }
 
-    /** The open ring cells around the body, at every level it spans. */
     private List<BlockPos> sideGoals(List<BlockPos> body, Set<BlockPos> bodySet) {
         Set<BlockPos> goals = new LinkedHashSet<BlockPos>();
         for (BlockPos cell : body) {
@@ -461,7 +409,6 @@ public class AutoBlockIn extends Module {
         return new ArrayList<BlockPos>(goals);
     }
 
-    /** The open cells directly above the top of the body. */
     private List<BlockPos> roofGoals(List<BlockPos> body) {
         int top = Integer.MIN_VALUE;
         for (BlockPos cell : body) {
@@ -476,11 +423,6 @@ public class AutoBlockIn extends Module {
         return roofs;
     }
 
-    /**
-     * One step of support: open cells next to a goal, outside the body, that
-     * can themselves be placed against something. Bounded at six per goal --
-     * this replaces the old 8964-node path search.
-     */
     private List<BlockPos> supportGoals(List<BlockPos> goals, Set<BlockPos> bodySet) {
         Set<BlockPos> goalSet = new HashSet<BlockPos>(goals);
         Set<BlockPos> supports = new LinkedHashSet<BlockPos>();

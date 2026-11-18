@@ -23,7 +23,6 @@ import de.florianmichael.vialoadingbase.netty.VLBPipeline;
 import java.util.SortedSet;
 
 public class VLBViaInjector implements ViaInjector {
-
   @Override
   public void inject() {}
 

@@ -6,11 +6,6 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.Vec3;
 
-/**
- * The situation of a click on {@code target}, as Accuracy reads it
- * (2026-10-26: was KillAuraLB.situation, shared now that KillAura2, the Atlas
- * engine and AutoClicker use humanization too).
- */
 public final class Situations {
     private static final Minecraft mc = Minecraft.getMinecraft();
 

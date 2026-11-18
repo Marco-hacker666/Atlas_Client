@@ -1,9 +1,5 @@
 package atlas.config;
 
-/**
- * Animation modes for item rendering
- * Original logic by syuto/animations-1.6, integrated into Uzi
- */
 public enum AnimationMode {
    VANILLA,
    EXHIBITION,

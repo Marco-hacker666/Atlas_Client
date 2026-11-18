@@ -19,26 +19,6 @@ import org.lwjgl.input.Mouse;
 
 import java.util.Random;
 
-/**
- * W-tap (rewritten 2026-10-09 after Vape 4.21's WTap): on a hit, really let go
- * of the forward key and press it again, so the game itself ends and restarts
- * the sprint and the next hit deals sprint knockback. Everything sent is what
- * a player letting go of W sends.
- *
- * What the old version did differently: it zeroed the movement input inside
- * the game (not the key), on every hit at most every 500ms, always 5.5 ticks
- * after the hit for 1.5 ticks -- a fixed rhythm -- and also on hits that could
- * not deal damage (the target still in its hurt time), where a W-tap gains
- * nothing.
- *
- *  chance          how often a hit is followed by a W-tap;
- *  release-delay   ms from the hit to letting go of W;
- *  re-press-delay  ms W stays up; each varies by +-20% so no two are alike;
- *  select-hits     only after hits that can deal damage (the target is out of
- *                  most of its hurt time; 14 of 20 as Vape, for ping).
- * The key goes back to what the player is really holding when the tap ends,
- * when a menu opens, and when the module is turned off.
- */
 public class Wtap extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
@@ -120,7 +100,6 @@ public class Wtap extends Module {
         this.restoreForwardKey();
     }
 
-    /** The forward key as the player is really holding it. */
     private void restoreForwardKey() {
         if (this.released) {
             KeyBinding forward = mc.gameSettings.keyBindForward;

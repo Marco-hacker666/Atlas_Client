@@ -28,8 +28,6 @@ public class AntiAFK extends Module {
         return code < 0 ? Mouse.isButtonDown(code + 100) : Keyboard.isKeyDown(code);
     }
 
-    /* The simulated keys used to be left wherever the last tick put them, so
-       switching off mid-strafe kept the player walking. */
     @Override
     public void onDisabled() {
         this.lastInput = 0;
@@ -42,10 +40,7 @@ public class AntiAFK extends Module {
     public void onUpdate(UpdateEvent event){
         if(event.getType() == EventType.PRE && this.isEnabled()){
             GameSettings gameSettings = mc.gameSettings;
-            /* Physical keys, not the bindings. isPressed() consumes a one-shot
-               press counter, so a key held down only counted once; and
-               isKeyDown() would see this module's own simulated presses and
-               never let the idle timer run out. */
+
             if (physicallyDown(gameSettings.keyBindJump) || physicallyDown(gameSettings.keyBindRight)
                     || physicallyDown(gameSettings.keyBindForward) || physicallyDown(gameSettings.keyBindLeft)
                     || physicallyDown(gameSettings.keyBindBack)) {

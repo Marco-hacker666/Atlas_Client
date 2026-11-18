@@ -32,37 +32,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
-/**
- * Out of a block this player is stuck in (2026-10-16).
- *
- * Owner, on a high ping: "I often end up inside blocks and cannot move" --
- * pulled back into a block just placed, a ghost block, or a block placed onto
- * the body; not sure which. All end the same way: the player's box overlaps a
- * solid block.
- *
- * A 1.8 server does not pull a player back for colliding when the move
- * STARTS inside a block (NetHandlerPlayServer.processPlayer only sets back a
- * move from free space into a block), and vanilla's own pushOutOfBlocks moves
- * a stuck player 0.1 a tick. So once the box has overlapped a block for two
- * ticks, this finds the shortest way out -- each horizontal direction and
- * up, the one being walked in first on a tie -- and moves along it at no
- * more than `speed` a tick. Nothing during a Clutch catch, in creative or
- * spectator, flying, or with noclip.
- *
- * `log` writes each time stuck (config/Atlas/stuck-*.txt): where, which
- * blocks, whether this client placed them and how long ago, ticks since the
- * last server correction, ping, the way out and how it ended.
- *
- * 2026-10-23 (owner): 141 of 192 times stuck were followed by a position flag
- * within 2 s, and in 94 of them the server's correction is what ended it. This
- * module moved the player in 191 of the 192, so there was nothing to compare
- * against. WATCH finds and logs the way out exactly as ESCAPE does but leaves
- * the motion alone (vanilla's own push only); played in turns, the two modes
- * say whether the escape is what the server corrects. Each line also gives
- * the ticks since the last hit or knockback and how far the last correction
- * moved the player, since a hit while stuck had ESCAPE overwrite the
- * knockback the server expected.
- */
 public class AntiBounce extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final double STEP = 0.05;
@@ -87,21 +56,13 @@ public class AntiBounce extends Module {
     private String stuckWhat = "";
     private String exitWay = "none";
     private File logFile;
-    /** Blocks this client placed lately: position -> tick. */
+
     private final Map<BlockPos, Integer> placed = new LinkedHashMap<BlockPos, Integer>();
 
     public AntiBounce() {
         super("AntiBounce", false, false, "Moves you out of a block you are stuck in");
     }
 
-    /**
-     * The shortest way out of a box: {dx, dy, dz} of at most maxDistance, or
-     * null. Directions tried at each distance in this order: the preferred
-     * one (may be null), +x, -x, +z, -z, up.
-     *
-     * @param box     {minX, minY, minZ, maxX, maxY, maxZ}
-     * @param blocked whether a box overlaps something solid
-     */
     static double[] escape(double[] box, Predicate<double[]> blocked, double[] preferred, double maxDistance) {
         List<double[]> ways = new ArrayList<double[]>();
         if (preferred != null) {
@@ -124,13 +85,11 @@ public class AntiBounce extends Module {
         return null;
     }
 
-    /** Ticks from {@code at} to {@code start} as the log shows them ("5t", "-2t" when after the start), or "none". */
     static String ticksBefore(int start, int at) {
         int ticks = start - at;
         return ticks > 200 ? "none" : ticks + "t";
     }
 
-    /** A correction's displacement as the log shows it: horizontal distance and signed vertical. */
     static String moveText(double dx, double dy, double dz) {
         return String.format(Locale.ROOT, "h%.2f v%+.2f", Math.sqrt(dx * dx + dz * dz), dy);
     }
@@ -143,7 +102,6 @@ public class AntiBounce extends Module {
         if (event.getType() == EventType.RECEIVE && event.getPacket() instanceof S08PacketPlayerPosLook) {
             S08PacketPlayerPosLook packet = (S08PacketPlayerPosLook) event.getPacket();
             if (mc.thePlayer != null) {
-                /* As FlagDetector reads it: relative fields carry a delta, the rest a target. */
                 Set<S08PacketPlayerPosLook.EnumFlags> flags = packet.func_179834_f();
                 boolean relX = flags != null && flags.contains(S08PacketPlayerPosLook.EnumFlags.X);
                 boolean relY = flags != null && flags.contains(S08PacketPlayerPosLook.EnumFlags.Y);
@@ -191,8 +149,7 @@ public class AntiBounce extends Module {
             this.lastCorrection = this.tick;
             this.correctionMove = this.pendingCorrectionMove;
         }
-        /* A hit: our knockback arrived, or the hurt animation has just started
-           (hurtTime is set to maxHurtTime and has counted down once by now). */
+
         if (this.knockedBack || (mc.thePlayer.maxHurtTime > 0
                 && mc.thePlayer.hurtTime >= mc.thePlayer.maxHurtTime - 1)) {
             this.knockedBack = false;
@@ -227,7 +184,6 @@ public class AntiBounce extends Module {
         }
         this.exitWay = String.format("%+.2f %+.2f %+.2f", way[0], way[1], way[2]);
         if (this.mode.getValue() == WATCH) {
-            /* Found and logged, not taken: vanilla's push is all that moves the player. */
             return;
         }
         double cap = this.speed.getValue();
@@ -238,12 +194,10 @@ public class AntiBounce extends Module {
             mc.thePlayer.motionZ = way[2] * scale;
         }
         if (way[1] > 0 && mc.thePlayer.onGround) {
-            // Up and out, no faster than a jump.
             mc.thePlayer.motionY = Math.min(0.42, way[1] + 0.05);
         }
     }
 
-    /** The axis direction the player walks in most, or null when not walking. */
     private double[] walkedWay() {
         float forward = mc.thePlayer.movementInput.moveForward;
         float strafe = mc.thePlayer.movementInput.moveStrafe;

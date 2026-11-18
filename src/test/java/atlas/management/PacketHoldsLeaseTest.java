@@ -21,9 +21,7 @@ import java.util.function.Predicate;
 
 import static org.junit.Assert.*;
 
-/** Packet hold leases (2026-09-28, after Rise's BlinkComponent). */
 public class PacketHoldsLeaseTest {
-
     private static final Predicate<String> ALL_ON = name -> true;
 
     private static Predicate<String> off(String... names) {
@@ -31,7 +29,6 @@ public class PacketHoldsLeaseTest {
         return name -> !off.contains(name);
     }
 
-    /** A holder under test's control. */
     static final class FakeHolder {
         int count;
         long since;
@@ -78,8 +75,6 @@ public class PacketHoldsLeaseTest {
         PacketHolds.clearForTests();
         Arbiter.setCatching("PacketHoldsLeaseTest", false);
     }
-
-    // ------------------------------------------------------------ the rule
 
     @Test
     public void aHoldWithinItsLeaseIsLeftAlone() {
@@ -216,8 +211,6 @@ public class PacketHoldsLeaseTest {
         assertEquals(1, holder.expired);
     }
 
-    // ------------------------------------------------------------ the holders
-
     @Test
     public void blinkLetsGoInOrderWhenItsOwnerIsOff() throws Exception {
         BlinkManagerTest.Recording blink = new BlinkManagerTest.Recording();
@@ -262,7 +255,7 @@ public class PacketHoldsLeaseTest {
         blink.setBlinkState(true, BlinkModules.NO_FALL);
         offerOnClientThread(blink, new BlinkManagerTest.Numbered(1));
         PacketHolds.enforce(System.currentTimeMillis(), off("NoFall"));
-        /* Its own late setBlinkState(false) is harmless: it no longer holds. */
+
         assertFalse(blink.setBlinkState(false, BlinkModules.NO_FALL));
         assertTrue(blink.setBlinkState(true, BlinkModules.SCAFFOLD));
         assertEquals(BlinkModules.SCAFFOLD, blink.getBlinkingModule());
@@ -287,7 +280,7 @@ public class PacketHoldsLeaseTest {
         TestLagHolderModule.hold(lag, 2);
         lag.handlePacket(new LagManagerTest.Numbered(1));
         long since = PacketHolds.snapshot().get(0).since;
-        /* Two ticks is 100ms; nothing flushed it (no tick ran). */
+
         assertTrue(PacketHolds.enforce(since + 100L + PacketHolds.LEASE_MARGIN_MS, ALL_ON).isEmpty());
         assertEquals(1, PacketHolds.enforce(since + 101L + PacketHolds.LEASE_MARGIN_MS, ALL_ON).size());
         assertEquals(Collections.singletonList(1), lag.sent);

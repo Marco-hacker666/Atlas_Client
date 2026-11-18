@@ -18,9 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.*;
 
-/** BlinkManager ownership (F-32, 2026-09-28): first come, first served. */
 public class BlinkManagerTest {
-
     public static final class Numbered implements Packet<INetHandler> {
         final int n;
 
@@ -69,7 +67,6 @@ public class BlinkManagerTest {
         BlinkManager.holdTransactions = () -> false;
     }
 
-    /** Records every packet sent, by kind: "C0F" or the Numbered's number. */
     static class RecordingAll extends BlinkManager {
         final List<String> sent = new ArrayList<String>();
 
@@ -85,7 +82,6 @@ public class BlinkManagerTest {
         }
     }
 
-    /** offerPacket only holds what the client thread sends. */
     private static boolean offerOnClientThread(BlinkManager blink, Packet<?> packet) throws Exception {
         AtomicBoolean result = new AtomicBoolean();
         Thread thread = new Thread(() -> result.set(blink.offerPacket(packet)), "Client thread");
@@ -94,7 +90,6 @@ public class BlinkManagerTest {
         return result.get();
     }
 
-    /* 2026-10-04: what is held on a world change belongs to the old world. */
     @Test
     public void aWorldChangeDropsTheHoldButSendsTheReplies() throws Exception {
         BlinkManager.holdTransactions = () -> true;
@@ -108,7 +103,7 @@ public class BlinkManagerTest {
         assertTrue(blink.blinkedPackets.isEmpty());
         assertEquals(BlinkModules.NONE, blink.getBlinkingModule());
         assertFalse(blink.isBlinking());
-        /* The old owner's own release afterwards has nothing to send. */
+
         assertFalse(blink.setBlinkState(false, BlinkModules.BLINK));
         assertEquals(1, blink.sent.size());
     }
@@ -145,12 +140,10 @@ public class BlinkManagerTest {
         assertEquals(1, blink.refusals());
         assertEquals("SCAFFOLD refused, ANTI_VOID holds", blink.lastRefusal());
 
-        /* The refused module "releasing" does nothing to the owner's hold. */
         assertFalse(blink.setBlinkState(false, BlinkModules.SCAFFOLD));
         assertEquals(2, blink.blinkedPackets.size());
         assertTrue(blink.sent.isEmpty());
 
-        /* The owner's release sends its packets, in order. */
         assertTrue(blink.setBlinkState(false, BlinkModules.ANTI_VOID));
         assertEquals(Arrays.asList(1, 2), blink.sent);
         assertEquals(BlinkModules.NONE, blink.getBlinkingModule());
@@ -160,7 +153,6 @@ public class BlinkManagerTest {
 
     @Test
     public void explicitTakeoverStillWorks() throws Exception {
-        /* Blink, NoFall and Hitflick: release whoever holds, then take it. */
         Recording blink = new Recording();
         blink.setBlinkState(true, BlinkModules.ANTI_VOID);
         offerOnClientThread(blink, new Numbered(7));
@@ -215,7 +207,7 @@ public class BlinkManagerTest {
     public void networkThreadSendsAreNeverHeld() {
         Recording blink = new Recording();
         blink.setBlinkState(true, BlinkModules.ANTI_VOID);
-        /* This test thread is not named "Client thread". */
+
         assertFalse(blink.offerPacket(new Numbered(1)));
     }
 
@@ -233,15 +225,13 @@ public class BlinkManagerTest {
         assertTrue(blink.blinkedPackets.isEmpty());
     }
 
-    /* hold-transactions (2026-10-02): Grim reads replies flowing during a hold as Timer. */
-
     @Test
     public void transactionsAreHeldInOrderWhenAsked() throws Exception {
         BlinkManager.holdTransactions = () -> true;
         RecordingAll blink = new RecordingAll();
         blink.setBlinkState(true, BlinkModules.BLINK);
         assertTrue(offerOnClientThread(blink, new Numbered(1)));
-        /* From this test thread too: a reply must not overtake one in the queue. */
+
         assertTrue(blink.offerPacket(new C0FPacketConfirmTransaction()));
         assertTrue(offerOnClientThread(blink, new Numbered(2)));
         blink.setBlinkState(false, BlinkModules.BLINK);

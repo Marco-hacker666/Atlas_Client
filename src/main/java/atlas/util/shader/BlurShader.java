@@ -91,10 +91,10 @@ public class BlurShader {
 
     private static void drawFlippedQuads(float width, float height) {
         GL11.glBegin(GL11.GL_QUADS);
-        GL11.glTexCoord2f(0, 1); GL11.glVertex2f(0, 0);       // top left (UV V=1)
-        GL11.glTexCoord2f(0, 0); GL11.glVertex2f(0, height);  // bottom left (UV V=0)
-        GL11.glTexCoord2f(1, 0); GL11.glVertex2f(width, height); // bottom right
-        GL11.glTexCoord2f(1, 1); GL11.glVertex2f(width, 0);   // top right
+        GL11.glTexCoord2f(0, 1); GL11.glVertex2f(0, 0);
+        GL11.glTexCoord2f(0, 0); GL11.glVertex2f(0, height);
+        GL11.glTexCoord2f(1, 0); GL11.glVertex2f(width, height);
+        GL11.glTexCoord2f(1, 1); GL11.glVertex2f(width, 0);
         GL11.glEnd();
     }
 
@@ -109,7 +109,7 @@ public class BlurShader {
 
     public static void renderBlur(float radius, float x, float y, float w, float h, float effectiveScale) {
         if (radius <= 0) return;
-        /* Framebuffers off (OptiFine Fast Render): no blur rather than a white screen (2026-10-05). */
+
         if (!atlas.util.render.FramebufferCompat.available()) return;
 
         ensureFramebuffers();

@@ -8,12 +8,9 @@ import java.util.Random;
 
 import static org.junit.Assert.*;
 
-/** Where a field's text goes (2026-10-23, GUI redesign M1). */
 public class TextLayoutTest {
-
     private static final TextLayout.Width MONO = s -> s.length() * 4.0F;
 
-    /** The bug-report box's wrapping before M1 (AtlasClickGui.wrapReport), without its line limit. */
     private static List<String> oldWrap(String text, float width) {
         List<String> lines = new ArrayList<String>();
         StringBuilder current = new StringBuilder();

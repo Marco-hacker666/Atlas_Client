@@ -13,9 +13,7 @@ import java.lang.reflect.Constructor;
 public class MouseRawInput extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static Mouse mouse;
-    /* Atomic, not volatile: the input thread did deltaX += n while the client
-       thread read and then zeroed it, and a movement landing between the read
-       and the zero was lost. */
+
     private static final java.util.concurrent.atomic.AtomicInteger deltaX = new java.util.concurrent.atomic.AtomicInteger();
     private static final java.util.concurrent.atomic.AtomicInteger deltaY = new java.util.concurrent.atomic.AtomicInteger();
     private static volatile boolean running;
@@ -56,12 +54,10 @@ public class MouseRawInput extends Module {
         return deltaY.getAndSet(0);
     }
 
-    /** A raw mouse has been found and is being read. */
     public static boolean hasMouse() {
         return running && mouse != null;
     }
 
-    /** Drops whatever has piled up. */
     public static void discard() {
         deltaX.set(0);
         deltaY.set(0);
@@ -81,10 +77,7 @@ public class MouseRawInput extends Module {
                     } else if (mouse.poll()) {
                         int x = (int) mouse.getX().getPollData();
                         int y = (int) mouse.getY().getPollData();
-                        /* Polled either way, so the device's own count does
-                           not build up; kept only while the game has the
-                           mouse. In a menu, or tabbed out, the movement is the
-                           cursor's, not the view's. */
+
                         if (mc.inGameHasFocus && mc.currentScreen == null) {
                             deltaX.addAndGet(x);
                             deltaY.addAndGet(y);
@@ -117,9 +110,6 @@ public class MouseRawInput extends Module {
         return constructor.newInstance();
     }
 
-    /* 2026-10-26 (review): the mice found by the last scan, and when. findMouse used to build a new controller
-       environment and list every device on each call -- every millisecond while no mouse moved. Now the list is
-       built at most every RESCAN_MS (a mouse plugged in later is still found) and only polled in between. */
     private static final long RESCAN_MS = 5000L;
     private static Mouse[] candidates;
     private static long candidatesAt;
@@ -136,7 +126,7 @@ public class MouseRawInput extends Module {
             candidates = found.toArray(new Mouse[0]);
             candidatesAt = now;
         }
-        /* The one that moves is the one in use (a laptop lists its touchpad too). */
+
         for (Mouse candidate : candidates) {
             if (candidate.poll()
                     && (candidate.getX().getPollData() != 0.0F || candidate.getY().getPollData() != 0.0F)) {

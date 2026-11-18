@@ -9,7 +9,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class ZestTapPlanTest {
-
     private static final class Run {
         final ZestTapPlan plan;
         long now = 100000L;
@@ -45,7 +44,6 @@ public class ZestTapPlanTest {
         assertFalse("between a select and a first hit", ZestTapPlan.starts(ZestTapPlan.START_ANY, hit, hit - 800L));
     }
 
-    /** 2026-11-10 (owner: "let go longer, as in the video"): W is let go from the peak until the third hit lands. */
     @Test
     public void wIsHeldForTwoHitsAndLetGoFromThePeakUntilTheThird() {
         Run run = new Run(3);
@@ -81,7 +79,6 @@ public class ZestTapPlanTest {
         assertTrue("about 450 ms: " + ms, ms >= 350L && ms <= 600L);
     }
 
-    /** 2026-11-10 (owner's video): at the hit, W goes when the target opens and overlaps the third hit. */
     @Test
     public void atTheHitWGoesWhenTheTargetOpensAndOverlapsTheThird() {
         ZestTapPlan plan = new ZestTapPlan(new Random(8));
@@ -138,7 +135,6 @@ public class ZestTapPlanTest {
         assertEquals("the next sequence goes the other way", -first, second);
     }
 
-    /** Random strafe (owner: "a little at a time"): short taps, never held, the side kept now and then. */
     @Test
     public void randomStrafeIsShortTapsWithGapsAndVaries() {
         java.util.Set<Integer> totals = new java.util.HashSet<Integer>();

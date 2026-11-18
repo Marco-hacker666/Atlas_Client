@@ -12,18 +12,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * ECJ in a JVM of its own (2026-11-04). ECJ also reads java.class.path, whatever -classpath says, so inside the test
- * JVM it sees the deobfuscated game classes that no player has: new Vec3(0, 64, 0) passed here and failed for players.
- * The child JVM has this client's classes, the tests' and ECJ, as a game with a JRE only would.
- */
 final class IsolatedEcj {
     private static final File JAR = new File("../backups/scripts-work/ecj-" + ScriptCompiler.ECJ_VERSION + ".jar");
 
     private IsolatedEcj() {
     }
 
-    /** What one source gave: ok, and every error, first lines only. */
     static final class Outcome {
         final boolean ok;
         final List<String> errors;
@@ -41,7 +35,6 @@ final class IsolatedEcj {
         }
     }
 
-    /** Compiles each source separately, in one child JVM. */
     static List<Outcome> compile(ScriptKind kind, List<String> sources) throws Exception {
         assumeJar();
         File dir = Files.createTempDirectory("atlas-ecj").toFile();
@@ -85,14 +78,13 @@ final class IsolatedEcj {
         }
     }
 
-    /** The child JVM: kind, work folder, sources. */
     public static void main(String[] args) throws Exception {
         ScriptKind kind = ScriptKind.valueOf(args[0]);
         File work = new File(args[1]);
         ScriptCompiler.compilerDir = new File(work, "compiler");
         JavaCompiler ecj = (JavaCompiler) Class.forName("org.eclipse.jdt.internal.compiler.tool.EclipseCompiler")
                 .newInstance();
-        /* ECJ prints its own report as well; only the marked lines count. */
+
         List<File> classpath = ScriptCompiler.classpath();
         for (int i = 2; i < args.length; i++) {
             String source = new String(Files.readAllBytes(new File(args[i]).toPath()), StandardCharsets.UTF_8);

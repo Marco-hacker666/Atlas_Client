@@ -61,22 +61,22 @@ public class Jesus extends Module {
             return;
         }
         switch (this.mode.getValue()) {
-            case 0: // Donor HypixelJesus: alternate dip offsets, spoil ground.
+            case 0:
                 mc.thePlayer.motionY = 0.0;
                 mc.thePlayer.posY -= mc.thePlayer.ticksExisted % 2 == 0 ? this.dip.getValue().doubleValue() : 0.10625;
                 break;
-            case 1: // Donor KarhuJesus: tiny even-tick dip.
+            case 1:
                 mc.thePlayer.motionY = 0.0;
                 if (mc.thePlayer.ticksExisted % 2 == 0) {
                     mc.thePlayer.posY -= 0.015625;
                 }
                 break;
-            case 2: // Donor OldNCPJesus: dip only on even ticks.
+            case 2:
                 if (mc.thePlayer.ticksExisted % 2 == 0) {
                     mc.thePlayer.posY -= this.dip.getValue().doubleValue() / 10.0;
                 }
                 break;
-            case 3: // Donor VulcanJesus: pin to entry height, hop out on jump.
+            case 3:
                 if (this.firstInWater) {
                     this.waterPosY = mc.thePlayer.posY - 0.85;
                     this.firstInWater = false;
@@ -111,7 +111,6 @@ public class Jesus extends Module {
 
     @EventTarget
     public void onPacket(PacketEvent event) {
-        // Donor HypixelJesus: swallow self velocity while floating.
         if (!this.isEnabled() || event.getType() != EventType.RECEIVE || mc.thePlayer == null) {
             return;
         }

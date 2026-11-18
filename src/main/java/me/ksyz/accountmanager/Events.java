@@ -22,12 +22,8 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.lang.reflect.Field;
 
-/*
- * This file is derived from https://github.com/ksyzov/AccountManager.
- * Originally licensed under the GNU LGPL.
- *
- * This modified version is licensed under the GNU GPL v3.
- */
+// Originally licensed under the GNU LGPL.
+
 public class Events {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
@@ -114,7 +110,6 @@ public class Events {
                     }
                 }
             } catch (Exception e) {
-                //
             }
         }
     }

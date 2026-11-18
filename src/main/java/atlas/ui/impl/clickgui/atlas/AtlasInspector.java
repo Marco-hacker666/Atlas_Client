@@ -11,36 +11,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-/**
- * Lets the menu be checked without anyone having to look at it.
- *
- * Every visual defect in this menu so far -- a white wash over the blur, a
- * corner radius silently clamped to four pixels, a triangle fan wound the wrong
- * way, a panel culled entirely, slider labels printed through the row below --
- * was found the same way: someone played the game, took a screenshot, and said
- * it looked wrong. That is a slow loop and a rude one, and none of those five
- * needed a human eye to detect. Three were arithmetic and two were a blank
- * region where something should have been drawn.
- *
- * So the menu reports on itself, in two ways that need no one watching:
- *
- * IT KEEPS ITS OWN RECEIPTS. Every rectangle drawn in a frame is recorded with
- * the purpose it was drawn for. Afterwards the record is checked for the things
- * that are wrong by construction rather than by taste -- two rows of the same
- * list overlapping, a click target that does not match the rectangle it was
- * drawn as, a surface with no area. Those are the bugs that shipped, and each
- * of them is a comparison of two numbers.
- *
- * IT CAN TAKE ITS OWN PICTURE. A key writes the framebuffer to a file, so
- * whoever is working on the menu can look at the result directly instead of
- * asking for a screenshot and waiting.
- *
- * Both are off unless switched on. Recording every rectangle costs allocation
- * on every frame, which is not a thing to leave running in a client that is
- * also trying to land hits.
- */
 final class AtlasInspector {
-
     private static final File DIR = new File("./config/Atlas/ui/");
     private static final SimpleDateFormat STAMP = new SimpleDateFormat("yyyyMMdd-HHmmss");
 
@@ -51,7 +22,6 @@ final class AtlasInspector {
     private static final List<Rect> DRAWN = new ArrayList<Rect>();
     private static final List<String> FINDINGS = new ArrayList<String>();
 
-    /** One rectangle, and what it was for. */
     private static final class Rect {
         final String purpose;
         final String group;
@@ -81,18 +51,10 @@ final class AtlasInspector {
         }
     }
 
-    /* ---- live mode ---------------------------------------------------
-       A capture every couple of seconds while the menu is open, so whoever is
-       working on it can watch rather than ask. Deliberately not every frame:
-       the point is to see what the menu looks like, and thirty near-identical
-       pictures a second answers that no better than one every two seconds
-       while costing a disk write each time. */
-
     private static boolean live;
     private static long lastCapture;
     private static String lastFindings = "";
 
-    /** Newest captures kept; older ones are deleted rather than accumulating. */
     private static final int KEEP = 12;
     private static final long INTERVAL_MS = 2000L;
 
@@ -112,11 +74,6 @@ final class AtlasInspector {
         return "live inspect OFF";
     }
 
-    /**
-     * Called at the end of every frame while live. Captures on the interval,
-     * and audits the same frame that was captured so a picture and its
-     * findings describe the same thing.
-     */
     static void tick() {
         if (!live) {
             return;
@@ -129,15 +86,13 @@ final class AtlasInspector {
 
         List<String> findings = audit();
         String joined = join(findings);
-        /* Only written when it changes. A file repeating the same clean line
-           every two seconds buries the moment something broke. */
+
         if (!joined.equals(lastFindings)) {
             lastFindings = joined;
             appendLog(findings);
         }
         capture();
         prune();
-        /* audit() cleared nothing, so recording stays on for the next frame. */
     }
 
     private static String join(List<String> findings) {
@@ -169,7 +124,6 @@ final class AtlasInspector {
             writer.println();
             writer.flush();
         } catch (Exception ignored) {
-            // Nothing useful to do; the menu keeps drawing.
         } finally {
             if (writer != null) {
                 writer.close();
@@ -177,7 +131,6 @@ final class AtlasInspector {
         }
     }
 
-    /** Keeps the newest few captures and removes the rest. */
     private static void prune() {
         try {
             File[] files = DIR.listFiles(new java.io.FilenameFilter() {
@@ -201,7 +154,6 @@ final class AtlasInspector {
                 }
             }
         } catch (Exception ignored) {
-            // Disk housekeeping is not worth failing a frame over.
         }
     }
 
@@ -215,33 +167,16 @@ final class AtlasInspector {
         }
     }
 
-    /**
-     * Records a rectangle the menu just drew.
-     *
-     * Rows in the same group are expected never to overlap; that is the whole
-     * of the check, and it is the one that would have caught slider rows
-     * reserving twenty pixels while drawing twenty-four.
-     */
     static void note(String group, String purpose, float x, float y, float x2, float y2) {
         if (recording) {
             DRAWN.add(new Rect(group, purpose, x, y, x2, y2));
         }
     }
 
-    /**
-     * Records where a click for something was tested, so it can be compared
-     * against where that thing was drawn.
-     *
-     * The two drifted apart twice: once when the list started scrolling by
-     * pixels while hit testing still assumed whole rows, and once when the
-     * detail pane gained a settling offset the click path did not know about.
-     * Both were invisible in a screenshot and obvious in two numbers.
-     */
     static void noteHit(String group, String purpose, float x, float y, float x2, float y2) {
         note(group, "hit:" + purpose, x, y, x2, y2);
     }
 
-    /** Checks the frame just recorded and returns what is wrong with it. */
     static List<String> audit() {
         FINDINGS.clear();
         for (int i = 0; i < DRAWN.size(); i++) {
@@ -283,16 +218,9 @@ final class AtlasInspector {
         return null;
     }
 
-    /**
-     * Runs one frame's worth of checking and writes the result.
-     *
-     * Always writes, even when nothing is wrong: a report saying a frame was
-     * clean is evidence, and a missing file is ambiguous between "no problems"
-     * and "never ran".
-     */
     static String check() {
         recording = true;
-        /* The caller redraws once with recording on, then calls report(). */
+
         return "recording next frame";
     }
 
@@ -329,14 +257,6 @@ final class AtlasInspector {
         }
     }
 
-    /**
-     * Writes the current framebuffer to a file.
-     *
-     * Uses the client's own screenshot path rather than reading pixels here:
-     * it already handles the framebuffer being a different size from the
-     * window, which is the case whenever the game is not at 100% scaling and
-     * is exactly the sort of detail a hand-rolled version gets wrong.
-     */
     static String capture() {
         try {
             Minecraft mc = Minecraft.getMinecraft();
@@ -344,9 +264,7 @@ final class AtlasInspector {
                 return "could not create " + DIR;
             }
             String name = "atlas-" + STAMP.format(new Date()) + ".png";
-            /* saveScreenshot always writes under <dir>/screenshots/, and does
-               not create a subfolder in the name -- so "ui/" + name failed
-               with FileNotFoundException and no capture was ever saved. */
+
             File shots = new File(DIR, "screenshots");
             if (!shots.exists() && !shots.mkdirs()) {
                 return "could not create " + shots;

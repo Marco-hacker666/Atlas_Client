@@ -37,11 +37,10 @@ public class AutoClicker extends Module {
     public final FloatProperty hitBoxVertical = new FloatProperty("hit-box-vertical", 0.1F, 0.0F, 1.0F, this.breakBlocks::getValue);
     public final FloatProperty hitBoxHorizontal = new FloatProperty("hit-box-horizontal", 0.2F, 0.0F, 1.0F, this.breakBlocks::getValue);
     public final ModeProperty clickMode = new ModeProperty("click-mode", 0, new String[]{"Normal", "LowCPS", "Record", "DragClick"});
-    /* Human (2026-10-25, HumanClicks): a mean-reverting CPS walk, log-normal gaps, cadence repeats, hesitations. */
+
     public final ModeProperty randomization = new ModeProperty("randomization", 3, new String[]{"Normal", "Extra", "Extra+", "Human"});
     private final atlas.util.HumanClicks humanClicks = new atlas.util.HumanClicks();
-    /* 2026-10-26 (review: apply-autoclicker was never read): Humanization's click-drop and click-double. The
-       player aims, so no hit-rate verdict here. */
+
     private final atlas.humanize.Humanizer humanizer = new atlas.humanize.Humanizer(atlas.humanize.Humanizer.CONSUMER_AUTOCLICKER);
     public final IntProperty lowMaxCPS = new IntProperty("low-max-cps", 6, 1, 20, () -> this.clickMode.getValue() == 1);
     public final BooleanProperty jitter = new BooleanProperty("jitter", false);
@@ -56,13 +55,9 @@ public class AutoClicker extends Module {
     public final BooleanProperty fatigue = new BooleanProperty("fatigue", false);
     public final FloatProperty fatigueFloor = new FloatProperty("fatigue-floor", 0.75F, 0.5F, 1.0F, this.fatigue::getValue);
     public final IntProperty fatigueSecs = new IntProperty("fatigue-secs", 120, 30, 600, this.fatigue::getValue);
-    /* Runs the plain attack-key click cycle while a container GUI is open. It
-       does not click inventory slots: the donor's inventory-fill behaviour
-       (arm a start delay, then click the hovered slot) is not implemented, so
-       the setting is named for what it does rather than for what it does not. */
+
     public final BooleanProperty guiAttack = new BooleanProperty("gui-attack", false);
-    /* True for the tick in which this module pressed the attack key itself, so
-       record mode can tell a synthesized click from a real one. */
+
     private boolean moduleClickThisTick = false;
     public final IntProperty startDelayMs = new IntProperty("start-delay-ms", 0, 0, 1000);
     private long enabledAtMs = 0L;
@@ -97,7 +92,6 @@ public class AutoClicker extends Module {
             int top = Math.max(this.minCPS.getValue(), this.maxCPS.getValue());
             base = 1000L / RandomUtil.nextLong(top, top + 8);
         } else if (this.randomization.getValue() == 3) {
-            /* Human shapes the whole gap; fatigue still sags it on a long fight. */
             long gap = this.humanClicks.next(this.minCPS.getValue(), this.maxCPS.getValue(), System.currentTimeMillis());
             return (long) ((double) gap / this.fatigueMultiplier());
         } else {
@@ -106,8 +100,6 @@ public class AutoClicker extends Module {
         return this.applyRandomization(base);
     }
 
-    // Fatigue sags effective CPS the longer a fight runs, then recovers
-    // after 5s without clicks. Emulation only, like the tiers above.
     private double fatigueMultiplier() {
         if (!this.fatigue.getValue()) {
             return 1.0;
@@ -129,9 +121,6 @@ public class AutoClicker extends Module {
         return 1.0 - sag * (1.0 - (double) this.fatigueFloor.getValue());
     }
 
-    // Humanization layer only. Normal returns the base untouched so old
-    // behavior is identical. This imitates human timing, it proves nothing
-    // against model-based detection.
     private long applyRandomization(long base) {
         if (this.randomization.getValue() == 0) {
             return (long) ((double) base / this.fatigueMultiplier());
@@ -207,19 +196,6 @@ public class AutoClicker extends Module {
         }
     }
 
-    /* 2026-10-20 (owner: "holding left click in front of an enemy, the
-       clicker stops"). The crosshair sits on a block behind the enemy while
-       the enemy is still just out of reach (ground behind them, or the feet
-       when aiming low), and the old check only looked "range" far down the
-       line, so it called it mining and stopped clicking. Now any enemy on the
-       crosshair line in front of that block counts, however far. */
-    /* 2026-10-25 (owner: "facing a block with someone behind it, holding the
-       mouse never breaks the block"). The line was max(range, distance to the
-       block), so with the block nearer than range a player BEHIND it was on
-       the line too: "a target", clicking went on and every click restarted the
-       break. On a block the line now ends at the block -- only an enemy in
-       front of it counts, at any distance (the 10-20 case above still holds:
-       there the block is behind the enemy). */
     private double rayLength() {
         if (this.isBreakingBlock() && mc.objectMouseOver.hitVec != null) {
             return mc.thePlayer.getPositionEyes(1.0F).distanceTo(mc.objectMouseOver.hitVec);
@@ -263,9 +239,6 @@ public class AutoClicker extends Module {
     @EventTarget
     public void onTick(TickEvent event) {
         if (event.getType() == EventType.PRE) {
-            /* Cleared every tick: a click the module synthesizes lands in this
-               same tick (vanilla turns the key press into clickMouse()), so
-               the flag never outlives the tick it was set in. */
             this.moduleClickThisTick = false;
             if (this.clickDelay > 0L) {
                 this.clickDelay -= 50L;
@@ -273,10 +246,9 @@ public class AutoClicker extends Module {
             if (this.blockHitDelay > 0L) {
                 this.blockHitDelay -= 50L;
             }
-            // GUI attack: keep the normal attack-key click cycle running inside
-            // container GUIs instead of stopping at the screen. Adapted from
-            // raven inventory-fill, which arms a start delay then clicks the
-            // hovered slot; the slot-clicking itself is not ported.
+
+            // Adapted from
+
             boolean invMode = this.guiAttack.getValue() && mc.currentScreen instanceof GuiContainer;
             if (mc.currentScreen != null && !invMode) {
                 this.clickPending = false;
@@ -291,13 +263,11 @@ public class AutoClicker extends Module {
                     this.blockHitPending = false;
                     KeyBindUtil.updateKeyState(mc.gameSettings.keyBindUseItem.getKeyCode());
                 }
-                // Start delay waits this long after toggle before the first click.
-                // Adapted from raven inventory start-delay arming. Default 0 = off.
+
+                // Adapted from raven inventory start-delay arming.
                 if (this.isEnabled() && this.canClick() && mc.gameSettings.keyBindAttack.isKeyDown()
                         && System.currentTimeMillis() - this.enabledAtMs >= (long) this.startDelayMs.getValue()) {
                     if (!this.isInvFillPaused() && mc.thePlayer.isUsingItem() && BlockHit.fullManaging()) {
-                        /* AutoBlock Full has the sword up: clicks wait, and do not pile up into a burst for
-                           the tick it comes down (2026-10-21). */
                         this.clickDelay = Math.max(this.clickDelay, 0L);
                     }
                     if (!this.isInvFillPaused() && !mc.thePlayer.isUsingItem()) {
@@ -307,7 +277,6 @@ public class AutoClicker extends Module {
                         } else {
                             while (this.clickDelay <= 0L) {
                                 if (this.humanizer.dropClick()) {
-                                    /* A press the finger did not make. */
                                     this.clickDelay = this.clickDelay + this.getNextClickDelay();
                                     continue;
                                 }
@@ -357,10 +326,7 @@ public class AutoClicker extends Module {
     public void onCLick(LeftClickMouseEvent event) {
         if (this.isEnabled() && !event.isCancelled()) {
             long now = System.currentTimeMillis();
-            /* A click this module synthesized presses the attack key, which
-               vanilla turns into clickMouse() in the same tick and lands back
-               here. Recording that would feed record mode its own output, so
-               only real clicks are recorded. */
+
             if (!this.moduleClickThisTick && this.lastRealClick > 0L && this.clickMode.getValue() == 2) {
                 this.recordGaps[this.recordPos] = Math.max(1L, now - this.lastRealClick);
                 this.recordPos = (this.recordPos + 1) % this.recordGaps.length;
@@ -435,8 +401,6 @@ public class AutoClicker extends Module {
         return new String[]{cps};
     }
 
-    /* Merged modules as modes (2026-10-11, ModuleBundle): the module's own
-       work pauses while another type is picked. */
     public final atlas.property.properties.ModeProperty mergedType = new atlas.property.properties.ModeProperty("type", 0, new String[]{"Normal", "Burst", "Smart", "Assist"});
     public final atlas.module.ModuleBundle burstMerged = atlas.module.ModuleBundle.forMode(this, new atlas.module.modules.BurstClicker(), "burst", "Burst", () -> this.mergedType.getValue() == 1).deselectWith(() -> this.mergedType.setValue(0));
     public final atlas.module.ModuleBundle smartMerged = atlas.module.ModuleBundle.forMode(this, new atlas.module.modules.SmartClicking(), "smart", "Smart", () -> this.mergedType.getValue() == 2).deselectWith(() -> this.mergedType.setValue(0));

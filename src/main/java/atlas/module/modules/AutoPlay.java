@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): sniffs the "/play" click command out of the
-// game-end message and runs it after a delay.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.util.regex.Pattern;
 
 import atlas.event.EventTarget;

@@ -11,9 +11,7 @@ import java.util.Random;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** What the LiquidBounce aura uses from humanization (2026-10-25). */
 public class HumanizeWiringTest {
-
     @After
     public void unpublish() {
         Humanizer.publish(null, null);
@@ -52,7 +50,6 @@ public class HumanizeWiringTest {
             now += 80L;
             Humanizer.Verdict v = humanizer.click(s, now);
             if (v.land) {
-                // one in ten meant hits misses anyway (the look was not on the box)
                 if (i % 10 == 0) {
                     humanizer.unlucky(now);
                 } else {
@@ -86,6 +83,6 @@ public class HumanizeWiringTest {
             now += 50L;
             waited++;
         }
-        assertTrue("ticks waited " + waited, waited >= 3 && waited <= 7); // 180-320 ms
+        assertTrue("ticks waited " + waited, waited >= 3 && waited <= 7);
     }
 }

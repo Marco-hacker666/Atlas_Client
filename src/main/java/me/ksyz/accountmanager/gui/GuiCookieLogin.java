@@ -25,15 +25,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
-/*
- * This file is derived from https://github.com/ksyzov/AccountManager.
- * Originally licensed under the GNU LGPL.
- *
- * This modified version is licensed under the GNU GPL v3.
- */
+// Originally licensed under the GNU LGPL.
+
 public class GuiCookieLogin extends GuiScreen {
-    // Same Microsoft application as the regular "Add" (browser) flow, so the
-    // resulting account refreshes exactly like any other Microsoft account.
     private static final String CLIENT_ID = "42a60a84-599d-44b2-a7c6-b00cdef1d6a2";
     private static final String SCOPE = "XboxLive.signin XboxLive.offline_access";
 
@@ -77,7 +71,6 @@ public class GuiCookieLogin extends GuiScreen {
 
     @Override
     public void updateScreen() {
-        // Disable the button while the chooser or an auth attempt is running.
         if (chooseButton != null) {
             chooseButton.enabled = !chooserOpen && (task == null || task.isDone());
         }
@@ -154,10 +147,6 @@ public class GuiCookieLogin extends GuiScreen {
         }
     }
 
-    /**
-     * Opens a native file chooser on a background thread (so the render loop is
-     * not blocked), then kicks off the cookie login once a file is picked.
-     */
     private void openFileChooser() {
         if (chooserOpen || (task != null && !task.isDone())) {
             return;
@@ -172,7 +161,6 @@ public class GuiCookieLogin extends GuiScreen {
                 try {
                     UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
                 } catch (Exception ignored) {
-                    //
                 }
                 JFileChooser chooser = new JFileChooser();
                 chooser.setDialogTitle("Select your exported cookies file");

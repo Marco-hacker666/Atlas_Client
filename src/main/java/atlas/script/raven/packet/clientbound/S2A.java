@@ -7,7 +7,6 @@ import net.minecraft.util.EnumParticleTypes;
 
 import java.util.Locale;
 
-/** Particles: type is the particle's name (CRIT, FLAME, REDSTONE ...). */
 public class S2A extends SPacket {
     public String type;
     public Vec3 position;

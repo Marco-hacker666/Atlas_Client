@@ -24,24 +24,22 @@ import net.minecraft.network.play.server.S40PacketDisconnect;
 public class ServerLag extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private final ConcurrentLinkedQueue<TimedPacket> packetQueue = new ConcurrentLinkedQueue<>();
-    /* 2026-10-19: down to 25 ms, so it also works as a light incoming delay
-       (Slinky's Fake Lag "inbound"), next to FakeLag's outgoing one. */
+
     private final IntProperty maxBlinkTime = new IntProperty("Lag ms", 1000, 25, 30000);
-    /* Hold only within a second of your own last hit (Slinky's "Attacked"). */
+
     private final atlas.property.properties.BooleanProperty onlyInCombat =
             new atlas.property.properties.BooleanProperty("only-in-combat", false);
     private final atlas.property.properties.BooleanProperty weaponsOnly =
             new atlas.property.properties.BooleanProperty("weapons-only", false);
     private volatile long lastAttackAt;
-    /** Whether a hold may start now; set on the client thread each tick. */
+
     private volatile boolean allowed = true;
 
     public ServerLag() {
         super("ServerLag", false, false, "I feel the lag ");
 
-        /* Incoming holder: one at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
         atlas.management.PacketHub.registerIncoming("ServerLag", () -> this.packetQueue.size(), this::releaseAllPackets);
-        /* What is held, for PacketHolds (plan step 13). */
+
         atlas.management.PacketHolds.register(() -> {
             int count = this.packetQueue.size();
             if (count == 0) {
@@ -57,7 +55,6 @@ public class ServerLag extends Module {
                 return getName();
             }
 
-            /* Its own limit, and a second more. */
             @Override
             public long ceilingMs() {
                 return maxBlinkTime.getValue() + atlas.management.PacketHolds.LEASE_MARGIN_MS;
@@ -69,18 +66,6 @@ public class ServerLag extends Module {
             }
         });
     }
-    /* ---- 2026-09-24 ------------------------------------------------------
-
-       Two faults. The delay was copied into currentLatency on enable and
-       zeroed by releaseAllPackets(), which runs on every S08 and every world
-       load, and nothing ever set it again -- so the first teleport or server
-       change switched the module off while it still showed as on. And queued
-       packets were processed from inside the receive handler, on the network
-       thread, only when another packet happened to arrive.
-
-       The delay is now read from the setting every time, and everything
-       queued is handed to the client thread: due packets at each tick, the
-       whole queue ahead of an S08 or disconnect. */
 
     @EventTarget(Priority.HIGHEST)
     public void onPacket(PacketEvent event) {
@@ -92,10 +77,6 @@ public class ServerLag extends Module {
                 || packet instanceof net.minecraft.network.play.server.S29PacketSoundEffect) return;
         if (!this.allowed) return;
         if (atlas.management.Arbiter.catching()) {
-            /* F-27: every other holder let go for a catch; this one kept
-               holding. Held packets go (scheduled ahead of this one's own
-               handling, so still in order) and nothing is held until the
-               catch is over. */
             if (!this.packetQueue.isEmpty()) {
                 this.scheduleReleaseAll();
                 atlas.management.Arbiter.yielded(this.getName());
@@ -103,8 +84,6 @@ public class ServerLag extends Module {
             return;
         }
         if (packet instanceof S08PacketPlayerPosLook || packet instanceof S40PacketDisconnect) {
-            /* Scheduled before vanilla schedules this packet's own handler,
-               so the held packets still run first, in order. */
             this.scheduleReleaseAll();
             return;
         }
@@ -129,11 +108,6 @@ public class ServerLag extends Module {
         releaseDue();
     }
 
-    /* Checked every frame as well, not only every tick: a short delay is
-       then kept to within a frame instead of up to 50 ms late. The due
-       packets are handled at the start of the next frame (the task queue
-       vanilla handles its own packets from), never in the middle of
-       drawing the world. */
     private volatile boolean releaseScheduled;
 
     @EventTarget
@@ -168,7 +142,6 @@ public class ServerLag extends Module {
 
     @EventTarget(whenDisabled = true)
     public void onLoadWorld(LoadWorldEvent event) {
-        /* A new world: the held packets describe the old one. */
         packetQueue.clear();
         this.releaseScheduled = false;
     }
@@ -189,7 +162,6 @@ public class ServerLag extends Module {
         }
     }
 
-    /** Client thread only. */
     private static void process(TimedPacket timed) {
         if (timed == null || mc.getNetHandler() == null) {
             return;
@@ -197,7 +169,6 @@ public class ServerLag extends Module {
         try {
             timed.packet.processPacket(mc.getNetHandler());
         } catch (net.minecraft.network.ThreadQuickExitException ignored) {
-            // Vanilla's normal "rescheduled onto the client thread" signal.
         } catch (Exception e) {
             e.printStackTrace();
         }

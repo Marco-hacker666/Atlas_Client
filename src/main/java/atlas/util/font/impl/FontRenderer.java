@@ -13,7 +13,6 @@ import org.lwjgl.opengl.GL11;
 import java.awt.*;
 
 public class FontRenderer extends CharRenderer implements IFont {
-
     final CharData[] boldChars = new CharData[256];
     final CharData[] italicChars = new CharData[256];
     final CharData[] boldItalicChars = new CharData[256];
@@ -57,7 +56,6 @@ public class FontRenderer extends CharRenderer implements IFont {
     }
 
     public void drawString(String text, double x, double y, int color, boolean shadow) {
-        /* NickHider (2026-11-17): the real name is replaced in every font, not only the game's. */
         text = atlas.module.modules.NickHider.apply(text);
         ScaledResolution sr = new ScaledResolution(Minecraft.getMinecraft());
 
@@ -106,32 +104,23 @@ public class FontRenderer extends CharRenderer implements IFont {
                 }
                 ++index;
             } else if (character < currentData.length) {
-                // ASCII characters
                 drawLetter(x, y, currentData, character);
                 x += currentData[character].width - 8.3 + this.charOffset;
             } else {
-                // ------------------ Unicode fallback ------------------
-
-                // 1. leave the custom render scale
                 GL11.glPopMatrix();
 
-                // 2. draw the Unicode text with vanilla's FontRenderer
-                // note: the high-resolution x, y must be turned back into GUI coordinates
                 float logicalX = (float) (x / sr.getScaleFactor());
-                float logicalY = (float) (y / sr.getScaleFactor()) + 3.0f; // the +3 lines it up vertically
+                float logicalY = (float) (y / sr.getScaleFactor()) + 3.0f;
 
                 Minecraft.getMinecraft().fontRendererObj.drawString(String.valueOf(character), logicalX, logicalY, color, false);
 
-                // 3. back into the custom render state
                 GL11.glPushMatrix();
                 GL11.glScaled((double) 1 / sr.getScaleFactor(), 1 / (double) sr.getScaleFactor(), 1 / (double) sr.getScaleFactor());
 
-                // 4. restore colour and texture (vanilla's drawing resets them)
                 GlStateManager.color(red, green, blue, (float) alpha);
                 GlStateManager.enableBlend();
-                GlStateManager.bindTexture(this.tex.getGlTextureId()); // kept simple: back to the plain texture after the fallback; bold/italic Unicode is not handled
+                GlStateManager.bindTexture(this.tex.getGlTextureId());
 
-                // 5. add the width
                 x += Minecraft.getMinecraft().fontRendererObj.getCharWidth(character) * sr.getScaleFactor();
             }
         }
@@ -181,10 +170,8 @@ public class FontRenderer extends CharRenderer implements IFont {
             if (character == '§') {
                 index++;
             } else if (character < currentData.length) {
-                // original width logic
                 width += currentData[character].width - 8.3f + charOffset;
             } else {
-                // Unicode width logic
                 width += Minecraft.getMinecraft().fontRendererObj.getCharWidth(character) * sr.getScaleFactor();
             }
         }

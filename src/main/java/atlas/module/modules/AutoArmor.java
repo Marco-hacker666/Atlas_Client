@@ -1,8 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): automatically equips the best armor from the
-// inventory while an inventory screen is open. the client's InvManager covers the same
-// ground for hotbar play; this is kept as its own module on purpose.
+// Ported from OpenSkid (GPL-3.0)
+
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.events.TickEvent;

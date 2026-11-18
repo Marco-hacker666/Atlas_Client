@@ -23,7 +23,7 @@ public class CrabSprintPlanTest {
     @Test
     public void delayThenStopThenRelease() {
         int[] steps = run(new CrabSprintPlan(), 12, 0, -1, false);
-        /* hit on tick 0: 4 ticks of delay, held for 2, given back */
+
         int[] expected = {NONE, NONE, NONE, NONE, APPLY, APPLY, RELEASE, NONE, NONE, NONE, NONE, NONE};
         for (int t = 0; t < expected.length; t++) {
             assertEquals("tick " + t, expected[t], steps[t]);
@@ -35,7 +35,6 @@ public class CrabSprintPlanTest {
         CrabSprintPlan plan = new CrabSprintPlan();
         int resets = 0;
         for (int t = 0; t < 40; t++) {
-            /* hitting every tick for two seconds */
             if (plan.tick(t * 0.05, true, 0, 0.0F, 1.0F, false, false, true, this.random) == RELEASE) {
                 resets++;
             }
@@ -49,7 +48,7 @@ public class CrabSprintPlanTest {
         for (int t = 0; t < 8; t++) {
             assertEquals("tick " + t, NONE, steps[t]);
         }
-        /* hurt on tick 8: armed since tick 0, so the delay starts there */
+
         assertEquals(APPLY, steps[12]);
         assertEquals(RELEASE, steps[14]);
     }
@@ -94,7 +93,7 @@ public class CrabSprintPlanTest {
             }
             int delay = applied - start;
             int hold = released - applied;
-            /* delay 4 + 0..2 (and up to a tick of carry-over), stop 2 - 0..1 + sometimes 1..2 */
+
             org.junit.Assert.assertTrue("delay " + delay, delay >= 3 && delay <= 8);
             org.junit.Assert.assertTrue("hold " + hold, hold >= 1 && hold <= 5);
             now += 1.0;

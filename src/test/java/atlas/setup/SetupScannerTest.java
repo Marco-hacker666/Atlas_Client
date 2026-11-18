@@ -7,11 +7,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The "is this already installed?" rules, without touching the game folder.
- */
 public class SetupScannerTest {
-
     private static SetupEntry mod(String fileName, boolean matchPrefix) {
         return new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.DIRECT,
                 "X", "", fileName, "https://example.com/" + fileName, 0, false, matchPrefix);
@@ -25,9 +21,9 @@ public class SetupScannerTest {
     @Test
     public void browserNumberedDuplicateMatchesEitherBrowserStyle() {
         SetupEntry entry = mod("Controlling-7.0.0.1.jar", false);
-        // Chrome inserts the counter before the extension...
+
         assertTrue(SetupScanner.matchesJarName("Controlling-7.0.0.1 (1).jar", entry));
-        // ...some clients append it after.
+
         assertTrue(SetupScanner.matchesJarName("Controlling-7.0.0.1.jar (23)", entry));
     }
 
@@ -37,7 +33,6 @@ public class SetupScannerTest {
         assertFalse(SetupScanner.isNumberedDuplicate("controlling-7.0.0.1jarbak", "controlling-7.0.0.1.jar"));
     }
 
-    /** Regression: the original compared an upper-case tag against lower-case text. */
     @Test
     public void optiFineCountsAnyHdBuildWhenPrefixMatchingIsOn() {
         SetupEntry optifine = mod("preview_OptiFine_1.8.9_HD_U_M6_pre2.jar", true);
@@ -60,10 +55,9 @@ public class SetupScannerTest {
     public void zipsAreNotMatchedByTheJarRules() {
         SetupEntry pack = new SetupEntry(SetupEntry.Section.PACKS, SetupEntry.Source.MEDIAFIRE_SHARE,
                 "Stewound", "", "Stewound.zip", "https://example.com/p.zip", 0, false);
-        // The exact name still means "installed"...
+
         assertTrue(SetupScanner.matchesJarName("stewound.zip", pack));
-        // ...but a differently named zip is not a numbered duplicate, because
-        // those rules only apply to jars.
+
         assertFalse(SetupScanner.matchesJarName("stewound (1).zip", pack));
         assertFalse(SetupScanner.isPrefixMatch("stewound.zip", "stewound.zip"));
     }

@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class NotificationManager {
-
     public static class NotificationEntry {
         public final String message;
         public final long startMillis;

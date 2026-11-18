@@ -27,11 +27,11 @@ public class AntiVoid extends Module {
     private double[] lastSafePosition = null;
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"BLINK"});
     public final FloatProperty distance = new FloatProperty("distance", 5.0F, 0.0F, 16.0F);
-    /** Refuse to engage while fighting, where the delayed world costs more than the fall. */
+
     public final BooleanProperty combatOnly = new BooleanProperty("not-in-combat", true);
     public final FloatProperty combatRange = new FloatProperty("combat-range", 8.0F, 2.0F, 30.0F,
             this.combatOnly::getValue);
-    /** Ticks after taking damage that still count as a fight. */
+
     public final IntProperty combatTicks = new IntProperty("combat-ticks", 60, 10, 400,
             this.combatOnly::getValue);
 
@@ -42,21 +42,6 @@ public class AntiVoid extends Module {
         this.lastSafePosition = null;
     }
 
-    /**
-     * Whether it is safe to start holding packets right now.
-     *
-     * Not during a fight. AntiVoid works by freezing what the server knows
-     * about this player and rewriting it afterwards, and everything that makes
-     * that survivable when falling alone -- nobody watching, no hits landing,
-     * a path that is a straight vertical line -- stops being true the moment
-     * someone is swinging. The exchange needs the server's idea of where both
-     * players are to be current, and this makes it deliberately stale; hits
-     * land on a position that is about to be rewritten, knockback applies to a
-     * journey that will be replaced, and the correction arrives mid-combo.
-     *
-     * Falling into the void during a fight is also the case where it is most
-     * tempting, which is why it needs saying rather than assuming.
-     */
     private boolean canUseAntiVoid() {
         LongJump longJump = (LongJump) Atlas.moduleManager.modules.get(LongJump.class);
         if (longJump != null && longJump.isJumping()) {
@@ -68,10 +53,6 @@ public class AntiVoid extends Module {
         return !this.combatOnly.getValue() || !inCombat();
     }
 
-    /**
-     * In a fight, by the two signs that do not depend on any module being on:
-     * something hit this player recently, or an opponent is close enough to.
-     */
     private boolean inCombat() {
         if (mc.thePlayer.hurtTime > 0 || this.ticksSinceHurt < this.combatTicks.getValue()) {
             return true;
@@ -96,11 +77,6 @@ public class AntiVoid extends Module {
         return false;
     }
 
-    /* Right click held with blocks in hand: bridging or saving themselves.
-       Holding packets then holds the clicks too, and they reach the server
-       late, judged from a position it is about to be told to forget --
-       2026-09-25 14:31:56, three blocks refused under a 30-packet blink,
-       then two lagbacks. The player is doing AntiVoid's job; let them. */
     private boolean placing() {
         return mc.gameSettings.keyBindUseItem.isKeyDown() && atlas.util.ItemUtil.isHoldingBlock();
     }

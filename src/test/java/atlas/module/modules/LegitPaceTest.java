@@ -8,11 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * legit-pace (2026-11-07): which modes show it, and the paced ledge rule. The flow itself needs a world.
- */
 public class LegitPaceTest {
-
     private static final int JUMP = 0;
     private static final int SNEAK = 1;
     private static final int STOP_INPUT = 2;

@@ -5,7 +5,6 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class GodBridgeLookTest {
-
     private static final float EPSILON = 1.0E-3F;
 
     @Test

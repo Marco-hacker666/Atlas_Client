@@ -4,41 +4,23 @@ import org.lwjgl.input.Keyboard;
 
 import java.util.function.Supplier;
 
-/**
- * The text of one field and its caret (2026-10-23, docs/GUI-AUDIT-2026-10-23.md
- * E2): the search box, a new profile's name, the bug report and a setting
- * being typed into each kept a string of their own, with their own backspace,
- * and none had a caret that could move. Only the report box could paste.
- *
- * Keys: characters insert at the caret; Backspace and Delete remove before and
- * after it; Left, Right, Home and End move it; Ctrl+A selects everything, so
- * the next character, Backspace or Delete replaces it; Ctrl+V pastes. Enter
- * and Escape are only reported, for the field's owner to act on.
- *
- * No drawing here, so the editing can be tested without a game. Where the text
- * was last drawn is kept ({@link #drawnAt}) so that a click can put the caret
- * where it lands.
- */
 public final class TextInput {
-
     public enum Result {
-        /** The key did nothing (a full field, Backspace at the start). */
         NONE,
-        /** The text changed. */
+
         EDITED,
-        /** Only the caret or the selection moved. */
+
         MOVED,
-        /** Enter. */
+
         SUBMIT,
-        /** Escape. */
+
         CANCEL,
-        /** Not a key a field uses; the owner may want it. */
+
         IGNORED
     }
 
-    /** The most characters typing or pasting may make; 0 for no limit. */
     private final int max;
-    /** Whether pasted line breaks are kept (the report box) or made spaces. */
+
     private final boolean newlines;
 
     private String text = "";
@@ -66,15 +48,10 @@ public final class TextInput {
         return this.text.isEmpty();
     }
 
-    /** Whether Ctrl+A has everything selected. */
     public boolean allSelected() {
         return this.all && !this.text.isEmpty();
     }
 
-    /**
-     * Replaces the text and puts the caret at its end. Never cut to the limit:
-     * a value longer than a field allows is still that value.
-     */
     public void set(String value) {
         this.text = value == null ? "" : value;
         this.caret = this.text.length();
@@ -90,10 +67,6 @@ public final class TextInput {
         this.all = false;
     }
 
-    /**
-     * One key, as GuiScreen.keyTyped hands it over. {@code ctrl} is whether
-     * Control is held; {@code clipboard} is asked only for Ctrl+V.
-     */
     public Result key(char typed, int key, boolean ctrl, Supplier<String> clipboard) {
         if (key == Keyboard.KEY_RETURN || key == Keyboard.KEY_NUMPADENTER) {
             return Result.SUBMIT;
@@ -101,9 +74,7 @@ public final class TextInput {
         if (key == Keyboard.KEY_ESCAPE) {
             return Result.CANCEL;
         }
-        /* Any other Control key falls through: AltGr is Control+Alt, and on
-           many layouts it is how '@' or '\' is typed. A Control+letter comes
-           with a control character, which is not typed. */
+
         if (ctrl && key == Keyboard.KEY_V) {
             String paste = clipboard == null ? null : clipboard.get();
             return insert(paste == null ? "" : clean(paste)) ? Result.EDITED : Result.NONE;
@@ -159,7 +130,6 @@ public final class TextInput {
         return Result.IGNORED;
     }
 
-    /** Inserts at the caret, replacing a Ctrl+A selection, as much as the limit allows. */
     private boolean insert(String piece) {
         if (allSelected()) {
             this.text = "";
@@ -183,7 +153,6 @@ public final class TextInput {
         return true;
     }
 
-    /** Pasted text without carriage returns or control characters; tabs become spaces. */
     private String clean(String paste) {
         StringBuilder out = new StringBuilder(paste.length());
         for (int i = 0; i < paste.length(); i++) {
@@ -202,14 +171,12 @@ public final class TextInput {
         return out.toString();
     }
 
-    /** Where the text was drawn this frame: text[start] at x, measured by width. */
     void drawnAt(float x, int start, TextLayout.Width width) {
         this.drawnX = x;
         this.drawnStart = start;
         this.drawnWidth = width;
     }
 
-    /** Puts the caret nearest to a click at x, by where the text was last drawn. */
     void placeAt(float x) {
         this.all = false;
         if (this.drawnWidth == null) {

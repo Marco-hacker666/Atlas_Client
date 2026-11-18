@@ -12,9 +12,7 @@ import java.util.List;
 
 import static org.junit.Assert.*;
 
-/** AsyncLog: order, failure isolation, the exit drain (F-29, 2026-09-28). */
 public class AsyncLogTest {
-
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
 

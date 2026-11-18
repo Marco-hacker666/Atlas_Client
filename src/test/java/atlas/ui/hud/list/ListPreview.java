@@ -14,13 +14,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Draws module lists into pictures, with no game (2026-11-14): the way to look at a style before anyone starts the
- * client. Not a test -- run its main with an output folder and, optionally, a font file. The layout and the colours
- * are the game's own ({@link ListLayout}, {@link ListColors}); the font's shapes, the blur and the glow are not.
- */
 public final class ListPreview {
-    /** Picture pixels to one unit of the list: about a 4x GUI scale. */
     static final float ZOOM = 4.0F;
     static final float TEXT_HEIGHT = 8.0F;
 
@@ -30,7 +24,6 @@ public final class ListPreview {
             {"AutoClicker", "12", "0"}, {"Sprint", "", "2"}, {"FullBright", "", "3"}, {"ESP", "Box", "3"},
             {"Timer", "", "5"}};
 
-    /** Java2D behind {@link ListPainter}: (0, 0) of the list at {@code originX}, {@code originY} of the picture. */
     static final class Canvas implements ListPainter {
         private final Graphics2D g;
         private final float originX;
@@ -75,7 +68,7 @@ public final class ListPreview {
             this.g.setFont(this.font);
             FontMetrics metrics = this.g.getFontMetrics();
             float px = this.originX + x * ZOOM;
-            /* The line's box is TEXT_HEIGHT high; the letters sit in its middle. */
+
             float py = this.originY + y * ZOOM + (TEXT_HEIGHT * ZOOM - metrics.getHeight()) / 2.0F
                     + metrics.getAscent();
             if (shadow) {
@@ -87,7 +80,6 @@ public final class ListPreview {
         }
     }
 
-    /** Something like a game behind the list: sky, hills, ground, so translucent rows have something to show. */
     static void scene(Graphics2D g, int x, int y, int w, int h) {
         g.setPaint(new GradientPaint(0, y, new Color(0x78A7FF), 0, y + h * 0.6F, new Color(0xCFE3FF)));
         g.fillRect(x, y, w, h);
@@ -123,7 +115,6 @@ public final class ListPreview {
         return still;
     }
 
-    /** One list in a cell of the sheet, with its label underneath. */
     static void cell(Graphics2D g, Font font, Font label, int x, int y, int w, int h, String title, ListStyle style,
                      List<ListRow> rows, long time) {
         g.setClip(x, y, w, h);
@@ -161,7 +152,6 @@ public final class ListPreview {
         Font label = new Font(Font.SANS_SERIF, Font.BOLD, 15);
         long time = 1700L;
 
-        /* Sheet 1: every preset, in a moving gradient. */
         String[] presets = ListPresets.NAMES;
         int cw = 470;
         int ch = 470;
@@ -181,8 +171,6 @@ public final class ListPreview {
         g.dispose();
         ImageIO.write(sheet, "png", new File(out, "presets.png"));
 
-        /* Sheet 2: every colour mode the list works out itself, on the SIDEBAR preset (HUD and THEME are the
-           game's colours). */
         List<ListStyle.Paint> paints = new ArrayList<ListStyle.Paint>();
         for (ListStyle.Paint paint : ListStyle.Paint.values()) {
             if (paint != ListStyle.Paint.HUD && paint != ListStyle.Paint.THEME) {
@@ -201,7 +189,6 @@ public final class ListPreview {
         g.dispose();
         ImageIO.write(sheet, "png", new File(out, "colours.png"));
 
-        /* Sheet 3: the four corners of the screen, the sorts, and a few awkward mixes. */
         Object[][] mixes = {
                 {"left, top: ROUNDED", "ROUNDED", false, false, ListStyle.Sort.WIDTH},
                 {"left, bottom: OUTLINE", "OUTLINE", false, true, ListStyle.Sort.WIDTH},

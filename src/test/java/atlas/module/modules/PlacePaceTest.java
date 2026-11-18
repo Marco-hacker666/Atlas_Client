@@ -9,17 +9,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * PlacePace (2026-11-07): the books Intave PlacementAnalysis Speed and Sneak keep, rebuilt from their behaviour. A
- * bridge is driven along +z, one block under the feet each gap, and the questions are the ones the server answers.
- */
 public class PlacePaceTest {
-
-    /** GODBRIDGE's straight look: back and 45.3 to a side, so off every multiple of 90. */
     private static final float GODBRIDGE_YAW = 135.3F;
     private static final float STRAIGHT_BACK = 180.0F;
 
-    /** count blocks placed along +z, gap ms apart, starting at t = 10 000; returns the time of the last. */
     private static long bridge(PlacePace pace, int count, long gap) {
         long t = 10000L;
         for (int i = 0; i < count; i++) {
@@ -98,7 +91,7 @@ public class PlacePaceTest {
             t += 420L;
             pace.placed(t, true, true, 1, 0, 64, i);
         }
-        /* 420 passes Speed (crouch 7 s ago: limit 200 with the crouch in its 8 s), not Sneak (no crouch in 6 s, under 500). */
+
         pace.sneaking(t - 7000L);
         assertTrue(pace.wouldFlag(t + 420L, GODBRIDGE_YAW, true, true, 1, 0));
         pace.placed(t + 100L, false, true, 1, 5, 64, 5);

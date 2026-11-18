@@ -7,12 +7,8 @@ import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
-/*
- * This file is derived from https://github.com/ksyzov/AccountManager.
- * Originally licensed under the GNU LGPL.
- *
- * This modified version is licensed under the GNU GPL v3.
- */
+// Originally licensed under the GNU LGPL.
+
 public class SessionManager {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
@@ -40,12 +36,6 @@ public class SessionManager {
         return mc.getSession();
     }
 
-    /**
-     * Builds an offline ("cracked") session for the given username. The UUID is
-     * derived the same way the vanilla server does for offline-mode players, so
-     * the account behaves consistently across cracked/offline servers. No
-     * network request is made.
-     */
     public static Session offline(String username) {
         String uuid = UUID.nameUUIDFromBytes(
                 ("OfflinePlayer:" + username).getBytes(StandardCharsets.UTF_8)
@@ -57,7 +47,6 @@ public class SessionManager {
         try {
             getField().set(mc, session);
         } catch (Exception e) {
-            //
         }
     }
 }

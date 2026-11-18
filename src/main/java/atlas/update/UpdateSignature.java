@@ -13,27 +13,13 @@ import java.security.PublicKey;
 import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 
-/**
- * Checks that an update really came from the release workflow.
- *
- * The release workflow signs each manifest with a private key that exists
- * only as a GitHub Actions secret. The matching public key ships inside the
- * jar (/atlas-update-key.pub). Someone who takes over the GitHub account, or
- * sits between the player and GitHub, can replace the jar and the manifest
- * but cannot produce a signature that verifies, so the client refuses it.
- *
- * ECDSA P-256 with SHA-256: available in every Java 8 build Minecraft ships
- * with (Ed25519 needs Java 15).
- */
 public final class UpdateSignature {
-
     public static final String KEY_RESOURCE = "/atlas-update-key.pub";
     private static final String ALGORITHM = "SHA256withECDSA";
 
     private UpdateSignature() {
     }
 
-    /** The public key bundled in the jar, or null when the build has none. */
     public static PublicKey bundledKey() {
         InputStream in = UpdateSignature.class.getResourceAsStream(KEY_RESOURCE);
         if (in == null) {
@@ -51,7 +37,6 @@ public final class UpdateSignature {
         }
     }
 
-    /** Accepts bare base64 or a PEM block ("-----BEGIN PUBLIC KEY-----"). */
     public static PublicKey parsePublicKey(String text) throws GeneralSecurityException {
         StringBuilder b64 = new StringBuilder();
         for (String line : text.split("\\r?\\n")) {
@@ -113,7 +98,6 @@ public final class UpdateSignature {
         return new String(out);
     }
 
-    /** The file matches the manifest: right size and right hash. */
     public static boolean matches(UpdateManifest manifest, File jar) {
         try {
             return jar.isFile() && jar.length() == manifest.size && manifest.sha256.equals(sha256Hex(jar));

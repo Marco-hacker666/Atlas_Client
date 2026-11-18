@@ -6,9 +6,7 @@ import java.util.Random;
 
 import static org.junit.Assert.*;
 
-/** Velocity's jitter: a reduced share moved by up to 0.03, kept in [0, 1] (2026-10-23). */
 public class VelocityJitterTest {
-
     @Test
     public void aReductionMovesByAtMostThreeHundredths() {
         Random random = new Random(1L);

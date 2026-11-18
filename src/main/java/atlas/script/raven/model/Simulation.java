@@ -10,14 +10,6 @@ import net.minecraft.util.MathHelper;
 
 import java.util.List;
 
-/**
- * Raven script API: this player's movement played forward, tick by tick, without moving it (2026-11-02). create()
- * starts from where the player is, how it moves and the keys it holds; set the keys and look, tick(), read the
- * position. Vanilla's ground and air movement (EntityLivingBase.moveEntityWithHeading): friction from the block
- * underfoot, the sprint and walk push, the jump (with its sprint boost and Jump Boost), gravity and air drag,
- * collisions axis by axis with the 0.6 step, and sneaking not walking off edges. Water, lava, ladders and webs
- * are not played.
- */
 public class Simulation {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final double STEP = 0.6;
@@ -30,7 +22,7 @@ public class Simulation {
     private boolean jump, sneak, sprinting;
     private float yaw, pitch;
     private int jumpTicks;
-    /** Walking speed without the sprint's 30%. */
+
     private double baseSpeed = 0.1;
     private double jumpBoost;
     private float width = 0.6F;
@@ -68,12 +60,10 @@ public class Simulation {
         return sim;
     }
 
-    /** -1 back, 0, 1 forward (the key, not its speed). */
     public void setForward(float forward) {
         this.forward = forward;
     }
 
-    /** -1 right, 0, 1 left. */
     public void setStrafe(float strafe) {
         this.strafe = strafe;
     }
@@ -105,7 +95,6 @@ public class Simulation {
         this.onGround = onGround;
     }
 
-    /** One tick. */
     public void tick() {
         if (Math.abs(this.motionX) < 0.005) {
             this.motionX = 0.0;
@@ -184,7 +173,6 @@ public class Simulation {
         return mc.theWorld.getCollidingBoundingBoxes(mc.thePlayer, area);
     }
 
-    /** Entity.moveEntity, for the parts that matter on land. */
     private void move(double dx, double dy, double dz) {
         if (mc.theWorld == null) {
             this.x += dx;
@@ -226,7 +214,6 @@ public class Simulation {
         box = box.offset(0.0, 0.0, dz);
 
         if (grounded && (wantX != dx || wantZ != dz)) {
-            /* The step: up 0.6, across, back down; kept when it gets further. */
             double sx = wantX;
             double sy = STEP;
             double sz = wantZ;
@@ -284,19 +271,14 @@ public class Simulation {
         return this.onGround;
     }
 
-    // ---- bS 17 ----
-
-    /** What a key pushes in the air this tick (vanilla's jumpMovementFactor): 0.02, or 0.026 sprinting. */
     public float getAirAcceleration() {
         return this.sprinting ? 0.026F : 0.02F;
     }
 
-    /** In water or lava where the simulation stands. */
     public boolean isInLiquid() {
         return mc.theWorld != null && mc.theWorld.isAnyLiquid(this.box().contract(0.001, 0.001, 0.001));
     }
 
-    /** On a ladder or vine where the simulation stands. */
     public boolean isOnLadder() {
         if (mc.theWorld == null) {
             return false;

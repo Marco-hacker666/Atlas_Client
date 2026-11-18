@@ -13,9 +13,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** PacketHub's rules (2026-10-18). */
 public class PacketHubTest {
-
     @Before
     @After
     public void clear() {

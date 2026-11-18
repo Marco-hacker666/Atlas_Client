@@ -78,7 +78,6 @@ public class BreakProgress extends Module {
         int bar = 0xFFD8FB6D;
         ThemeStyle themed = ThemeStyle.active(BlockColors.class);
         if (themed != null) {
-            /* BlockColors: the bar in the line colour, the track under it at the fill transparency. */
             track = themed.fill(new Color(0x101018), null, 0).getRGB();
             bar = themed.line(new Color(0xD8FB6D), null, 0).getRGB();
         }

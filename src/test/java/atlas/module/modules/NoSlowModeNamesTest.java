@@ -7,7 +7,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class NoSlowModeNamesTest {
-
     @Test
     public void oldNgNamesLoadTheNewOnes() {
         NoSlow noSlow = new NoSlow();

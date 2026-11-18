@@ -14,12 +14,8 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Optional;
 
-/*
- * This file is derived from https://github.com/ksyzov/AccountManager.
- * Originally licensed under the GNU LGPL.
- *
- * This modified version is licensed under the GNU GPL v3.
- */
+// Originally licensed under the GNU LGPL.
+
 public class AccountManager {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File file = new File(mc.mcDataDir, "atlas.accounts.json");
@@ -57,7 +53,7 @@ public class AccountManager {
                     JsonObject jsonObject = jsonElement.getAsJsonObject();
                     String refresh = Optional.ofNullable(jsonObject.get("refreshToken")).map(JsonElement::getAsString).orElse("");
                     String access = Optional.ofNullable(jsonObject.get("accessToken")).map(JsonElement::getAsString).orElse("");
-                    /* 2026-11-01: tokens are kept encrypted (TokenVault); an old plain one is re-saved encrypted. */
+
                     plain |= !refresh.isEmpty() && !TokenVault.isEncrypted(refresh)
                             || !access.isEmpty() && !TokenVault.isEncrypted(access);
                     accounts.add(new Account(

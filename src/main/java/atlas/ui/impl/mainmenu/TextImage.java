@@ -27,28 +27,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Large, crisp text for the main menu (2026-10-12).
- *
- * The client's glyph atlases top out around 14 GUI pixels at high scale
- * factors, and scaling a small atlas up blurs it. A title is drawn instead
- * as one picture of the whole string, rendered by Java2D at the screen's
- * real pixel size (with letter spacing, which the atlases cannot do) and
- * kept as a texture. Tinted white, so one picture serves every colour.
- * The menu shows a dozen strings at most; the cache drops the oldest past
- * 64 and everything when the GUI scale changes.
- *
- * 2026-10-13 (menu hitch on opening): loading the fonts, starting Java2D's
- * text pipeline and rasterising every string all happened in the first
- * frame of the menu, on the render thread -- a visible freeze that also ate
- * the fade-in. Now the fonts are loaded and Java2D warmed up on a worker
- * thread while the game starts ({@link #warmUp()}), strings are rasterised
- * on that worker, and only the texture upload stays on the render thread.
- * A string not rasterised yet is simply not drawn; the menu waits for
- * {@link #ready()} and {@link #busy()} before it fades in.
- */
 public final class TextImage {
-    /** The faces the menu uses, warmed up at start. */
     private static final String[] MENU_FONTS = {"outfit-regular.ttf", "outfit-medium.ttf", "bebas-neue.ttf"};
     private static final Map<String, Font> FONTS = new ConcurrentHashMap<>();
     private static final Map<String, Entry> CACHE = new LinkedHashMap<>();
@@ -67,7 +46,7 @@ public final class TextImage {
         final int height;
         final float advance;
         final float ascent;
-        /* Filled in by the worker; turned into the texture on the render thread. */
+
         volatile BufferedImage image;
         DynamicTexture texture;
 
@@ -82,7 +61,6 @@ public final class TextImage {
     private TextImage() {
     }
 
-    /** Loads the menu fonts and starts Java2D's text pipeline off the render thread. Safe to call more than once. */
     public static synchronized void warmUp() {
         if (warm != null) {
             return;
@@ -90,8 +68,7 @@ public final class TextImage {
         warm = WORKER.submit(() -> {
             for (String file : MENU_FONTS) {
                 Font font = base(file);
-                /* One small string drawn: the first TextLayout and the first
-                   anti-aliased draw are what take the time. */
+
                 BufferedImage image = new BufferedImage(64, 32, BufferedImage.TYPE_INT_ARGB);
                 Graphics2D g = image.createGraphics();
                 g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
@@ -102,7 +79,6 @@ public final class TextImage {
         });
     }
 
-    /** The fonts are loaded (starts the warm-up if nothing did). */
     static boolean ready() {
         if (warm == null) {
             warmUp();
@@ -110,7 +86,6 @@ public final class TextImage {
         return warm.isDone();
     }
 
-    /** Strings still being rasterised. */
     static boolean busy() {
         return PENDING.get() > 0;
     }
@@ -118,7 +93,6 @@ public final class TextImage {
     private static Font base(String file) {
         Font font = FONTS.get(file);
         if (font == null) {
-            /* From the jar directly: the resource manager is not for other threads. */
             try (InputStream in = TextImage.class.getResourceAsStream("/assets/atlas/font/" + file)) {
                 font = Font.createFont(Font.TRUETYPE_FONT, in);
             } catch (Exception e) {
@@ -198,16 +172,10 @@ public final class TextImage {
         CACHE.clear();
     }
 
-    /** Width in GUI pixels, as drawn with {@code xScale}. */
     static float width(String text, String file, float size, float tracking, float xScale) {
         return entry(text, file, size, tracking).advance / scale() * xScale;
     }
 
-    /**
-     * Draws {@code text} with its top at {@code y}; align 0 left, 1 centre,
-     * 2 right of {@code x}. {@code xScale} below 1 narrows the letters.
-     * Returns the width drawn.
-     */
     static float draw(String text, String file, float size, float tracking, float x, float y, int color,
                       int align, float xScale) {
         int alpha = color >>> 24;
@@ -217,7 +185,6 @@ public final class TextImage {
         if (e.texture == null) {
             BufferedImage image = e.image;
             if (image == null) {
-                /* Still on the worker: drawn from the next frame on. */
                 return advance;
             }
             e.texture = new DynamicTexture(image);
@@ -229,8 +196,7 @@ public final class TextImage {
         float left = align == 1 ? x - advance / 2.0F : align == 2 ? x - advance : x;
         int pad = (e.width - (int) Math.ceil(e.advance)) / 2;
         float dx = left - pad / sf * xScale;
-        /* y is where the capitals start: the ascent above them is font
-           leading, about a fifth of the size in these faces. */
+
         float dy = y - (e.ascent - size * sf * 0.74F) / sf;
         float dw = e.width / sf * xScale;
         float dh = e.height / sf;

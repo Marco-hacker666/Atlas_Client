@@ -10,15 +10,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Locale;
 
-/**
- * .update                 status
- * .update check           check GitHub now
- * .update download        download the new version (installs when the game closes)
- * .update cancel          do not install the downloaded version this time
- * .update mode auto|notify|off
- */
 public class UpdateCommand extends Command {
-
     public UpdateCommand() {
         super(new ArrayList<String>(Arrays.asList("update", "updater", "upd")));
     }

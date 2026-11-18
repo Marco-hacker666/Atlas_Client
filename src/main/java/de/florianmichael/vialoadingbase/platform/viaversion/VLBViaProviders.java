@@ -23,10 +23,8 @@ import de.florianmichael.vialoadingbase.ViaLoadingBase;
 import de.florianmichael.vialoadingbase.provider.VLBBaseVersionProvider;
 
 public class VLBViaProviders implements ViaPlatformLoader {
-
   @Override
   public void load() {
-    // Now, we can implement custom providers
     final ViaProviders providers = Via.getManager().getProviders();
     providers.use(VersionProvider.class, new VLBBaseVersionProvider());
 
@@ -36,6 +34,5 @@ public class VLBViaProviders implements ViaPlatformLoader {
 
   @Override
   public void unload() {
-    // Nothing to do
   }
 }

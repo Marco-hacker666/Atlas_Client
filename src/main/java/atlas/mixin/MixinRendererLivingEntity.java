@@ -63,7 +63,7 @@ public abstract class MixinRendererLivingEntity<T extends EntityLivingBase> exte
     )
     private void untintModel(T entity, float a, float b, float c, float d, float e, float scale, CallbackInfo ci) {
         atlas.module.modules.Chams.endTint();
-        /* TargetOrbit's body glow: the marked entity's model again, larger and glowing (2026-10-18). */
+
         atlas.module.modules.TargetOrbit.glowModel(entity, this.mainModel, a, b, c, d, e, scale);
     }
 

@@ -22,7 +22,6 @@ import java.awt.Color;
 import java.util.Locale;
 import java.util.Random;
 
-/** Client-side hit particles and an optional block-break sound on credited kills. */
 public class HitParticleEffects extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private final Random random = new Random();
@@ -34,7 +33,7 @@ public class HitParticleEffects extends Module {
             () -> this.mode.getValue() == 2);
     public final BooleanProperty onlyCrits = new BooleanProperty("only-crits", false);
     public final BooleanProperty killSound = new BooleanProperty("kill-sound", true);
-    /** Phrase used by servers that announce a credited kill as "You killed ...". */
+
     public final TextProperty killMessage = new TextProperty("kill-message", "You killed",
             this.killSound::getValue);
 
@@ -49,9 +48,8 @@ public class HitParticleEffects extends Module {
                 || mc.thePlayer == null || mc.theWorld == null) return;
 
         final S19PacketEntityStatus packet = (S19PacketEntityStatus) event.getPacket();
-        if (packet.getOpCode() != 2) return; // Server-confirmed hurt animation; ignores misses.
-        // Incoming packets are intercepted on Netty's thread. Resolve the entity and
-        // add particles on Minecraft's client thread, where the world is safe to use.
+        if (packet.getOpCode() != 2) return;
+
         mc.addScheduledTask(() -> {
             if (!this.isEnabled() || mc.thePlayer == null || mc.theWorld == null) return;
             Entity entity = packet.getEntity(mc.theWorld);
@@ -120,7 +118,6 @@ public class HitParticleEffects extends Module {
         mc.addScheduledTask(() -> {
             if (this.isEnabled() && this.killSound.getValue()
                     && isCreditedKill(message, playerName, this.killMessage.getValue())) {
-                // Minecraft's stone breaking sound is the familiar block-break cue.
                 SoundUtil.playSound("dig.stone");
             }
         });

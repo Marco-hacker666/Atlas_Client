@@ -38,54 +38,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Records how real people bridge, for a human Speed Telly (2026-11-06, owner: "make it look like a real player";
- * no friend who can telly, so it also records the players around).
- *
- * One CSV per recording in config/Atlas/recordings, one row per player per tick:
- * - "S" rows are you: the camera's yaw and pitch (the mouse, not any module's silent look), position, ground,
- *   the movement keys, sprint, the use key and the placements sent that tick. Assist says which helpers were on,
- *   as bits: 1 Scaffold or Clutch (they turn the look and click: leave those ticks out), 2 BridgeAssist (it only
- *   crouches at the edge: the look, jumps and clicks are still your own, the sneak column is not), 4 a module
- *   that moves the camera itself (AimAssist, Silent Aura on Legit or LockView, AutoClicker's jitter, Tower,
- *   AutoHeadHitter, AutoBedDef, ProjectileAimBot, AutoRod, Freecam): the look is not only the mouse's.
- * - "O" rows are other players: the yaw and pitch exactly as the server sent them (look packets, not the
- *   smoothed model), the position as sent, ground, sneak, sprint, and the blocks that appeared under them that
- *   tick. With only-bridging on, a player is recorded from PRE_ROLL ticks before a block appears under them until
- *   ACTIVE_TICKS after the last one, so the jump before the first block is in too.
- *
- * Aim (2026-11-09, owner: "an ML rotation mode"): with record-combat, a second CSV (aim-<time>.csv) gets one row a
- * tick while an enemy is within combat-range: your camera look, the enemy you are looking closest to, how far off
- * your look is from the middle of its box (degrees), both positions, ground and hurt time, and the swings and
- * attacks you sent that tick. That is what a model needs to learn how your hand follows a target.
- *
- * clean-recording switches off, for the recording, every module that would make the data not your own (anything
- * that turns the look, clicks, holds or delays packets, changes your fight movement, or shows players through
- * walls) and switches them back on after. Assist bit 8 marks a tick where one of them was on anyway.
- *
- * Recording while playing (2026-11-10, owner: "can it record while I use it"): record-with-aura keeps Silent Aura on.
- * Its turns are silent, so the camera is still your hand; those ticks carry assist bit 16 so Recorded can leave them
- * out. A tick is not recorded while the aura moves the camera itself (LiquidBounce engine, MovementCorrection
- * ChangeLook): that would be the aura learning from itself. Three filters keep only real aiming, with or without the
- * aura: aim-fov (the look within that many degrees of the target), only-when-clicking (a swing or the attack key in
- * the last second) and aura-target (the enemy the aura is fighting, rather than the one nearest your look). Every row
- * also goes straight to Silent Aura's Recorded turn (AimFeed), so it learns while you play.
- *
- * Started by Silent Aura (2026-11-10, owner: "most people never open the Recorder"): with AngleSmooth Recorded and
- * Recorded-AutoRecord on, Silent Aura switches this module on for an aim-only session (startForAura): no bridging
- * file, nothing switched off, the aura's ticks kept as with record-with-aura, and the aim-fov / only-when-clicking
- * filters as set here. It ends with the aura (stopForAura). A Recorder you switched on yourself is left alone.
- *
- * Nothing leaves the computer. Other players are "e" plus the entity id and the world number, which means nothing
- * outside the recording: no names, no UUIDs, no server address.
- */
 public class TellyRecorder extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     static final File DIR = new File("./config/Atlas/recordings/");
     static final String HEADER = "tick,src,id,yaw,pitch,x,y,z,ground,fwd,strafe,jump,sneak,sprint,use,place,ping,assist";
-    /** Ticks kept before a player's first block: the run-up and the jump. */
+
     static final int PRE_ROLL = 40;
-    /** Ticks a player stays recorded after a block appeared under them. */
+
     static final int ACTIVE_TICKS = 60;
 
     public final BooleanProperty recordSelf = new BooleanProperty("record-self", true);
@@ -105,10 +64,7 @@ public class TellyRecorder extends Module {
             this.recordCombat::getValue);
 
     static final String AIM_HEADER = AimLibrary.AIM_HEADER;
-    /**
-     * Modules that would make a recording not the player's own: they turn the look, click or change hits, hold or
-     * delay packets, change fight movement, or show players through walls. clean-recording switches them off.
-     */
+
     static final String[] NOT_OWN = {"Silent Aura", "AimAssist", "AutoClicker", "FreeLook", "Freecam", "Scaffold",
             "Clutch", "Tower", "AutoRod", "ProjectileAimBot", "AutoHeadHitter", "AutoBedDef", "ThrowAura", "HitSelect",
             "Hitflick", "NoDelay", "Piercing", "Reach", "HitBox", "BackTrack", "LagRange", "FakeLag", "ServerLag",
@@ -117,10 +73,10 @@ public class TellyRecorder extends Module {
             "AutoBlock", "ESP", "Pointers", "Indicators"};
     static final int ASSIST_OTHER = 8;
     static final int ASSIST_AURA = AimLibrary.ASSIST_AURA;
-    /** How recent a swing or the attack key must be for only-when-clicking. */
+
     static final long CLICK_WINDOW_MS = 1000L;
     private long lastClickAt;
-    /** Switched on by Silent Aura for Recorded: aim only, nothing switched off. */
+
     private boolean auraSession;
     private final List<Module> switchedOff = new ArrayList<Module>();
     private File aimFile;
@@ -129,12 +85,10 @@ public class TellyRecorder extends Module {
     private final AtomicInteger swingsSent = new AtomicInteger();
     private final AtomicInteger attacksSent = new AtomicInteger();
 
-    /* Filled on the network thread, read on the client thread. */
     private final Map<Integer, float[]> looks = new ConcurrentHashMap<Integer, float[]>();
     private final ConcurrentLinkedQueue<BlockPos> appeared = new ConcurrentLinkedQueue<BlockPos>();
     private final AtomicInteger placesSent = new AtomicInteger();
 
-    /* Client thread only. */
     private final Map<Integer, ArrayDeque<String>> preRoll = new HashMap<Integer, ArrayDeque<String>>();
     private final Map<Integer, Integer> activeUntil = new HashMap<Integer, Integer>();
     private final List<String> pending = new ArrayList<String>();
@@ -146,7 +100,6 @@ public class TellyRecorder extends Module {
     private int otherRows;
 
     public TellyRecorder() {
-        /* 2026-11-09: "Recorder" now that it records fights too; old configs find it by its class name. */
         super("Recorder", false);
     }
 
@@ -199,7 +152,7 @@ public class TellyRecorder extends Module {
     @Override
     public void onDisabled() {
         this.flush();
-        /* The last second of aim rows too: they were only written every 20 ticks. */
+
         if (!this.aimPending.isEmpty() && this.aimFile != null) {
             AsyncLog.append(this.aimFile, new ArrayList<String>(this.aimPending));
             this.aimPending.clear();
@@ -234,7 +187,6 @@ public class TellyRecorder extends Module {
 
     @EventTarget
     public void onLoadWorld(LoadWorldEvent event) {
-        /* Entity ids start over in a new world: a new number keeps them apart. */
         this.world++;
         this.clearWorld();
     }
@@ -287,7 +239,6 @@ public class TellyRecorder extends Module {
         }
     }
 
-    /** A packet's angle byte in degrees, -180 to 180 as sent (1.40625 degrees a step). */
     static float angle(byte value) {
         return value * 360.0F / 256.0F;
     }
@@ -364,20 +315,14 @@ public class TellyRecorder extends Module {
         return false;
     }
 
-    /** Silent Aura (either engine), which record-with-aura leaves on: its silent turns do not move the camera. */
     private boolean keptForAura(Module module) {
         return withAuraAllowed() && (module instanceof KillAura || module instanceof KillAuraLB);
     }
 
-    /** record-with-aura, or a session Silent Aura started. */
     private boolean withAuraAllowed() {
         return this.auraSession || this.recordWithAura.getValue();
     }
 
-    /**
-     * Silent Aura (Recorded, Recorded-AutoRecord) starts an aim-only session. False when this module was already
-     * on: a recording the player started is theirs, and is left as it is.
-     */
     public boolean startForAura() {
         if (this.isEnabled()) {
             return false;
@@ -391,7 +336,6 @@ public class TellyRecorder extends Module {
         return true;
     }
 
-    /** Ends a session Silent Aura started; a recording the player started is not touched. */
     public void stopForAura() {
         if (this.auraSession && this.isEnabled()) {
             this.setEnabled(false);
@@ -402,16 +346,11 @@ public class TellyRecorder extends Module {
         return this.auraSession && this.isEnabled();
     }
 
-    /** Silent Aura, when on. */
     private static KillAura aura() {
         Module module = atlas.Atlas.moduleManager.modules.get(KillAura.class);
         return module != null && module.isEnabled() ? (KillAura) module : null;
     }
 
-    /**
-     * The aura turns the camera itself, so there is nothing of yours to learn: the LiquidBounce engine with
-     * MovementCorrection ChangeLook, or the Atlas engine with Legit or LockView rotations.
-     */
     private static boolean auraMovesCamera(KillAura aura) {
         if (aura == null) {
             return false;
@@ -424,7 +363,6 @@ public class TellyRecorder extends Module {
         return aura.atlasEngine() && ("Legit".equals(rotations) || "LockView".equals(rotations));
     }
 
-    /** One aim row while an enemy is within combat-range: the one your look is closest to. */
     private void recordAim(int swings, int attacks) {
         long now = System.currentTimeMillis();
         if (swings > 0 || attacks > 0 || mc.gameSettings.keyBindAttack.isKeyDown()) {
@@ -436,7 +374,6 @@ public class TellyRecorder extends Module {
         KillAura aura = aura();
         boolean withAura = aura != null && withAuraAllowed();
         if (withAura && auraMovesCamera(aura)) {
-            /* The aura steers the camera itself: this tick is not your hand. */
             return;
         }
         EntityPlayer auraPick = null;
@@ -454,7 +391,6 @@ public class TellyRecorder extends Module {
         float bestOff = Float.MAX_VALUE;
         for (EntityPlayer player : mc.theWorld.playerEntities) {
             if (auraPick != null && player != auraPick) {
-                /* aura-target: only the enemy the aura is fighting. */
                 continue;
             }
             if (player == mc.thePlayer || player.isDead || player.getHealth() <= 0.0F
@@ -476,7 +412,6 @@ public class TellyRecorder extends Module {
             return;
         }
         if (Math.abs(bestErr[0]) > this.aimFov.getValue() || Math.abs(bestErr[1]) > this.aimFov.getValue()) {
-            /* Not aiming at them (aim-fov): a look elsewhere teaches nothing about following a target. */
             return;
         }
         int ping = 0;
@@ -498,10 +433,6 @@ public class TellyRecorder extends Module {
         this.aimRows++;
     }
 
-    /**
-     * How far the look is from a point, in degrees: [yaw, pitch], each from the look to the point (positive: the point
-     * is to the right of / below the look), yaw wrapped to -180..180.
-     */
     static float[] aimError(float yaw, float pitch, double ex, double ey, double ez, double x, double y, double z) {
         double dx = x - ex;
         double dy = y - ey;
@@ -523,7 +454,6 @@ public class TellyRecorder extends Module {
         return d;
     }
 
-    /** A module that turns the camera itself is on; Silent Aura only on the modes that turn it. */
     private static boolean lookMoved() {
         if (on(AimAssist.class) || on(AutoClicker.class) || on(Tower.class) || on(AutoHeadHitter.class)
                 || on(AutoBedDef.class) || on(ProjectileAimBot.class) || on(AutoRod.class) || on(Freecam.class)) {
@@ -533,7 +463,7 @@ public class TellyRecorder extends Module {
         if (aura == null || !aura.isEnabled()) {
             return false;
         }
-        /* Those rotations belong to the Atlas engine; under the LiquidBounce engine they do nothing. */
+
         String rotations = ((KillAura) aura).rotations.getModeString();
         return ((KillAura) aura).atlasEngine() && ("Legit".equals(rotations) || "LockView".equals(rotations));
     }
@@ -593,7 +523,7 @@ public class TellyRecorder extends Module {
                 }
             }
         }
-        /* Players gone from range keep nothing. */
+
         for (Iterator<Integer> it = this.preRoll.keySet().iterator(); it.hasNext(); ) {
             int id = it.next();
             boolean present = false;
@@ -607,10 +537,6 @@ public class TellyRecorder extends Module {
         }
     }
 
-    /**
-     * Who a new block is under: the nearest other player whose feet are at most 1.5 blocks above its top and
-     * within 4.5 blocks of its middle (reach), or null when you are nearer (your own block).
-     */
     static EntityPlayer placer(BlockPos pos, List<EntityPlayer> near) {
         double cx = pos.getX() + 0.5;
         double cy = pos.getY() + 0.5;

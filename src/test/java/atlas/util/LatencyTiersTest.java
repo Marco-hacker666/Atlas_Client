@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** LatencyGovernor's tier decision: hysteresis and settling (plan step 8, F-25). */
 public class LatencyTiersTest {
-
     private static final int MID = 150;
     private static final int HIGH = 250;
     private static final int JITTER = 60;
@@ -17,7 +15,6 @@ public class LatencyTiersTest {
         return tiers.update(average, jitter, MID, HIGH, JITTER, MARGIN, SETTLE);
     }
 
-    /** Counts tier changes over a series of averages (steady jitter). */
     private static int changes(LatencyTiers tiers, int[] averages) {
         int changes = 0;
         int last = LatencyTiers.UNKNOWN;
@@ -50,7 +47,6 @@ public class LatencyTiersTest {
 
     @Test
     public void aShortSpikeNeverReachesTheWorstTier() {
-        /* 09:36:24 on 2026-09-28: a jitter spike, gone six seconds later. */
         LatencyTiers tiers = new LatencyTiers();
         feed(tiers, 120, 20);
         for (int i = 0; i < 6; i++) {
@@ -63,8 +59,6 @@ public class LatencyTiersTest {
 
     @Test
     public void noisyLineAtAThresholdDoesNotFlap() {
-        /* The brief's example, around a 85 ms threshold, repeated: a naive
-           single threshold changes tier on almost every sample. */
         int[] pattern = {79, 83, 80, 92, 77, 88};
         int[] series = new int[pattern.length * 20];
         for (int i = 0; i < series.length; i++) {
@@ -85,7 +79,6 @@ public class LatencyTiersTest {
 
     @Test
     public void theUsersLineUnderTheHighThresholdStaysPut() {
-        /* ~225 ms wandering up to the 250 ms line and back. */
         int[] series = {225, 238, 251, 229, 244, 255, 231, 226, 249, 252, 236, 228, 241, 253, 230};
         assertTrue(changes(new LatencyTiers(), series) <= 1);
     }
@@ -114,11 +107,11 @@ public class LatencyTiersTest {
     public void leavingNeedsTheMargin() {
         LatencyTiers tiers = new LatencyTiers();
         assertEquals(1, feed(tiers, 180, 5));
-        /* Just under the threshold, inside the margin: stays. */
+
         for (int i = 0; i < 20; i++) {
             assertEquals(1, feed(tiers, 140, 5));
         }
-        /* Below threshold - margin, long enough: leaves. */
+
         for (int i = 1; i < SETTLE; i++) {
             assertEquals(1, feed(tiers, 120, 5));
         }
@@ -130,11 +123,11 @@ public class LatencyTiersTest {
         LatencyTiers tiers = new LatencyTiers();
         assertEquals(1, feed(tiers, 100, 70));
         assertTrue(tiers.jittery());
-        /* Between 4/5 of the limit and the limit: still jittery. */
+
         for (int i = 0; i < 10; i++) {
             assertEquals(1, feed(tiers, 100, 55));
         }
-        /* Below 4/5 of the limit: clears, and the tier follows after settling. */
+
         for (int i = 1; i < SETTLE; i++) {
             feed(tiers, 100, 40);
         }
@@ -144,7 +137,6 @@ public class LatencyTiersTest {
 
     @Test
     public void jitterAloneNeverReachesTheWorstTier() {
-        /* Pika, 10:01-10:08: a middling average with jitter at the limit. */
         LatencyTiers tiers = new LatencyTiers();
         for (int i = 0; i < 60; i++) {
             assertTrue(feed(tiers, 160, 70) <= 1);

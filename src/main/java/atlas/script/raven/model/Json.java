@@ -12,7 +12,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
-/** Raven script API: JSON values, over Gson (2026-11-02). add(...) returns this, so calls chain. */
 public class Json {
     public enum Type { OBJECT, ARRAY, STRING, NUMBER, BOOLEAN, NULL }
 
@@ -22,7 +21,6 @@ public class Json {
         this.element = element == null ? JsonNull.INSTANCE : element;
     }
 
-    /** Parsed, or a null value when it is not JSON. */
     public static Json parse(String jsonString) {
         try {
             return new Json(new JsonParser().parse(jsonString));
@@ -88,7 +86,6 @@ public class Json {
         return this.add(key, booleanValue(val));
     }
 
-    /** The member, or a null value. */
     public Json get(String key) {
         return this.element.isJsonObject() && this.element.getAsJsonObject().has(key)
                 ? new Json(this.element.getAsJsonObject().get(key)) : nullValue();
@@ -171,7 +168,6 @@ public class Json {
         return this;
     }
 
-    /** Gson 2.2 (the game's) has no JsonArray.remove: the array is rebuilt without that item. */
     public Json remove(final int index) {
         if (this.element.isJsonArray()) {
             JsonArray array = this.element.getAsJsonArray();

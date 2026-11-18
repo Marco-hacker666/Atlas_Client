@@ -21,7 +21,6 @@ import com.viaversion.viaversion.protocols.base.BaseVersionProvider;
 import de.florianmichael.vialoadingbase.ViaLoadingBase;
 
 public class VLBBaseVersionProvider extends BaseVersionProvider {
-
   @Override
   public ProtocolVersion getClosestServerProtocol(UserConnection connection) throws Exception {
     if (connection.isClientSide()) {

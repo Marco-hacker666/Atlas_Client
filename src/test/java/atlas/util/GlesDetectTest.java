@@ -9,11 +9,7 @@ import java.util.Map;
 
 import static org.junit.Assert.*;
 
-/** Mobile-safe mode: renderer detection and the plain rounded-rect geometry (2026-10-15). */
 public class GlesDetectTest {
-
-    // ---- GL strings (as read from each renderer's source) ----
-
     @Test
     public void gl4esCurrent() {
         assertEquals("gl4es", GlesDetect.translationLayer("GL4ES wrapping Qualcomm", "GL4ES using Adreno (TM) 650",
@@ -34,7 +30,6 @@ public class GlesDetectTest {
 
     @Test
     public void kryptonWithColourCodes() {
-        /* LIBGL_USE_MC_COLOR puts section signs into the version string. */
         assertEquals("Krypton Wrapper", GlesDetect.translationLayer(null, null,
                 "3.3 §aKrypton Wrapper §b0.4.5§r", null));
     }
@@ -60,8 +55,6 @@ public class GlesDetectTest {
         assertNull(GlesDetect.translationLayer("Mesa", "Mesa Intel(R) Xe Graphics (TGL GT2)", "4.6 (Compatibility Profile) Mesa 24.0", "4.60"));
         assertNull(GlesDetect.translationLayer(null, null, null, null));
     }
-
-    // ---- Android signals ----
 
     private static String android(Map<String, String> env, Map<String, String> props, boolean buildProp) {
         return GlesDetect.android(env::get, props::get, path -> buildProp && "/system/build.prop".equals(path));
@@ -107,8 +100,6 @@ public class GlesDetectTest {
         }, p -> false));
     }
 
-    // ---- the setting ----
-
     @Test
     public void settingOverridesDetection() {
         assertTrue(GlesDetect.active(GlesDetect.AUTO, true));
@@ -116,8 +107,6 @@ public class GlesDetectTest {
         assertTrue(GlesDetect.active(GlesDetect.ON, false));
         assertFalse(GlesDetect.active(GlesDetect.OFF, true));
     }
-
-    // ---- geometry ----
 
     @Test
     public void squareRectIsFourCorners() {
@@ -143,7 +132,7 @@ public class GlesDetectTest {
         assertEquals(x + w, maxX, 1e-3F);
         assertEquals(y, minY, 1e-3F);
         assertEquals(y + h, maxY, 1e-3F);
-        /* Clockwise on screen (y down) gives a positive shoelace area. */
+
         double area = 0;
         for (int i = 0; i < p.length; i += 2) {
             int j = (i + 2) % p.length;

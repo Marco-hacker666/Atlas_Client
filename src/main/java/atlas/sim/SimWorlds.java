@@ -5,23 +5,10 @@ import net.minecraft.util.AxisAlignedBB;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Worlds for {@link PlayerSim} made from other worlds (2026-11-11). */
 public final class SimWorlds {
-
     private SimWorlds() {
     }
 
-    /**
-     * {@code base} with a full block at this cell as well: the world as it
-     * will be once a block about to be placed is down, for "and if it goes
-     * down, where does the walk end?".
-     *
-     * Everything else is the base's (2026-11-12: only the boxes and the
-     * slipperiness were passed on, so in such a world the water, the ladders
-     * and the cobwebs were gone). The new cell is a full cube and no longer a
-     * ladder or slime; a liquid or a cobweb it replaces is still counted, as
-     * those are asked for by area.
-     */
     public static PlayerSim.World withBlock(final PlayerSim.World base, final int x, final int y, final int z) {
         final AxisAlignedBB block = new AxisAlignedBB(x, y, z, x + 1, y + 1, z + 1);
         return new PlayerSim.World() {
@@ -87,33 +74,15 @@ public final class SimWorlds {
         };
     }
 
-    /**
-     * {@code base} answering its area questions from a bigger area asked once (2026-11-16). A simulation run many
-     * times from one place -- a fit's candidates, a forecast's ways out -- asks for the collision boxes, the water,
-     * the lava and the cobwebs of nearly the same few blocks hundreds of times, and in the game each answer scans
-     * every block of its area again. Here the first question about an area asks the base about a region grown round
-     * it (blocks: {@link #GROW} to each side, {@link #GROW_Y} up and down), and every later area inside that region
-     * is answered from it: the boxes that touch the area are the region's boxes that touch it, and a region with no
-     * water (lava, liquid, cobweb, soul sand) has none in any area inside it. Where the region has some, the base is
-     * asked about the area itself, so the answers are the base's, to the bit.
-     *
-     * That rests on the game's own queries: a box touches the area or not whichever bigger area it was found in
-     * (World.getCollidingBoundingBoxes keeps only boxes touching what it was asked about, and no block's box reaches
-     * past its own cell sideways or past 1.5 up), and each of the others is true for an area only if it is for any
-     * area round it. One question at a time about single blocks (slipperiness, ladders) goes to the base unchanged.
-     *
-     * For one computation only, one tick: the world must not change while it is used.
-     */
     public static PlayerSim.World cached(PlayerSim.World base) {
         return new Cached(base);
     }
 
-    /** How far a cached region reaches past the area first asked about, sideways and up and down, blocks. */
     static final double GROW = 2.0;
     static final double GROW_Y = 1.5;
-    /** An area wider than this (a long step, a big knockback's sweep) goes to the base. */
+
     static final double LARGEST = 4.0;
-    /** Regions kept at most; past it the oldest are dropped. */
+
     static final int REGIONS = 32;
 
     private static final class Cached implements PlayerSim.World {
@@ -133,7 +102,7 @@ public final class SimWorlds {
         private static final class Region {
             final AxisAlignedBB area;
             List<AxisAlignedBB> boxes;
-            /** Per kind: 0 not asked yet, 1 none in the region, 2 some. */
+
             final byte[] any = new byte[5];
 
             Region(AxisAlignedBB area) {
@@ -146,7 +115,6 @@ public final class SimWorlds {
             }
         }
 
-        /** The region holding this area, made if none does; null for an area too big to be worth it. */
         private Region region(AxisAlignedBB area) {
             for (int i = this.regions.size() - 1; i >= 0; i--) {
                 if (this.regions.get(i).holds(area)) {
@@ -165,7 +133,6 @@ public final class SimWorlds {
             return made;
         }
 
-        /** Whether the region has none of this kind; asked of the base once per region. */
         private boolean none(Region region, int kind) {
             if (region.any[kind] == 0) {
                 boolean some;

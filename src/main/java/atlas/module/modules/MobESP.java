@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): boxes around nearby mobs and animals, with
-// per-type filters and separate hostile/passive colors.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.util.ArrayList;
 import java.util.List;
 

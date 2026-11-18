@@ -26,8 +26,6 @@ public class AutoHypixel extends Module {
 
     @EventTarget
     public void onTick(TickEvent event) {
-        /* PRE only: TickEvent fires twice a tick, and without this every
-           ticksExisted-timed window packet below could go out twice. */
         if (this.isEnabled() && event.getType() == atlas.event.types.EventType.PRE) {
             if (this.hypixelinv.getValue() && mc.currentScreen instanceof GuiInventory) {
                 boolean moving = (Keyboard.isKeyDown(mc.gameSettings.keyBindForward.getKeyCode()) ||
@@ -63,7 +61,6 @@ public class AutoHypixel extends Module {
         }
     }
 
-    /* Merged modules (2026-10-11, ModuleBundle). */
     public final atlas.module.ModuleBundle autoPlayMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.AutoPlay(), "auto-play", "Auto play", false);
     public final atlas.module.ModuleBundle requeueMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.AutoRequeue(), "requeue", "Requeue", false);
 }

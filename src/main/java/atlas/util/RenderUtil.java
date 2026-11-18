@@ -1,6 +1,5 @@
 package atlas.util;
 
-
 import net.minecraft.client.renderer.GlStateManager;
 import atlas.enums.ChatColors;
 import atlas.mixin.IAccessorEntityRenderer;
@@ -96,7 +95,6 @@ public class RenderUtil {
         return applyOpacity(resultColor, interpolateInt(color1.getAlpha(), color2.getAlpha(), amount) / 255f);
     }
 
-
     public static org.lwjgl.util.Color interpolateColorsBackAndForth(int speed, int index, org.lwjgl.util.Color start, org.lwjgl.util.Color end, boolean trueColor) {
         int angle = (int) (((System.currentTimeMillis()) / speed + index) % 360);
         angle = (angle >= 180 ? 360 - angle : angle) * 2;
@@ -127,7 +125,6 @@ public class RenderUtil {
     public static float interpolate(float old,
                                     float now,
                                     float partialTicks) {
-
         return old + (now - old) * partialTicks;
     }
 
@@ -208,7 +205,6 @@ public class RenderUtil {
         GlStateManager.color((float) (n >> 16 & 0xFF) / 255.0f, (float) (n >> 8 & 0xFF) / 255.0f, (float) (n & 0xFF) / 255.0f, (float) (n >> 24 & 0xFF) / 255.0f);
     }
 
-
     public static Framebuffer createFrameBuffer(Framebuffer framebuffer) {
         return createFrameBuffer(framebuffer, false);
     }
@@ -242,10 +238,6 @@ public class RenderUtil {
         GlStateManager.bindTexture(texture);
     }
 
-    /**
-     * Binds a texture on unit 16 for a shader's second sampler and leaves unit 0 active. GlStateManager tracks units
-     * 0-7 only, so this one is set directly; the cache is put on unit 0 first so it and the real state agree after.
-     */
     public static void bindTextureOnUnit16(int texture) {
         GlStateManager.setActiveTexture(org.lwjgl.opengl.GL13.GL_TEXTURE0);
         org.lwjgl.opengl.GL13.glActiveTexture(org.lwjgl.opengl.GL13.GL_TEXTURE16);
@@ -551,7 +543,6 @@ public class RenderUtil {
         GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
     }
 
-
     public static void drawDurabilityBar(int xPos, int yPos, float durabilityRatio) {
         if (durabilityRatio < 0) durabilityRatio = 0;
         if (durabilityRatio > 1) durabilityRatio = 1;
@@ -758,7 +749,6 @@ public class RenderUtil {
         drawRect(x, y + radius, x + radius, y + height - radius, color);
         drawRect(x + width - radius, y + radius, x + width, y + height - radius, color);
 
-        // Corners
         drawCircle(x + radius, y + radius, radius, color);
         drawCircle(x + width - radius, y + radius, radius, color);
         drawCircle(x + radius, y + height - radius, radius, color);
@@ -1169,7 +1159,6 @@ public class RenderUtil {
         GlStateManager.enableTexture2D();
         GlStateManager.disableBlend();
     }
-
 
     public static void drawRoundedRect(double x, double y, double width, double height, double radius, int color, boolean roundTopLeft, boolean roundTopRight, boolean roundBottomLeft, boolean roundBottomRight) {
         if (width <= 0.0D || height <= 0.0D || (color >>> 24) == 0) {

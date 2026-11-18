@@ -68,9 +68,6 @@ public class AutoTool extends Module {
 
     @Override
     public void onDisabled() {
-        /* Switched off while holding the tool it picked: put the player's
-           own slot back first, as the normal path does, instead of just
-           forgetting which one it was. */
         if (this.switchBack.getValue() && this.previousSlot != -1 && mc.thePlayer != null) {
             mc.thePlayer.inventory.currentItem = this.previousSlot;
         }

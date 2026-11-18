@@ -27,46 +27,25 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
-/**
- * Anonymous movement data for SpeedBlocker's prediction (2026-11-01, owner: "let every player give us their data,
- * with a click to agree in game, for the SpeedBlocker AI model").
- *
- * Asked once, in chat, the first time the player is in a world: [Agree] / [No]. Changed any time in Client
- * Settings > Privacy (share-run-data) or with .rundata on|off. Nothing is recorded or sent without "on".
- *
- * With it on, every moving player within RANGE is predicted and later checked against where it went (RunRecorder,
- * velocity and position by RunTracker), whether SpeedBlocker is on or not. A row is only numbers: the horizon,
- * distance, speed, approach, key offset, chasing, ground, sprint and the errors (the model's, the straight line's
- * and, since 2026-11-13, the movement simulation's). No name -- the player column is
- * "e" plus the entity id, which means nothing outside that session -- no server, no coordinates, no account. The
- * relay sees the sender's IP, as any website does, and uses it only for its hourly limit.
- *
- * 2026-11-02 (review): the rows of a window of WINDOW_MS are a uniform sample of it (a reservoir of CAPACITY):
- * a full buffer used to drop everything after its first minute or two, the busiest fights first. Each window is
- * sent once it has passed (at least MIN_ROWS). A send that fails keeps its rows for the next one (one batch, then
- * they go); rows not sent when the game closes are saved (config/Atlas/run-data-pending.csv) and sent next time;
- * switching it off drops them. Asked only once: an unanswered question is not asked again at every launch.
- */
 public final class RunCollector {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File CONSENT_FILE = new File("./config/Atlas/run-data.txt");
     private static final File PENDING_FILE = new File("./config/Atlas/run-data-pending.csv");
     static final double RANGE = 12.0;
-    /** Rows kept per window: a uniform sample of everything recorded in it. */
+
     static final int CAPACITY = 3000;
     static final int MIN_ROWS = 300;
     static final long WINDOW_MS = 10L * 60L * 1000L;
 
-    /** "on" / "off" / "asked" (shown, not answered) / null (never shown). */
     private static volatile String state;
     private static boolean stateRead;
 
     private final RunTracker tracker = new RunTracker();
     private final Random random = new Random();
-    /** This window's sample, and how many rows the window produced. */
+
     private final List<String> sample = new ArrayList<String>();
     private long seen;
-    /** A batch whose send failed (or was left at the last exit), sent along with the next window. */
+
     private volatile List<String> retry = new ArrayList<String>();
     private final RunRecorder recorder = new RunRecorder(this::offer);
     private int tick;
@@ -77,8 +56,6 @@ public final class RunCollector {
         this.retry = loadPending();
         Runtime.getRuntime().addShutdownHook(new Thread(this::savePending, "Atlas run data"));
     }
-
-    // ---- the choice ----------------------------------------------------
 
     private static synchronized String state() {
         if (!stateRead) {
@@ -95,7 +72,6 @@ public final class RunCollector {
         return state;
     }
 
-    /** TRUE on, FALSE off, null when the player has not chosen. */
     public static Boolean consent() {
         String s = state();
         return "on".equals(s) ? Boolean.TRUE : "off".equals(s) ? Boolean.FALSE : null;
@@ -126,9 +102,6 @@ public final class RunCollector {
         return Boolean.TRUE.equals(consent());
     }
 
-    // ---- recording -------------------------------------------------------
-
-    /** A row for this window's sample: kept outright until it is full, then by reservoir sampling. */
     private void offer(String row) {
         this.seen++;
         if (this.sample.size() < CAPACITY) {
@@ -200,7 +173,6 @@ public final class RunCollector {
         this.recorder.clearOpen();
     }
 
-    /** The window is over: its sample (and any batch waiting for a retry) goes, if there is enough of it. */
     private void endWindow(String why) {
         this.windowStart = System.currentTimeMillis();
         final List<String> fresh = new ArrayList<String>(this.sample);
@@ -211,7 +183,6 @@ public final class RunCollector {
         this.seen = 0;
         this.retry = new ArrayList<String>();
         if (batch.size() < MIN_ROWS) {
-            /* Too little to be worth a post: kept for the next window. */
             this.retry = batch;
             return;
         }
@@ -226,15 +197,12 @@ public final class RunCollector {
                 + this.recorder.summary();
         atlas.util.BugReport.sendRuns(title, summary, body.toString(), ok -> {
             if (!ok && on()) {
-                /* This window's rows get one more try with the next window; rows that were already a retry go. */
                 List<String> keep = new ArrayList<String>(fresh);
                 keep.addAll(this.retry);
                 this.retry = keep.size() > CAPACITY * 2 ? new ArrayList<String>(keep.subList(0, CAPACITY * 2)) : keep;
             }
         });
     }
-
-    // ---- across launches -------------------------------------------------
 
     private void savePending() {
         try {
@@ -250,7 +218,6 @@ public final class RunCollector {
             }
             Files.write(PENDING_FILE.toPath(), String.join("\n", rows).getBytes(StandardCharsets.UTF_8));
         } catch (Exception ignored) {
-            // Only data for training; nothing to lose sleep over.
         }
     }
 
@@ -260,20 +227,16 @@ public final class RunCollector {
                 List<String> rows = new ArrayList<String>(Arrays.asList(
                         new String(Files.readAllBytes(PENDING_FILE.toPath()), StandardCharsets.UTF_8).split("\n")));
                 rows.removeIf(String::isEmpty);
-                /* Rows saved by a version with fewer columns. */
+
                 rows.replaceAll(RunRecorder::padded);
                 PENDING_FILE.delete();
                 return rows.size() > CAPACITY ? new ArrayList<String>(rows.subList(0, CAPACITY)) : rows;
             }
         } catch (Exception ignored) {
-            // Unreadable: start empty.
         }
         return new ArrayList<String>();
     }
 
-    // ---- the question --------------------------------------------------
-
-    /** The question, once: what is sent and what is not, and two buttons. */
     private static void ask() {
         IChatComponent line = new ChatComponentText("");
         line.appendSibling(text("[Atlas] ", EnumChatFormatting.AQUA));

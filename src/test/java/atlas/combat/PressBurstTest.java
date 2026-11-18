@@ -10,9 +10,7 @@ import java.util.Set;
 
 import static org.junit.Assert.*;
 
-/** SpeedBlocker's Press burst and the walled-run check (2026-11-02). */
 public class PressBurstTest {
-
     @Test
     public void aTapRunsAtOnceAndForItsLength() {
         PressBurst burst = new PressBurst();
@@ -72,7 +70,6 @@ public class PressBurstTest {
 
     @Test
     public void aWallInTheRunIsFoundBeforeThePlayerNotAfter() {
-        /* A run along +x at y 64 towards a player standing in x 5. */
         List<int[]> cells = new ArrayList<int[]>();
         for (int x = 1; x <= 8; x++) {
             cells.add(new int[]{x, 64, 0, x * 3});

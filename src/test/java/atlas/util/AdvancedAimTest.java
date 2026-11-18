@@ -9,9 +9,7 @@ import java.util.Random;
 
 import static org.junit.Assert.*;
 
-/** KillAura's Advanced rotation model (2026-09-28, Rise item 3). */
 public class AdvancedAimTest {
-
     private static AdvancedAim.Settings noOvershoot() {
         AdvancedAim.Settings s = new AdvancedAim.Settings();
         s.overshootChance = 0.0F;
@@ -22,7 +20,6 @@ public class AdvancedAimTest {
         return (float) Math.hypot(MathHelper.wrapAngleTo180_float(yawA - yawB), pitchA - pitchB);
     }
 
-    /** Ticks until within 1 degree of the target, from 60 away. */
     private static int ticksToSettle(long seed, AdvancedAim.Settings s, float[] maxTurn) {
         AdvancedAim aim = new AdvancedAim(new Random(seed));
         float yaw = 0.0F;
@@ -38,8 +35,6 @@ public class AdvancedAimTest {
         }
         return -1;
     }
-
-    // ------------------------------------------------------------ the hand
 
     @Test
     public void itGetsThereInAHumanTime() {
@@ -58,7 +53,7 @@ public class AdvancedAimTest {
         s.gravity = 20.0F;
         s.maxStep = 60.0F;
         s.wind = 10.0F;
-        /* The widest the guard ever allows: flickMax x 1.25 x 1.12. */
+
         float widest = s.flickMax * 1.25F * 1.12F;
         for (long seed = 1; seed <= 30; seed++) {
             AdvancedAim aim = new AdvancedAim(new Random(seed));
@@ -172,8 +167,6 @@ public class AdvancedAimTest {
         }
     }
 
-    // ------------------------------------------------------------ the finger
-
     @Test
     public void theFirstHitWaitsAReaction() {
         AdvancedAim.Settings s = new AdvancedAim.Settings();
@@ -209,8 +202,6 @@ public class AdvancedAimTest {
         s.triggerReactionJitter = 0.0F;
         assertTrue(new AdvancedAim(new Random(1)).triggerReady(4, true, 1000L, s));
     }
-
-    // ------------------------------------------------------------ the eye
 
     private static final AxisAlignedBB BOX = new AxisAlignedBB(-0.3, 0.0, -0.3, 0.3, 1.8, 0.3);
 
@@ -281,8 +272,6 @@ public class AdvancedAimTest {
         Vec3 above = AdvancedAim.nearestInside(BOX, new Vec3(0.0, 5.0, -3.0));
         assertEquals(1.77, above.yCoord, 1.0E-9);
     }
-
-    // ------------------------------------------------------------ helpers
 
     @Test
     public void drawsAreClamped() {

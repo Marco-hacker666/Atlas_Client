@@ -23,70 +23,22 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.BooleanSupplier;
 
-/**
- * Finds settings by trying them, rather than by being told them.
- *
- * Every number in this client was chosen by someone guessing, copying a config,
- * or reasoning from how the protocol ought to behave. None of those survive
- * contact with one particular connection: the reach that is safe here, the
- * backtrack window this line can carry, the click rate that lands rather than
- * looks fast, are all properties of a route and a server rather than of the
- * game. They cannot be reasoned to. They can be measured.
- *
- * Two instruments already write the numbers that matter. {@link FlagDetector}
- * counts corrections per minute; {@link HitCheck} counts the fraction of swings
- * that dealt damage. Those are the two halves of the only question worth
- * asking -- is this configuration landing more hits without being caught more
- * often.
- *
- * THE EXPERIMENT (plan step 11, 2026-09-28). One setting at a time, one
- * candidate value at a time, measured as four blocks of play --
- * current, candidate, current, candidate -- and kept only if the candidate
- * beat the current value in both pairs and by the margin on average
- * ({@link TuneExperiment}). The old loop kept anything that out-scored one
- * earlier five-minute block by any amount, which mostly kept luck (F-21).
- * A kept value is COMMITTED: written as the setting's base (source TUNED),
- * saved with the configuration, and logged with the evidence. Everything
- * short of that is an override (plan step 7) and never saved.
- *
- * The instruments are read, not reset: each block takes the counters' change
- * over it. The old loop cleared FlagDetector's and HitCheck's session counters
- * at every trial, so their own displays never showed a session (C6). A block
- * the counters were reset in (a join), with too little fighting, or with the
- * value masked by something of higher precedence (LatencyGovernor) is played
- * again, a limited number of times.
- *
- * SCORING. Hits are worth having and corrections are worth avoiding, but not at
- * any exchange rate: score = hit% - flags/min x flag-weight. The weight is a
- * setting because the right exchange rate is a judgement about risk, not a fact
- * about the game -- and every block is written with its parts.
- *
- * WHAT IT WILL NOT DO. It only moves settings it was given, one at a time; only
- * tunes a setting that is in use (BackTrack has two delays and uses one); never
- * changes the configuration without a validated result; and writes every block
- * and every result to autotune.txt with its trial id.
- */
 public class AutoTune extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File LOG_DIR = new File("./config/Atlas/");
     private static final SimpleDateFormat LINE_STAMP = new SimpleDateFormat("HH:mm:ss");
     private static final String OWNER = "AutoTune";
 
-    /** Minutes of play in each block; an experiment is four blocks. */
     public final IntProperty trialMinutes = new IntProperty("trial-minutes", 5, 1, 60);
-    /** Judged swings a block needs before its numbers mean anything. */
+
     public final IntProperty minSwings = new IntProperty("min-swings", 25, 5, 200);
-    /**
-     * How many points of hit rate one flag per minute is worth giving up. High
-     * values tune for safety, low values for damage.
-     */
+
     public final FloatProperty flagWeight = new FloatProperty("flag-weight", 6.0F, 0.0F, 40.0F);
-    /** Fraction of the range a first step moves. */
+
     public final FloatProperty stepFraction = new FloatProperty("step", 0.12F, 0.02F, 0.5F);
-    /** Score points the candidate must win by, on average over both pairs. */
+
     public final FloatProperty margin = new FloatProperty("margin", 2.0F, 0.0F, 20.0F);
-    /** Blocks that may be played again (too little fighting, a join, masked) before the experiment expires. */
+
     public final IntProperty maxReplays = new IntProperty("max-replays", 3, 0, 10);
 
     public final BooleanProperty tuneReach = new BooleanProperty("tune-reach", true);
@@ -109,18 +61,17 @@ public class AutoTune extends Module {
     private int blockHits;
     private File logTarget;
 
-    /** One numeric setting under test, and how far it is currently willing to move. */
     private static final class Knob {
         final String label;
         final Property<?> property;
         final double min;
         final double max;
         final boolean integral;
-        /** Whether the setting is the one its module uses right now. */
+
         final BooleanSupplier active;
         double step;
         int direction = 1;
-        /** Set by the player mid-trial: left alone until AutoTune is switched off and on. */
+
         boolean byHand;
 
         Knob(String label, Property<?> property, double min, double max, boolean integral,
@@ -134,7 +85,6 @@ public class AutoTune extends Module {
             this.step = step;
         }
 
-        /** The player's value (the base). */
         double base() {
             Object value = this.property.getBaseValue();
             return value instanceof Number ? ((Number) value).doubleValue() : 0.0;
@@ -146,9 +96,6 @@ public class AutoTune extends Module {
                     : (Object) Float.valueOf((float) clamped);
         }
 
-        /* An override, never a write (plan step 7): the player's value stays the
-           base and is what is saved. Laid for the current-value blocks too, so
-           "is the value tried the one in effect" means the same in every block. */
         void apply(double value) {
             this.property.override(Property.Source.TRIAL, OWNER, typed(value));
         }
@@ -165,8 +112,7 @@ public class AutoTune extends Module {
     public AutoTune() {
         super("AutoTune", false, false,
                 "Tries settings and keeps the ones that measure better");
-        /* Quitting never calls onDisabled: whatever block is running is let go
-           before the config is written, so only committed values are saved. */
+
         atlas.management.Shutdown.register(atlas.management.Shutdown.Stage.RESTORE, "AutoTune.release",
                 this::releaseForExit);
     }
@@ -206,8 +152,6 @@ public class AutoTune extends Module {
 
     @Override
     public void onDisabled() {
-        /* An experiment that ends unfinished is undone; committed values stay
-           -- they are the configuration now, with their evidence in the log. */
         if (this.experiment != null && !this.experiment.finished()) {
             log("ABANDON " + this.experiment + " (switched off)");
         }
@@ -216,7 +160,6 @@ public class AutoTune extends Module {
         this.knob = null;
     }
 
-    /** The settings this is allowed to move, and the range each may move in. */
     private void collectKnobs() {
         double fraction = this.stepFraction.getValue();
 
@@ -231,8 +174,7 @@ public class AutoTune extends Module {
             Module module = Atlas.moduleManager.modules.get(BackTrack.class);
             if (module instanceof BackTrack && module.isEnabled()) {
                 final BackTrack backtrack = (BackTrack) module;
-                /* Only the delay in use is tuned (F-22): trials of the other
-                   were noise, and could still be "kept". */
+
                 add("BackTrack.normal-delay", backtrack.normalDelay, 50, 250, true,
                         () -> !backtrack.adaptive.getValue(), fraction);
                 add("BackTrack.adaptive-delay", backtrack.adaptiveDelay, 50, 250, true,
@@ -258,9 +200,6 @@ public class AutoTune extends Module {
         this.knobs.add(new Knob(label, property, min, max, integral, active, step));
     }
 
-    // ---- the loop -----------------------------------------------------
-
-    /** Begins an experiment on the next setting in use. */
     private void startNext() {
         this.experiment = null;
         this.knob = null;
@@ -273,7 +212,6 @@ public class AutoTune extends Module {
             double from = next.base();
             double candidate = from + next.step * next.direction;
             if (candidate < next.min || candidate > next.max) {
-                /* Against the edge in this direction; turn around. */
                 next.direction = -next.direction;
                 candidate = from + next.step * next.direction;
             }
@@ -293,7 +231,6 @@ public class AutoTune extends Module {
         say("&7no setting in use to tune");
     }
 
-    /** Lays the block's value and takes the instruments' readings at its start. */
     private void beginBlock() {
         this.knob.apply(this.experiment.valueNow());
         this.blockStart = System.currentTimeMillis();
@@ -311,11 +248,6 @@ public class AutoTune extends Module {
             return;
         }
         if (this.knob.base() != this.experiment.current) {
-            /* The player set this one by hand (the menu and commands set the
-               base). The trial on top kept its own value in effect, so the
-               slider moved and the number did not (BackTrack adaptive-delay,
-               2026-10-02); the block would then have been replayed as
-               "masked", and a COMMIT would have overwritten the choice. */
             this.knob.byHand = true;
             say("&7" + this.knob.label + " &fchanged by hand &8-- left alone until AutoTune is toggled");
             this.experiment.expire("changed by the player");
@@ -328,11 +260,6 @@ public class AutoTune extends Module {
         endBlock();
     }
 
-    /**
-     * Another server makes the comparison meaningless: the experiment expires.
-     * A new connection to the same server resets the instruments, so the
-     * block in progress starts over.
-     */
     @EventTarget
     public void onSession(atlas.events.SessionEvent event) {
         if (event.getType() != atlas.events.SessionEvent.Type.START || this.experiment == null) {
@@ -398,7 +325,6 @@ public class AutoTune extends Module {
         }
     }
 
-    /** Carries out the experiment's result and moves on to the next setting. */
     private void finish() {
         TuneExperiment done = this.experiment;
         Knob tuned = this.knob;
@@ -409,7 +335,7 @@ public class AutoTune extends Module {
         this.finished++;
         switch (done.state()) {
             case COMMITTED:
-                /* The one path from an experiment to the configuration. */
+
                 tuned.property.setBase(Property.Source.TUNED, tuned.typed(done.candidate));
                 this.committed++;
                 log(String.format(Locale.ROOT, "COMMIT  #%d %s %.3f -> %.3f: %s", done.id, done.label,
@@ -419,10 +345,8 @@ public class AutoTune extends Module {
                 break;
             case REJECTED:
                 if (tuned.direction > 0) {
-                    /* One direction failed; the other has not been tried. */
                     tuned.direction = -1;
                 } else {
-                    /* Both failed: at a local best for now, so look more finely. */
                     tuned.direction = 1;
                     tuned.step = Math.max(tuned.integral ? 1.0 : 0.005, tuned.step * 0.5);
                 }
@@ -437,8 +361,6 @@ public class AutoTune extends Module {
         }
         startNext();
     }
-
-    // ---- output -------------------------------------------------------
 
     private void say(String message) {
         if (this.chat.getValue()) {
@@ -465,7 +387,6 @@ public class AutoTune extends Module {
             writer.println(LINE_STAMP.format(new Date()) + "  " + line);
             writer.flush();
         } catch (Exception ignored) {
-            // Losing a log line must not end the experiment.
         } finally {
             if (writer != null) {
                 writer.close();

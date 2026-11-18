@@ -10,7 +10,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class HeldKnockbackTest {
-
     @Test
     public void aHeldKnockbackIsFoundWhenTheGameAppliesIt() {
         HeldKnockback held = new HeldKnockback();

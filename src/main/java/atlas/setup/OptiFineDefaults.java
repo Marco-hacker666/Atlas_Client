@@ -6,16 +6,6 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * OptiFine settings set for a player the first time this client installs
- * OptiFine for them (2026-10-11, the owner's request).
- *
- * Connected Textures goes off: OptiFine keeps it in optionsof.txt as
- * {@code ofConnectedTextures}, 1 = Fast, 2 = Fancy (OptiFine's default),
- * 3 = Off -- checked against the owner's own file, where Off is stored as 3.
- * Written only right after our own OptiFine install, so a player who turns
- * it on later is never overridden.
- */
 public final class OptiFineDefaults {
     static final String FILE = "optionsof.txt";
     static final String CONNECTED_TEXTURES = "ofConnectedTextures";
@@ -24,7 +14,6 @@ public final class OptiFineDefaults {
     private OptiFineDefaults() {
     }
 
-    /** Sets Connected Textures off in {@code gameDir}/optionsof.txt, creating the file if need be. */
     public static void applyFirstInstall(File gameDir) {
         try {
             File file = new File(gameDir, FILE);

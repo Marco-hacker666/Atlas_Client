@@ -10,7 +10,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/** The LiquidBounce rotation engine port (2026-10-25). */
 public class AuraRotationsTest {
     private static final Rotation CAMERA = new Rotation(0.0F, 0.0F);
 
@@ -44,8 +43,8 @@ public class AuraRotationsTest {
         AuraRotations rotations = linear(30.0F);
         rotations.ticksUntilReset = 1;
         rotations.request(new Rotation(60.0F, 0.0F), 3.0, false);
-        assertEquals(30.0F, rotations.update(CAMERA, 0.0).yaw, 1e-4); // the request's one tick
-        assertEquals(0.0F, rotations.update(CAMERA, 0.0) == null ? 0.0F : 1.0F, 0.0); // 30 -> 0: within 2, let go
+        assertEquals(30.0F, rotations.update(CAMERA, 0.0).yaw, 1e-4);
+        assertEquals(0.0F, rotations.update(CAMERA, 0.0) == null ? 0.0F : 1.0F, 0.0);
         assertFalse(rotations.active());
     }
 
@@ -58,7 +57,7 @@ public class AuraRotationsTest {
         assertEquals(20.0F, rotations.update(CAMERA, 0.0).yaw, 1e-4);
         assertEquals(30.0F, rotations.update(CAMERA, 0.0).yaw, 1e-4);
         assertFalse(rotations.requesting());
-        assertEquals(20.0F, rotations.update(CAMERA, 0.0).yaw, 1e-4); // turning back now
+        assertEquals(20.0F, rotations.update(CAMERA, 0.0).yaw, 1e-4);
         assertTrue(rotations.active());
     }
 
@@ -78,7 +77,7 @@ public class AuraRotationsTest {
         rotations.ticksUntilReset = 10;
         rotations.request(new Rotation(45.0F, 0.0F), 3.0, false);
         assertNotNull(rotations.update(CAMERA, 0.0));
-        assertNull(rotations.update(new Rotation(45.0F, 0.0F), 0.0)); // the request lasts one tick
+        assertNull(rotations.update(new Rotation(45.0F, 0.0F), 0.0));
     }
 
     @Test
@@ -88,7 +87,7 @@ public class AuraRotationsTest {
         rotations.request(new Rotation(90.0F, 0.0F), 3.0, false);
         assertEquals(30.0F, rotations.update(CAMERA, 0.0).yaw, 1e-4);
         rotations.expire();
-        assertEquals(0.0F, rotations.update(CAMERA, 0.0) == null ? 0.0F : 1.0F, 0.0); // back within 2: let go
+        assertEquals(0.0F, rotations.update(CAMERA, 0.0) == null ? 0.0F : 1.0F, 0.0);
     }
 
     @Test

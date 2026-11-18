@@ -6,12 +6,9 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** 2026-10-11 audit fixes: new ledger kinds, merged modules by name, Debug's panel list. */
 public class AuditFixesTest {
-
     @Test
     public void newKindsWeighLikeWhatTheyDo() {
-        /* A module-made movement packet moves the player as surely as a held one. */
         assertEquals(Attribution.weight("held-send"), Attribution.weight("move-packet"), 1e-9);
         assertTrue(Attribution.weight("move") > Attribution.weight("place"));
         assertEquals(Attribution.weight("move"), Attribution.weight("timer"), 1e-9);
@@ -42,7 +39,7 @@ public class AuditFixesTest {
 
     @Test
     public void debugPanelListsItsModules() {
-        assertEquals(5, atlas.module.modules.Debug.MANAGED.length); // LatencyCrosshair removed 2026-10-31
+        assertEquals(5, atlas.module.modules.Debug.MANAGED.length);
         assertTrue(java.util.Arrays.asList(atlas.module.modules.Debug.MANAGED)
                 .contains(atlas.module.modules.HitCheck.class));
     }

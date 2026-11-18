@@ -11,22 +11,9 @@ import org.lwjgl.input.Mouse;
 
 import java.util.List;
 
-/**
- * Lets the player drag HUD elements around the screen.
- *
- * Opened from the menu's HUD Editor button. The HUD keeps drawing underneath,
- * as it does behind any menu; this screen only draws a frame around each
- * element that reported where it is (see {@link HudLayout}), and moves the one
- * being dragged. Escape goes back to the menu that opened it.
- *
- * The mouse wheel over an element resizes it (Shift for fine steps), R puts
- * the selected one back to 100% -- every element, through its own scale
- * setting (2026-11-09).
- */
 public class HudEditorScreen extends GuiScreen {
-    /** How close, in pixels, an edge or centre has to come to a guide to snap to it. */
     private static final int SNAP = 4;
-    /** One wheel notch, and one with Shift held. */
+
     private static final float SCALE_STEP = 0.05F;
     private static final float FINE_SCALE_STEP = 0.01F;
 
@@ -39,7 +26,7 @@ public class HudEditorScreen extends GuiScreen {
     private int pressY;
     private int movedX;
     private int movedY;
-    /* The guide lines the dragged element is snapped to, if any. */
+
     private boolean guideXShown;
     private boolean guideYShown;
     private float guideX;
@@ -75,7 +62,6 @@ public class HudEditorScreen extends GuiScreen {
         int accent = accent();
         int neutral = light ? 0xFF1A1F28 : 0xFFFFFFFF;
 
-        /* Faint centre lines, the two guides everything can snap to. */
         Gui.drawRect(sw / 2, 0, sw / 2 + 1, sh, withAlpha(neutral, 0x18));
         Gui.drawRect(0, sh / 2, sw, sh / 2 + 1, withAlpha(neutral, 0x18));
 
@@ -100,7 +86,6 @@ public class HudEditorScreen extends GuiScreen {
             drawLabel(label, left, top, bottom, sh, active || hover ? accent : neutral, light);
         }
 
-        /* The anchor the dragged or selected element hangs from (2026-10-18). */
         HudLayout.Element anchored = this.dragging != null ? this.dragging : this.selected;
         if (anchored != null) {
             float[] mark = HudAnchors.marker(anchored, sw, sh);
@@ -204,7 +189,6 @@ public class HudEditorScreen extends GuiScreen {
         this.guideYShown = snappedY[1] > 0.5F;
         this.guideY = snappedY[2];
 
-        /* Never past the edge of the screen. */
         x = Math.max(0.0F, Math.min(Math.max(0.0F, sw - w), x));
         y = Math.max(0.0F, Math.min(Math.max(0.0F, sh - h), y));
         moveTo(Math.round(x - this.startX), Math.round(y - this.startY));
@@ -244,17 +228,12 @@ public class HudEditorScreen extends GuiScreen {
         }
     }
 
-    /** Moves the dragged element so it ends up this far from where the drag began. */
     private void moveTo(int totalX, int totalY) {
         int[] moved = this.dragging.mover.moveBy(totalX - this.movedX, totalY - this.movedY);
         this.movedX += moved[0];
         this.movedY += moved[1];
     }
 
-    /**
-     * Snaps one axis. Returns {position, 1 if snapped else 0, guide line}.
-     * Guides: the screen's edges and centre, and every other element's edges and centre.
-     */
     private static float[] snapAxis(float want, float size, int screen, List<HudLayout.Element> others,
                                     boolean horizontal) {
         float best = want;
@@ -287,7 +266,6 @@ public class HudEditorScreen extends GuiScreen {
     }
 
     private static HudLayout.Element topAt(List<HudLayout.Element> elements, int mouseX, int mouseY) {
-        /* Last reported is drawn last, so it is on top. */
         for (int i = elements.size() - 1; i >= 0; i--) {
             if (elements.get(i).contains(mouseX, mouseY)) {
                 return elements.get(i);
@@ -308,7 +286,7 @@ public class HudEditorScreen extends GuiScreen {
             return;
         }
         int width = this.fontRendererObj.getStringWidth(label);
-        /* Above the frame, or below it when there is no room above. */
+
         int y = top - 11 >= 0 ? top - 11 : Math.min(screenHeight - 10, bottom + 2);
         Gui.drawRect(left, y - 1, left + width + 6, y + 9, light ? 0xC8F3F5F9 : 0xB0101318);
         this.fontRendererObj.drawStringWithShadow(label, left + 3, y, colour);

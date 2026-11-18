@@ -5,9 +5,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** TELLY (2026-11-18): the look goes back only on the way down of a jump, or when not walking. */
 public class TellyBridgeTest {
-
     @Test
     public void forwardOnTheGroundAndOnTheWayUp() {
         assertFalse(TellyBridge.placing(true, 0.0, true));

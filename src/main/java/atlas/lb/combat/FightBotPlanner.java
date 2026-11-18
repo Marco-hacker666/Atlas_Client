@@ -2,28 +2,17 @@ package atlas.lb.combat;
 
 import java.util.function.BiPredicate;
 
-/**
- * Where the LiquidBounce aura's FightBot walks (2026-10-25, LiquidBounce
- * NextGen port, GPL-3.0; KillAuraFightBot and NavigationBaseValueGroup).
- *
- * With the next click coming it goes to the nearest point at attack range
- * around the target that is outside the target's "dangerous" angle (where it
- * is looking); while no click is due (RunawayOnCooldown) it backs away along
- * the line to the target; with a leader set it keeps within a radius of him.
- * The walk keys are the 8-way direction of the goal relative to the view.
- * Positions are {x, z}; yaw in Minecraft degrees (0 = +z, 90 = -x).
- */
+// Where the LiquidBounce aura's FightBot walks (LiquidBounce NextGen port, GPL-3.0)
+
 public final class FightBotPlanner {
     private FightBotPlanner() {
     }
 
-    /** The horizontal look vector of a yaw: {x, z}. */
     public static double[] direction(float yaw) {
         double r = Math.toRadians(yaw);
         return new double[]{-Math.sin(r), Math.cos(r)};
     }
 
-    /** The yaw from {@code from} looking at {@code to}. */
     public static float yawTo(double fromX, double fromZ, double toX, double toZ) {
         return (float) Math.toDegrees(Math.atan2(toZ - fromZ, toX - fromX)) - 90.0F;
     }
@@ -39,16 +28,10 @@ public final class FightBotPlanner {
         return angle;
     }
 
-    /** Whether the target's look is within dangerousYaw of facing us: "in danger" is the opposite of LiquidBounce's outOfDanger. */
     public static boolean outOfDanger(float targetYaw, float requiredYaw, float dangerousYaw) {
         return Math.abs(wrap(requiredYaw - targetYaw)) > dangerousYaw;
     }
 
-    /**
-     * The attack spot: every 10 degrees around the target at {@code range},
-     * not inside a block and not within dangerousYaw of where the target
-     * looks, nearest to the player; the spot along the target's look when none.
-     */
     public static double[] attackPosition(double targetX, double targetZ, float targetYaw, double range,
                                           float dangerousYaw, double playerX, double playerZ,
                                           BiPredicate<Double, Double> collides) {
@@ -75,13 +58,11 @@ public final class FightBotPlanner {
         return best != null ? best : fallback;
     }
 
-    /** Backing away: {@code range} along the yaw at which the player would look at the target. */
     public static double[] runawayPosition(double playerX, double playerZ, float requiredYaw, double range) {
         double[] d = direction(requiredYaw);
         return new double[]{playerX + d[0] * range, playerZ + d[1] * range};
     }
 
-    /** The point every 45 degrees around the leader at {@code radius} nearest to the player. */
     public static double[] leaderPosition(double leaderX, double leaderZ, double radius, double playerX, double playerZ) {
         double[] best = {leaderX, leaderZ};
         double bestDist = Double.MAX_VALUE;
@@ -98,11 +79,6 @@ public final class FightBotPlanner {
         return best;
     }
 
-    /**
-     * The walk keys toward a goal: {forward, strafe} each -1, 0 or 1 (vanilla:
-     * strafe positive = left). An axis is pressed only when the goal is more
-     * than {@code deadAngle} degrees off its perpendicular.
-     */
     public static int[] directionalInput(double dx, double dz, float viewYaw, float deadAngle) {
         if (dx * dx + dz * dz < 1.0E-6) {
             return new int[]{0, 0};
@@ -112,13 +88,11 @@ public final class FightBotPlanner {
         int forward = abs < 90.0F - deadAngle ? 1 : (abs > 90.0F + deadAngle ? -1 : 0);
         int strafe = 0;
         if (abs > deadAngle && abs < 180.0F - deadAngle) {
-            /* Turning right raises the yaw: a goal at a positive relative yaw is to the right. */
             strafe = relative > 0 ? -1 : 1;
         }
         return new int[]{forward, strafe};
     }
 
-    /** The movement yaw of walk keys under a view yaw (the direction the keys move in). */
     public static float movementYaw(float viewYaw, float forward, float strafe) {
         if (forward == 0.0F && strafe == 0.0F) {
             return viewYaw;

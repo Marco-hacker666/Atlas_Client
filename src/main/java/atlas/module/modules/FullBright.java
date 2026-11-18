@@ -13,9 +13,7 @@ public class FullBright extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private float prevGamma = Float.NaN;
     private boolean appliedNightVision = false;
-    /* Night vision the player already had when EFFECT mode took over, and
-       when; put back (with whatever time it would have left) on switch-off,
-       instead of removing every night vision regardless of whose it was. */
+
     private PotionEffect savedNightVision;
     private int savedAtTick;
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"GAMMA", "EFFECT"});

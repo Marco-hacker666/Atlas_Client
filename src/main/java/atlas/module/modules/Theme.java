@@ -10,36 +10,14 @@ import atlas.property.properties.PercentProperty;
 import atlas.ui.impl.clickgui.atlas.ThemeSwitch;
 import atlas.util.ChatUtil;
 
-/**
- * The master switch and colours of the Theme tab.
- *
- * Off, nothing is themed and every render module draws as it always did. On,
- * each group that is also on recolours its rendering; groups in THEME mode
- * (the default) take this module's colours, so changing them here changes
- * everything at once.
- *
- * A preset is a quick start: picking one sets these colours, switches this
- * and every group on, and points the groups at THEME -- except Items and
- * Chests, which keep their own per-type colours (an emerald should still look
- * like an emerald) and only take the transparency. Transparency and line
- * width are never touched by a preset. The preset keeps showing its name
- * until one of this module's colours is changed by hand, which turns it back
- * to CUSTOM. Reading a config never applies a preset (Config.loading): the
- * saved colours are the ones that count, preset or not.
- */
 public class Theme extends ThemeStyle {
-
     private static final String[] PRESETS = {"CUSTOM", "RAINBOW", "ASTOLFO", "OCEAN", "SUNSET", "NEON", "MINT",
             "BLOOD", "LAVENDER", "GOLD", "PASTEL", "MONO", "TEAM", "HEALTH", "OFF"};
 
     public final ModeProperty preset = new ModeProperty("preset", 0, PRESETS);
-    /** Every group's transparency scaled at once. */
+
     public final PercentProperty alphaScale = new PercentProperty("alpha-scale", 100, 0, 200, null);
-    /*
-     * 2026-11-14 (owner: "switch the whole theme in one go"): keys that put on the next or the previous look saved
-     * in the Theme window, A to Z (ThemeSwitch; .theme does the same by name). Whether this module is on or not.
-     * A key is never part of a look: ThemeFiles leaves keys out.
-     */
+
     public final KeyProperty nextLook = new KeyProperty("next-theme-key", 0);
     public final KeyProperty previousLook = new KeyProperty("previous-theme-key", 0);
 
@@ -73,7 +51,6 @@ public class Theme extends ThemeStyle {
                 : String.format("%s&cNone of the saved themes could be read.", Atlas.clientName));
     }
 
-    /** Every group module, in the order the tab lists them. */
     static final Class<?>[] GROUPS = {PlayerColors.class, TracerColors.class, TargetColors.class,
             BacktrackColors.class, BedColors.class, ChestColors.class, ItemColors.class, BlockColors.class,
             ProjectileColors.class, InterfaceColors.class, ChamsColors.class, NameTagColors.class,
@@ -85,7 +62,6 @@ public class Theme extends ThemeStyle {
             return;
         }
         if (!"preset".equals(name)) {
-            /* A colour of the master changed by hand: no longer the preset. */
             if (!"CUSTOM".equals(this.preset.getModeString()) && isColouring(name)) {
                 this.applying = true;
                 try {

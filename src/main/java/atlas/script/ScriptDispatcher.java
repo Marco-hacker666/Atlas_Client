@@ -49,44 +49,16 @@ import org.lwjgl.opengl.GL11;
 
 import java.util.List;
 
-/**
- * Calls the scripts' hooks from the client's events (2026-11-02; 2026-11-03 to Raven bS 16's and bS 17's own
- * order, from their sources, so a Raven script does here what it does in Raven). One object, registered once at
- * startup on Atlas's bus and on Forge's.
- *
- * The tick, as Raven runs it:
- *  - onPreUpdate: the start of the player's update (UpdateEvent PRE). A look a script asks for here
- *    (client.setRotations, getRotations) goes to the shared rotation engine at once, whole (no easing), so the
- *    movement fix moves with it.
- *  - onPrePlayerInput(MovementInput): the keys as read, before sneaking slows them; onPostPlayerInput after.
- *  - onPlayerMove(Vec3): what the player is about to move by (Entity.moveEntity's arguments).
- *  - onPreMotion(PlayerState): after the move, right before the movement packet. The packet says what the state
- *    says -- look, position, ground, sprint, sneak -- exactly; the camera stays where the scripts left it.
- *  - onPostMotion, then onPostUpdate: after the packet.
- *  - onRenderTick: the end of each frame (bS 17 sets the 2D view first and tidies the GL state after);
- *    onRenderWorld: after the world is drawn and every other world drawing, in its view (bS 17 tidies after).
- *  - onKeyPress(char, int): a key in an open screen (false keeps it from the screen); bS 17's
- *    onKey(name, code, state, inGui): every key going down or up; onMouse: every mouse event (bS 17 with the
- *    pointer, without bare moves); onPrePlayerInteract: each tick before the clicks are handled; onPreAttack: a
- *    left click about to be handled, on anything (false drops the click).
- *  - onPacketSent(CPacket): a packet about to be sent (false drops it); onDispatchPacket(CPacket): one really
- *    leaving -- held ones when they are let go, and those modules send past the event, too.
- * As in Raven, the hooks come before the client's own modules (Priority.HIGHEST): a script sees a packet before
- * a module drops it and the keys before a module changes them.
- * Atlas scripts get bS 17's hooks and their own (onTick, onUpdate(UpdateEvent), onRender2D/3D, onAttack, onKey(int),
- * onWorldLoad); Raven scripts only Raven's, so a helper of theirs that happens to share a name is not called.
- */
 public final class ScriptDispatcher {
     public static final ScriptDispatcher INSTANCE = new ScriptDispatcher();
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    /** The owner Raven's look (client.setRotations, getRotations) is asked with. */
     private final Object ravenLook = new Object();
-    /** What onPreMotion changed of this tick's movement packet; applied to the next one sent. */
+
     private volatile PlayerState packetState;
     private volatile boolean packetPosition;
     private volatile boolean packetGround;
-    /** Undone after the packet: the look given to it, and the camera, sprint and sneak to come back to. */
+
     private boolean restore;
     private float sentYaw;
     private float sentPitch;
@@ -116,7 +88,6 @@ public final class ScriptDispatcher {
         return ScriptManager.get().running;
     }
 
-    /** Its runtime when the script is loaded and its module on; else null. */
     private static ScriptRuntime live(ScriptEntry entry) {
         ScriptHost host = entry.host;
         ScriptRuntime runtime = entry.runtime;
@@ -145,7 +116,6 @@ public final class ScriptDispatcher {
         }
     }
 
-    /** Asks the scripts; false from any one cancels (all are still asked, as each may count what it saw). */
     private static boolean ask(Which which, String hook, Object... args) {
         boolean allowed = true;
         for (ScriptEntry entry : running()) {
@@ -157,8 +127,6 @@ public final class ScriptDispatcher {
         return allowed;
     }
 
-    // ---- the tick ----------------------------------------------------------------
-
     @EventTarget
     public void onTick(TickEvent event) {
         if (event.getType() != EventType.PRE) {
@@ -169,7 +137,6 @@ public final class ScriptDispatcher {
             Entity.prune();
         }
         if (RavenHooks.edgeCrouchHeld && noScriptOn()) {
-            /* What paused BridgeAssist is gone or off without putting it back. */
             RavenHooks.edgeCrouchHeld = false;
         }
         if (inWorld()) {
@@ -213,7 +180,7 @@ public final class ScriptDispatcher {
             RavenHooks.appliedPitch = null;
             return;
         }
-        /* Whole: Raven puts the asked look on the packet as it is (minStep 360 lets the engine turn all of it). */
+
         float[] got = RotationHelper.request(this.ravenLook, yaw != null ? yaw : event.getNewYaw(),
                 pitch != null ? pitch : event.getNewPitch(), ScriptManager.PRIORITY,
                 RavenHooks.movementFix ? RotationHelper.MOVE_FIX : RotationHelper.MOVE_CAMERA, false,
@@ -222,7 +189,6 @@ public final class ScriptDispatcher {
         RavenHooks.appliedPitch = got == null ? null : got[1];
     }
 
-    /** After the move, right before the movement packet: Raven's PreMotion. */
     @EventTarget(Priority.HIGHEST)
     public void onPlayerUpdate(PlayerUpdateEvent event) {
         if (!inWorld() || running().isEmpty()) {
@@ -246,7 +212,7 @@ public final class ScriptDispatcher {
             }
             runtime.call("onPreMotion", state);
         }
-        /* A look asked during onPreMotion is this packet's, as in Raven. */
+
         Float wantedYaw = RavenHooks.wantedYaw;
         Float wantedPitch = RavenHooks.wantedPitch;
         if (wantedYaw != null || wantedPitch != null) {
@@ -270,8 +236,6 @@ public final class ScriptDispatcher {
             return;
         }
         if (state.yaw != before.yaw || state.pitch != before.pitch) {
-            /* The packet's look; afterwards the camera goes back to where the scripts left it (their setYaw), or
-               to where it was. */
             this.cameraYaw = player.rotationYaw;
             this.cameraPitch = player.rotationPitch;
             this.cameraMoved = player.rotationYaw != yawBefore || player.rotationPitch != pitchBefore;
@@ -300,13 +264,11 @@ public final class ScriptDispatcher {
         }
     }
 
-    /** After the movement packet: what onPreMotion changed only for the packet goes back. */
     private void undoPacketState() {
         EntityPlayerSP player = mc.thePlayer;
         if (this.restore) {
             this.restore = false;
-            /* Moved by the scripts: theirs. Not: back from the packet's look, unless the client's own silent look
-               has already put the camera back. */
+
             if (this.cameraMoved || player.rotationYaw == this.sentYaw && player.rotationPitch == this.sentPitch) {
                 player.rotationYaw = this.cameraYaw;
                 player.rotationPitch = this.cameraPitch;
@@ -338,7 +300,6 @@ public final class ScriptDispatcher {
                 continue;
             }
             if (input == null) {
-                /* Raven gives the keys before sneaking slows them (and slows them after); here they come slowed. */
                 float slow = keys.sneak ? 0.3F : 1.0F;
                 input = new MovementInput(keys.moveForward / slow, keys.moveStrafe / slow, keys.jump, keys.sneak);
                 before = new MovementInput(input.asArray());
@@ -425,7 +386,6 @@ public final class ScriptDispatcher {
         }
     }
 
-    /** Raven's onPreAttack: a left click about to be handled (Minecraft.clickMouse), on an entity, a block or air. */
     @EventTarget(Priority.HIGHEST)
     public void onLeftClick(LeftClickMouseEvent event) {
         if (inWorld() && !event.isCancelled() && !running().isEmpty() && !ask(ALL, "onPreAttack")) {
@@ -465,17 +425,12 @@ public final class ScriptDispatcher {
         call(ATLAS, "onWorldLoad");
     }
 
-    // ---- called from the mixins (Minecraft, GuiScreen, Entity, NetworkManager) ------------------------------
-
-    /** Raven's PlayerMoveEvent: Entity.moveEntity's arguments for this player, before anything changes them. */
     public void onPlayerMove(double x, double y, double z) {
         if (inWorld() && !running().isEmpty()) {
             call(ALL, "onPlayerMove", new Vec3(x, y, z));
         }
     }
 
-    /** Raven's AntiCheatFlagEvent: one of the client's cheat detectors (AntiCheat, CheatDetector) reported a
-     *  player. Their flags are their own checks' names (Reach, WallHit, AutoBlock ...). */
     public void onAntiCheatFlag(String flag, net.minecraft.entity.Entity entity) {
         if (!mc.isCallingFromMinecraftThread()) {
             mc.addScheduledTask(() -> this.onAntiCheatFlag(flag, entity));
@@ -486,7 +441,6 @@ public final class ScriptDispatcher {
         }
     }
 
-    /** Raven's DispatchPacketEvent: a packet really going out (NetworkManager.dispatchPacket). */
     public void onDispatch(Packet<?> packet) {
         if (!inWorld() || running().isEmpty()) {
             return;
@@ -507,7 +461,6 @@ public final class ScriptDispatcher {
         }
     }
 
-    /** bS 17's KeyEvent: every key going down or up, before the client handles it this tick. */
     public void onKeyState(int key, boolean down, boolean inGui) {
         if (!inWorld() || running().isEmpty()) {
             return;
@@ -515,7 +468,6 @@ public final class ScriptDispatcher {
         call(BS17, "onKey", org.lwjgl.input.Keyboard.getKeyName(key), key, down, inGui);
     }
 
-    /** A key in an open screen; true when a script keeps it from the screen. */
     public boolean onScreenKey(char typed, int key) {
         if (!inWorld() || running().isEmpty()) {
             return false;
@@ -523,14 +475,11 @@ public final class ScriptDispatcher {
         return !ask(ALL, "onKeyPress", typed, key);
     }
 
-    /** Each tick, before the clicks are handled. */
     public void onPreInteract() {
         if (inWorld() && !running().isEmpty()) {
             call(ALL, "onPrePlayerInteract");
         }
     }
-
-    // ---- drawing ----------------------------------------------------------------
 
     @EventTarget
     public void onRender2D(Render2DEvent event) {
@@ -609,7 +558,6 @@ public final class ScriptDispatcher {
         }
     }
 
-    /** bS 17 tidies after a script drew in 2D. */
     private static void restoreOverlayState() {
         mc.entityRenderer.setupOverlayRendering();
         restoreCommonState();
@@ -620,7 +568,6 @@ public final class ScriptDispatcher {
         RenderHelper.disableStandardItemLighting();
     }
 
-    /** bS 17 tidies after a script drew in the world. */
     private static void restoreWorldState(float partial) {
         ((IAccessorEntityRenderer) mc.entityRenderer).callSetupCameraTransform(partial, 0);
         restoreCommonState();
@@ -646,8 +593,6 @@ public final class ScriptDispatcher {
         GL11.glDisable(GL11.GL_SCISSOR_TEST);
     }
 
-    // ---- Forge's other events ----------------------------------------------------------
-
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onMouse(MouseEvent event) {
         if (!inWorld() || running().isEmpty()) {
@@ -655,7 +600,6 @@ public final class ScriptDispatcher {
         }
         boolean allowed = ask(BS16, "onMouse", event.button, event.buttonstate);
         if (event.button != -1 || event.dwheel != 0) {
-            /* bS 17: no bare moves; the wheel is button -1, "down" when turned forward. */
             boolean state = event.button == -1 ? event.dwheel > 0 : event.buttonstate;
             allowed &= ask(BS17, "onMouse", event.button, state, event.x, event.y);
         }
@@ -664,11 +608,6 @@ public final class ScriptDispatcher {
         }
     }
 
-    /**
-     * bS 16: onChat(message) for chat lines, not the action bar. bS 17: onChat(message, type) for every line, the
-     * action bar (type 2) too. Atlas scripts may declare either. Both skip a line with nothing Raven calls
-     * visible: no character from space to '~' once the colour codes are gone.
-     */
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onChat(ClientChatReceivedEvent event) {
         if (event.message == null || !inWorld() || running().isEmpty()) {
@@ -700,8 +639,6 @@ public final class ScriptDispatcher {
         call(ALL, "onWorldJoin", Entity.convert(event.entity));
     }
 
-    /** Raven's GuiUpdateEvent (the head of Minecraft.displayGuiScreen): the screen opening, else the one closing.
-     *  Raven asks it in the menus too. */
     public void onGuiChange(GuiScreen next, GuiScreen current) {
         GuiScreen screen = next != null ? next : current;
         if (screen != null && !running().isEmpty()) {

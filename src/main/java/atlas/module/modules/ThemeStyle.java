@@ -18,24 +18,6 @@ import net.minecraft.util.MathHelper;
 
 import java.awt.Color;
 
-/**
- * One group of extra rendering and how it is coloured: the base of every
- * module in the Theme tab (2026-09-25).
- *
- * Before this, each render module had its own idea of colour -- a mode list
- * of its own, sometimes RGB sliders, sometimes a fixed palette, sometimes
- * "same as the HUD" -- and no module had all of: rainbow, gradients, speed,
- * shade, saturation, transparency. Rather than adding those to twenty
- * modules one by one, a render module asks its group here for a colour,
- * passing the colour it would have used; when the group is off (the
- * default) that colour comes back untouched, so nothing looks different
- * until the user turns theming on.
- *
- * A group in THEME mode follows the master Theme module's colours, so one
- * place recolours everything, while any group can still be set apart. The
- * transparency and line width are always the group's own: they are about
- * how much a thing should stand out, not what colour it is.
- */
 public abstract class ThemeStyle extends Module {
     protected static final Minecraft mc = Minecraft.getMinecraft();
 
@@ -44,7 +26,6 @@ public abstract class ThemeStyle extends Module {
     static final String[] MASTER_MODES = {"ORIGINAL", "STATIC", "RAINBOW", "GRADIENT", "TRIPLE",
             "PULSE", "ASTOLFO", "TEAM", "HEALTH", "DISTANCE", "HUD"};
 
-    /** Set while a HUD-mode colour is being resolved, so the HUD's own group cannot loop back into it. */
     private static boolean resolvingHud;
 
     private final boolean master;
@@ -53,19 +34,19 @@ public abstract class ThemeStyle extends Module {
     public final ColorProperty color1;
     public final ColorProperty color2;
     public final ColorProperty color3;
-    /** Cycles a second-ish at 1.0; the animated modes only. */
+
     public final FloatProperty speed;
-    /** How far apart in the cycle neighbouring lines or entities are. */
+
     public final PercentProperty spread;
     public final PercentProperty saturation;
-    /** Darker below zero, lighter above, by mixing toward black or white. */
+
     public final IntProperty shade;
-    /** Brightness rising and falling on top of any mode. */
+
     public final BooleanProperty breathe;
     public final PercentProperty breatheDepth;
-    /** Filled areas: boxes, backgrounds. */
+
     public final PercentProperty fillAlpha;
-    /** Lines: outlines, tracers, arrows, text accents. */
+
     public final PercentProperty lineAlpha;
     public final FloatProperty lineWidth;
 
@@ -100,12 +81,6 @@ public abstract class ThemeStyle extends Module {
         return false;
     }
 
-    // ------------------------------------------------------------------ access
-
-    /**
-     * The group's style if it should be applied now -- its module on, and the
-     * master Theme on -- or null, in which case the caller keeps its colour.
-     */
     public static ThemeStyle active(Class<? extends ThemeStyle> type) {
         if (Atlas.moduleManager == null) {
             return null;
@@ -118,7 +93,6 @@ public abstract class ThemeStyle extends Module {
         return theme != null && theme.isEnabled() ? (ThemeStyle) module : null;
     }
 
-    /** The group's colour, opaque. */
     public Color color(Color original, Entity entity, int index) {
         ThemeStyle source = this;
         if (!this.master && "THEME".equals(this.mode.getModeString())) {
@@ -130,17 +104,14 @@ public abstract class ThemeStyle extends Module {
         return source.shape(original == null ? Color.WHITE : original, entity, index);
     }
 
-    /** For filled areas, at the group's fill transparency. */
     public Color fill(Color original, Entity entity, int index) {
         return withAlpha(color(original, entity, index), this.fillAlpha.getValue());
     }
 
-    /** For lines, at the group's line transparency. */
     public Color line(Color original, Entity entity, int index) {
         return withAlpha(color(original, entity, index), this.lineAlpha.getValue());
     }
 
-    /** Whether the colour is actually changed -- not ORIGINAL, here or through the master. */
     public boolean recolours() {
         String current = this.mode.getModeString();
         if (!this.master && "THEME".equals(current)) {
@@ -172,15 +143,12 @@ public abstract class ThemeStyle extends Module {
         return MathHelper.clamp_int(Math.round(percent / 100.0F * scale * 255.0F), 0, 255);
     }
 
-    // ------------------------------------------------------------------ colour
-
     private Color shape(Color original, Entity entity, int index) {
         double seconds = (System.currentTimeMillis() % 3_600_000L) / 1000.0;
         double offset;
         if (index >= 0) {
             offset = index * this.spread.getValue() / 100.0 * 0.12;
         } else if (entity != null) {
-            /* Entities have no order; the golden ratio spreads their ids evenly round the cycle. */
             offset = frac(entity.getEntityId() * 0.6180339887) * this.spread.getValue() / 100.0;
         } else {
             offset = 0.0;
@@ -216,7 +184,6 @@ public abstract class ThemeStyle extends Module {
                 color = scaleBrightness(c1, (float) (0.3 + 0.7 * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2.0))));
                 break;
             case "ASTOLFO": {
-                /* Pink through purple to cyan and back: the hue bounces in the cool half. */
                 double h = frac(phase);
                 h = h < 0.5 ? h : 1.0 - h;
                 color = Color.getHSBColor((float) (0.5 + h), 0.5F, 1.0F);
@@ -246,7 +213,7 @@ public abstract class ThemeStyle extends Module {
                 color = hudColor(original, Math.max(0, index));
                 break;
             default:
-                /* ORIGINAL: the render module's own colour, with the adjustments below. */
+
                 color = original;
                 break;
         }
@@ -295,9 +262,6 @@ public abstract class ThemeStyle extends Module {
         return value - Math.floor(value);
     }
 
-    // ------------------------------------------------------------------ presets
-
-    /** Sets this style's colouring from a preset; transparency and width are left as the user set them. */
     void applyPreset(String mode, int c1, int c2, int c3, float speed, int spread, int saturation, int shade,
                      boolean breathe) {
         this.mode.parseString(mode);

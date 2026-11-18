@@ -5,38 +5,21 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-/**
- * The module list laid out (2026-11-14): a style and the rows in, rectangles and text out. No drawing and no game:
- * the HUD module paints the frame with OpenGL, a test paints it into a picture, and both get the same list.
- *
- * (0, 0) is the corner the list is anchored to. The first row sits against it and the others follow, down for a
- * list anchored to the top and up for one anchored to the bottom; every row ends at the anchored side and grows
- * toward the free one. A side bar lies between the anchored edge and the rows; an inner bar lies past their free
- * ends.
- */
 public final class ListLayout {
-    /** How far a row slides while it fades in or out. */
     static final float SLIDE = 25.0F;
     static final int GRAY = 0xAAAAAA;
     static final int WHITE = 0xFFFFFF;
     static final int DARK = 0x14161A;
-    /** Rows this close in width count as equal: no step between them. */
+
     private static final float SAME = 0.5F;
 
     private ListLayout() {
     }
 
-    /** A row's height: its text and the space above and below. */
     public static float rowHeight(ListStyle style, float textHeight) {
         return textHeight + 2.0F * Math.max(0.0F, style.padY);
     }
 
-    /**
-     * @param rows       the rows to draw, each measured and with its appear and slot set ({@link ListAnim})
-     * @param textHeight the height of a line of text
-     * @param source     the colour of a row where the style's paint is HUD or THEME, which only the game knows;
-     *                   may be null (colour 1 then)
-     */
     public static ListFrame frame(ListStyle style, List<ListRow> rows, float textHeight, long timeMs,
                                   ListColors.Source source) {
         ListFrame frame = new ListFrame();
@@ -44,7 +27,7 @@ public final class ListLayout {
         if (count == 0) {
             return frame;
         }
-        /* The free direction: the way the rows grow from the anchored edge. */
+
         final float sx = style.right ? -1.0F : 1.0F;
         float padX = Math.max(0.0F, style.padX);
         float padY = Math.max(0.0F, style.padY);
@@ -58,7 +41,7 @@ public final class ListLayout {
         boolean detached = gap > SAME;
         boolean slides = style.anim == ListStyle.Anim.SLIDE || style.anim == ListStyle.Anim.SLIDE_FADE;
         boolean fades = style.anim == ListStyle.Anim.FADE || style.anim == ListStyle.Anim.SLIDE_FADE;
-        /* Where the rows' bodies start: past the side bar, when there is one. */
+
         float edge = sideBar ? sx * barW : 0.0F;
 
         final float[] width = new float[count];
@@ -81,7 +64,7 @@ public final class ListLayout {
             ListRow row = rows.get(i);
             float appear = Math.max(0.0F, Math.min(1.0F, row.appear));
             float eased = ListAnim.ease(appear);
-            /* Out past the anchored edge: the way a row comes from and goes to. */
+
             float reach = style.anim == ListStyle.Anim.SLIDE ? width[i] + barW + 4.0F : SLIDE;
             shift[i] = slides ? -sx * (1.0F - eased) * reach : 0.0F;
             alpha[i] = fades ? appear : 1.0F;
@@ -97,7 +80,7 @@ public final class ListLayout {
             rgb[i] = outside && source != null ? source.color(i) & 0xFFFFFF
                     : ListColors.color(style, timeMs, i, row.name, row.category);
         }
-        /* The rows from the top of the screen down, to know each one's neighbours. */
+
         List<Integer> down = new ArrayList<Integer>();
         for (int i = 0; i < count; i++) {
             down.add(i);
@@ -119,7 +102,6 @@ public final class ListLayout {
         float radius = style.corners == ListStyle.Corners.NONE ? 0.0F
                 : Math.max(0.0F, Math.min(style.radius, rowH / 2.0F));
 
-        /* Each row's area, for the glow. */
         for (int i = 0; i < count; i++) {
             float a = edge + shift[i];
             float b = a + sx * width[i];
@@ -127,15 +109,13 @@ public final class ListLayout {
                     style.corners == ListStyle.Corners.NONE ? 0 : ListPainter.ALL, ListColors.argb(rgb[i], alpha[i]));
         }
 
-        /* The backgrounds. */
         if (block) {
             float top = y1[down.get(0)];
             float bottom = y2[down.get(count - 1)];
             float a = edge;
             float b = edge + sx * widest;
             int base = ListColors.mix(style.backgroundColor, rgb[0], style.backgroundTint / 100.0F);
-            /* As there as the most present row: whole while one is, fading out with the last one to go, slid or
-               faded (review, PR #42). */
+
             float present = 0.0F;
             for (ListRow row : rows) {
                 present = Math.max(present, Math.max(0.0F, Math.min(1.0F, row.appear)));
@@ -144,7 +124,6 @@ public final class ListLayout {
                     : Math.max(0.0F, Math.min(style.radius, Math.min(widest, bottom - top) / 2.0F));
             int corners = ListPainter.ALL;
             if (sideBar) {
-                /* The bar lies against that side: it stays square. */
                 corners &= ~(style.right ? ListPainter.TOP_RIGHT | ListPainter.BOTTOM_RIGHT
                         : ListPainter.TOP_LEFT | ListPainter.BOTTOM_LEFT);
             }
@@ -178,7 +157,6 @@ public final class ListLayout {
             }
         }
 
-        /* The bars. */
         boolean pill = style.corners == ListStyle.Corners.EACH || detached;
         for (int i = 0; i < count && barW > 0.0F; i++) {
             int colour = ListColors.argb(rgb[i], alpha[i]);
@@ -202,7 +180,7 @@ public final class ListLayout {
                     break;
                 }
                 case CAP:
-                    /* Along the outer edge of the row the list starts with. */
+
                     if (i == 0) {
                         if (style.bottom) {
                             frame.rect(left, y2[i], right, y2[i] + barW, 0.0F, 0, colour, false);
@@ -212,7 +190,7 @@ public final class ListLayout {
                     }
                     break;
                 case UNDERLINE:
-                    /* Just under the row, clear of the letters' tails; rows that touch get it on their last line. */
+
                     if (detached) {
                         frame.rect(left, y2[i], right, y2[i] + Math.min(barW, gap), 0.0F, 0, colour, false);
                     } else {
@@ -228,7 +206,6 @@ public final class ListLayout {
             }
         }
 
-        /* The text, last: over everything. */
         for (int i = 0; i < count; i++) {
             ListRow row = rows.get(i);
             int nameRgb = style.text == ListStyle.Text.WHITE ? WHITE : style.text == ListStyle.Text.DARK ? DARK : rgb[i];
@@ -253,7 +230,7 @@ public final class ListLayout {
             float a = edge + shift[i];
             float x = style.right ? a - padX - row.textWidth() : a + padX;
             float y = y1[i] + padY;
-            /* A shadow under dark text only smears it. */
+
             boolean shadow = style.textShadow && style.text != ListStyle.Text.DARK;
             frame.text(row.name, x, y, row.nameWidth, textHeight, textArgb(nameRgb, alpha[i]), shadow);
             if (!row.suffix.isEmpty()) {
@@ -265,11 +242,6 @@ public final class ListLayout {
         return frame;
     }
 
-    /**
-     * The outline's pieces for one row. Rows apart get a box each. Rows that touch share one outline: each row
-     * gives the two upright pieces at its ends, the first and last close the top and bottom, and where two
-     * neighbours differ in width the wider one gives the piece along the step.
-     */
     private static void outline(ListFrame frame, int i, float left, float right, float top, float bottom, float line,
                                 int colour, boolean detached, int[] above, int[] below, float[] width, float sx,
                                 float start, int[] rgb, float[] alpha) {
@@ -287,7 +259,6 @@ public final class ListLayout {
         }
     }
 
-    /** The piece along a step: from the narrower neighbour's end to the wider row's, the corner included. */
     private static void step(ListFrame frame, float start, float sx, float narrow, float wide, float line, float y1,
                              float y2, int colour) {
         float a = start + sx * narrow;
@@ -295,7 +266,6 @@ public final class ListLayout {
         frame.rect(Math.min(a, b), y1, Math.max(a, b), y2, 0.0F, 0, colour, false);
     }
 
-    /** Text never below alpha 4: the game's font reads 0 as fully opaque. */
     static int textArgb(int rgb, float alpha) {
         int a = Math.max(4, Math.min(255, Math.round(alpha * 255.0F)));
         return (a << 24) | (rgb & 0xFFFFFF);

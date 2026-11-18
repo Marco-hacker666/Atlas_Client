@@ -14,32 +14,6 @@ import org.lwjgl.input.Mouse;
 
 import java.util.Random;
 
-/**
- * AimAssist's Regular, Linear and Lock On styles, after OpenSlinky's Aim
- * Assist (2026-10-20, plan item 6; owner: "follow Slinky's aim assist").
- *
- * The target is chosen once a tick, the view turned every frame by the time
- * the frame took, the way a hand moves a mouse:
- *   aim point   the target's eye height, pulled toward the point of its box
- *               nearest this player by hitbox-h / hitbox-v (less so up close),
- *               its position carried toward where the server last put it by
- *               predict, plus a slowly wandering offset (randomization) from a
- *               smooth noise, so the point never sits still;
- *   dead zone   nothing is turned for the last dead-zone degrees;
- *   Regular     each frame (speed/2)^2 x what is left x the frame's seconds:
- *               fast when far, easing in;
- *   Linear      at most 5 x (speed/2)^2 degrees a second: one steady speed;
- *   Lock On     all that is left, every frame (sideways; up and down only with
- *               lock-vertical) -- the view stays on the target (owner: "Lock On
- *               as Slinky does it; that is what the mode is");
- *   texture     the speeds drift +-10 % over a second and +-5 % over a minute;
- *               up and down is damped while the sideways error is large; a
- *               little up-and-down noise rides on sideways turns; after the
- *               button goes down, Regular and Linear wait one or two ticks.
- * Turns go on the mouse grid (sensitivity GCD) with the remainder carried to
- * the next frame, and are applied as mouse movement (setAngles), so the
- * camera's previous angle moves with them.
- */
 final class AimAssistSlinky {
     private static final Minecraft mc = Minecraft.getMinecraft();
     static final int REGULAR = 0;
@@ -89,8 +63,6 @@ final class AimAssistSlinky {
         int code = mc.gameSettings.keyBindAttack.getKeyCode();
         return code < 0 ? Mouse.isButtonDown(code + 100) : code > 0 && Keyboard.isKeyDown(code);
     }
-
-    // ---- target, once a tick ----
 
     private static final class Score {
         double distance;
@@ -251,7 +223,6 @@ final class AimAssistSlinky {
         return true;
     }
 
-    /** The point to turn to: eye height, pulled toward the nearest point of the box, with a wandering offset. */
     static Vec3 aimPoint(Vec3 localEye, Vec3 predicted, Vec3 nearest, double distance, float horizontal, float vertical,
                          float randomization) {
         Vec3 targetEye = new Vec3(predicted.xCoord, predicted.yCoord + 1.62, predicted.zCoord);
@@ -273,8 +244,6 @@ final class AimAssistSlinky {
                 z + scale * 0.5 * noise(20000.0F + input));
     }
 
-    // ---- the turn, once a frame ----
-
     void frame(float partial) {
         long now = System.nanoTime();
         float seconds = this.lastFrame == 0L ? 0.0F : Math.min(0.1F, (now - this.lastFrame) / 1.0E9F);
@@ -285,7 +254,7 @@ final class AimAssistSlinky {
         }
         float currentYaw = mc.thePlayer.rotationYaw;
         float currentPitch = mc.thePlayer.rotationPitch;
-        /* What the player's own hand did since the last frame (require-mouse-move). */
+
         float manualYaw = Float.isNaN(this.lastYaw) ? 0.0F : MathHelper.wrapAngleTo180_float(currentYaw - this.lastYaw);
         float manualPitch = Float.isNaN(this.lastYaw) ? 0.0F : currentPitch - this.lastPitch;
         if (!this.targetActive || this.target == null || seconds <= 0.0F) {
@@ -343,7 +312,6 @@ final class AimAssistSlinky {
             pitch += this.pitchNoise.sample(-bound, bound, 1.0, now, this.random);
         }
         if (this.module.requireMouseMove.getValue()) {
-            /* Never turn more than the hand did this frame. */
             if (Math.abs(manualYaw) < Math.abs(yaw) && yaw != 0.0F) {
                 yaw *= Math.abs(manualYaw) / Math.abs(yaw);
             }
@@ -354,7 +322,6 @@ final class AimAssistSlinky {
         return new float[]{yaw, pitch};
     }
 
-    /** As mouse movement, on the sensitivity grid, the remainder carried to the next frame. */
     private void apply(float yaw, float pitch) {
         float f = mc.gameSettings.mouseSensitivity * 0.6F + 0.2F;
         float unit = f * f * f * 1.2F;
@@ -365,12 +332,9 @@ final class AimAssistSlinky {
         this.carryYaw -= yawCounts * unit;
         this.carryPitch -= pitchCounts * unit;
         if (yawCounts != 0.0F || pitchCounts != 0.0F) {
-            /* setAngles turns by 0.15 per unit and subtracts pitch, as the mouse does. */
             mc.thePlayer.setAngles(yawCounts * unit / 0.15F, -pitchCounts * unit / 0.15F);
         }
     }
-
-    // ---- helpers ----
 
     private static double clamp(double min, double max, double v) {
         return v < min ? min : (v > max ? max : v);
@@ -390,7 +354,6 @@ final class AimAssistSlinky {
         return new float[]{yaw, pitch};
     }
 
-    /** Smooth 1D gradient noise in about [-1, 1]: nearby inputs give nearby values. */
     static float noise(float x) {
         int i = MathHelper.floor_float(x);
         float t = x - i;
@@ -408,7 +371,6 @@ final class AimAssistSlinky {
         return (h & 0xFFFF) / 32767.5F - 1.0F;
     }
 
-    /** A value wandering between low and high: a straight line from one random point to the next over duration. */
     static final class Drift {
         private double timestamp = -1.0E9;
         private float left;

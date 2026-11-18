@@ -1,7 +1,6 @@
 package atlas.util;
 
 public class MSTimer {
-
     private long time = System.currentTimeMillis();
 
     public void reset() {
@@ -24,4 +23,3 @@ public class MSTimer {
         this.time = time;
     }
 }
-

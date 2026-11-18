@@ -6,9 +6,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** KillAura2's hurt-window clock and the hit-reaction wait (2026-10-15). */
 public class HitTimingTest {
-
     @Test
     public void ourHitOpensTenTicksOnOurOwnClock() {
         HitWindow w = new HitWindow();
@@ -16,7 +14,7 @@ public class HitTimingTest {
         w.sent(100, true);
         assertEquals(10, w.opensIn(100, 0.0F, 5));
         assertEquals(3, w.opensIn(107, 0.0F, 5));
-        // The flinch of our own hit, seen a round trip late, does not hold it longer.
+
         assertEquals(0, w.opensIn(110, 1.4F, 5));
         assertTrue(w.ours(110, 5));
     }
@@ -70,16 +68,15 @@ public class HitTimingTest {
         HitWindow w = new HitWindow();
         assertEquals(4, w.opensIn(100, 3.2F, 5));
         assertEquals(0, w.opensIn(100, -0.5F, 5));
-        // Long after our own window, the observed estimate decides again.
+
         w.sent(100, true);
         assertEquals(2, w.opensIn(140, 1.5F, 5));
     }
 
     @Test
     public void theReactionWaitFollowsThePing() {
-        // 230 ms: 4 + ceil(330 / 50) = 11 ticks.
         assertEquals(11, HitFeedback.waitTicksFor(230));
-        // Unknown ping is taken as 300 ms, never as none (it gave 3 ticks).
+
         assertEquals(12, HitFeedback.waitTicksFor(-1));
         assertTrue(HitFeedback.waitTicksFor(-1) > 3 + 230 / 50);
     }

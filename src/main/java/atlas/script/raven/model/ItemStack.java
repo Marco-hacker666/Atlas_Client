@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** Raven script API: an item stack (2026-11-02). Fields as Raven has them; {@link #itemStack} is the game's. */
 public class ItemStack {
     public String type;
     public String name;
@@ -39,7 +38,6 @@ public class ItemStack {
         this.meta = itemStack.getMetadata();
     }
 
-    /** A stack of one of the item with this name ("diamond_sword", or "minecraft:diamond_sword"). */
     public ItemStack(String name) {
         this(stackOf(name), (byte) 0);
     }
@@ -59,14 +57,11 @@ public class ItemStack {
         if (this.itemStack == null) {
             return out;
         }
-        /* As Raven: the advanced tooltip (ids, durability), whatever F3+H says. */
+
         out.addAll(this.itemStack.getTooltip(net.minecraft.client.Minecraft.getMinecraft().thePlayer, true));
         return out;
     }
 
-    /** {id, name, level} for each enchantment. */
-    /** As Raven gives them: {name, level} with the English name in lower case and '_' for spaces
-     *  ("fire_aspect"), or null for none. */
     public List<Object[]> getEnchantments() {
         if (this.itemStack == null) {
             return null;

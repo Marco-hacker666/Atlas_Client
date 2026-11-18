@@ -27,23 +27,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * Glide ClickGUI (2026-10-26, owner request): a main window listing the
- * categories, one window per category with its modules, and a search box at
- * the top. Written for Atlas from scratch; it sits beside the Atlas, Normal,
- * Panel and Slinky styles (ClickGUI > Style).
- *
- * Every frame lays out and draws the windows in one pass and records what is
- * clickable ({@link GlideHit}); a click is matched against the hits of the
- * frame the player saw.
- *
- * Main window: a category shows or hides its window; the gear opens the
- * menu's own settings (ClickGUI). Window title: drag to move, right click or
- * the arrow to fold. Module: left click switches it, right click or the
- * three dots open its settings under it ({@link GlideSettings}). Search box:
- * click and type to keep only matching modules. Wheel over a window scrolls
- * it. Resting the pointer on a module or a setting shows its description.
- */
 public class GlideClickGui extends GuiScreen {
     private static GlideClickGui instance;
 
@@ -53,7 +36,7 @@ public class GlideClickGui extends GuiScreen {
 
     private final List<GlideFrame> frames = new ArrayList<GlideFrame>();
     private final GlideFrame mainFrame;
-    /** Frames with no saved place yet: laid out in a row on the first open. */
+
     private final List<GlideFrame> unplaced = new ArrayList<GlideFrame>();
     private final List<GlideHit> hits = new ArrayList<GlideHit>();
     private final GlideAnim anim = new GlideAnim();
@@ -67,13 +50,11 @@ public class GlideClickGui extends GuiScreen {
     private final TextInput search = new TextInput(32, false);
     private boolean searchFocused;
 
-    /** What was on top under the pointer last frame: hover tints follow it, so a covered row never lights up. */
     private GlideHit lastTop;
-    /** The row under the pointer, and since when, for its description. */
+
     private GlideHit hovered;
     private long hoveredSince;
 
-    /** A one-line message at the foot of the screen (bind conflicts, refused values, resets). */
     private String status = "";
     private boolean statusWarn;
     private long statusAt;
@@ -123,16 +104,15 @@ public class GlideClickGui extends GuiScreen {
         this.anim.reset();
         ScaledResolution sr = new ScaledResolution(mc);
         layOutUnplaced(sr);
-        /* Keep every title on screen after a resize or a GUI scale change. */
+
         for (GlideFrame frame : this.frames) {
             clamp(frame, sr);
             frame.shownScroll = frame.scroll;
         }
-        /* A first layout or a clamp after a resize is kept even if the game is closed with the menu open. */
+
         saveState();
     }
 
-    /** Puts windows that were never placed side by side below the search box, wrapping at the screen's edge. */
     private void layOutUnplaced(ScaledResolution sr) {
         if (this.unplaced.isEmpty()) {
             return;
@@ -159,13 +139,10 @@ public class GlideClickGui extends GuiScreen {
         return false;
     }
 
-    // ---- for GlideSettings ---------------------------------------------
-
     void addHit(GlideHit hit) {
         this.hits.add(hit);
     }
 
-    /** Whether {@code hit} was on top under the pointer last frame. */
     boolean isOver(GlideHit hit) {
         return this.dragging == null && !this.settings.dragging() && hit.same(this.lastTop);
     }
@@ -176,13 +153,10 @@ public class GlideClickGui extends GuiScreen {
         this.statusAt = System.currentTimeMillis();
     }
 
-    // ---- search --------------------------------------------------------
-
     private String query() {
         return this.search.text().trim().toLowerCase(Locale.ROOT);
     }
 
-    /** The modules a window lists now: all of them, or those whose name has the search text. */
     private List<Module> listed(GlideFrame frame) {
         String query = query();
         if (query.isEmpty()) {
@@ -198,15 +172,12 @@ public class GlideClickGui extends GuiScreen {
         return out;
     }
 
-    /** Whether a window is on screen: the main window always; a category when shown, or when the search finds something in it. */
     private boolean visible(GlideFrame frame) {
         if (frame.main) {
             return true;
         }
         return query().isEmpty() ? !frame.hidden : !listed(frame).isEmpty();
     }
-
-    // ---- drawing -------------------------------------------------------
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
@@ -229,7 +200,6 @@ public class GlideClickGui extends GuiScreen {
             }
         }
 
-        /* The world behind is blurred whole, as in the reference; without blur it is dimmed instead. */
         float fade = GlideTheme.easeOut(elapsed / GlideTheme.FADE_MS);
         boolean blur = GlideTheme.blur();
         if (blur) {
@@ -279,7 +249,6 @@ public class GlideClickGui extends GuiScreen {
         super.drawScreen(mouseX, mouseY, partialTicks);
     }
 
-    /** This frame's geometry: the drop-in offset, the eased fold, open settings, and how far the list scrolls. */
     private void measure(GlideFrame frame, float shown, ScaledResolution sr) {
         frame.drawY = frame.y + (1.0F - shown) * -6.0F;
         float content = GlideTheme.PAD;
@@ -305,12 +274,10 @@ public class GlideClickGui extends GuiScreen {
         frame.shownHeight = GlideTheme.HEADER + frame.body;
     }
 
-    /** Rows in the main window: one per category window, then Friends and Profiles. */
     private int mainRows() {
         return this.frames.size() - 1 + 2;
     }
 
-    /** The hit on top under the pointer, or null. */
     private GlideHit hitAt(float mx, float my) {
         for (int i = this.hits.size() - 1; i >= 0; i--) {
             if (this.hits.get(i).contains(mx, my)) {
@@ -320,7 +287,6 @@ public class GlideClickGui extends GuiScreen {
         return null;
     }
 
-    /** An Atlas icon scaled to {@code size} px, centred on (cx, cy). */
     private static void icon(String name, float cx, float cy, float size, int color) {
         float s = size / 12.0F;
         GlStateManager.pushMatrix();
@@ -330,7 +296,6 @@ public class GlideClickGui extends GuiScreen {
         GlStateManager.popMatrix();
     }
 
-    /** Three dots one above the other, centred on (cx, cy). */
     private static void dots(float cx, float cy, int color) {
         for (int i = -1; i <= 1; i++) {
             float y = cy + i * 2.6F;
@@ -352,13 +317,11 @@ public class GlideClickGui extends GuiScreen {
         int headerBg = frame.main ? GlideTheme.MAIN_HEADER : GlideTheme.HEADER_BG;
         RoundedUtils.drawRound(x, y, w, h, GlideTheme.RADIUS, GlideTheme.alpha(headerBg, shown));
         if (frame.body > 0.5F) {
-            /* Square off the header's lower corners where the body hangs from it. */
             RenderUtil.drawRect(x, y + h - GlideTheme.RADIUS, x + w, y + h, GlideTheme.alpha(headerBg, shown));
             RenderUtil.drawRect(x, y + h - 0.5F, x + w, y + h, GlideTheme.alpha(GlideTheme.SEPARATOR, shown));
         }
 
         if (frame.main) {
-            /* Wordmark and version, then the gear for the menu's own settings. */
             FontRenderer bold = GlideDraw.titleFont();
             GlideDraw.text(bold, "ATLAS", x + 7.0F, y, h, GlideTheme.alpha(GlideTheme.TEXT, shown));
             String version = Atlas.version == null ? "" : Atlas.version;
@@ -417,7 +380,6 @@ public class GlideClickGui extends GuiScreen {
         }
     }
 
-    /** One row of the main window: icon, name, an optional chip, and the arrow at the right. */
     private float mainRow(GlideFrame frame, GlideHit.Kind kind, Object target, String iconName, String label,
                           String chip, boolean lit, float x, float rowY, float shown, int accent) {
         float w = GlideTheme.WIDTH;
@@ -516,7 +478,6 @@ public class GlideClickGui extends GuiScreen {
                 GlideTheme.alpha(text, shown));
     }
 
-    /** The search box, centred at the top. */
     private void drawSearch(ScaledResolution sr, float fade, int accent) {
         float x = (sr.getScaledWidth() - SEARCH_W) / 2.0F;
         float y = 6.0F;
@@ -542,7 +503,6 @@ public class GlideClickGui extends GuiScreen {
         }
     }
 
-    /** A description in a box by the pointer, wrapped, kept on screen. */
     private void drawTooltip(String description, float mx, float my, ScaledResolution sr) {
         if (description == null || description.trim().isEmpty()) {
             return;
@@ -581,8 +541,6 @@ public class GlideClickGui extends GuiScreen {
         GlideDraw.text(font, GlideDraw.trim(font, this.status, w - 20.0F), x + 10.0F, y, 18.0F,
                 GlideTheme.alpha(GlideTheme.TEXT, fade));
     }
-
-    // ---- input ---------------------------------------------------------
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) throws IOException {
@@ -656,7 +614,6 @@ public class GlideClickGui extends GuiScreen {
         }
     }
 
-    /** Shows the window holding ClickGUI and opens its settings there (accent, blur, style). */
     private void openMenuSettings() {
         Module gui = Atlas.moduleManager.getModule("ClickGUI");
         for (GlideFrame frame : this.frames) {
@@ -688,11 +645,6 @@ public class GlideClickGui extends GuiScreen {
         this.settings.release();
     }
 
-    /**
-     * Writes where the windows are. Called after every move, fold and hide,
-     * not only on close: closing the game window with the menu open never
-     * calls onGuiClosed (seen in the G2 test), and the layout was lost.
-     */
     private void saveState() {
         GlideState.write(this.frames);
     }

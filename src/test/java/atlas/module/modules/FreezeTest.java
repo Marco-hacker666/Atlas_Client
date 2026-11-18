@@ -15,19 +15,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The hold has to end (CrewX port, 2026-10-11). A hold that outlives its world
- * or its module never gives the client the knockback it is owed, and the queue
- * is what the ending releases -- so these check that a world change and a
- * disable both empty it, and that an ordinary tick before the timeout does not.
- *
- * onPacket() needs a live client (it asks mc.thePlayer for the entity id), and
- * the timeout's chat line does too, so the hold is set up through the state the
- * packet handler would leave behind and the release is triggered through the
- * paths that do not talk to chat.
- */
 public class FreezeTest {
-
     private static Freeze holdingFreeze() throws Exception {
         Freeze freeze = new Freeze();
         set(freeze, Module.class, "enabled", true);

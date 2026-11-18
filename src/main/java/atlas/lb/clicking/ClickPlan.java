@@ -6,16 +6,8 @@ import java.util.Random;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntPredicate;
 
-/**
- * The presses ahead, planned on a timeline and consumed tick by tick
- * (2026-10-24, LiquidBounce NextGen port, GPL-3.0; ClickPlan.kt).
- *
- * Presses are planned up to a second ahead from the timing; each tick takes
- * those due by then (at most max-per-tick), so a lookahead (clicksAt(n))
- * says exactly what that tick will consume. A combo ends when a gap in ticks
- * or unused presses last longer than 250 ms; the next one starts fresh (and
- * Human timing draws a new CPS).
- */
+// The presses ahead, planned on a timeline and consumed tick by tick (LiquidBounce NextGen port, GPL-3.0)
+
 public final class ClickPlan {
     public static final long TICK_MS = 50L;
     private static final long HORIZON_MS = 1000L;
@@ -29,7 +21,7 @@ public final class ClickPlan {
     private int minCps = 11;
     private int maxCps = 14;
     private int maxPerTick = 2;
-    /** Adds a guaranteed click to tick n when nothing is planned for it. */
+
     private IntPredicate enforced = tick -> false;
 
     private long tickTime;
@@ -77,7 +69,6 @@ public final class ClickPlan {
         return this.tickTime - this.comboStart;
     }
 
-    /** Starts a new combo with a press at {@code now}. */
     public void reset(long now) {
         this.times.clear();
         this.intervals.clear();
@@ -90,7 +81,6 @@ public final class ClickPlan {
         this.times.add(now);
     }
 
-    /** Advances to the next tick; presses nobody used for a while, or a gap in ticks, end the combo. */
     public void tick(long now) {
         if (this.consumed > 0) {
             this.idleSince = NONE;
@@ -101,7 +91,7 @@ public final class ClickPlan {
                 || this.idleSince != NONE && now - this.idleSince > IDLE_MS) {
             reset(now);
         }
-        /* Stay on the 50 ms grid so lookahead matches consumption, unless the real tick drifted off it. */
+
         long expected = this.tickTime + TICK_MS;
         this.tickTime = Math.abs(now - expected) > TICK_MS ? now : expected;
 
@@ -116,7 +106,6 @@ public final class ClickPlan {
         trim();
     }
 
-    /** Presses for the tick {@code tick} ticks from now (0: this one). */
     public int clicksAt(int tick) {
         int planned = tick <= 0 ? this.due : plannedAt(tick);
         return planned == 0 && this.enforced.test(Math.max(0, tick)) ? 1 : planned;
@@ -139,15 +128,10 @@ public final class ClickPlan {
         return Math.min(count, this.maxPerTick);
     }
 
-    /** A click attempt; true when it succeeded. */
     public interface Attempt {
         boolean run();
     }
 
-    /**
-     * Uses up the presses of this tick. A press failing {@code gate} is dropped
-     * (as vanilla drops presses during its miss delay). Returns the successful attempts.
-     */
     public int consume(BooleanSupplier gate, Attempt attempt) {
         int clicks = 0;
         while (take()) {
@@ -166,7 +150,6 @@ public final class ClickPlan {
         return true;
     }
 
-    /** Drops the presses planned after this tick, so they are planned again with the changed settings. */
     private void replan() {
         int keep = Math.max(this.next, 1);
         if (this.times.size() <= keep) {
@@ -179,8 +162,6 @@ public final class ClickPlan {
     }
 
     private void planUntil(long time) {
-        /* Before the first tick nothing is planned (a lookahead from onEnabled, or a tick that returned
-           early): no presses yet, rather than reading the last of an empty list. */
         if (this.times.isEmpty()) {
             return;
         }

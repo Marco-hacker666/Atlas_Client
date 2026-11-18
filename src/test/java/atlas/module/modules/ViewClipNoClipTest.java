@@ -8,18 +8,7 @@ import java.lang.reflect.Field;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The "no-clip" setting and the VANILLA mode must both leave the camera alone
- * (PR #5 review). MixinEntityRenderer (setupFog, updateFogColor) and
- * MixinVisGraph call isNoClipActive() instead of isEnabled(), so this pins the
- * truth table that wiring depends on -- the mixins themselves need a running
- * game and cannot be covered here.
- *
- * The enabled flag is set directly by reflection: setEnabled() runs
- * onEnabled(), which loads chunk renderers and needs a live client.
- */
 public class ViewClipNoClipTest {
-
     private static ViewClip enabledViewClip() throws Exception {
         ViewClip viewClip = new ViewClip();
         setEnabledFlag(viewClip, true);
@@ -44,9 +33,9 @@ public class ViewClipNoClipTest {
     @Test
     public void vanillaModeNeverBypasses() throws Exception {
         ViewClip viewClip = enabledViewClip();
-        viewClip.mode.setValue(1); // VANILLA -- never reorder the mode list
+        viewClip.mode.setValue(1);
         assertFalse("VANILLA mode must leave the camera as vanilla has it", viewClip.isNoClipActive());
-        viewClip.mode.setValue(0); // CAMERA
+        viewClip.mode.setValue(0);
         assertTrue("CAMERA must bypass blocks again", viewClip.isNoClipActive());
     }
 

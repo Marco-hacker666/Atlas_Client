@@ -23,25 +23,8 @@ import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
 
-/**
- * AutoRod (2026-10-31, ported from LiquidBounce legacy's AutoRod, GPL-3; it
- * replaces the earlier OpenSkid port).
- *
- * Casts the fishing rod at the enemy the crosshair is on -- or the one on the
- * look up to activation-distance -- when this player is healthy enough, few
- * enough enemies are near and the enemy is not nearly dead; casts anyway to
- * escape when low; with facing-enemy off, casts whenever it can. The rod goes
- * out through vanilla's own use (sendUseItem), is taken back after
- * pullback-delay, and the next cast waits push-delay after that. No aim of its
- * own: it throws where the player looks.
- *
- * Differences from the original, each a fix: the pull-back reels the line in
- * when the rod was already in hand (the original's stopUsingItem does nothing
- * for a rod, so the line stayed out); a cast with the rod in hand keeps that
- * rod (the original re-picked the first rod in the hotbar, a slot change with
- * nothing to switch back from); enemies behind a wall are not cast at; the
- * slot is given back when the module is switched off mid-cast.
- */
+// AutoRod (ported from LiquidBounce legacy's AutoRod, GPL-3)
+
 public class AutoRod extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
@@ -90,12 +73,10 @@ public class AutoRod extends Module {
 
     @EventTarget(whenDisabled = true)
     public void onWorld(LoadWorldEvent event) {
-        /* A slot remembered in the last world means nothing in this one. */
         this.rodInUse = false;
         this.switchBack = -1;
     }
 
-    /** TickEvent PRE (runTick head): where vanilla's own right click happens. */
     @EventTarget
     public void onTick(TickEvent event) {
         if (!this.isEnabled() || event.getType() != EventType.PRE) {
@@ -109,15 +90,13 @@ public class AutoRod extends Module {
         if (usingRod) {
             if (this.rodPullTimer.hasTimeElapsed(this.pullbackDelay.getValue())) {
                 if (this.switchBack != -1 && mc.thePlayer.inventory.currentItem != this.switchBack) {
-                    /* Back to the previous item: the line is taken in with it. */
                     this.giveSlotBack();
                 } else if (mc.thePlayer.fishEntity != null && isRod(held)) {
-                    /* The rod was already in hand: a second use reels it in. */
                     mc.playerController.sendUseItem(mc.thePlayer, mc.theWorld, held);
                 }
                 this.switchBack = -1;
                 this.rodInUse = false;
-                /* The next cast always waits push-delay after the pull-back. */
+
                 this.pushTimer.reset();
             }
             return;
@@ -163,14 +142,12 @@ public class AutoRod extends Module {
             return !this.ignoreOnEnemyLowHealth.getValue() || health(facing) >= this.enemyHealthThreshold.getValue();
         }
         if (own <= this.escapeHealthThreshold.getValue()) {
-            /* Low: a cast to keep them off. */
             return true;
         }
-        /* Facing-enemy off: cast whenever it can. */
+
         return !this.facingEnemy.getValue();
     }
 
-    /** The enemy under the crosshair, else the first one on the look within activation-distance. */
     private EntityLivingBase facingEnemy() {
         MovingObjectPosition over = mc.objectMouseOver;
         if (over != null && over.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY && this.selected(over.entityHit)) {
@@ -208,7 +185,6 @@ public class AutoRod extends Module {
         return count;
     }
 
-    /** An enemy: another living player the client's targeting accepts (friends, team mates and bots never). */
     private boolean selected(Entity entity) {
         if (!(entity instanceof EntityPlayer) || entity == mc.thePlayer) {
             return false;

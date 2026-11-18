@@ -1,11 +1,3 @@
-/*
- * Decompiled with CFR 0.152.
- *
- * Could not load the following classes:
- *  net.minecraft.client.Minecraft
- *  net.minecraft.client.gui.ScaledResolution
- *  net.minecraft.client.renderer.GlStateManager
- */
 package atlas.module.modules;
 
 import atlas.ui.impl.clickgui.atlas.HudPanel;
@@ -38,7 +30,7 @@ public class FPScounter
     public final IntProperty cornerRadius = new IntProperty("Corner Radius", 8, 5, 20);
     public final IntProperty backgroundAlpha = new IntProperty("Background Alpha", 160, 0, 255);
     public final ColorProperty textColor = new ColorProperty("Text Color", Color.WHITE.getRGB());
-    /* 2026-11-09: every HUD element's panel can be switched off. */
+
     public final BooleanProperty background = new BooleanProperty("background", true);
 
     public FPScounter() {
@@ -97,7 +89,6 @@ public class FPScounter
         float drawX = baseX / scaleFactor;
         float drawY = baseY / scaleFactor;
         if (!this.background.getValue()) {
-            /* No panel: the text only. */
         } else if (HudPanel.active()) {
             HudPanel.panel(drawX - w / 2.0f, drawY - h / 2.0f, drawX + w / 2.0f, drawY + h / 2.0f);
         } else {
@@ -108,4 +99,3 @@ public class FPScounter
         GlStateManager.popMatrix();
     }
 }
-

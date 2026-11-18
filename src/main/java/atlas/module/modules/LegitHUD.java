@@ -24,7 +24,6 @@ import java.awt.Color;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
-/** Lightweight, client-only HUD pieces inspired by common Lunar client mods. */
 public class LegitHUD extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final long CPS_WINDOW_MS = 1000L;
@@ -42,7 +41,7 @@ public class LegitHUD extends Module {
     public final IntProperty y = new IntProperty("y", 6, 0, 300);
     public final IntProperty keysX = new IntProperty("keys-x", 6, 0, 500);
     public final IntProperty keysY = new IntProperty("keys-y", 86, 0, 400);
-    /* 2026-11-09: every HUD element can be resized (both of this module's, about their top-left corners). */
+
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
 
     public LegitHUD() {

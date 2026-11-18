@@ -7,7 +7,6 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.WeakHashMap;
 
-/** Raven script API: a player in the tab list (2026-11-02). */
 public class NetworkPlayer {
     private static final Map<NetworkPlayerInfo, NetworkPlayer> CACHE = new WeakHashMap<NetworkPlayerInfo, NetworkPlayer>();
     private final NetworkPlayerInfo playerInfo;
@@ -20,8 +19,6 @@ public class NetworkPlayer {
         return this.playerInfo.getLocationCape() == null ? null : this.playerInfo.getLocationCape().getResourcePath();
     }
 
-    /** As Raven: this player's own display name without colours; anyone else's name with their team's prefix and
-     *  suffix. */
     public String getDisplayName() {
         net.minecraft.client.entity.EntityPlayerSP self = net.minecraft.client.Minecraft.getMinecraft().thePlayer;
         if (self != null && this.playerInfo.getGameProfile() == self.getGameProfile()) {
@@ -38,8 +35,6 @@ public class NetworkPlayer {
         return this.playerInfo.getResponseTime();
     }
 
-    /** The skin's textures property (base64), or null. */
-    /** The skin's texture description, decoded from its Base64 (a JSON text), as Raven gives it. */
     public String getSkinData() {
         Collection<Property> textures = this.playerInfo.getGameProfile().getProperties().get("textures");
         if (textures == null || textures.isEmpty()) {

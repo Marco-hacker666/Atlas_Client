@@ -16,60 +16,23 @@ import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-/**
- * AutoBlock "Full", second version (2026-10-21).
- *
- * The first version swapped every hit in within one tick (release, hit, block
- * again), and full-blink hid the block from the client. On Grim that is
- * PacketOrderI (release while right-clicking), MultiActions and NoSlow
- * (20:49:24-36 on test.ccbluex.net), and a player using it was banned on
- * Pika. Both are gone. Everything this version sends is in an order vanilla
- * makes: the sword is raised with the use key (the client really blocks, at
- * blocking speed), lowered with it, and between lowering and the next
- * attack there is always a tick -- in 1.8 an attack pressed while the item is
- * in use is dropped, so a real block hit is: down (C07) on tick N, swing and
- * hit (C0A, C02) on tick N+1, then up again (C08) on that same tick.
- *
- * Less slowdown, same protection, by choosing when the sword is up:
- * - Windows (full-style Smart): an opponent can damage this player again ten
- *   ticks after their last hit. The sword goes up open-hurt ticks before
- *   that (plus the round trip with ping-aware) and stays up (at least hold
- *   ticks) until the hit lands, the enemy leaves full-range or the exchange
- *   is over. Outside an exchange, guard: short
- *   windows while an enemy within guard-range faces this player.
- * - In the air (full-air): blocking scales the movement input by 0.2, and in
- *   the air the input adds only 0.02 a tick against the momentum already
- *   carried, so a block in the air costs almost no speed. Up whenever an
- *   enemy is in range and the feet are off the ground.
- * - Attacks: the sword comes down only for a hit that can do damage (the
- *   target's hurt time nearly over), not for every click; other clicks are
- *   spent while it stays up. Coming down also gives sprint back for the hit
- *   (a raised sword ends sprinting), so it carries full knockback.
- * Always keeps the sword up whenever an enemy is in range (most protection,
- * most slowdown).
- */
 final class AutoBlockFull {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File LOG_DIR = new File("./config/Atlas/");
     private static final SimpleDateFormat FILE_STAMP = new SimpleDateFormat("yyyyMMdd-HHmmss");
     private static final SimpleDateFormat LINE_STAMP = new SimpleDateFormat("HH:mm:ss");
     private static final int HISTORY = 40;
-    /** Two key changes at least this many ticks apart (block-toggle checks). */
+
     private static final int MIN_GAP = 2;
-    /** Ticks after a hit taken that still count as an exchange. */
+
     private static final int CYCLE_TICKS = 30;
-    /** Damage again this many ticks after the last hit (1.8). */
+
     private static final int IMMUNE_TICKS = 10;
-    /**
-     * Once engaged, how far past full-range the enemy may be before this lets go (2026-10-30: the 10-30 games went
-     * ON/OFF 150 times, "no enemy in range" 90 of them -- an exchange knocks both apart past 3.5 -- and the window
-     * opened while the enemy was out there was spent before they came back: 9 of 64 hits blocked).
-     */
+
     private static final float ENGAGED_EXTRA = 1.5F;
 
     private final BlockHit module;
-    /** The use key is this mode's. */
+
     private boolean active;
     private final boolean[] upAt = new boolean[HISTORY];
     private int tick;
@@ -79,7 +42,7 @@ final class AutoBlockFull {
     private int lastAttackTick = -100;
     private int lastHurt;
     private int lastHurtAt = -1000;
-    /** A Smart window is up (opened once per stretch in reach, so hold counts from the opening). */
+
     private boolean windowOpen;
     private int windowUntil = -1;
     private int guardRestUntil;
@@ -96,7 +59,6 @@ final class AutoBlockFull {
         this.module = module;
     }
 
-    /** This mode has the use key: AutoClicker's clicks wait while the sword is up. */
     boolean managing() {
         return this.active;
     }
@@ -105,12 +67,10 @@ final class AutoBlockFull {
         return this.active;
     }
 
-    /** AttackEvent: a hit went out. */
     void attacked() {
         this.lastAttackTick = this.tick;
     }
 
-    /** TickEvent PRE (runTick HEAD), after the clickers. */
     void tick() {
         if (mc.thePlayer == null || mc.theWorld == null) {
             return;
@@ -146,11 +106,10 @@ final class AutoBlockFull {
         int useKey = mc.gameSettings.keyBindUseItem.getKeyCode();
         int presses = ((IAccessorKeyBinding) mc.gameSettings.keyBindAttack).getPressTime();
 
-        /* Down for an attack: wait for the click (it lands this tick, before vanilla's right-click), at most 3 ticks. */
         if (this.dropTick >= 0) {
             if (presses > 0 && !mc.thePlayer.isUsingItem()) {
                 this.dropTick = -1;
-                /* down, hit, up: a block hit as vanilla makes it, the raise right after the hit is not a toggle to space out. */
+
                 this.lastToggle = this.tick - MIN_GAP;
             } else if (this.tick - this.dropTick >= 3) {
                 log("DROP spent, no click came");
@@ -169,7 +128,6 @@ final class AutoBlockFull {
             }
         }
         if (using && hurtableUnderCrosshair() && this.tick - this.lastToggle >= MIN_GAP) {
-            /* A hit that can do damage: down now, it goes out next tick, the sword back up after it. */
             KeyBindUtil.setKeyBindState(useKey, false);
             this.dropTick = this.tick;
             this.lastToggle = this.tick;
@@ -181,7 +139,7 @@ final class AutoBlockFull {
                     KeyBindUtil.setKeyBindState(useKey, false);
                     return;
                 }
-                /* Up this tick: after this tick's attack, if one is pressed (vanilla right-clicks after it). */
+
                 ((IAccessorMinecraft) mc).setRightClickDelayTimer(0);
                 this.lastToggle = this.tick;
             }
@@ -198,7 +156,6 @@ final class AutoBlockFull {
         }
     }
 
-    /** {@code inReach}: the enemy within full-range -- a window opens only then, so it is not spent while they are away. */
     private boolean shouldBeUp(EntityPlayer enemy, boolean hurtAgain, boolean inReach) {
         if (this.module.fullStyle.getValue() == 0) {
             this.upReason = "always";
@@ -213,11 +170,7 @@ final class AutoBlockFull {
         int openAt = Math.max(0, Math.min(9, this.module.fullOpenHurt.getValue() + lead));
         boolean inCycle = this.tick - this.lastHurtAt <= CYCLE_TICKS;
         int hold = this.module.fullHold.getValue();
-        /*
-         * The window stays up until the next hit lands, the enemy leaves reach or the exchange is over, at least
-         * hold ticks (2026-10-30: one raise of hold ticks per hit taken was down long before the next hit -- after
-         * the knockback the enemy needs about a second to come back -- and blocked 1 of 23, sword up 5%).
-         */
+
         if (inCycle && hurt <= openAt && inReach) {
             if (!this.windowOpen) {
                 this.windowOpen = true;
@@ -244,7 +197,6 @@ final class AutoBlockFull {
         return false;
     }
 
-    /** The enemy under the crosshair can be damaged now (its immunity nearly over), and we have not just hit. */
     private boolean hurtableUnderCrosshair() {
         if (!KeyBindUtil.isKeyDown(mc.gameSettings.keyBindAttack.getKeyCode()) || mc.objectMouseOver == null
                 || mc.objectMouseOver.typeOfHit != MovingObjectPosition.MovingObjectType.ENTITY
@@ -256,7 +208,7 @@ final class AutoBlockFull {
             return false;
         }
         int since = this.tick - this.lastAttackTick;
-        /* Our last hit is still on its way back (the hurt shows a round trip later): not again yet, unless it missed. */
+
         int back = Math.max(3, Math.round(atlas.util.Ping.own() / 50.0F) + 2);
         return since >= IMMUNE_TICKS - 1 || since >= back && ((EntityPlayer) target).hurtTime == 0;
     }
@@ -274,7 +226,6 @@ final class AutoBlockFull {
                 && KeyBindUtil.isKeyDown(mc.gameSettings.keyBindAttack.getKeyCode());
     }
 
-    /** A hit taken: was the sword up when it was dealt (a round trip back)? Returns whether one came this tick. */
     private boolean noteHits() {
         int hurt = mc.thePlayer.hurtTime;
         float health = mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount();

@@ -166,4 +166,3 @@ public class TeamUtil {
         return player != null && Atlas.targetManager != null && Atlas.targetManager.isFriend(player.getName());
     }
 }
-

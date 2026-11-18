@@ -62,6 +62,5 @@ public class ClientSpoofer extends Module {
         return new String[]{mode.getModeString()};
     }
 
-    /* Merged modules (2026-10-11, ModuleBundle). */
     public final atlas.module.ModuleBundle modSpooferMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.ModSpoofer(), "mod-spoofer", "Mod list spoof", false);
 }

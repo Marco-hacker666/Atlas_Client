@@ -22,7 +22,7 @@ public class Timer extends Module {
     public final IntProperty balanceInterval = new IntProperty("balance-interval", 5, 1, 20, () -> timerMode.getValue() == 2);
     public final FloatProperty minSpeed = new FloatProperty("min-speed", 1.0F, 0.01F, 10.0F);
     public final FloatProperty maxSpeed = new FloatProperty("max-speed", 1.0F, 0.01F, 10.0F);
-    /* 2026-10-19 (from Slinky): run fast only while these hold; otherwise 1.0. */
+
     public final BooleanProperty requireAttackKey = new BooleanProperty("require-attack-key", false);
     public final BooleanProperty requireDamage = new BooleanProperty("require-damage", false);
     public final BooleanProperty requireFalling = new BooleanProperty("require-falling", false);
@@ -77,7 +77,7 @@ public class Timer extends Module {
             return;
         }
         if (timer != null) {
-            // Ported from Raven GrimBoatLongJump timer-balance idea: hop and balance variants.
+            // Ported from Raven GrimBoatLongJump timer-balance idea
             if (this.timerMode.getValue() == 1 && mc.thePlayer != null) {
                 atlas.util.TimerControl.set(this, mc.thePlayer.onGround ? this.randomizedSpeed : this.hopSpeed.getValue());
             } else if (this.timerMode.getValue() == 2) {

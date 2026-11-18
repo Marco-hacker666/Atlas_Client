@@ -2,7 +2,6 @@ package atlas.script.raven.model;
 
 import net.minecraft.util.BlockPos;
 
-/** Raven script API: a position or a direction (2026-11-02, Atlas's own implementation of Raven bS's API). */
 public class Vec3 {
     public double x, y, z;
 
@@ -56,7 +55,6 @@ public class Vec3 {
         return new Vec3(-this.x, -this.y, -this.z);
     }
 
-    /** As in Raven: a new vector, like offset. */
     public Vec3 translate(Vec3 position) {
         return this.offset(position);
     }

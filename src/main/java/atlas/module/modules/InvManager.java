@@ -270,6 +270,5 @@ public class InvManager extends Module {
         }
     }
 
-    /* Merged modules (2026-10-11, ModuleBundle). */
     public final atlas.module.ModuleBundle armorMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.AutoArmor(), "armor", "Auto armor", false);
 }

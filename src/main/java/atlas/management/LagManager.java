@@ -26,21 +26,11 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 public class LagManager {
     private static final Minecraft mc = Minecraft.getMinecraft();
     public final Deque<LagPacket> packetQueue;
-    /* Written on the client thread, read on the network thread too (the
-       keep-alive reply passes through handlePacket there). */
+
     private volatile int tickDelay;
-    /**
-     * The thread inside flushQueue, or null.
-     *
-     * isFlushing() exists so the packets this class sends while flushing are
-     * not offered straight back to it by the mixin. It used to be one flag for
-     * everyone: while the network thread flushed (a keep-alive reply arriving),
-     * a movement packet the client thread sent in that moment saw "flushing",
-     * skipped both the blink and the lag hold, and went out ahead of the
-     * packets still queued. Only the flushing thread's own sends are exempt now.
-     */
+
     private volatile Thread flushingThread;
-    /** The module that last asked for a delay (F-11, 2026-09-28). */
+
     private volatile String holder = "LagManager";
     private volatile Vec3 lastPosition;
 
@@ -48,7 +38,7 @@ public class LagManager {
         this.packetQueue = new ConcurrentLinkedDeque<>();
         this.tickDelay = 0;
         this.lastPosition = new Vec3(0.0, 0.0, 0.0);
-        /* What is held, for PacketHolds (plan step 13). */
+
         PacketHolds.register(() -> {
             int count = this.packetQueue.size();
             if (count == 0) {
@@ -59,16 +49,12 @@ public class LagManager {
                     head == null ? 0L : head.at, "delay " + this.tickDelay + " ticks",
                     "each after its delay; all on a catch or a join");
         }, new PacketHolds.Lease() {
-            /* The delay is the holder's, and lasts until it sets 0 -- which
-               a holder switched off without doing so never does. */
             @Override
             public String owner() {
                 String holder = LagManager.this.holder;
                 return "LagManager".equals(holder) ? null : holder;
             }
 
-            /* Each packet leaves once it is tickDelay ticks old; a second
-               beyond that and the flush is not happening. */
             @Override
             public long ceilingMs() {
                 return LagManager.this.tickDelay * 50L + PacketHolds.LEASE_MARGIN_MS;
@@ -86,16 +72,6 @@ public class LagManager {
         flushQueue(false);
     }
 
-    /**
-     * Sends whatever is due -- everything, when {@code all}.
-     *
-     * Synchronized (F-28, 2026-09-28). This runs on the network thread as
-     * well as the client thread: vanilla answers a keep-alive from inside the
-     * packet handler, without moving to the client thread, and that reply
-     * comes through handlePacket, which flushes first. The loop is peek, send,
-     * poll; two threads in it at once could both send the head and then poll
-     * two entries -- one packet sent twice, the next never sent.
-     */
     private synchronized void flushQueue(boolean all) {
         if (!connected()) {
             this.packetQueue.clear();
@@ -110,8 +86,6 @@ public class LagManager {
                     break;
                 }
                 if (!all && lagPacket.packet instanceof C03PacketPlayer && this.movesThisTick >= MOVES_PER_TICK) {
-                    /* 2026-10-28 LagGuard: a delay that drops lets the queue out two positions a tick, catching up
-                       one a tick, never as a burst (FakeLag's 26 "exceeds travel" corrections). */
                     break;
                 }
                 if (lagPacket.packet instanceof C03PacketPlayer) {
@@ -128,19 +102,17 @@ public class LagManager {
             }
         } finally {
             this.flushingThread = null;
-            /* The release, stamped when it happens (plan step 12). */
+
             if (sent > 0) {
                 ActionLedger.note(this.holder, "release", sent);
             }
         }
     }
 
-    /** Whether there is a connection to send on. Overridden by tests. */
     protected boolean connected() {
         return mc != null && mc.getNetHandler() != null;
     }
 
-    /** Sends one held packet past the hooks. Overridden by tests. */
     protected void send(Packet<?> packet) {
         PacketUtil.sendPacketNoEvent(packet);
     }
@@ -151,12 +123,7 @@ public class LagManager {
 
     public boolean handlePacket(Packet<?> packet) {
         if (Arbiter.catching()) {
-            /* A catch is on (see Arbiter): everything held goes now, and
-               nothing more is held until it is over. */
             if (!this.packetQueue.isEmpty()) {
-                /* Everything, regardless of the delay -- without setting the
-                   delay to zero and back, which from the network thread could
-                   overwrite a delay the client thread set in between. */
                 this.flushQueue(true);
                 Arbiter.yielded("LagManager");
             }
@@ -166,13 +133,6 @@ public class LagManager {
         if (packet instanceof C00PacketKeepAlive || packet instanceof C01PacketChatMessage) {
             return false;
         } else if ((long) this.tickDelay > 0L || !this.packetQueue.isEmpty()) {
-            /* (2026-10-28: or still letting a queue out, two positions a tick -- this one waits its turn behind it.) */
-            /* Same blind spot as the blink path: this swallows the packet
-               through the mixin rather than by cancelling an event, so without
-               saying so here nothing that withholds packets through the lag
-               manager could ever be blamed for the corrections it causes.
-               
-               Named after the module that set the delay (see setDelay). */
             ActionLedger.note(this.holder, "held-send");
             this.packetQueue.offer(new LagPacket(packet));
             return true;
@@ -187,15 +147,6 @@ public class LagManager {
         }
     }
 
-    /**
-     * Sets how many ticks packets are held; 0 stops holding.
-     *
-     * The holder used to be guessed from a list of modules that were switched
-     * on -- LagRange, ServerLag, FakeLag, Blink -- three of which never use
-     * this class, while BlockHit, which does, was missing (F-11). It is now
-     * whoever actually set a delay: the calling module, found on the stack.
-     * Looked up only when a non-zero delay changes, not on every call.
-     */
     public void setDelay(int delay) {
         if (delay > 0 && delay != this.tickDelay) {
             String caller = ActionLedger.callerModule();
@@ -204,18 +155,15 @@ public class LagManager {
             }
         }
         if (delay > 0 && !LagGuard.mayHold(this.holder, false, null)) {
-            /* 2026-10-28 LagGuard: no delay now (a knockback, a dig, a correction). */
             delay = 0;
         }
         this.tickDelay = delay;
     }
 
-    /** Everything held, in order, now (LagGuard). */
     public void releaseAll() {
         this.flushQueue(true);
     }
 
-    /** The module that last asked for a delay; "LagManager" if unknown. */
     public String holder() {
         return this.holder;
     }
@@ -228,36 +176,15 @@ public class LagManager {
         return this.lastPosition;
     }
 
-    /** True only on the thread currently flushing: its own sends pass untouched. */
     public boolean isFlushing() {
         return this.flushingThread == Thread.currentThread();
     }
 
-    /**
-     * A new world: the queue is the old one's. Delayed movement, clicks and
-     * attacks from there were flushed into the new world as they came due.
-     * Dropped now, transaction replies sent in order when there is a
-     * connection; the holder keeps its delay for the new world (2026-10-04).
-     */
     @EventTarget(Priority.HIGHEST)
     public void onWorldLoad(LoadWorldEvent event) {
         dropForWorldChange(event.getWorld() != null);
     }
 
-    /**
-     * See onWorldLoad. sendReplies false (leaving) drops everything.
-     *
-     * 2026-11-10 (game froze on a server teleport): the replies used to be
-     * sent from inside the poll loop without marking this thread as the
-     * flushing one. Each send went back through the mixin, which offered the
-     * reply to handlePacket; with a delay still set (LagGuard ends the holds
-     * before it sets the delay to 0, and a world change keeps the holder's
-     * delay) the reply was queued again, polled again, sent again -- forever,
-     * on the network thread for a teleport, holding this lock, so the next
-     * packet the game sent waited on it and the whole game hung. The queue is
-     * now emptied first, and the replies sent afterwards as this thread's own
-     * flush, which the mixin lets straight through.
-     */
     public synchronized void dropForWorldChange(boolean sendReplies) {
         java.util.List<Packet<?>> replies = new java.util.ArrayList<Packet<?>>();
         LagPacket lagPacket;
@@ -309,7 +236,7 @@ public class LagManager {
     public static class LagPacket {
         public final Packet<?> packet;
         public int delay;
-        /** When it was taken (PacketHolds). */
+
         public final long at = System.currentTimeMillis();
 
         public LagPacket(Packet<?> packet) {

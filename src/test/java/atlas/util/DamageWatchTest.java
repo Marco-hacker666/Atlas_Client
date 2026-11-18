@@ -7,12 +7,9 @@ import java.util.Arrays;
 
 import static org.junit.Assert.*;
 
-/** Damage per landed hit, and runs of low ones (2026-09-28). */
 public class DamageWatchTest {
-
     private static final long WINDOW = 500L;
 
-    /** Clock and health of one simulated fight. */
     private static final class Fight {
         final DamageWatch watch = new DamageWatch();
         long now = 10_000L;
@@ -20,7 +17,6 @@ public class DamageWatchTest {
         DamageWatch.Hit lastHit;
         DamageWatch.Verdict lastVerdict;
 
-        /** One tick of target id at the current health and hurt time. */
         void tick(int id, int hurtTime) {
             this.now += 50L;
             DamageWatch.Hit hit = this.watch.tick(id, this.health, hurtTime, this.now, WINDOW);
@@ -33,7 +29,6 @@ public class DamageWatchTest {
             }
         }
 
-        /** Attack, flinch a tick later, health follows a tick after that, then settle. */
         DamageWatch.Hit hit(int id, float damage) {
             this.lastHit = null;
             tick(id, 0);
@@ -49,7 +44,6 @@ public class DamageWatchTest {
 
     @Test
     public void twoHitsInOneScoreWindowAreTwoHitsNotOneBigOne() {
-        // 2026-10-15: tab health settles over 24 ticks, room for a combo's next hit.
         Fight f = new Fight();
         f.watch.setPrecision(1.0F);
         f.tick(1, 0);
@@ -187,12 +181,12 @@ public class DamageWatchTest {
     @Test
     public void eachTargetIsJudgedByItsOwnHitsOnceItHasEnough() {
         Fight f = new Fight();
-        /* A lightly armoured target first: big hits set the session's usual. */
+
         for (int i = 0; i < 6; i++) {
             f.health = 20.0F;
             f.hit(1, 4.0F);
         }
-        /* A heavily armoured one: its own hits are small, and that is normal for it. */
+
         for (int i = 0; i < 6; i++) {
             f.health = 20.0F;
             f.hit(2, 1.0F);
@@ -245,7 +239,6 @@ public class DamageWatchTest {
         assertEquals("over 3 s later: a new run", 0, gap.dropped(5000L));
     }
 
-    /** One landed hit made with a given weapon (basis) and known minimum (NaN for none). */
     private static DamageWatch.Hit hitWith(Fight f, int id, float damage, float expected, String basis) {
         f.lastHit = null;
         f.tick(id, 0);
@@ -275,12 +268,12 @@ public class DamageWatchTest {
     @Test
     public void aBetterArmouredOpponentIsNotLowDamage() {
         Fight f = new Fight();
-        /* Hits worth about 1.2x their vanilla minimum, on a light target... */
+
         for (int i = 0; i < 6; i++) {
             f.health = 20.0F;
             hitWith(f, 1, 6.0F, 5.0F, "iron_sword");
         }
-        /* ...then a heavy one: much less health, but the same share of its minimum. */
+
         f.health = 20.0F;
         hitWith(f, 2, 2.4F, 2.0F, "iron_sword");
         hitWith(f, 2, 2.4F, 2.0F, "iron_sword");

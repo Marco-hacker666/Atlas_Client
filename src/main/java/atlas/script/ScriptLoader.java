@@ -2,11 +2,6 @@ package atlas.script;
 
 import java.util.Map;
 
-/**
- * Defines one script's classes from the compiler's output (2026-11-02). One loader per load, so a reloaded script
- * is a new class and the old one goes with its loader. Everything else -- this client, the game, Java -- comes
- * from the parent, the loader that loaded this client.
- */
 final class ScriptLoader extends ClassLoader {
     private final Map<String, byte[]> classes;
 
@@ -20,7 +15,6 @@ final class ScriptLoader extends ClassLoader {
         synchronized (this.getClassLoadingLock(name)) {
             Class<?> type = this.findLoadedClass(name);
             if (type == null && this.classes.containsKey(name)) {
-                /* Its own classes first: the parent would only go looking through every mod for them. */
                 type = this.findClass(name);
             }
             if (type == null) {

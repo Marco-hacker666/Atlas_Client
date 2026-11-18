@@ -14,17 +14,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(GuiMultiplayer.class)
 public class MixinGuiMultiplayer extends GuiScreen {
-    /* 2026-10-23 (owner, GUI redesign D3): ServerProfiles on or off from the
-       server list, where the choice is made. An id far from vanilla's 0-8. */
     @Unique
     private static final int ATLAS_AUTO_CONFIG = 7310;
 
     @Inject(method = "createButtons", at = @At("TAIL"))
     private void addViaVersionSlider(CallbackInfo ci) {
         this.buttonList.add(new AsyncVersionSlider(-1, this.width - 110, 30, 100, 20));
-        /* Under the version slider, the same width: the account manager's
-           "Accounts" button has the top right (width - 106, 6), and its
-           username line the top left (seen overlapping, 2026-10-23). */
+
         this.buttonList.add(new GuiButton(ATLAS_AUTO_CONFIG, this.width - 110, 54, 100, 20, atlasAutoConfigLabel()));
     }
 

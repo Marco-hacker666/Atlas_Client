@@ -21,14 +21,9 @@ import java.util.TreeSet;
 
 import static org.junit.Assert.*;
 
-/**
- * A compiler looks at the game types in the signatures of every overload it weighs, and those classes are not there
- * for a player: the Minecraft jar is obfuscated (2026-11-04). The calls here are inexact on purpose: they are what
- * makes a compiler read all the overloads of a name.
- */
 public class ScriptStubsTest {
     private static final String[] API_FOLDERS = {"atlas/script", "atlas/property", "atlas/events"};
-    /** ECJ stops reporting at 100 problems in one file. */
+
     private static final int CALLS_PER_UNIT = 30;
 
     private static void collect(File folder, String name, List<String> out) {
@@ -45,7 +40,6 @@ public class ScriptStubsTest {
         }
     }
 
-    /** The classes of the script API, without running their static blocks. */
     private static List<Class<?>> apiClasses() throws Exception {
         File own = ScriptCompiler.codeSource(ScriptSource.class);
         List<String> names = new ArrayList<String>();
@@ -63,7 +57,6 @@ public class ScriptStubsTest {
         return String.join(", ", Collections.nCopies(count, "0"));
     }
 
-    /** Every constructor and method of the API, called with ints, which fit nearly none of them. */
     private static List<String> inexactCalls() throws Exception {
         Set<String> calls = new TreeSet<String>();
         for (Class<?> type : apiClasses()) {
@@ -112,7 +105,6 @@ public class ScriptStubsTest {
         assertTrue(missing.size() + " missing: " + missing, missing.isEmpty());
     }
 
-    /** javac reads the same signatures, and failed on same-arity overloads until the stubs. */
     @Test
     public void javacNeverMissesAGameTypeInAnOverload() throws Exception {
         JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
@@ -155,7 +147,6 @@ public class ScriptStubsTest {
         }
     }
 
-    /** Checked by reflection, against the real game classes: a name no scan finds would be a hole in the scan. */
     @Test
     public void everyTypeInTheApisSignaturesHasAStub() throws Exception {
         Set<String> named = new TreeSet<String>();
@@ -188,7 +179,6 @@ public class ScriptStubsTest {
         assertTrue("no stub: " + holes, holes.isEmpty());
     }
 
-    /** A stub may say less than the real class, never something else: a compiler rejects a wrong shape. */
     @Test
     public void stubsHaveTheShapeOfTheRealClasses() throws Exception {
         Map<String, ScriptCompiler.StubType> types = ScriptCompiler.stubTypes(ScriptCompiler.codeSource(ScriptSource.class));

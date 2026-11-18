@@ -30,6 +30,4 @@ public class RenderUtils {
     private static int interpolateInt(int oldValue, int newValue, double interpolationValue) {
         return (int) (oldValue + (newValue - oldValue) * interpolationValue);
     }
-
-
 }

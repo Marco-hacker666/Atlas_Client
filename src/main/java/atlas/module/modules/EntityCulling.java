@@ -1,11 +1,8 @@
-/*
- * Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0),
- * src/main/java/openskid/module/modules/EntityCulling.java, 2026-10-05: package openskid -> atlas,
- * OpenSkid -> Atlas. Changes after that are marked in comments.
- */
+// Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0), src/main/java/openskid/module/modules/EntityCulling.java
+
 package atlas.module.modules;
 
-// Adapted from the MiauMinus EntityCulling donor. Rewritten for OpenSkid APIs.
+// Adapted from the MiauMinus EntityCulling donor.
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

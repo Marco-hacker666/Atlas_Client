@@ -16,7 +16,6 @@ import org.spongepowered.asm.mixin.Shadow;
 
 @Mixin(value = NetHandlerPlayClient.class, priority = 1001)
 public class MixinNetHandlerPlayClient {
-
   @Shadow private Minecraft gameController;
 
   @Shadow

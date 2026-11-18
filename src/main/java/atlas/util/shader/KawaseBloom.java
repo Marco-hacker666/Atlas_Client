@@ -71,17 +71,13 @@ public class KawaseBloom {
         }
     }
 
-
     public static void renderBlur(int framebufferTexture, int iterations, float offset) {
         renderBlur(framebufferTexture, iterations, offset, 1.0F);
     }
 
-    /** strength: how opaque the glow is where the mask was solid (0-1). 2026-11-15. */
     public static void renderBlur(int framebufferTexture, int iterations, float offset, float strength) {
-        // Initialize shaders on first use
         initShaders();
 
-        // Check if shaders are properly initialized
         if (kawaseDown == null || kawaseUp == null) {
             System.err.println("KawaseBloom shaders not initialized, skipping bloom render");
             return;
@@ -122,13 +118,11 @@ public class KawaseBloom {
         kawaseUp.setUniformf("strength", Math.max(0.0F, Math.min(1.0F, strength)));
         kawaseUp.setUniformf("halfpixel", 1.0f / lastBuffer.framebufferWidth, 1.0f / lastBuffer.framebufferHeight);
         kawaseUp.setUniformf("iResolution", lastBuffer.framebufferWidth, lastBuffer.framebufferHeight);
-        /* The mask on unit 16, for the shader to leave the glow out where the shape itself is. Unit 16 is past the
-           8 GlStateManager tracks: bound directly (2026-11-15). */
+
         RenderUtil.bindTextureOnUnit16(framebufferTexture);
         RenderUtil.bindTexture(framebufferList.get(1).framebufferTexture);
         ShaderUtils.drawQuads();
         kawaseUp.unload();
-
 
         GlStateManager.clearColor(0, 0, 0, 0);
         mc.getFramebuffer().bindFramebuffer(false);

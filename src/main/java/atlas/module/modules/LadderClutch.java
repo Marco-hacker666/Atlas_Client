@@ -1,9 +1,7 @@
 package atlas.module.modules;
 
 // Ported from OpenSkid (GPL-3.0), itself adapted from Raven bS-16's clutch
-// block logic: Block mode places blocks below while falling, Ladder mode
-// prefers an adjacent wall face in radius. Separate from the client's own Clutch
-// rework, which is untouched.
+
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
 import atlas.events.UpdateEvent;

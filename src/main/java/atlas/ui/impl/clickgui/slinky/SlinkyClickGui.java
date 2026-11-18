@@ -39,35 +39,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
-/**
- * Slinky-style ClickGUI (2026-10-19, owner request: "make it look exactly
- * like Slinky's, with animated switches").
- *
- * The look: a dark pill of tabs at the top (Combat, Move, Visual, Block,
- * Utility, Profiles and a red Unload), and under it the modules as dark
- * rounded cards in two masonry columns. A card has the name, a key badge, a
- * switch, and a line of description with a small "+" box that unrolls the
- * settings inside the card. Profiles are cards too, with load, save, folder
- * and delete buttons and a key that loads them in game.
- *
- * Measured from the reference: everything is laid out in screen pixels, not
- * Minecraft's scaled units, so the menu is the same size at every GUI scale
- * (a 900 px wide page, 42 px tabs, 20 px rows 8 px apart, 12 px padding,
- * 20 px corner radius). Text is Inter at 16/15/14/12 px. Colours are greys of
- * 0.08 (cards), 0.25 (tracks), 0.6 (secondary text) and 0.87 (text), with an
- * accent (red by default, ClickGUI "slinky-accent").
- *
- * Animations: the page fades and slides down on open (0.3 s, ease-out
- * quint); the tab highlight slides between tabs and the page slides
- * sideways and fades on a tab change; switches move their knob and blend
- * their colour over 0.1 s (smoothstep); cards ease to their new height when
- * settings open or close; sliders ease to their value; dropdowns unroll;
- * tooltips grow in; dialogs fade and slide down.
- *
- * Drawing and input are one pass (immediate mode): a click is stored when it
- * happens and claimed during the next frame by the first control under it,
- * so what is clicked is always what was drawn there.
- */
 public class SlinkyClickGui extends GuiScreen {
     private static SlinkyClickGui instance;
 
@@ -102,8 +73,6 @@ public class SlinkyClickGui extends GuiScreen {
     private static final int MODAL_PROMPT = 3;
     private static final int MODAL_OPTIONS = 4;
 
-    // ---- frame -------------------------------------------------------------
-
     private float k;
     private float screenW;
     private float screenH;
@@ -116,16 +85,12 @@ public class SlinkyClickGui extends GuiScreen {
     private float mx;
     private float my;
 
-    // ---- input -------------------------------------------------------------
-
     private boolean pending;
     private boolean consumed;
     private float clickX;
     private float clickY;
     private int clickButton;
     private boolean drawingModal;
-
-    // ---- page --------------------------------------------------------------
 
     private int selected;
     private float selectedShown;
@@ -147,23 +112,17 @@ public class SlinkyClickGui extends GuiScreen {
     private float dragTrackX;
     private float dragTrackW;
 
-    // ---- tooltip -----------------------------------------------------------
-
     private String tipText;
     private float tipX;
     private float tipY;
     private float tipProgress;
     private boolean tipRequested;
 
-    // ---- profiles ----------------------------------------------------------
-
     private List<SlinkyProfiles.Row> rows = Collections.emptyList();
     private double rowsRead = -10.0;
     private boolean profileConfirmed;
     private boolean creating;
     private final StringBuilder createText = new StringBuilder();
-
-    // ---- dialogs -----------------------------------------------------------
 
     private int modal;
     private float modalProgress;
@@ -175,7 +134,7 @@ public class SlinkyClickGui extends GuiScreen {
     private Consumer<String> modalTextDone;
     private List<String> options = Collections.emptyList();
     private Consumer<Integer> optionChosen;
-    /** Colour dialog: hue, saturation, lightness, each 0..1. */
+
     private final float[] hsl = new float[3];
     private Consumer<Integer> colorChosen;
     private boolean editingHex;
@@ -211,8 +170,6 @@ public class SlinkyClickGui extends GuiScreen {
         return false;
     }
 
-    // ---- look --------------------------------------------------------------
-
     private static int accent() {
         Module module = Atlas.moduleManager.modules.get(ClickGUIModule.class);
         if (module instanceof ClickGUIModule) {
@@ -238,7 +195,6 @@ public class SlinkyClickGui extends GuiScreen {
                 | Math.round(g1 + (g2 - g1) * t) << 8 | Math.round(b1 + (b2 - b1) * t);
     }
 
-    /** The colour with the frame's opacity applied. */
     private int a(int color) {
         return withAlpha(color, this.alpha);
     }
@@ -255,8 +211,6 @@ public class SlinkyClickGui extends GuiScreen {
     private float follow(float from, float to, float seconds) {
         return from + (to - from) * Math.min(1.0F, this.dt / seconds);
     }
-
-    // ---- drawing (all in screen pixels) -------------------------------------
 
     private void fill(float x, float y, float w, float h, float r, int color) {
         if (w <= 0.0F || h <= 0.0F) {
@@ -315,7 +269,6 @@ public class SlinkyClickGui extends GuiScreen {
         return (float) font.getStringWidth(s) / this.k;
     }
 
-    /** Text left-aligned in a row, centred vertically; returns where it ends. */
     private float text(String s, int style, float size, float x, float y, float h, int color) {
         FontRenderer font = SlinkyFonts.get(style, size);
         float centre = (y + this.ty + h / 2.0F) * this.k;
@@ -336,11 +289,6 @@ public class SlinkyClickGui extends GuiScreen {
         text(s, style, size, right - textWidth(s, style, size), y, h, color);
     }
 
-    /**
-     * Shortened texts, by font and width (2026-10-19): a long description
-     * was cut a letter at a time, measuring the whole string each time, for
-     * every card on every frame. Widths do not depend on the GUI scale.
-     */
     private final Map<String, String> trimmed = new HashMap<String, String>();
 
     private String trim(String s, int style, float size, float max) {
@@ -351,7 +299,6 @@ public class SlinkyClickGui extends GuiScreen {
         }
         String out = s;
         if (s.length() > 1 && textWidth(s, style, size) > max) {
-            /* The longest prefix that fits with "...", by halving. */
             int low = 1;
             int high = s.length() - 1;
             while (low < high) {
@@ -370,8 +317,6 @@ public class SlinkyClickGui extends GuiScreen {
         this.trimmed.put(key, out);
         return out;
     }
-
-    // ---- input helpers -----------------------------------------------------
 
     private boolean blocked() {
         return this.modal != MODAL_NONE && !this.drawingModal;
@@ -411,8 +356,6 @@ public class SlinkyClickGui extends GuiScreen {
             this.tipRequested = true;
         }
     }
-
-    // ---- frame -------------------------------------------------------------
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
@@ -455,7 +398,6 @@ public class SlinkyClickGui extends GuiScreen {
 
         drawTabs(x0, PAD, w0);
 
-        /* A tab change slides the page sideways and fades it through. */
         float target = this.selected;
         this.selectedShown = follow(this.selectedShown, target, 0.05F);
         if (Math.abs(target - this.selectedShown) < 0.001F) {
@@ -485,7 +427,6 @@ public class SlinkyClickGui extends GuiScreen {
             drawModal(pageX, pageW);
         }
 
-        /* A click nothing claimed: stop listening for a key, close an open dropdown. */
         if (this.pending && !this.consumed) {
             if (this.listening != null && this.clickButton == 0) {
                 this.listening = null;
@@ -509,7 +450,7 @@ public class SlinkyClickGui extends GuiScreen {
         fill(x, y, w, h, RADIUS, CARD);
         float tabW = w / TABS.length;
         float shown = this.selectedShown;
-        /* The highlight slides; it sits under the tab being shown. */
+
         fill(x + shown * tabW + 6.0F, y + 6.0F, tabW - 12.0F, h - 12.0F, 14.0F, TRACK);
         for (int i = 0; i < TABS.length; i++) {
             float tx0 = x + i * tabW;
@@ -534,9 +475,6 @@ public class SlinkyClickGui extends GuiScreen {
         }
     }
 
-    // ---- module pages --------------------------------------------------------
-
-    /** Cards placed in columns, each under the card above it in its column. */
     private static final class Masonry {
         final float x;
         final float colW;
@@ -611,7 +549,6 @@ public class SlinkyClickGui extends GuiScreen {
 
     private static final Map<String, String> NAMES = new HashMap<String, String>();
 
-    /** "KillAura" -> "Kill Aura", "TNTTimer" -> "TNT Timer". */
     static String displayName(Module module) {
         String name = module.getName();
         String cached = NAMES.get(name);
@@ -667,7 +604,6 @@ public class SlinkyClickGui extends GuiScreen {
         float iy = r[1] + PAD;
         float iw = r[2] - PAD * 2.0F;
 
-        /* Name, key badge and switch. */
         float end = text(trim(displayName(module), 0, 16.0F, iw - 150.0F), 0, 16.0F, ix, iy, ROW, TEXT);
         final Module target = module;
         badge(module, module.getKey(), end + 5.0F, iy, new IntConsumer() {
@@ -680,7 +616,6 @@ public class SlinkyClickGui extends GuiScreen {
             module.toggle();
         }
 
-        /* Description, with the box that opens the settings. */
         List<Property<?>> settings = settingsOf(module);
         boolean open = this.expanded.contains(module);
         float y = iy + ROW + GAP;
@@ -716,7 +651,6 @@ public class SlinkyClickGui extends GuiScreen {
         return out;
     }
 
-    /** The "+" box and the description beside it; true when clicked. */
     private boolean expander(boolean open, String label, float x, float y, float w) {
         float labelX = x + ROW + 8.0F;
         String shown = trim(label, 0, 14.0F, w - ROW - 8.0F);
@@ -733,7 +667,6 @@ public class SlinkyClickGui extends GuiScreen {
         return clicked;
     }
 
-    /** A switch, 40 x 20; returns true when clicked. */
     private boolean toggle(Object id, float x, float y, boolean value) {
         float[] state = this.toggles.get(id);
         if (state == null) {
@@ -754,7 +687,6 @@ public class SlinkyClickGui extends GuiScreen {
         return key == 0 ? "NONE" : KeyBindUtil.getKeyName(key).toUpperCase(Locale.ROOT);
     }
 
-    /** A key badge at (x, y); clicking it waits for a key. Returns its width. */
     private float badge(Object id, int key, float x, float y, IntConsumer set) {
         boolean active = this.listening == id;
         String label = active ? "PRESS A KEY..." : keyName(key);
@@ -769,8 +701,6 @@ public class SlinkyClickGui extends GuiScreen {
         }
         return w;
     }
-
-    // ---- settings ------------------------------------------------------------
 
     private float drawSettings(List<Property<?>> settings, float x, float y, float w) {
         String group = null;
@@ -884,14 +814,13 @@ public class SlinkyClickGui extends GuiScreen {
             }
             return ROW;
         }
-        /* Lists, files and positions: shown; set with a command or the Atlas menu. */
+
         text(shownLabel, 0, 15.0F, x, y, ROW, TEXT);
         String value = String.valueOf(property.getValue());
         textRight(trim(value, 0, 15.0F, half - 8.0F), 0, 15.0F, x + w, y, ROW, DIM);
         return ROW;
     }
 
-    /** A dropdown: the box opens in place for a few options, a search dialog for many. */
     private float drawChoice(final ModeProperty property, String label, float x, float y, float w) {
         final int[] shown = property.visibleIndices();
         int count = shown.length;
@@ -952,8 +881,6 @@ public class SlinkyClickGui extends GuiScreen {
         }
         return height;
     }
-
-    // ---- numbers -------------------------------------------------------------
 
     private static boolean isNumeric(Property<?> property) {
         return property instanceof IntProperty || property instanceof FloatProperty || property instanceof PercentProperty;
@@ -1019,8 +946,6 @@ public class SlinkyClickGui extends GuiScreen {
             property.setBase(Property.Source.USER, Float.valueOf(Math.round(value * 100.0F) / 100.0F));
         }
     }
-
-    // ---- profiles --------------------------------------------------------------
 
     private float drawProfiles(float x, float y, float w) {
         if (this.now - this.rowsRead > 2.0 && !this.creating) {
@@ -1089,7 +1014,6 @@ public class SlinkyClickGui extends GuiScreen {
         unclip();
     }
 
-    /** Load, save, folder and delete, drawn as small glyphs in a 20 x 20 box. */
     private void drawProfileIcon(int slot, float x, float y, boolean enabled, boolean over) {
         int color;
         if (slot == 3) {
@@ -1099,7 +1023,7 @@ public class SlinkyClickGui extends GuiScreen {
         }
         switch (slot) {
             case 0:
-                /* A tray with an arrow leaving it upwards. */
+
                 fill(x + 4.0F, y + 9.0F, 12.0F, 9.0F, 2.5F, color);
                 fill(x + 8.5F, y + 9.0F, 3.0F, 2.5F, 0.0F, CARD);
                 fill(x + 9.0F, y + 2.0F, 2.0F, 9.5F, 0.0F, color);
@@ -1107,19 +1031,19 @@ public class SlinkyClickGui extends GuiScreen {
                 line(x + 13.5F, y + 5.0F, x + 10.0F, y + 1.5F, 2.0F, color);
                 break;
             case 1:
-                /* A tray with an arrow going into it. */
+
                 fill(x + 4.0F, y + 9.0F, 12.0F, 9.0F, 2.5F, color);
                 fill(x + 9.0F, y + 1.0F, 2.0F, 9.0F, 0.0F, color);
                 line(x + 7.0F, y + 9.5F, x + 10.0F, y + 12.5F, 2.0F, CARD);
                 line(x + 13.0F, y + 9.5F, x + 10.0F, y + 12.5F, 2.0F, CARD);
                 break;
             case 2:
-                /* A folder. */
+
                 fill(x + 3.0F, y + 4.0F, 7.0F, 4.0F, 1.5F, color);
                 fill(x + 3.0F, y + 6.0F, 14.0F, 11.5F, 2.5F, color);
                 break;
             default:
-                /* A bin: handle, lid, body with two slots. */
+
                 stroke(x + 7.5F, y + 1.0F, 5.0F, 3.0F, 1.0F, 1.5F, color);
                 fill(x + 3.0F, y + 3.5F, 14.0F, 2.0F, 1.0F, color);
                 fill(x + 4.5F, y + 6.0F, 11.0F, 12.0F, 2.5F, color);
@@ -1180,7 +1104,6 @@ public class SlinkyClickGui extends GuiScreen {
         this.rowsRead = -10.0;
     }
 
-    /** Typed text centred in a box, with a blinking caret after it. */
     private void textEntry(String typed, float x, float y, float w, float h, float size) {
         float tw = textWidth(typed, 0, size);
         float start = x + (w - tw) / 2.0F;
@@ -1189,13 +1112,6 @@ public class SlinkyClickGui extends GuiScreen {
         fill(start + tw + 1.0F, y, 1.0F, h, 0.0F, withAlpha(TEXT, caret));
     }
 
-    // ---- unload ------------------------------------------------------------
-
-    /**
-     * A Forge mod cannot be taken out of a running game, so "unload" here is
-     * Panic: every behaviour module off, held packets let go or dropped, the
-     * menu closed.
-     */
     private void unload() {
         Module panic = Atlas.moduleManager.getModule("Panic");
         if (panic != null) {
@@ -1203,8 +1119,6 @@ public class SlinkyClickGui extends GuiScreen {
         }
         mc.displayGuiScreen(null);
     }
-
-    // ---- tooltip -------------------------------------------------------------
 
     private void drawTooltip() {
         if (!this.tipRequested) {
@@ -1234,8 +1148,6 @@ public class SlinkyClickGui extends GuiScreen {
         this.ty = saveTy;
         this.alpha = saveAlpha;
     }
-
-    // ---- dialogs -------------------------------------------------------------
 
     private void openModal(int kind, String title) {
         this.modal = kind;
@@ -1538,13 +1450,11 @@ public class SlinkyClickGui extends GuiScreen {
         return p;
     }
 
-    // ---- input ---------------------------------------------------------------
-
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) throws IOException {
         float x = Mouse.getEventX();
         float y = mc.displayHeight - Mouse.getEventY() - 1;
-        /* A mouse button while waiting for a key binds that button (middle and side buttons). */
+
         if (this.listening != null && button >= 2) {
             if (this.listenSetter != null) {
                 this.listenSetter.accept(button - 100);
@@ -1624,7 +1534,6 @@ public class SlinkyClickGui extends GuiScreen {
                 System.arraycopy(values, 0, this.hsl, 0, 3);
                 applyColor();
             } catch (NumberFormatException ignored) {
-                // Not hex: left as it was.
             }
             this.editingHex = false;
             return;

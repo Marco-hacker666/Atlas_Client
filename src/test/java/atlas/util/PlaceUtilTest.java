@@ -7,21 +7,14 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/**
- * PlaceUtil's geometry. The build of 2026-10-02 that was compiled outside
- * Gradle read every Vec3/AxisAlignedBB coordinate as 0.0, so rotationsTo gave
- * the same rotation for every target and no box intersected anything. These
- * fail on such a build.
- */
 public class PlaceUtilTest {
-
     private static final Vec3 EYE = new Vec3(0.5, 65.62, 0.5);
 
     @Test
     public void rotationsPointAtTheTarget() {
-        assertEquals(-90.0F, PlaceUtil.rotationsTo(EYE, new Vec3(5.5, 65.62, 0.5), 0.0F)[0], 0.01F); // +x is yaw -90
-        assertEquals(0.0F, PlaceUtil.rotationsTo(EYE, new Vec3(0.5, 65.62, 5.5), 0.0F)[0], 0.01F);   // +z is yaw 0
-        assertEquals(90.0F, PlaceUtil.rotationsTo(EYE, new Vec3(0.5, 60.0, 0.5001), 0.0F)[1], 0.1F); // straight down
+        assertEquals(-90.0F, PlaceUtil.rotationsTo(EYE, new Vec3(5.5, 65.62, 0.5), 0.0F)[0], 0.01F);
+        assertEquals(0.0F, PlaceUtil.rotationsTo(EYE, new Vec3(0.5, 65.62, 5.5), 0.0F)[0], 0.01F);
+        assertEquals(90.0F, PlaceUtil.rotationsTo(EYE, new Vec3(0.5, 60.0, 0.5001), 0.0F)[1], 0.1F);
     }
 
     @Test

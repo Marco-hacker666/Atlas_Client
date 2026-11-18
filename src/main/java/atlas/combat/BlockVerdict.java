@@ -11,33 +11,10 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.potion.Potion;
 import net.minecraft.potion.PotionEffect;
 
-/**
- * Whether the server counted a sword block, told from the damage a hit took
- * (2026-10-16): not this client's guess at the timing, which agreed with
- * whatever timing mistake the blocking code made.
- *
- * A wooden sword on armour 7 takes 3.6 (crit 5.4) unblocked and 2.16 (crit
- * 3.06) blocked. REDUCED: matches a blocked hit only. FULL: an unblocked hit
- * only. AMBIG: both. DIFF: less than any blocked hit (a second hit inside the
- * immunity takes only the difference, or a weaker item). OTHER: none.
- *
- * 2026-10-16 22:37-22:39 (KillAura2 holding the block properly): with the
- * sword up when the server applied the hit, 3 of 4 hits took 1.80 -- half
- * of 3.6 after armour -- and every hit with it down took the full amount.
- * Pika halves a blocked hit after the armour, not vanilla's (1 + d) / 2
- * before it (2.16), so both count as blocked: until then the half-damage
- * blocks were filed as DIFF.
- */
 public final class BlockVerdict {
-
     private BlockVerdict() {
     }
 
-    /**
-     * {full, fullCrit, blocked, blockedCrit, half, halfCrit}, each {least,
-     * most}, for a hit by {@code attacker}: blocked the vanilla way, and
-     * halved after the armour as Pika does.
-     */
     public static float[][] ranges(EntityPlayer attacker, EntityPlayerSP self) {
         ItemStack held = attacker.getHeldItem();
         float weapon = 0.0F;

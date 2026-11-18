@@ -5,7 +5,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
 public class SetupEntryTest {
-
     @Test
     public void stripColorsRemovesSectionSignCodes() {
         assertEquals("Wood Sound Overlay", SetupEntry.stripColors("\u00A74Wood \u00A7fSound \u00A74Overlay"));

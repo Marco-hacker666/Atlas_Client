@@ -21,24 +21,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * The start screen (rewritten 2026-10-12, owner: "redo it completely"; the six old
- * backgrounds, their picker and the glass card are gone), from the preview
- * the owner approved (design/menu-preview.html): a sunrise-graded panorama
- * (MenuBackground), a large condensed ATLAS / ATLAS on the left with the
- * menu under it; a hovered entry slides right behind an orange bar.
- *
- * 2026-10-13 (owner, from player feedback): the AURORA look and the pill
- * that switched to it are gone, and so is the "SIGNED IN AS / LAST SERVER"
- * block at the bottom right ("looks generic"). The menu now fades in only
- * once its text is rasterised (TextImage works off the render thread),
- * so opening it no longer freezes a frame and skips the fade.
- *
- * Every text is a TextImage (crisp at any size). Clicks are matched to the
- * boxes drawn in the frame the player saw.
- */
 public class AtlasMainMenu extends GuiScreen implements GuiYesNoCallback {
-    /* Outfit and Bebas Neue (SIL OFL 1.1, licences in assets/atlas/font/licenses). */
+    // Outfit and Bebas Neue (SIL OFL 1.1, licences in assets/atlas/font/licenses).
+
     private static final String REGULAR = "outfit-regular.ttf";
     private static final String MEDIUM = "outfit-medium.ttf";
     private static final String BOLD = "bebas-neue.ttf";
@@ -69,7 +54,7 @@ public class AtlasMainMenu extends GuiScreen implements GuiYesNoCallback {
     private final List<Hit> hits = new ArrayList<>();
     private final Map<String, Float> anims = new HashMap<>();
     private long openedAt;
-    /* The text is ready and the fade-in has started. */
+
     private boolean shown;
     private long lastFrame;
     private float dt = 0.016F;
@@ -119,8 +104,6 @@ public class AtlasMainMenu extends GuiScreen implements GuiYesNoCallback {
         }
     }
 
-    // ---- helpers -------------------------------------------------------
-
     private float ease(String key, float target, float speed) {
         Float now = this.anims.get(key);
         float v = now == null ? target : now;
@@ -129,7 +112,6 @@ public class AtlasMainMenu extends GuiScreen implements GuiYesNoCallback {
         return v;
     }
 
-    /** {@code color} with its alpha times {@code k} and the opening fade. */
     private int alpha(int color, float k) {
         int a = Math.round((color >>> 24) * Math.max(0.0F, Math.min(1.0F, k)) * this.fade);
         return a << 24 | color & 0xFFFFFF;
@@ -152,8 +134,6 @@ public class AtlasMainMenu extends GuiScreen implements GuiYesNoCallback {
         return "V" + v.toUpperCase();
     }
 
-    // ---- drawing -------------------------------------------------------
-
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         long now = System.nanoTime();
@@ -163,9 +143,6 @@ public class AtlasMainMenu extends GuiScreen implements GuiYesNoCallback {
         this.hits.clear();
         MenuBackground.draw(this.width, this.height, mouseX, mouseY);
         if (!this.shown) {
-            /* Wait (black) for the fonts, then lay the menu out unseen once so
-               every string goes to the worker, and fade in when they are all
-               back; never longer than 1.5 s. */
             long waited = millis - this.openedAt;
             if (TextImage.ready() || waited > 1500L) {
                 this.fade = 0.0F;
@@ -182,7 +159,7 @@ public class AtlasMainMenu extends GuiScreen implements GuiYesNoCallback {
         float t = Math.min(1.0F, (millis - this.openedAt) / 700.0F);
         this.fade = 1.0F - (1.0F - t) * (1.0F - t) * (1.0F - t);
         this.drawCinematic(mouseX, mouseY);
-        /* Black lifting off as the screen opens. */
+
         if (this.fade < 1.0F) {
             MenuBackground.rect(0.0F, 0.0F, (float) this.width, (float) this.height,
                     Math.round(0xFF * (1.0F - this.fade)) << 24);
@@ -202,8 +179,7 @@ public class AtlasMainMenu extends GuiScreen implements GuiYesNoCallback {
 
         TextImage.draw("MINECRAFT 1.8.9  ·  " + version(), MEDIUM, 7.5F, 0.45F, x, y, alpha(ORANGE, 1.0F), 0, 1.0F);
         y += 15.0F;
-        /* One word since the rename to Atlas (2026-10-14); it was two lines,
-           the old name over "ATLAS", and both lines said ATLAS after the rename. */
+
         TextImage.draw("ATLAS", BOLD, title, 0.02F, x - 2.0F, y, alpha(0xFFFFFFFF, 1.0F), 0, 1.0F);
         y += title * 0.86F + 26.0F;
 
@@ -211,9 +187,7 @@ public class AtlasMainMenu extends GuiScreen implements GuiYesNoCallback {
         String[] names = demo ? new String[]{"PLAY DEMO"} : new String[]{"PLAY", "MULTIPLAYER", "ALT MANAGER", "MODS"};
         int[] actions = demo ? new int[]{DEMO} : new int[]{SINGLEPLAYER, MULTIPLAYER, ALTS, MODS};
         float size = 12.0F;
-        /* 2026-10-13 (owner: PLAY's bar never drew back): one bar only, on
-           the entry under the pointer; with the pointer on none there is no
-           bar at all (owner, later the same day: not even on PLAY). */
+
         int pointed = -1;
         for (int i = 0; i < names.length; i++) {
             float w = TextImage.width(names[i], MEDIUM, size, 0.12F, 1.0F);
@@ -251,8 +225,6 @@ public class AtlasMainMenu extends GuiScreen implements GuiYesNoCallback {
             sx += w + 18.0F;
         }
     }
-
-    // ---- input ---------------------------------------------------------
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {

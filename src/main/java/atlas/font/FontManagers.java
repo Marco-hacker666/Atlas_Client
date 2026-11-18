@@ -5,7 +5,6 @@ import atlas.font.impl.UFontRenderer;
 import java.util.HashMap;
 
 public class FontManagers {
-
     public UFontRenderer s14;
     public UFontRenderer s16;
     public UFontRenderer s18;

@@ -19,31 +19,28 @@ import java.awt.*;
 public class ClickGUIModule extends Module {
     private boolean switchingGuiStyle;
 
-    // ── Color palette (same as TargetESP) ────────────────────────────────────
     private static final int[] COLORS = {
-            0xFF4FC3F7, // Sky Blue
-            0xFF81C784, // Green
-            0xFFFF8A65, // Orange
-            0xFFBA68C8, // Purple
-            0xFFFFD54F, // Yellow
-            0xFFFF6B6B, // Red
-            0xFF4DB6AC, // Teal
-            0xFFFFFFFF, // White
+            0xFF4FC3F7,
+            0xFF81C784,
+            0xFFFF8A65,
+            0xFFBA68C8,
+            0xFFFFD54F,
+            0xFFFF6B6B,
+            0xFF4DB6AC,
+            0xFFFFFFFF,
     };
     private static final String[] COLOR_NAMES = {
             "Sky Blue", "Green", "Orange", "Purple", "Yellow", "Red", "Teal", "White"
     };
 
     public ModeProperty accentColor = new ModeProperty("Color", 0, COLOR_NAMES);
-    /* Only Atlas and Normal (the backup) are left (2026-10-06): Raven B3/B4,
-       Cheadle, Modern and RiseLB were removed. The style is saved by name, so
-       a config naming one of the removed styles keeps this default, Atlas. */
+
     public ModeProperty style = new ModeProperty("Style", 1, new String[]{"Normal", "Atlas", "Panel", "Slinky", "Glide"});
-    /** The Slinky style's accent: switches, sliders, bound keys. */
+
     public ColorProperty slinkyAccent = new ColorProperty("slinky-accent", 0xDD4747, () -> this.style.getValue() == 3);
-    /** The Glide style's accent (2026-10-26): enabled modules, switches, sliders. The HUD keeps its own colours. */
+
     public ColorProperty glideAccent = new ColorProperty("glide-accent", 0x048668, () -> this.style.getValue() == 4);
-    /** The Glide style blurs the world behind its panels; off saves frames on weak PCs. */
+
     public BooleanProperty glideBlur = new BooleanProperty("glide-blur", true, () -> this.style.getValue() == 4);
     public BooleanProperty saveGuiState = new BooleanProperty("Save GUI State", true);
     public BooleanProperty shadow = new BooleanProperty("Shadow", true);
@@ -51,10 +48,9 @@ public class ClickGUIModule extends Module {
     public IntProperty windowWidth = new IntProperty("Window Width", 600, 300, 1200);
     public IntProperty windowHeight = new IntProperty("Window Height", 400, 200, 800);
     public FloatProperty cornerRadius = new FloatProperty("Corner Radius", 8.0f, 0.0f, 20.0f);
-    /* 2026-10-27 (owner: "can the mouse wheel scroll faster?"): rows (or 16 px) per wheel notch in the menus. */
+
     public IntProperty scrollSpeed = new IntProperty("Scroll Speed", 3, 1, 10);
 
-    /** Rows a wheel event moves the menus (notches times Scroll Speed); 1 before the module exists. */
     public static int wheelSteps(int wheel) {
         int notches = Math.max(1, Math.abs(wheel) / 120);
         ClickGUIModule gui = atlas.Atlas.moduleManager == null ? null
@@ -75,7 +71,7 @@ public class ClickGUIModule extends Module {
 
     public void openSelectedGui() {
         Minecraft mc = Minecraft.getMinecraft();
-        /* 2026-11-17: the privacy question comes first, once, before any menu (ui.ConsentScreen). */
+
         if (atlas.management.UsageReporter.consent() == null && !(mc.currentScreen instanceof atlas.ui.ConsentScreen)) {
             mc.displayGuiScreen(new atlas.ui.ConsentScreen(this::openSelectedGui));
             return;
@@ -109,7 +105,6 @@ public class ClickGUIModule extends Module {
         return ClickGuiScreen.getInstance();
     }
 
-    /** Whether the screen is one of the click menus. */
     public static boolean isClickGui(GuiScreen screen) {
         return screen instanceof ClickGuiScreen || screen instanceof AtlasClickGui
                 || screen instanceof atlas.ui.impl.clickgui.panel.PanelClickGui || screen instanceof SlinkyClickGui
@@ -126,15 +121,6 @@ public class ClickGUIModule extends Module {
         }
     }
 
-    /**
-     * The key with the menu already closed by Escape (2026-10-17): Atlas does
-     * not switch this module off when it closes, so the key used to switch it
-     * off and the legacy "ClickGui" opener on the same key opened it again --
-     * a second open over the first whenever the menu was really closed (the
-     * 110 ms per press). With that opener stood down, the first press after
-     * Escape only switched this off. Now a press with no menu showing opens
-     * it, whatever this module's state.
-     */
     @Override
     public boolean toggle() {
         Minecraft mc = Minecraft.getMinecraft();

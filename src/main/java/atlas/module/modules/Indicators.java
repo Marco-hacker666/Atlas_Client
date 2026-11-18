@@ -73,7 +73,6 @@ public class Indicators extends Module {
         return new Item();
     }
 
-    /** Themed by the Projectiles group. */
     private Color getIndicatorColor(Entity entity) {
         Color own = this.ownIndicatorColor(entity);
         ThemeStyle style = ThemeStyle.active(ProjectileColors.class);
@@ -134,6 +133,5 @@ public class Indicators extends Module {
         }
     }
 
-    /* Merged modules (2026-10-11, ModuleBundle). */
     public final atlas.module.ModuleBundle playersMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.Arrows(), "players", "Off-screen players", false);
 }

@@ -32,20 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Records the packet stream so a disconnect can be explained after the fact.
- *
- * A kick ends the session before anything printed to chat can be read, so the
- * recent traffic is held in a ring buffer and written to disk the moment a
- * disconnect packet arrives. The file is what survives; chat output is only
- * for watching live.
- *
- * Detail is extracted per packet type rather than logging class names alone,
- * because "sent 40 C08s" says nothing while "40 C08s at the same block in 6
- * ticks" identifies the module responsible.
- */
 public class PacketLogger extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File LOG_DIR = new File("./config/Atlas/");
     private static final SimpleDateFormat STAMP = new SimpleDateFormat("HH:mm:ss.SSS");
@@ -55,10 +42,7 @@ public class PacketLogger extends Module {
     public final IntProperty bufferSize = new IntProperty("buffer", 600, 50, 4000);
     public final TextProperty filter = new TextProperty("filter", "");
     public final BooleanProperty onDisconnect = new BooleanProperty("dump-on-kick", true);
-    /* A proxy network does not disconnect you when a child server kicks you:
-       it moves you to the lobby, so no disconnect packet ever arrives. The
-       chat line is the only thing that reliably marks the moment, and the
-       join-game packet marks the server switch that follows it. */
+
     public final TextProperty triggerText = new TextProperty("dump-on-text", "Invalid packets");
     public final BooleanProperty onServerSwitch = new BooleanProperty("dump-on-switch", true);
     public final KeyProperty dumpKey = new KeyProperty("dump-key", org.lwjgl.input.Keyboard.KEY_NONE);
@@ -100,8 +84,6 @@ public class PacketLogger extends Module {
         Packet<?> packet = event.getPacket();
         boolean send = event.getType() == EventType.SEND;
 
-        /* Kick detection runs whatever direction is being recorded: it is the
-           only chance to write the buffer before the evidence rolls out of it. */
         if (!send) {
             if (packet instanceof S40PacketDisconnect && onDisconnect.getValue()) {
                 record(false, packet, event.isCancelled());
@@ -172,7 +154,6 @@ public class PacketLogger extends Module {
         }
     }
 
-    /** Per-type detail, limited to the fields that identify a bad packet. */
     private String describe(Packet<?> packet) {
         if (packet instanceof C08PacketPlayerBlockPlacement) {
             C08PacketPlayerBlockPlacement p = (C08PacketPlayerBlockPlacement) packet;
@@ -244,7 +225,6 @@ public class PacketLogger extends Module {
         return sb.toString();
     }
 
-    /** Writes the ring buffer and the per-type totals to a timestamped file. */
     public void dump(String reason) {
         if (total == 0) {
             return;
@@ -297,6 +277,5 @@ public class PacketLogger extends Module {
         return new String[]{direction.getModeString(), String.valueOf(total)};
     }
 
-    /* Merged modules (2026-10-11, ModuleBundle). */
     public final atlas.module.ModuleBundle viewMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.ViewPackets(), "view", "Show in chat", false);
 }

@@ -7,16 +7,7 @@ import org.lwjgl.input.Keyboard;
 
 import java.util.function.BooleanSupplier;
 
-/**
- * An LWJGL key code held as a module setting.
- *
- * Distinct from a module's own keybind, which toggles the module: this is for
- * settings that need a key of their own, such as a hold-to-activate control.
- * Stored as a plain number so it round-trips through the config the same way
- * an IntProperty does.
- */
 public class KeyProperty extends Property<Integer> {
-
     public KeyProperty(String name, Integer value) {
         this(name, value, null);
     }

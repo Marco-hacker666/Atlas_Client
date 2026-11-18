@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): highlights nearby ores through walls.
-// RenderUtil has no 3D line helper, so the tracer segment is drawn here.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.util.concurrent.CopyOnWriteArraySet;
 
 import atlas.event.EventTarget;
@@ -149,7 +149,6 @@ public class BlocksESP extends Module {
         RenderUtil.disableRenderState();
     }
 
-    /** the client's RenderUtil has no line helper: the segment is drawn relative to the camera. */
     private void drawTracer(Vec3 start, double targetX, double targetY, double targetZ,
                             float red, float green, float blue, float alpha, float width) {
         double cameraX = ((IAccessorRenderManager) mc.getRenderManager()).getRenderPosX();

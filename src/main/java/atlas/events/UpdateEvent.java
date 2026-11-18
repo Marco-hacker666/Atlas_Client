@@ -55,7 +55,6 @@ public class UpdateEvent implements Event {
         return this.rotated;
     }
 
-    /** The priority the packet's look was last set at this tick; -1 when nobody set it. */
     public int getRotationPriority() {
         return this.lastPriority;
     }
@@ -69,12 +68,6 @@ public class UpdateEvent implements Event {
         }
     }
 
-    /* Ties go to the last caller, exactly as in setRotation. With `<` here the
-       first caller at a priority kept the movement yaw while the last one
-       took the packet, so two modules at one priority (KillAura runs LOW,
-       after AimAssist/ThrowAura/ChestAura/Speed at 1; Velocity after
-       PlainAura at 2) moved by one yaw and reported the other --
-       ENGINEERING-NOTES 4.12. */
     public void setPervRotation(float yaw, int priority) {
         if (this.type == EventType.PRE && this.priority <= priority) {
             this.prevYaw = yaw;

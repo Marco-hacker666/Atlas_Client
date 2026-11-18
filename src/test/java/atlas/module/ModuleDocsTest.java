@@ -13,9 +13,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.*;
 
-/** Every registered module has a description in ModuleDocs, and keys read as words (2026-10-04). */
 public class ModuleDocsTest {
-
     @Test
     public void everyRegisteredModuleIsDescribed() throws Exception {
         String atlas = new String(Files.readAllBytes(Paths.get("src/main/java/atlas/Atlas.java")), StandardCharsets.UTF_8);

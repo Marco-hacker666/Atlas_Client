@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-/** The ground input step TimerRange's Slinky modes predict with (2026-10-19). */
 public class TimerRangeSlinkyTest {
-
     @Test
     public void noInputNoMovement() {
         double[] m = TimerRangeSlinky.movement(0.0F, 0.0F, 0.0F, 0.13F);

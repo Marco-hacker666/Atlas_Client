@@ -48,299 +48,69 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
- * Holds outgoing movement, so the server's copy of this player runs behind the
- * real one.
- *
- * Built to match Vape v4: three modes, a delay in milliseconds, and a
- * transmission offset that only Repel uses. The modes are the interesting
- * part, and they were never what went wrong here -- an earlier attempt at this
- * had all three and was kicked from the server twice before being stripped
- * back to a constant delay. The faults were all in the plumbing underneath,
- * and they are fixed below rather than avoided by keeping the module simple.
- *
- * WHAT THE MODES ARE. Each asks a different question every tick.
- *
- *   LATENCY asks nothing. Every eligible packet waits the same number of
- *   milliseconds. Fifty milliseconds of real ping with two hundred set here is
- *   a two hundred and fifty millisecond connection, in both directions, all
- *   the time.
- *
- *   DYNAMIC (2026-10-27: what was LIQUID; the first DYNAMIC is gone) holds
- *   only on the approach to an opponent and lets the queue out before melee
- *   distance; the fight itself goes out honest, and after any release a
- *   recoil passes before it holds again. Out of a fight it adds nothing at
- *   all: a connection that is only ever late on the way in is a smaller
- *   thing for anyone to notice than one that is always late.
- *
- *   REPEL (since 2026-09-25 Vape's Repel, not the old position game) holds
- *   no movement at all. It holds one thing: an attack on someone who cannot
- *   be hurt yet, until they can -- their hurt time within the round trip
- *   HitTimer measures -- and then sends it, with a swing in front. An attack
- *   the server would have refused becomes one it accepts. Only attacks early
- *   by no more than delay (+ delay-random, + transmission offset) are held,
- *   and never longer. The old REPEL -- send only the positions that do not
- *   close the distance -- did what DYNAMIC and LIQUID already do and was
- *   dropped.
- *
- * WHAT WENT WRONG BEFORE, AND WHY IT CANNOT NOW.
- *
- * It delayed every outgoing packet, including the transaction replies. A 1.8
- * server times the round trip by sending a transaction and waiting for the
- * answer, and several -- Pika among them -- close the connection when the
- * answer is late rather than flagging it: "Unexpected pong response -380 -366
- * window: 0" is that happening. So the eligible set is an allow list. A deny
- * list is one forgotten packet away from a disconnect; an allow list is one
- * forgotten packet away from that packet not being delayed.
- *
- * It released from UpdateEvent, which the client fires from EntityPlayerSP
- * behind a check that the chunk under the player is loaded, while the hold ran
- * off the send path, which has no such condition. During a server transfer the
- * client went on cancelling movement while nothing released it: several
- * hundred packets accumulated, the player could not move because the server
- * had not heard from them, and when the chunks arrived the backlog went out at
- * once. Twenty-one lagbacks in three hundred milliseconds, then a kick. The
- * release now runs off TickEvent, which fires under exactly the condition the
- * hold path tests.
- *
- * Its ceiling was checked only by the release path -- which is no ceiling at
- * all on the one occasion it matters, because that is the path that had
- * stopped. The limits are now applied by the thread that fills the queue, so
- * whatever is growing it is also draining it. This is the fix that makes the
- * modes safe to have: none of them can hold anything for longer than the
- * ceiling allows, however confident their own reasoning is.
- *
- * It delayed placements and digs, which buys nothing -- holding a block
- * placement moves nobody's position -- while putting the delay on the one
- * thing in this game that has to feel immediate, and getting the placement
- * refused into the bargain, because the server judges it against the position
- * this module is deliberately keeping out of date. Three refusals inside one
- * second of the first test. Those actions now empty the queue and then go.
- *
- * And it flushed the held positions on a correction, when the server had just
- * finished saying where this player is. Sending them asks to be corrected
- * again; each correction triggered another flush. They are discarded instead.
- *
- * 2026-09-24: THE COMBAT RULES ARE NOW SHARED. The 09-23 test put all 31
- * corrections within a few ticks of a hit or of knockback. What LIQUID does
- * about that now applies to every mode: knockback, damage, a pushing
- * explosion, a placement or dig releases everything and starts a recoil
- * during which nothing is held; DYNAMIC and REPEL additionally stop holding
- * once an opponent is within melee distance of the server-side position, and
- * release on their own attack. What each mode does while it IS holding is
- * unchanged. Releases go through release-style (IN_ORDER or the old
- * COLLAPSE), so the two can be compared in play.
- *
- * 2026-09-25: NO MORE DUMPS (LIQUID). Every release used to put the whole
- * queue on the wire in one tick -- seven to seventeen positions -- and the
- * server does not take that: at 12:45:04 a ten-packet release on a slot
- * change was followed by a placement judged 5.7 blocks from where the
- * client was. Now the queue is let out, not dropped:
- *   - approaching, the delay shrinks to nothing over the last taper blocks
- *     before melee distance, so by the time the fight starts there is
- *     nothing left to send;
- *   - when holding stops for a reason the server has no need to hear about
- *     at once (retreating, standing still, no opponent, a screen, an item
- *     in use, water) the queue drains at catch-up positions a tick, and
- *     what is sent meanwhile waits its turn behind it so the order holds;
- *   - what does need the server current -- an attack, knockback, damage, a
- *     placement, a dig, a slot change, melee distance, a correction, death
- *     -- still empties it at once, as before.
- *
- * 2026-09-24: EVERY HOLD IS REPORTED (the log setting). A whole match could
- * not say whether LIQUID had held anything: the suffix shows a count for a
- * fraction of a second per approach, and FlagDetector names this module only
- * when a flag follows. Each hold now ends in one line -- how many packets,
- * for how long, against whom, and what released them -- and each engagement
- * ends in one line in the file saying why nothing was held the rest of the
- * time.
- */
 public class FakeLag extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     private static final int LATENCY = 0;
-    /**
-     * DYNAMIC (2026-10-27, owner: "rename Liquid to Dynamic and delete the
-     * original"): the mode that was LIQUID. The old DYNAMIC -- hold while an
-     * opponent is in range and not yet in melee, release everything at once
-     * -- is gone; a config saying LIQUID loads as this, one saying DYNAMIC
-     * gets this too. Below, "LIQUID" in older notes means this mode.
-     *
-     * LiquidBounce's gating (legacy FakeLag.kt and nextgen ModuleFakeLag.kt).
-     *
-     * The other combat modes hold hardest exactly while hits are being traded,
-     * which is where every one of their flags landed: 31 corrections in 9 s,
-     * all 1-4 t after a hit or 1-7 t after knockback (2026-09-23). LiquidBounce
-     * inverts that. It holds only on the approach, and goes honest -- releasing
-     * everything, in order -- the moment the fight actually starts: an
-     * opponent within melee distance of the server-side position, knockback,
-     * damage, an attack. After any release it will not hold again for a recoil
-     * period.
-     *
-     * Deliberately not copied: legacy LiquidBounce also flushes the queue when
-     * an S08 arrives. NOTES §2 says to discard stale positions on a
-     * correction, so this mode uses the existing S08/C06 handling instead.
-     */
+
     private static final int DYNAMIC = 1;
     private static final int REPEL = 2;
 
     public final ModeProperty mode = new ModeProperty("mode", 0,
             new String[]{"LATENCY", "DYNAMIC", "REPEL"}).alias("LIQUID", "DYNAMIC")
-            /* 2026-10-31 (owner's consolidation): REPEL retired, a config naming it gets DYNAMIC. */
+
             .retire("DYNAMIC", "REPEL");
 
-    /**
-     * Milliseconds each eligible packet waits.
-     *
-     * Exactly what it says. On a connection already past two hundred
-     * milliseconds, two hundred more is a great deal -- start low and raise it
-     * only while it is buying something.
-     */
     public final IntProperty delay = new IntProperty("delay", 150, 0, 1000);
 
-    /*
-     * 2026-10-23 (owner: "no flags"): what the server sees is the real ping
-     * plus this module's delay, and Pika's mitigation starts once that total
-     * is past about a quarter of a second. Each hold waits at most this many
-     * milliseconds minus the ping (Ping.own()), so the total stays under it;
-     * when less than MIN_WORTH_HOLDING would be left, DYNAMIC does not hold at
-     * all ("ping", let out gradually). 0 turns it off; with no ping reading
-     * the delay is used as set.
-     */
     public final IntProperty pingBudget = new IntProperty("ping-budget", 250, 0, 600);
     static final int MIN_WORTH_HOLDING = 40;
 
-    /** Extra milliseconds REPEL may hold an attack beyond delay and delay-random. */
     public final IntProperty transmissionOffset = new IntProperty("transmission-offset",
             0, 0, 400, () -> this.mode.getValue() == REPEL);
 
-    /** How near an opponent has to be for the two combat modes to engage. */
     public final FloatProperty range = new FloatProperty("range", 8.0F, 1.0F, 24.0F,
             () -> this.mode.getValue() != LATENCY);
 
-    /**
-     * Whether sending an attack empties the queue behind it.
-     *
-     * On. The held positions are what make the attack worth anything, and
-     * sitting on the movement after the attack has gone means the server
-     * resolves the hit against a position this client has already left and
-     * then receives a burst of movement explaining how it got there -- louder
-     * than the delay it is protecting.
-     */
     public final BooleanProperty releaseOnAttack = new BooleanProperty("release-on-attack",
             true, () -> this.mode.getValue() != LATENCY);
 
-    /**
-     * The most packets that may be held, whatever any mode thinks.
-     *
-     * A hard stop rather than a tuning knob, and the reason the modes are safe
-     * to have at all. Twenty is a second of movement; nothing good happens
-     * past that.
-     */
     public final IntProperty maxHeld = new IntProperty("max-held", 20, 4, 100);
 
-    /**
-     * DYNAMIC: an opponent this close to the server-side position ends the hold.
-     *
-     * LiquidBounce legacy's MinAllowedDistToEnemy upper bound (3.5). Inside
-     * this, hits are being exchanged, and holding would mean the server
-     * resolves them against a position the player has left.
-     */
     public final FloatProperty meleeDistance = new FloatProperty("melee-distance", 3.5F, 0.0F, 6.0F,
             () -> this.mode.getValue() != LATENCY);
 
-    /**
-     * DYNAMIC: milliseconds after any release during which nothing is held.
-     *
-     * LiquidBounce legacy's RecoilTime (750; nextgen uses 250). This is what
-     * stops the hold, release, hold, release cycle within one exchange: each
-     * release is a burst the server has to accept, so there should be few.
-     */
     public final IntProperty recoilTime = new IntProperty("recoil-time", 750, 0, 2000);
 
-    /**
-     * DYNAMIC: blocks before melee distance over which the delay runs down to
-     * nothing, so the queue is already empty when the fight starts. 0 keeps
-     * the full delay up to melee distance and then releases it all at once.
-     */
     public final FloatProperty taper = new FloatProperty("taper", 1.5F, 0.0F, 4.0F,
             () -> this.mode.getValue() == DYNAMIC);
 
-    /**
-     * DYNAMIC: positions a tick while the queue is let out -- one is what the
-     * client makes, so one more than that is the queue shrinking by one a
-     * tick. Releases that must be immediate ignore it.
-     */
     public final IntProperty catchUp = new IntProperty("catch-up", 2, 2, 5,
             () -> this.mode.getValue() == DYNAMIC);
 
-    /**
-     * How a release sends what was held.
-     *
-     * IN_ORDER sends every held packet as it was made (LiquidBounce's way):
-     * the server sees the real path, several positions in one tick. COLLAPSE
-     * keeps the actions but only the last position: one jump of the same
-     * total distance. NOTES 1 says both cost something and nothing so far
-     * says which Pika minds less -- this is here to be measured, not argued.
-     */
     public final ModeProperty releaseStyle = new ModeProperty("release-style", 0,
             new String[]{"IN_ORDER", "COLLAPSE"});
 
-    /* Up to this many milliseconds more than delay, drawn afresh for every
-       hold. A hold that always lasts exactly the same is a constant a timing
-       check can find; LiquidBounce draws each one from 300-600 ms, Vape's
-       Repel adds 0-99 ms (2026-09-25). In LATENCY, where the queue never
-       empties, it is redrawn every two seconds instead. */
     public final IntProperty delayRandom = new IntProperty("delay-random", 100, 0, 500);
 
-    /* 2026-10-12 (owner's log: LAGBACKs whose pull-back equals the distance
-       walked during the hold). Polar and Grim time movement with transactions:
-       the server sends one and its reply marks where the client was. Holding
-       the positions while the replies went out at once told the server
-       "these ticks have passed, but no movement for them", and the burst that
-       followed was more movement than the elapsed time allows -- set back.
-       While positions are held, the replies now wait in the same queue, in
-       order, so the server sees what real latency looks like: everything
-       late together. Never in LATENCY (its queue never empties, and a reply
-       that is always late is what got Pika to close the connection) and
-       never in REPEL (it holds no movement). */
     public final BooleanProperty holdTransactions = new BooleanProperty("hold-transactions", true,
             () -> this.mode.getValue() == DYNAMIC);
-    /* After a correction (S08), nothing is held for at least this long: a
-       setback says the server is watching this player's movement right now. */
+
     public final IntProperty flagPause = new IntProperty("flag-pause", 2000, 0, 5000);
 
-    /* Hold only with a weapon in hand -- a sword, or anything with Sharpness
-       (Slinky's "holding weapon" condition). With a bow, a rod, a pearl or
-       food out, the fight is not at arm's length and holding buys nothing;
-       the queue is let out as for the other quiet reasons. */
     public final BooleanProperty weaponsOnly = new BooleanProperty("weapons-only", true,
             () -> this.mode.getValue() != LATENCY);
 
-
-    /**
-     * Where holds are reported.
-     *
-     * One line per hold, from the first packet held to the release that
-     * emptied the queue, in chat and in config/Atlas/fakelag-<stamp>.txt. The
-     * file also gets one line per engagement: how long an opponent was in
-     * range, how much of it holding was allowed, and which condition ruled it
-     * out the rest of the time. Not in LATENCY, whose queue is only empty
-     * when something released it, so a hold there has no end to report.
-     */
     public final ModeProperty log = new ModeProperty("log", 2,
             new String[]{"OFF", "FILE", "CHAT+FILE"}, () -> this.mode.getValue() != LATENCY);
 
     private final ConcurrentLinkedQueue<Held> queue = new ConcurrentLinkedQueue<Held>();
-    /** This module's name at PacketHub. */
+
     private static final String HUB = "FakeLag";
 
-    /** The delay for the hold in progress (delay-random). */
     private volatile int rolledDelay = 150;
     private long rolledAt;
 
-    /* REPEL: the one attack being held, whom it is for, and until when. */
     private C02PacketUseEntity heldHit;
     private net.minecraft.entity.EntityLivingBase heldHitTarget;
     private long heldHitAt;
@@ -355,12 +125,10 @@ public class FakeLag extends Module {
         this.rolledAt = System.currentTimeMillis();
     }
 
-    /** What a held packet waits: the delay drawn for this hold, cut to the ping budget. */
     private int holdDelay() {
         return budgetedDelay(this.rolledDelay, Ping.own(), this.pingBudget.getValue());
     }
 
-    /** The delay left once the ping is taken out of the budget; unchanged when off or with no ping. */
     static int budgetedDelay(int rolled, int ping, int budget) {
         if (budget <= 0 || ping < 0) {
             return rolled;
@@ -368,86 +136,53 @@ public class FakeLag extends Module {
         return Math.max(0, Math.min(rolled, budget - ping));
     }
 
-    /** Whether the budget, not the delay setting itself, leaves too little to be worth holding. */
     static boolean pingRulesOut(int rolled, int ping, int budget) {
         int left = budgetedDelay(rolled, ping, budget);
         return left < rolled && left < MIN_WORTH_HOLDING;
     }
 
-    /** Outgoing packets currently held, for whatever is reporting on the connection. */
     public int heldCount() {
         return this.queue.size();
     }
 
-    /** DYNAMIC: no holding before this wall-clock time. Written from the network thread too. */
     private volatile long recoilUntil;
-    /** DYNAMIC: whether the conditions to hold were met at the last tick. */
+
     private boolean holdAllowed;
-    /** DYNAMIC: the queue is being let out rather than dropped; new packets wait behind it. */
+
     private volatile boolean easing;
-    /* 2026-10-21 (FakeLag/Backtrack review). Of 2,744 holds on 10-18..10-21, the ones the tick ended at once
-       went out in one tick: "melee" 619 (155 with 6+ positions), "hurt" 51; and a dig (126) or a right-click
-       on a block (51) emptied the queue ahead of itself. The setbacks naming FakeLag were those bursts.
-       DYNAMIC now drains instead: DRAIN_POSITIONS a tick, and what is sent meanwhile -- a dig, a click --
-       waits its turn behind, in order, so the server judges it where it was made. Only an attack,
-       knockback, a catch or a correction still empty the queue at once. */
+
     private volatile boolean drainingOut;
     static final int DRAIN_POSITIONS = 3;
 
-    /** Set from the network thread, acted on by the client thread. */
     private volatile boolean flushRequested;
     private volatile boolean attackQueued;
-    /** True while this module is putting its own packets back on the wire. */
+
     private volatile boolean releasing;
 
-    /** The last position the server was actually told about. Repel needs it. */
     private Vec3 lastSent;
 
-    /**
-     * Whether a position has already left this tick.
-     *
-     * The cap that was missing, and the cause of the lagbacks this module was
-     * still producing after the queue stopped running away. A client emits one
-     * position per tick, so a server receiving several in one tick is being
-     * told the player covered several ticks of ground in one -- "LAGBACK x4,
-     * max 2.8 blocks, sprint, air" is that, and so were the five placement
-     * refusals a second later, because each placement flushed the queue ahead
-     * of itself and was then judged against a position the server was still
-     * catching up to.
-     *
-     * Exactly the same mistake as the one in Blink's release earlier today,
-     * reached from the other direction and not recognised for what it was. It
-     * is not about how the packets are grouped; it is that N ticks of travel
-     * cannot be delivered in one tick by any arrangement.
-     */
     private boolean sentPositionThisTick;
 
     private static final File LOG_DIR = new File("./config/Atlas/");
     private static final SimpleDateFormat FILE_STAMP = new SimpleDateFormat("yyyyMMdd-HHmmss");
     private static final SimpleDateFormat LINE_STAMP = new SimpleDateFormat("HH:mm:ss");
-    /** An engagement ends once no opponent has been in range for this long. */
+
     private static final int ENGAGEMENT_GAP_TICKS = 60;
-    /** Anything shorter is someone walking past, and is not written. */
+
     private static final int ENGAGEMENT_MIN_TICKS = 20;
 
     private File logTarget;
 
-    /** Why the last tick did not allow holding; null when it did. */
     private String blockedBy;
-    /** The opponent the last tick reasoned about, for the reports. */
+
     private EntityPlayer currentTarget;
 
-    /* The hold in progress, from the first packet held to the release that
-       empties the queue. No hold is in progress while episodeStart is 0. */
     private long episodeStart;
     private int episodeHeld;
     private int episodePeak;
     private String episodeTarget;
     private double episodeDistance;
 
-    /* The engagement in progress: an opponent in range, until none has been
-       for ENGAGEMENT_GAP_TICKS. Counted per tick by the reason holding was
-       ruled out, so a match with no holds says why it had none. */
     private int tickCount;
     private String engagedWith;
     private int engagedLastSeen;
@@ -460,7 +195,7 @@ public class FakeLag extends Module {
     public FakeLag() {
         super("FakeLag", false, false,
                 "Delays outgoing movement so the server's copy of this player runs behind the real one");
-        /* One holder at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
+
         atlas.management.PacketHub.register(HUB, atlas.management.PacketHub.MOVEMENT,
                 () -> this.queue.size() + (this.heldHit != null ? 1 : 0), () -> {
                     releaseAll("packet hub");
@@ -468,7 +203,7 @@ public class FakeLag extends Module {
                         releaseHit("packet hub");
                     }
                 });
-        /* What is held, for PacketHolds (plan step 13). */
+
         atlas.management.PacketHolds.register(() -> {
             int count = this.queue.size() + (this.heldHit != null ? 1 : 0);
             if (count == 0) {
@@ -484,7 +219,6 @@ public class FakeLag extends Module {
                 return getName();
             }
 
-            /* The longest delay the settings can draw, and a second more. */
             @Override
             public long ceilingMs() {
                 return delay.getValue() + delayRandom.getValue() + atlas.management.PacketHolds.LEASE_MARGIN_MS;
@@ -507,8 +241,7 @@ public class FakeLag extends Module {
         this.lastSent = null;
         this.drainingOut = false;
         this.holdAllowed = false;
-        /* LiquidBounce does not lag on the first moments either: the
-           recoil applies from the switch-on, not only after a release. */
+
         this.recoilUntil = System.currentTimeMillis() + this.recoilTime.getValue();
         this.blockedBy = null;
         this.currentTarget = null;
@@ -531,20 +264,17 @@ public class FakeLag extends Module {
         this.currentTarget = null;
     }
 
-    /** Movement, the attack, and the swing that belongs with it. Nothing else. */
     private static boolean delayable(Packet<?> packet) {
         return packet instanceof C03PacketPlayer
                 || packet instanceof C02PacketUseEntity
                 || packet instanceof C0APacketAnimation;
     }
 
-    /** Things the server must judge against where the player really is. */
     private static boolean mustBeCurrent(Packet<?> packet) {
         return packet instanceof C07PacketPlayerDigging
                 || packet instanceof C08PacketPlayerBlockPlacement;
     }
 
-    /** An item use (not a placement) and the release that ends it: ordered, not judged by position. */
     private static boolean queuesBehind(Packet<?> packet) {
         if (packet instanceof C08PacketPlayerBlockPlacement) {
             return ((C08PacketPlayerBlockPlacement) packet).getPlacedBlockDirection() == 255;
@@ -553,14 +283,6 @@ public class FakeLag extends Module {
                 && ((C07PacketPlayerDigging) packet).getStatus() == C07PacketPlayerDigging.Action.RELEASE_USE_ITEM;
     }
 
-    /* A slot change or a sprint/sneak toggle is not judged against a
-       position, only against the order of the movement around it. Until
-       2026-09-25 they emptied the queue at once like a click: 14:36:07 a
-       stop-sprint sent ten held positions in one tick, the server pulled the
-       player back four times and refused every block for three seconds.
-       Queued behind what is held, in order, they are only late -- latency --
-       and the queue drains at its own pace. */
-    /** A transaction reply that must stay behind the positions held before it. */
     private boolean holdsReply(Packet<?> packet) {
         int mode = this.mode.getValue();
         return packet instanceof net.minecraft.network.play.client.C0FPacketConfirmTransaction
@@ -578,7 +300,6 @@ public class FakeLag extends Module {
         Packet<?> packet = event.getPacket();
         if (this.isEnabled() && event.getType() == EventType.SEND && !event.isCancelled()
                 && packet instanceof C03PacketPlayer && ((C03PacketPlayer) packet).isMoving()) {
-            /* Let through: now the last position the server has (heldServerPosition). */
             C03PacketPlayer position = (C03PacketPlayer) packet;
             this.lastSent = new Vec3(position.getPositionX(), position.getPositionY(), position.getPositionZ());
         }
@@ -592,21 +313,14 @@ public class FakeLag extends Module {
 
         if (event.getType() == EventType.RECEIVE) {
             if (packet instanceof S08PacketPlayerPosLook || packet instanceof S07PacketRespawn) {
-                /* Deferred to the tick: this runs on the network thread. */
                 this.flushRequested = true;
                 this.recoilUntil = System.currentTimeMillis()
                         + Math.max(this.recoilTime.getValue(), this.flagPause.getValue());
             } else if (hitsThisPlayer(packet)) {
-                /* Knockback or damage: the server now expects to see this
-                   player react, and every tick the reaction sits in the queue
-                   is a tick it looks like it was ignored. This is the half of
-                   the 2026-09-23 flags that said "kb 1t ago". */
                 this.recoilUntil = System.currentTimeMillis() + this.recoilTime.getValue();
                 final String cause = packet instanceof S12PacketEntityVelocity ? "knockback"
                         : packet instanceof S27PacketExplosion ? "explosion" : "damage";
-                /* The network thread must not send; the client thread runs
-                   scheduled tasks before its next tick, so the queue is gone
-                   before the first position that carries the reaction. */
+
                 mc.addScheduledTask(new Runnable() {
                     @Override
                     public void run() {
@@ -624,14 +338,8 @@ public class FakeLag extends Module {
         }
 
         if (this.flushRequested && packet instanceof C03PacketPlayer.C06PacketPlayerPosLook) {
-            /* The client's answer to the correction. Vanilla sends it from the
-               S08 handler, before the tick that acts on flushRequested, so it
-               used to be queued here and then thrown away with the stale
-               positions -- leaving the server waiting for a reply to its own
-               teleport. Clear the stale state now and let the answer go. */
             discardStalePositions();
-            /* Handled here, so the tick must not discard again: by then the
-               queue holds positions from after the reply, which are current. */
+
             this.flushRequested = false;
             return;
         }
@@ -650,15 +358,6 @@ public class FakeLag extends Module {
         }
         if (packet instanceof C08PacketPlayerBlockPlacement && !this.queue.isEmpty()
                 && atlas.util.ItemUtil.isHoldingBlock() && !Arbiter.catching()) {
-            /* A block placed while positions are still held. Emptying the
-               queue first sends them all in one tick, and the server answered
-               every such burst on 2026-09-25 by pulling the player back and
-               refusing the blocks (14:36:07, 14:55:16: switched to blocks
-               mid-hold and clicked at once). With blocks in hand the queue is
-               already being let out ("blocks"); the click takes its place
-               at the back and reaches the server in order, behind the
-               positions it was made from -- late, as with latency, but
-               judged exactly where it was made. */
             if (!atlas.management.PacketHub.take(event, HUB)) {
                     return;
                 }
@@ -668,16 +367,6 @@ public class FakeLag extends Module {
             return;
         }
         if (queuesBehind(packet) && !this.queue.isEmpty() && !Arbiter.catching()) {
-            /* 2026-10-17, owner: "FakeLag, please stop getting flagged". Of the
-               holds since 10-16, those ended by a right-click were followed by
-               a FakeLag-blamed setback within 2 s 51 % of the time (23/45),
-               and by an item in use 56 % (28/50), against 3-13 % for every
-               gradual release: a sword block (BlockHit Manual after a hit),
-               food, a bow or a pearl emptied 8-19 held positions in one tick.
-               A use (face 255) and its release are not judged against where
-               the player stands, so like a block placement they take their
-               place behind the held positions, in order -- late, as with
-               latency -- and "using-item" then lets the queue out gradually. */
             if (!atlas.management.PacketHub.take(event, HUB)) {
                 return;
             }
@@ -687,12 +376,8 @@ public class FakeLag extends Module {
             return;
         }
         if (mustBeCurrent(packet)) {
-            /* Emptied before this packet rather than after it. We are at the
-               head of the send call, so anything released here reaches the
-               server first and this one is judged against it. */
             this.recoilUntil = System.currentTimeMillis() + this.recoilTime.getValue();
             if (this.mode.getValue() == DYNAMIC && !this.queue.isEmpty() && !Arbiter.catching()) {
-                /* Behind what is held, in order, and the queue drains (drainingOut). */
                 if (!atlas.management.PacketHub.take(event, HUB)) {
                     return;
                 }
@@ -709,25 +394,16 @@ public class FakeLag extends Module {
             if (!(packet instanceof C02PacketUseEntity)
                     || ((C02PacketUseEntity) packet).getAction() != C02PacketUseEntity.Action.ATTACK
                     || Arbiter.catching()) {
-                /* REPEL holds attacks and nothing else. */
                 return;
             }
             net.minecraft.entity.Entity entity = ((C02PacketUseEntity) packet).getEntityFromWorld(mc.theWorld);
             if (this.heldHit != null) {
                 if (entity != null && entity == this.heldHitTarget) {
-                    /* Another click on the one already held for. It could
-                       not land either -- the target is still immune -- and
-                       sending the held one to make room for it is what made
-                       the first version useless at 12-16 clicks a second:
-                       every held attack went out a tick and a half later,
-                       still too early. The held one stands; this one is
-                       dropped (its swing has already gone, which is a miss
-                       like any other). */
                     event.setCancelled(true);
                     this.hitsMerged++;
                     return;
                 }
-                /* Someone else: the held one goes first, as it was made. */
+
                 releaseHit("switched target");
             }
             boolean armed = !this.weaponsOnly.getValue() || atlas.util.ItemUtil.hasRawUnbreakingEnchant();
@@ -755,38 +431,24 @@ public class FakeLag extends Module {
             return;
         }
         if (Arbiter.catching()) {
-            /* A fall is being caught (see Arbiter): the server has to have
-               every position as it happens, so nothing is held and what was
-               goes now. */
             if (!this.queue.isEmpty()) {
                 releaseAll("catch");
                 Arbiter.yielded(this.getName());
             }
             return;
         }
-        /* The rules below are what LIQUID proved, applied to every mode
-           (2026-09-24). The old DYNAMIC and REPEL held right through the
-           exchange of hits and collapsed the queue on each attack, and every
-           flag of the 09-23 test was 1-4 t after a hit or 1-7 t after
-           knockback. */
+
         boolean attack = packet instanceof C02PacketUseEntity
                 && ((C02PacketUseEntity) packet).getAction() == C02PacketUseEntity.Action.ATTACK;
         if (attack && this.mode.getValue() != LATENCY && this.releaseOnAttack.getValue()) {
-            /* The attack goes out live, behind everything held, and the recoil
-               keeps the rest of the exchange honest. */
             this.recoilUntil = System.currentTimeMillis() + this.recoilTime.getValue();
             releaseAll("attack");
             return;
         }
         if (!this.holdAllowed || System.currentTimeMillis() < this.recoilUntil) {
-            /* Checked here as well as at the tick: a release on the network
-               side sets the recoil between ticks, and the packets of the
-               current tick must already respect it. Released before this
-               packet goes, so nothing overtakes what was held. */
             if (!this.queue.isEmpty()) {
                 if (this.easing && System.currentTimeMillis() >= this.recoilUntil
                         || this.drainingOut && this.mode.getValue() == DYNAMIC) {
-                    /* Being let out: this one takes its place at the back. */
                     if (!atlas.management.PacketHub.take(event, HUB)) {
                                     return;
                                 }
@@ -800,18 +462,9 @@ public class FakeLag extends Module {
             return;
         }
         if (!mc.theWorld.isBlockLoaded(new BlockPos(mc.thePlayer.posX, 0.0, mc.thePlayer.posZ))) {
-            /* Mid-transfer, or the chunk under the player has not arrived.
-               Nothing is gained by delaying movement at a moment when the
-               player is not really anywhere, and holding here is what turned a
-               server change into a disconnect. */
             return;
         }
 
-        /* Held by cancelling the event rather than inside the mixin. The ledger
-           hears of it at the release (send), not here: holding moves nobody
-           on the server, and noting every held packet put this module at the
-           top of every correction in a fight just for being active
-           (2026-10-12). */
         if (!atlas.management.PacketHub.take(event, HUB)) {
             return;
         }
@@ -820,11 +473,8 @@ public class FakeLag extends Module {
         enforceLimits();
     }
 
-    /** The name a release is reported under when an action forced it. */
     private static String actionName(Packet<?> packet) {
         if (packet instanceof C08PacketPlayerBlockPlacement) {
-            /* Every right-click against a block or with an item in hand, not
-               only placements. */
             return "right-click";
         }
         if (packet instanceof C07PacketPlayerDigging) {
@@ -840,20 +490,11 @@ public class FakeLag extends Module {
         return packet.getClass().getSimpleName();
     }
 
-    /**
-     * The limits, applied by the thread that just added to the queue.
-     *
-     * Cheap, and touches nothing outside the queue, so it is safe to run on
-     * every outgoing packet -- which is the point. Whatever fills the queue
-     * also drains it, so no mode's reasoning, and no event failing to arrive,
-     * can let it run away.
-     */
     private void enforceLimits() {
         while (this.queue.size() > this.maxHeld.getValue()) {
             sendOne();
         }
-        /* A ceiling in time as well as in count. No mode may hold a packet
-           longer than this, whatever it believes it is achieving. */
+
         long deadline = holdDelay() + 500L;
         long now = System.currentTimeMillis();
         while (!this.queue.isEmpty() && now - this.queue.peek().stamp > deadline) {
@@ -870,19 +511,17 @@ public class FakeLag extends Module {
             this.queue.clear();
             this.heldHit = null;
             this.heldHitTarget = null;
-            /* Nothing to report: the connection these were for is gone. */
+
             this.episodeStart = 0L;
             return;
         }
-        /* A hold the delay or the limits drained rather than a release. */
+
         closeEpisode("drained");
         if (this.heldHit != null) {
             net.minecraft.entity.EntityLivingBase target = this.heldHitTarget;
             if (Arbiter.catching()) {
                 releaseHit("catch");
             } else if (target == null || target.isDead || mc.theWorld.getEntityByID(target.getEntityId()) != target) {
-                /* Dead, out of sight, or another world: an attack on nobody
-                   is dropped, not sent. */
                 this.heldHit = null;
                 this.heldHitTarget = null;
             } else if (target.hurtTime <= atlas.management.HitTimer.ticks()) {
@@ -914,8 +553,6 @@ public class FakeLag extends Module {
             return;
         }
         if (current == LATENCY) {
-            /* A constant delay, except around knockback and actions (above):
-               those release and start the recoil. */
             this.blockedBy = null;
             this.holdAllowed = true;
             releaseOlderThan(holdDelay());
@@ -923,7 +560,6 @@ public class FakeLag extends Module {
         }
 
         if (current == REPEL) {
-            /* Attacks only (above, and in onPacket); no movement is held. */
             this.holdAllowed = false;
             if (!this.queue.isEmpty()) {
                 releaseAll("repel");
@@ -932,37 +568,12 @@ public class FakeLag extends Module {
         }
     }
 
-    /**
-     * DYNAMIC, once a tick: decide whether the next tick may hold, and release
-     * what is due.
-     *
-     * Holds only while all of these are true -- each is a LiquidBounce
-     * condition:
-     *   moving, not using an item, no screen, not in water, not hurt, not in
-     *   singleplayer;
-     *   an opponent within range of the real position;
-     *   that opponent further than melee distance from the server-side
-     *   position (legacy MinAllowedDistToEnemy);
-     *   the server-side position no nearer to them than the real one, i.e.
-     *   approaching, not retreating (nextgen's serverDistance < clientDistance).
-     *
-     * Reaching melee distance counts as the fight starting and starts the
-     * recoil. The other conditions failing just releases: nothing happened
-     * that the server needs to see promptly.
-     *
-     * Releases are everything in order, as LiquidBounce does, not collapsed
-     * to the last position. Several positions in one tick is a known §1 cost;
-     * the recoil is what keeps it rare.
-     */
     private void dynamicTick() {
         long now = System.currentTimeMillis();
         this.drainingAhead = false;
         boolean hold = false;
         double taperFactor = 1.0;
-        /* The target is looked up whether or not the player is eligible, so
-           the engagement report can count the ticks an opponent was in range
-           but holding was ruled out. The decision below uses it only when
-           eligible, exactly as before. */
+
         String blocked = ineligibility();
         EntityPlayer target = nearestTarget();
         if (target == null) {
@@ -991,9 +602,6 @@ public class FakeLag extends Module {
                 double closingPerTick = this.closingSpeed(target, serverDistance);
                 if (hold && mustDrain(serverDistance, this.meleeDistance.getValue(),
                         closingPerTick, heldPositions(), this.catchUp.getValue())) {
-                    /* Not enough ticks left before melee distance to let the
-                       queue out at catch-up: start now, so it is empty when the
-                       fight starts instead of dumped in one tick. */
                     taperFactor = 0.0;
                     this.drainingAhead = true;
                 }
@@ -1015,7 +623,6 @@ public class FakeLag extends Module {
                     releaseDue(Long.MAX_VALUE, this.catchUp.getValue());
                     closeEpisode(blocked + ", let out");
                 } else {
-                    /* Melee, hurt, recoil: quickly, but not in one tick (drainingOut). */
                     this.drainingOut = true;
                     releaseDue(Long.MAX_VALUE, Math.max(DRAIN_POSITIONS, this.catchUp.getValue()));
                     closeEpisode(blocked + ", drained");
@@ -1027,7 +634,7 @@ public class FakeLag extends Module {
             return;
         }
         this.drainingOut = false;
-        /* Closing in: the delay runs down with the distance still to go. */
+
         long cutoff = now - (long) (holdDelay() * taperFactor);
         releaseDue(cutoff, taperFactor < 1.0 ? this.catchUp.getValue() : Integer.MAX_VALUE);
         if (taperFactor < 1.0) {
@@ -1036,21 +643,11 @@ public class FakeLag extends Module {
         this.drainingAhead = false;
     }
 
-    /*
-     * 2026-10-15: the fixed taper (1.5 blocks) was too short for two players
-     * running at each other. They close ~0.4-0.6 blocks a tick, so it lasted
-     * about three ticks, while catch-up 2 lets the queue out only one position
-     * a tick faster than it fills: holds of 6-12 packets were still there at
-     * melee distance or at the first attack and went out in one tick. Over
-     * 10-12..10-15, 11-12 % of those releases ("melee", "attack") were
-     * followed by a setback within 2 s, against 5 % for the ones let out.
-     */
     private double lastServerDistance = -1.0;
     private EntityPlayer lastDistanceTarget;
     private double closing;
     private boolean drainingAhead;
 
-    /** Blocks a tick the server-side distance to this target is shrinking, smoothed. */
     private double closingSpeed(EntityPlayer target, double serverDistance) {
         if (target != this.lastDistanceTarget || this.lastServerDistance < 0.0) {
             this.closing = 0.0;
@@ -1063,7 +660,6 @@ public class FakeLag extends Module {
         return this.closing;
     }
 
-    /** Positions in the queue. */
     private int heldPositions() {
         int count = 0;
         for (Held held : this.queue) {
@@ -1074,11 +670,6 @@ public class FakeLag extends Module {
         return count;
     }
 
-    /**
-     * Whether the queue has to start going out now to be empty by melee
-     * distance: at catch-up positions a tick, it shrinks by catch-up - 1 a
-     * tick, and the target closes {@code closingPerTick} blocks a tick.
-     */
     static boolean mustDrain(double serverDistance, double meleeDistance, double closingPerTick,
                              int heldPositions, int catchUp) {
         if (heldPositions <= 0 || closingPerTick <= 0.02) {
@@ -1089,17 +680,12 @@ public class FakeLag extends Module {
         return ticksToEmpty + 1.0 >= ticksLeft;
     }
 
-    /** Reasons to stop holding that the server has no need to hear about this tick. */
     private static boolean easesOut(String reason) {
         return "retreating".equals(reason) || "not-moving".equals(reason) || "no-target".equals(reason)
                 || "screen".equals(reason) || "using-item".equals(reason) || "water".equals(reason)
                 || "blocks".equals(reason) || "no-weapon".equals(reason) || "ping".equals(reason);
     }
 
-    /**
-     * Sends what was held before the cutoff, in order, with at most this many
-     * positions; anything else goes along with them.
-     */
     private void releaseDue(long cutoff, int positions) {
         int sent = 0;
         while (!this.queue.isEmpty() && this.queue.peek().stamp <= cutoff) {
@@ -1113,14 +699,6 @@ public class FakeLag extends Module {
         }
     }
 
-    /**
-     * Where the server last put this player, as far as the queue can say.
-     *
-     * The last position that reached it (2026-10-21; it was the oldest held,
-     * as LiquidBounce uses -- a tick ahead of what the server has). The oldest
-     * held when that is not known, after a correction; with nothing held the
-     * server is up to date and the real position is the answer.
-     */
     private Vec3 heldServerPosition() {
         for (Held held : this.queue) {
             if (held.packet instanceof C03PacketPlayer && ((C03PacketPlayer) held.packet).isMoving()) {
@@ -1134,10 +712,6 @@ public class FakeLag extends Module {
         return new Vec3(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ);
     }
 
-    /**
-     * DYNAMIC: the first of LiquidBounce's player conditions that rules holding
-     * out, or null when none does.
-     */
     private String ineligibility() {
         if (mc.isSingleplayer()) {
             return "singleplayer";
@@ -1146,9 +720,6 @@ public class FakeLag extends Module {
             return "screen";
         }
         if (mc.thePlayer.isUsingItem() || mc.gameSettings.keyBindUseItem.isKeyDown() || auraBlocking()) {
-            /* 2026-10-23: an aura's own block is a use packet with no item in
-               use on this client, and the use key held down is a block about
-               to start; both are let out the same gradual way. */
             return "using-item";
         }
         if (pingRulesOut(this.rolledDelay, Ping.own(), this.pingBudget.getValue())) {
@@ -1157,10 +728,7 @@ public class FakeLag extends Module {
         if (mc.thePlayer.isInWater()) {
             return "water";
         }
-        /* Blocks in hand: building, not fighting. Every block placed while
-           positions are held empties the queue in one tick first (a click is
-           judged where the player really is), and those bursts were behind
-           the refused blocks of 2026-09-25 14:36. */
+
         if (atlas.util.ItemUtil.isHoldingBlock()) {
             return "blocks";
         }
@@ -1177,7 +745,6 @@ public class FakeLag extends Module {
         return null;
     }
 
-    /** The sword is up because KillAura or KillAura2 raised it. */
     private static boolean auraBlocking() {
         KillAura aura = (KillAura) atlas.Atlas.moduleManager.getModule(KillAura.class);
         if (aura != null && aura.isEnabled() && aura.isAuraBlocking()) {
@@ -1186,7 +753,6 @@ public class FakeLag extends Module {
         return false;
     }
 
-    /** Every release goes through here, in the style the setting chooses. */
     private void releaseAll(String reason) {
         this.easing = false;
         this.drainingOut = false;
@@ -1198,7 +764,6 @@ public class FakeLag extends Module {
         closeEpisode(reason);
     }
 
-    /** Knockback, an explosion that pushes, or lost health. Runs on the network thread. */
     private static boolean hitsThisPlayer(Packet<?> packet) {
         if (mc.thePlayer == null) {
             return false;
@@ -1219,12 +784,6 @@ public class FakeLag extends Module {
         return false;
     }
 
-    /**
-     * Everything held, in the order it was made. LiquidBounce's blink().
-     *
-     * Unlike flush(), no position is skipped: the server gets the whole path
-     * rather than one jump to its end.
-     */
     private void flushInOrder() {
         int remaining = this.queue.size();
         for (int i = 0; i < remaining && !this.queue.isEmpty(); i++) {
@@ -1233,7 +792,6 @@ public class FakeLag extends Module {
         this.attackQueued = false;
     }
 
-    /** The nearest opponent worth holding packets against. */
     private EntityPlayer nearestTarget() {
         EntityPlayer best = null;
         double bestDistance = this.range.getValue();
@@ -1264,13 +822,6 @@ public class FakeLag extends Module {
         return best;
     }
 
-    /**
-     * Releases what is due, at the rate a client produces it.
-     *
-     * One position per tick and no more. Non-movement packets are not travel
-     * and pass without counting, because a server measuring speed has no
-     * opinion on how many swings arrive together.
-     */
     private void releaseOlderThan(int millis) {
         long now = System.currentTimeMillis();
         while (!this.queue.isEmpty()) {
@@ -1288,19 +839,6 @@ public class FakeLag extends Module {
         }
     }
 
-    /**
-     * Empties the queue in one pass, keeping only the last of the positions.
-     *
-     * For the moments that cannot wait several ticks to drain -- an attack, a
-     * placement, being switched off, dying. Replaying every held position
-     * claims each one as travel inside this tick; sending only the last claims
-     * the same total distance in a single move event, which is strictly less
-     * to object to and is what latency already explains at this delay. The
-     * intermediate ones describe a path the server does not need.
-     *
-     * Everything that is not a position is kept and sent in order, because
-     * those are things the player did.
-     */
     private void flush() {
         Held lastPosition = null;
         for (Held held : this.queue) {
@@ -1330,14 +868,6 @@ public class FakeLag extends Module {
         this.attackQueued = false;
     }
 
-    /**
-     * Empties the queue after a correction, throwing the positions away.
-     *
-     * The client has already answered the teleport with its own confirming
-     * position, so nothing is missing. Actions -- an attack, a swing -- are
-     * still sent, because those are things the player did and dropping them
-     * looks to them like the client ignoring input.
-     */
     private void discardStalePositions() {
         releaseHit("correction");
         int remaining = this.queue.size();
@@ -1352,8 +882,7 @@ public class FakeLag extends Module {
             send(held.packet);
         }
         this.attackQueued = false;
-        /* The server's position is authoritative now and this module's idea of
-           where it last put the player is not. */
+
         this.lastSent = null;
         closeEpisode("correction");
     }
@@ -1373,17 +902,6 @@ public class FakeLag extends Module {
         }
     }
 
-    /**
-     * Sent without an event, so it cannot be caught by the handler above and
-     * queued a second time. It still passes through the blink and lag
-     * managers, which is correct: if one of those is also holding packets it
-     * should get this one too.
-     */
-    /**
-     * Sends the held attack, behind whatever positions are held and with a
-     * swing of its own in front of it. The positions go first when the
-     * attack would have released them anyway (release-on-attack).
-     */
     private void releaseHit(String reason) {
         C02PacketUseEntity hit = this.heldHit;
         if (hit == null) {
@@ -1413,26 +931,21 @@ public class FakeLag extends Module {
         if (packet instanceof C02PacketUseEntity
                 && ((C02PacketUseEntity) packet).getAction() == C02PacketUseEntity.Action.ATTACK
                 && mc.theWorld != null) {
-            /* Sent without an event: tell the timer when it really left. */
             net.minecraft.entity.Entity attacked = ((C02PacketUseEntity) packet).getEntityFromWorld(mc.theWorld);
             atlas.management.HitTimer.noteAttackSent(attacked);
             FightLog.noteAttackSent(attacked);
         }
         this.releasing = true;
         try {
-            /* The release, stamped when it happens (plan step 12). */
             ActionLedger.note(this.getName(), "release");
             PacketUtil.sendPacketNoEvent(packet);
         } catch (Exception ignored) {
-            /* A disconnect part-way through. The rest describes a connection
-               that no longer exists. */
             this.queue.clear();
         } finally {
             this.releasing = false;
         }
     }
 
-    /** A packet was just held: starts the hold's record if it is the first. */
     private void noteHeld() {
         if (this.episodeStart == 0L) {
             if (this.mode.getValue() != LATENCY) {
@@ -1449,13 +962,6 @@ public class FakeLag extends Module {
         this.episodePeak = Math.max(this.episodePeak, this.queue.size());
     }
 
-    /**
-     * Reports the hold in progress, if the queue is now empty.
-     *
-     * Called after every release, so it is the emptying of the queue that
-     * ends a hold, whichever path emptied it; a release that left packets
-     * behind has not ended anything.
-     */
     private void closeEpisode(String reason) {
         if (this.episodeStart == 0L || !this.queue.isEmpty()) {
             return;
@@ -1485,7 +991,6 @@ public class FakeLag extends Module {
         }
     }
 
-    /** One tick of the engagement report. Also records what the tick decided. */
     private void observe(EntityPlayer target, String blocked) {
         this.blockedBy = blocked;
         this.currentTarget = target;
@@ -1519,7 +1024,6 @@ public class FakeLag extends Module {
         }
     }
 
-    /** Writes the engagement in progress, most frequent reason first, and ends it. */
     private void endEngagement() {
         if (this.engagedWith == null) {
             return;
@@ -1555,7 +1059,6 @@ public class FakeLag extends Module {
                 mc.thePlayer.posY + mc.thePlayer.getEyeHeight(), mc.thePlayer.posZ));
     }
 
-    /** Chat belongs to the client thread; a release can be reached from another. */
     private static void chat(final String line) {
         if (mc.isCallingFromMinecraftThread()) {
             ChatUtil.sendFormatted(line);
@@ -1569,12 +1072,11 @@ public class FakeLag extends Module {
         });
     }
 
-    /** One file per enable, appended to, like FlagDetector's and HitCheck's. */
     private void writeLog(String line) {
         if (this.logTarget == null) {
             this.logTarget = new File(LOG_DIR, "fakelag-" + FILE_STAMP.format(new Date()) + ".txt");
         }
-        /* Written on AsyncLog's thread: a file opened mid-tick is a stall. */
+
         AsyncLog.append(this.logTarget, LINE_STAMP.format(new Date()) + "  " + line);
     }
 

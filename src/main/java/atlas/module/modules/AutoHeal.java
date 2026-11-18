@@ -92,8 +92,6 @@ public class AutoHeal extends Module {
     @EventTarget(value = Priority.HIGH, whenDisabled = true)
     public void onTick(TickEvent event) {
         if (!this.isEnabled()) {
-            /* A keybind toggles between PRE and POST, i.e. after the switch
-               to the healing item and before the switch back. */
             restorePrevSlot();
         } else {
             if (hurtCheck.getValue()){
@@ -161,7 +159,6 @@ public class AutoHeal extends Module {
         }
     }
 
-    /* Merged modules (2026-10-11, ModuleBundle). */
     public final atlas.module.ModuleBundle potMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.AutoPot(), "pot", "Potions", false);
     public final atlas.module.ModuleBundle soupMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.AutoSoup(), "soup", "Soup", false);
     public final atlas.module.ModuleBundle gappleMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.AutoGapple(), "gapple", "Golden apples", false);

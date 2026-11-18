@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): spoofs the client brand on outgoing
-// MC|Brand payloads and can drop FML/FORGE mod channels.
+// Ported from OpenSkid (GPL-3.0)
+
 import io.netty.buffer.Unpooled;
 
 import atlas.event.EventTarget;
@@ -18,8 +18,6 @@ import net.minecraft.network.play.client.C17PacketCustomPayload;
 public class ModSpoofer extends Module {
     private static final String BRAND_CHANNEL = "MC|Brand";
 
-    /* 2026-11-10: merged into ClientSpoofer, both rewrote MC|Brand and whichever ran last won (Vanilla there, Forge
-       here: "fml,forge" could go out). ClientSpoofer owns the brand while it is on; these two only apply without it. */
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"Forge", "Vanilla", "Custom"},
             () -> !clientSpooferOn());
     public final TextProperty customBrand = new TextProperty("custom-brand", "fml,forge",

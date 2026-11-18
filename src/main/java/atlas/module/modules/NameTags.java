@@ -79,7 +79,7 @@ public class NameTags extends Module {
     public final BooleanProperty animals = new BooleanProperty("animals", false, () -> this.mode.getValue() == 0);
     public final BooleanProperty self = new BooleanProperty("self", false, () -> this.mode.getValue() == 0);
     public final BooleanProperty bots = new BooleanProperty("bots", false, () -> this.mode.getValue() == 0);
-    // raven mode's settings
+
     public final FloatProperty ravenScale = new FloatProperty("raven-scale", 1.0F, 0.5F, 2.0F, () -> this.mode.getValue() == 1);
     public final BooleanProperty ravenAutoScale = new BooleanProperty("raven-auto-scale", true, () -> this.mode.getValue() == 1);
     public final BooleanProperty ravenBackground = new BooleanProperty("raven-background", true, () -> this.mode.getValue() == 1);
@@ -231,7 +231,6 @@ public class NameTags extends Module {
                                 textColor.getRGB()
                         );
                         if (themed != null && themed.recolours()) {
-                            /* An accent under the tag in the line colour. */
                             float bottom = this.shadow.getValue() ? 0.0F : -1.0F;
                             RenderUtil.drawRect(
                                     (float) (-width) / 2.0F - 1.0F,
@@ -339,7 +338,6 @@ public class NameTags extends Module {
     }
 
     private void renderRaven(Render3DEvent event) {
-
         updateRavenStates();
 
         if (ravenStateCount == 0) return;
@@ -433,7 +431,6 @@ public class NameTags extends Module {
     private String buildRavenDisplayName(EntityPlayer entity, boolean showDist, float distance) {
         String name;
         if (ravenOnlyName.getValue()) {
-
             String formatted = getFirstColorCode(entity.getDisplayName().getFormattedText());
             String prefix = (formatted.length() >= 2 && formatted.charAt(0) == '§') ? formatted : "";
             name = prefix + entity.getName();
@@ -486,7 +483,6 @@ public class NameTags extends Module {
     }
 
     private int getTeamColorInt(EntityPlayer player) {
-
         String teamName = player.getDisplayName().getFormattedText();
         for (int i = 0; i < teamName.length() - 1; i++) {
             if (teamName.charAt(i) == '§') {
@@ -571,7 +567,7 @@ public class NameTags extends Module {
                 ravenFontRenderer = new UFontRenderer("Arial", 16);
             } catch (Exception e) {
                 System.err.println("[NameTags] Failed to create raven font renderer: " + e.getMessage());
-                // Fallback: try with default font
+
                 try {
                     ravenFontRenderer = new UFontRenderer("serif", 16);
                 } catch (Exception e2) {
@@ -683,9 +679,7 @@ public class NameTags extends Module {
         Tessellator tess = Tessellator.getInstance();
         WorldRenderer wr = tess.getWorldRenderer();
         float alpha = (float) ravenBgOpacity.getValue() / 100.0f;
-        /* NameTagColors: the background takes the fill, the border the line
-           colour -- and is drawn whenever the colour is themed. A friend's or
-           marked enemy's border keeps its colour. */
+
         ThemeStyle themed = ThemeStyle.active(NameTagColors.class);
         float bgR = 0.0f, bgG = 0.0f, bgB = 0.0f;
         if (themed != null) {

@@ -2,19 +2,8 @@ package atlas.lb.aiming;
 
 import java.util.Random;
 
-/**
- * The aura's server-side rotation, tick by tick (2026-10-25, LiquidBounce
- * NextGen port, GPL-3.0; RotationManager.update, RotationTarget.towards,
- * RotationsValueGroup and the ShortStop / Fail processors).
- *
- * The module asks for a rotation each tick it aims ({@link #request}); a
- * request lives ticks-until-reset ticks. While one is alive the rotation
- * turns toward it through the angle smoother, then Fail and ShortStop; once
- * it expires it turns back toward the camera the same way and is let go
- * within reset-threshold degrees of it (at once with no processors, or for
- * ChangeLook). Every result is snapped to whole mouse steps from the
- * rotation it came from. No game state.
- */
+// The aura's server-side rotation, tick by tick (LiquidBounce NextGen port, GPL-3.0)
+
 public final class AuraRotations {
     public static final int CORRECTION_OFF = 0;
     public static final int CORRECTION_STRICT = 1;
@@ -25,7 +14,7 @@ public final class AuraRotations {
     public int movementCorrection = CORRECTION_SILENT;
     public float resetThreshold = 2.0F;
     public int ticksUntilReset = 5;
-    /** This tick's turn is scaled by this (1: as the smoother says); humanization's speed variance sets it. */
+
     public float speedScale = 1.0F;
 
     public boolean shortStopOn;
@@ -49,7 +38,7 @@ public final class AuraRotations {
     private double requestedDistance;
     private boolean requestedCrosshair;
     private int requestTicks;
-    /** The target followed last tick (null once let go). */
+
     private Rotation previousTarget;
     private Rotation current;
     private Rotation previous;
@@ -69,7 +58,6 @@ public final class AuraRotations {
         this.random = random;
     }
 
-    /** The rotation the server gets now, or null when the camera's is used. */
     public Rotation current() {
         return this.current;
     }
@@ -78,7 +66,6 @@ public final class AuraRotations {
         return this.previous;
     }
 
-    /** Whether a target (alive or being reset from) is held. */
     public boolean active() {
         return this.requestTicks > 0 || this.previousTarget != null;
     }
@@ -95,12 +82,10 @@ public final class AuraRotations {
         this.previous = null;
     }
 
-    /** Drops the live request, so the next updates turn back to the camera (switched off, target gone for good). */
     public void expire() {
         this.requestTicks = 0;
     }
 
-    /** Aim at {@code rotation} (distance to the entity and whether the current look already lands on it, for Acceleration). */
     public void request(Rotation rotation, double distance, boolean onCrosshair) {
         this.requested = rotation;
         this.requestedDistance = distance;
@@ -108,7 +93,6 @@ public final class AuraRotations {
         this.requestTicks = this.movementCorrection == CORRECTION_CHANGE_LOOK ? 1 : Math.max(1, this.ticksUntilReset);
     }
 
-    /** Start of a client tick: Fail's roll (LiquidBounce rolls it on every game tick). */
     public void gameTick() {
         if (!this.failOn) {
             return;
@@ -124,11 +108,6 @@ public final class AuraRotations {
         }
     }
 
-    /**
-     * One step. {@code player} is the camera's rotation, {@code gcd} the mouse
-     * step in degrees (0: no snapping). Returns the rotation the server gets
-     * this tick, or null when the camera's is used (nothing held, or just let go).
-     */
     public Rotation update(Rotation player, double gcd) {
         boolean alive = this.requestTicks > 0;
         Rotation target = alive ? this.requested : this.previousTarget;
@@ -155,11 +134,6 @@ public final class AuraRotations {
         return this.current;
     }
 
-    /**
-     * This tick's look is {@code look} after all (2026-10-26: Velocity Polar's
-     * counter-hit went out along it, so the movement packet keeps it). The
-     * next step turns on from there. Only while this aura holds a rotation.
-     */
     public Rotation hold(Rotation look) {
         if (this.current != null) {
             this.current = look;
@@ -167,7 +141,6 @@ public final class AuraRotations {
         return look;
     }
 
-    /** Ticks the smoother needs from {@code from} to {@code to} (LiquidBounce's calculateTicks). */
     public int calculateTicks(Rotation from, Rotation to) {
         return this.smooth.calculateTicks(SmoothContext.estimate(this.previous), from, to);
     }

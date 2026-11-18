@@ -5,7 +5,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
 public class ChatAccentTest {
-
     @Test
     public void theAccentsGetAColourNotGrey() {
         assertEquals("Violet", '9', ChatAccent.codeFor(0xA78BFA));

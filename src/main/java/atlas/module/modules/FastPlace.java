@@ -34,15 +34,9 @@ public class FastPlace extends Module {
     public final BooleanProperty placeFix = new BooleanProperty("place-fix", true);
     public final BooleanProperty skipObsidian = new BooleanProperty("skip-obsidian", true);
     public final BooleanProperty skipInteractable = new BooleanProperty("skip-interactable", true);
-    /* While the server is pulling the player back, no placing at all.
-       After a lagback Pika sends a position every tick for a second or
-       more, moving the player along its own copy of the fall, and every
-       block clicked meanwhile is judged from where it is about to put them:
-       2026-09-25 14:36:10-11 and 14:47:56, seven blocks refused, each left
-       on screen as a block that is not there. */
+
     public final BooleanProperty pauseOnCorrection = new BooleanProperty("pause-on-correction", true);
 
-    /** Ticks after the last correction still treated as part of it. */
     private static final int CORRECTION_TICKS = 3;
     private volatile boolean corrected;
     private int ticksSinceCorrection = 1000;
@@ -88,7 +82,6 @@ public class FastPlace extends Module {
         }
     }
 
-    /** The server is moving the player itself (see pauseOnCorrection). */
     public boolean correcting() {
         return this.pauseOnCorrection.getValue() && this.ticksSinceCorrection <= CORRECTION_TICKS;
     }
@@ -103,8 +96,6 @@ public class FastPlace extends Module {
                 this.ticksSinceCorrection++;
             }
             if (correcting() && ItemUtil.isHoldingBlock()) {
-                /* Two, not one: the timer is counted down before this
-                   tick's click, so one would still let it through. */
                 IAccessorMinecraft accessor = (IAccessorMinecraft) mc;
                 if (accessor.getRightClickDelayTimer() < 2) {
                     accessor.setRightClickDelayTimer(2);

@@ -69,175 +69,41 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
- * Catches a fall with a block: knocked off a bridge, or walked off an edge
- * over the void.
- *
- * 2026-09-25 REWRITE. The previous version (a port of Raven bS's script) was
- * measured in a BedFight session with its debug output on, and failed in
- * three distinct ways, each visible in the log:
- *
- *   IT LOOKED FOR THE WRONG THING. It chose an existing solid block near where
- *   the player was heading and placed against one of its faces. The new block
- *   then sat beside the path rather than under it: three blocks placed at
- *   y84, y79 and y73 on one fall, each against a wall, and the player fell
- *   past all three into the void. It also only searched one to four blocks
- *   below the feet, so once knocked a few blocks under the bridge it found
- *   nothing at all -- "no aim" from fall 2 to fall 29, repeatedly, then death.
- *
- *   IT PLACED A TICK LATE. It aimed from the position before this tick's
- *   movement and clicked on the next tick, by which time the server had the
- *   position after it. Falling at one to three blocks a tick, the look
- *   direction it had validated no longer pointed at the face from where the
- *   server thought the player was: placements refused with nobody near
- *   (REJECT, body 14), and pulled back.
- *
- *   IT TRIGGERED ON FALL DISTANCE. Knockback throws the player up first, and
- *   the fall distance only starts counting at the top of the arc, which is
- *   the moment the bridge starts getting away.
- *
- * So this works the other way round, in the order a person who clutches well
- * thinks in:
- *
- *   WHERE WILL I BE. The fall is simulated tick by tick against the world's
- *   collision boxes (the idea Raven's auto-clutch uses for its trigger). That
- *   one prediction decides whether to act -- the void below, or after a hit a
- *   drop worse than safe-drop -- and where a block would have to be.
- *
- *   WHICH CELL CATCHES ME. Candidate cells are the ones under the predicted
- *   footprint whose top the feet actually cross, highest first: a block there
- *   ends the fall; a block anywhere else is decoration.
- *
- *   WHAT CAN I CLICK TO PUT ONE THERE. Any solid neighbour's facing side,
- *   including the underside of the block above (so a block can be hung under
- *   the bridge once already below it), reachable and unobstructed from where
- *   the eyes will be when the click is sent. With no neighbour at all, a short
- *   chain is built toward the cell from the nearest support, but only when
- *   there is time for every block of it.
- *
- *   HOW FAST MUST I TURN. Rotation speed comes from the time left: the angle
- *   still to cover over the ticks before the feet pass the cell (the planning
- *   rule LiquidBounce's MLG uses), clamped between speed and max-speed. An
- *   easy catch turns gently; a late one turns as fast as allowed.
- *
- *   CLICK AFTER THE MOVE IS SENT. The placement goes out in the POST update,
- *   after the movement packet carrying this tick's rotation, and is checked by
- *   a ray from the position that packet reported. The server validates the
- *   click against exactly what was just computed -- LiquidBounce does the same
- *   on old versions ("post move").
- *
- * Every attempt is counted, and the suffix shows saves out of attempts, so
- * whether a change helped is a number rather than an impression.
- *
- * SECOND PASS, same day, from the first BedFight session with it (3/5 in a
- * practice match, then 1/2 in a real one with 6 of its 8 blocks refused):
- *
- *   THE MOVEMENT DID NOT MATCH THE LOOK. The rotation was only put on the
- *   packet: movement in the air was still worked out from the camera's yaw,
- *   while the server, which knows only the yaw it is sent, works it out from
- *   that. Every other module here that turns the player registers its yaw
- *   for movement as well (setPervRotation) and remaps the keys to the
- *   nearest matching direction; this one never did, so the global MoveFix
- *   had nothing to fix with. Both attempts that had blocks refused came
- *   with a triple LAGBACK of 2.3 blocks, "exceeds travel", Clutch active --
- *   the server discarding the movement of the whole catch.
- *
- *   IT KEPT CLICKING THROUGH A CORRECTION. After a setback the server holds
- *   the player where it put them until the client confirms, and the
- *   corrections still in flight arrive one after another; every placement
- *   sent in that window was judged from a position the client no longer
- *   had. Now a correction (the confirming C06 sent outside the tick) stops
- *   clicks for a round trip, a refused block (S23 air on a block this placed)
- *   stops them for one too, and three refusals end the clicking for that
- *   attempt: past that, each block is only another flag.
- *
- *   "NOTHING TO BUILD FROM" SAID NOTHING. The two losses in practice left
- *   only that line. Every attempt is now traced tick by tick to
- *   config/Atlas/clutch-<stamp>.txt -- position, motion, catch levels, the
- *   plan or the reason there is none (out of reach and by how much, faces
- *   turned away, view blocked, a chain too slow for the time left), what
- *   stopped each click, corrections and refusals -- and chat gets the
- *   reason once it has lasted two ticks.
- *
- * THIRD PASS, ideas from Vape 4.21's clutch (read, not copied: it plans a
- * whole placement sequence once and verifies it in a full simulation; this
- * keeps re-planning every tick and takes only the three ideas that fit):
- *
- *   FIGHT THE PUSH. When the estimated drift is four blocks or more, Vape
- *   turns the player's movement back and holds forward. Here, after a hit
- *   that carries the player away from where they last stood, the keys are
- *   held toward that spot for the rest of the fall, remapped to the yaw the
- *   server is sent; the prediction includes the push, so the catch cells
- *   are where the steered player will actually be. When steering alone gets
- *   the player back onto something, no block is placed at all.
- *
- *   TURN BEFORE THE FACE IS THERE. Vape's simulation starts the rotation for
- *   a face that becomes clickable a few ticks later. Here, when nothing can
- *   be clicked from where the eyes are, the plan is also made from where
- *   they will be one to four ticks down the fall, and the turn starts now;
- *   with nothing at all, the look goes back to the block last stood on,
- *   where the supports are.
- *
- *   LET GO AFTER LANDING. Vape freezes movement for a few ticks after a fast
- *   clutch; here, three ticks after a steered save, or the held key walks
- *   the player off the one block that caught them.
- *
- * FOURTH PASS, same day, at the user's word (BedFight hands out ladders):
- *
- *   A LADDER WHEN NO BLOCK WILL DO. Vape's fallback, rebuilt for 1.8's own
- *   rules: a ladder only needs the body to enter its cell, at any speed, so
- *   it catches falls past a pillar or an island's side that a block could
- *   only catch by being under the feet in time. Then the player is pressed
- *   into it, climbs, and steps off onto the block it hangs on. See
- *   planLadder for why the click waits until the body is clear of the cell.
- *
- *   REAL BY DEFAULT, AND THE VIEW HANDED BACK. As Vape does: the camera is
- *   turned, which is what a server that watches rotations expects to see,
- *   and after the catch it is turned back to where it looked (reset-angle),
- *   unless the mouse takes it first. Meanwhile the keys keep meaning what
- *   they meant against that view.
- *
- *   ONE BLOCK A TICK. place-interval now defaults to 1, as Vape places; to be
- *   measured on Pika.
- */
 public class Clutch extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    /** Ticks of fall simulated: three seconds covers well over a hundred blocks. */
     private static final int HORIZON = 60;
-    /** A catch must happen within this many ticks of now to be planned for. */
+
     private static final int PLAN_TICKS = 16;
     private static final double FACE_INSET = 0.1;
     private static final int FACE_GRID = 4;
-    /** Above every combat rotation (they use up to 6): this one keeps the player alive. */
+
     private static final int ROTATION_PRIORITY = 7;
-    /** Refusals in one attempt after which it stops clicking: the server is not taking them. */
+
     private static final int MAX_REFUSALS = 3;
-    /** Ticks a reason must last before it goes to chat; the file gets every tick. */
+
     private static final int PROBLEM_TICKS = 2;
-    /** Lines kept for one attempt's trace: a three-second fall writes about two hundred. */
+
     private static final int TRACE_LIMIT = 800;
-    /** How far ahead of the fall a face is looked for, to start turning before it can be clicked. */
+
     private static final int PRE_AIM_TICKS = 4;
-    /** Ticks without movement after a steered save: long enough for the landing to stick. */
+
     private static final int SETTLE_TICKS = 3;
-    /** Steering stops this close, horizontally, to where the player last stood. */
+
     private static final double STEER_STOP = 0.3;
-    /** Beyond this, horizontally, the last standing place is no guide to anything. */
+
     private static final double ANCHOR_RANGE = 10.0;
-    /** A hurt this recent is what the player is flying from: knockback, not a jump. */
+
     private static final long KNOCKBACK_MILLIS = 1000L;
-    /** Ticks of the fall searched for a cell to hang a ladder in. */
+
     private static final int LADDER_TICKS = 12;
-    /** Climbing is given up this long after the ladder went up: the player has control again. */
+
     private static final int CLIMB_TICKS = 60;
-    /* Scaffold's SPEED-TELLY: blocks go along one lane (TellyLane). Nothing below that names the lane runs otherwise. */
-    /** Degrees the view may be off the lane before the next landing starts a new one. */
+
     private static final float LANE_KEEP = 35.0F;
-    /** Blocks ahead of the player the lane steers for: the sideways pull back onto it. */
+
     private static final double LANE_AHEAD = 3.0;
-    /** Ticks before the feet reach the layer from which a lane cell out of reach gives way to any catch. */
+
     private static final int LANE_RESCUE_TICKS = 3;
     private static final File LOG_DIR = new File("./config/Atlas/");
     private static final SimpleDateFormat FILE_STAMP = new SimpleDateFormat("yyyyMMdd-HHmmss");
@@ -246,143 +112,88 @@ public class Clutch extends Module {
     public final ModeProperty trigger = new ModeProperty("trigger", 2, new String[]{"AUTO", "HOLD", "BOTH"});
     public final KeyProperty holdKey = new KeyProperty("hold-key", Keyboard.KEY_NONE,
             () -> this.trigger.getValue() != 0);
-    /* REAL turns the camera, as a player would; SILENT only the packets. */
+
     public final ModeProperty mode = new ModeProperty("mode", 1, new String[]{"SILENT", "REAL"});
-    /** REAL: after the catch, turn the camera back to where it looked before. */
+
     public final BooleanProperty resetAngle = new BooleanProperty("reset-angle", true, () -> this.mode.getValue() == 1);
-    /* SILENT: movement is worked out from the yaw the server is sent, with the
-       keys remapped to the nearest direction that still goes where the player
-       meant -- the server can only check movement against that yaw. */
+
     public final ModeProperty moveFix = new ModeProperty("move-fix", 1, new String[]{"NONE", "SILENT"},
             () -> this.mode.getValue() == 0);
 
     public final FloatProperty reach = new FloatProperty("reach", 4.5F, 3.0F, 5.0F);
-    /* Only blocks within this cone of where the player looked when the catch
-       began. A catch that swings the view round behind the player is the
-       loudest turn it makes; 360 is no limit. */
+
     public final IntProperty fov = new IntProperty("fov", 360, 30, 360);
-    /* Only the sides of blocks: never the top of one below (which puts the
-       block under the feet a level lower) or the bottom of one above. */
+
     public final BooleanProperty onlySideways = new BooleanProperty("only-sideways", false);
-    /** Degrees a tick when there is time to spare. */
+
     public final IntProperty speed = new IntProperty("speed", 30, 5, 180);
-    /** Degrees a tick when the catch is about to be missed. */
+
     public final IntProperty maxSpeed = new IntProperty("max-speed", 60, 10, 180);
-    /* 2026-10-22 (owner, after Slinky's clutch): Even turns the view back in snapback-ticks equal parts, the last
-       one landing exactly (Slinky: rate 1/remaining); Speed is the old fixed degrees a tick. */
+
     public final ModeProperty snapbackStyle = new ModeProperty("snapback-style", 1, new String[]{"Speed", "Even"});
     public final IntProperty snapback = new IntProperty("snapback-speed", 20, 1, 100,
             () -> this.snapbackStyle.getValue() == 0);
     public final IntProperty snapbackTicks = new IntProperty("snapback-ticks", 4, 1, 20,
             () -> this.snapbackStyle.getValue() == 1);
-    /* Ticks the view stays where the catch left it before turning back. A
-       hand does not start back the instant the block is down. */
+
     public final IntProperty snapbackDelay = new IntProperty("snapback-delay", 0, 0, 20);
-    /* Up to this many ticks more, drawn for every turn back (Slinky draws its delay too). */
+
     public final IntProperty snapbackDelayRandom = new IntProperty("snapback-delay-random", 2, 0, 10);
-    /* Pressing jump while the view is being turned back finishes the turn at
-       once, so the jump goes where the player is looking. */
+
     public final BooleanProperty snapOnJump = new BooleanProperty("snap-on-jump", false);
-    /* Switch Clutch off once a catch is over and the view is back. */
+
     public final BooleanProperty disableAfter = new BooleanProperty("disable-after", false);
     public final IntProperty randomization = new IntProperty("rotation-random", 15, 0, 60);
-    /* 2026-10-22 (after Slinky's clutch): the turn's speed scaled by a factor that wanders every 2-4 ticks --
-       when a catch is due only upward (never slower than the time left needs, capped at max-speed), when
-       aiming ahead up and down; and while the look is steeply down (pitch > 75) the yaw wanders a little,
-       which moves the point looked at almost nothing. Percent; 0 = off. */
+
     public final IntProperty turnRandom = new IntProperty("turn-random", 25, 0, 60);
-    /* humanize (2026-10-04): the spot clicked on a face drawn from a normal
-       distribution, a new one every block, instead of always the edge
-       nearest the crosshair (scaled by rotation-random); and the turn handed
-       to the shared engine's NOISE and CURVE (amounts in the Rotations
-       module), the tick that lands on the target left exact. Off: exactly
-       the turn of before. */
+
     public final BooleanProperty humanize = new BooleanProperty("humanize", true);
-    /* The engine's EASE as well: slows the last stretch of a turn, which
-       costs ticks a catch may not have. Off by default for that reason. */
+
     public final BooleanProperty ease = new BooleanProperty("ease", false, this.humanize::getValue);
 
-    /** Without a hit, how far to fall toward the void before acting: a small hop is not a fall. */
     public final FloatProperty edgeFall = new FloatProperty("edge-fall", 1.0F, 0.0F, 10.0F);
-    /* Only falls with nothing under them. Catching a drop onto ground costs
-       blocks, turns and clicks the server can refuse, to save a few hearts:
-       the user asked for it off (2026-09-25). */
+
     public final BooleanProperty voidOnly = new BooleanProperty("void-only", true);
-    /** After a hit, drops longer than this are caught even where there is ground below. */
+
     public final FloatProperty safeDrop = new FloatProperty("safe-drop", 5.0F, 2.0F, 30.0F,
             () -> !this.voidOnly.getValue());
-    /* Not unless at least this many blocks of air are under the feet. 0 is
-       off. Over the void there is no bottom, so this only tells drops apart. */
+
     public final IntProperty minHeight = new IntProperty("min-height", 0, 0, 20);
     public final IntProperty combatWindow = new IntProperty("combat-window", 2500, 0, 8000);
 
-    /* Ticks between placements. Vanilla holds right click to one per four
-       ticks; a fast clicker manages one per two; Vape's clutch places one a
-       tick, which halves the time a chain needs. 1 is being tried on Pika
-       (2026-09-25): if placements start coming back refused, go to 2. */
     public final IntProperty placeInterval = new IntProperty("place-interval", 1, 0, 6);
-    /* Early turn (2026-10-04). A click goes out before the movement packet
-       that carries its look, so the look the server already has when the
-       click arrives is last tick's; 57% of the 10-04 20:35 clicks were aimed
-       somewhere that look did not reach, 105 of them after a turn of more
-       than 90 degrees in that same tick (places-20261004-203527). A turn
-       bigger than this, when the fall leaves a tick to spare, is made a tick
-       early and clicked along next tick; a turn this size or smaller, or one
-       with no tick to spare, is turned and clicked in the same tick as
-       before, so the one-block-a-tick chain keeps its pace. 180 = off. */
-    /* safe-mode switches both parts on (the click along the look already
-       sent, and the early turn); off, the catch runs exactly as the 10-03
-       07:40 jar: turn and click in the same tick. */
+
     public final BooleanProperty safeMode = new BooleanProperty("safe-mode", false);
     public final IntProperty earlyTurn = new IntProperty("early-turn", 45, 10, 180, this.safeMode::getValue);
     public final BooleanProperty chain = new BooleanProperty("chain", true);
     public final IntProperty chainLength = new IntProperty("chain-length", 3, 1, 6, this.chain::getValue);
-    /* Never build above the layer last stood on: knocked upward, the highest
-       crossed cell is above the bridge and the catch becomes a step up. Lower
-       layers stay allowed, so a fall past the bridge is still caught. Vape
-       catches at the height last stood on (fallTargetY). */
+
     public final BooleanProperty keepY = new BooleanProperty("keep-y", false);
-    /* After a catch, if the landing would be on the edge of the block with the
-       middle of the feet over air, place the block under the middle too --
-       Vape's landing extension. One per catch. */
+
     public final BooleanProperty extraBlock = new BooleanProperty("extra-block", true);
-    /* Hold the movement key toward where the player last stood while the hit
-       carries them away, and let go for a moment after landing on the block. */
+
     public final BooleanProperty counterKnockback = new BooleanProperty("counter-knockback", true);
-    /* Ticks after the hit before the push back starts. A server checking
-       that knockback was taken looks at the first ticks after it, and no
-       hand answers a hit in less than a few: pressing back from the tick of
-       the hit is what set the 2026-09-25 Pika lagbacks off. */
+
     public final IntProperty counterDelay = new IntProperty("counter-delay", 6, 0, 15, this.counterKnockback::getValue);
-    /* 2026-10-12 (owner's log: blocks refused "kb 0t ago", a Clutch lagback
-       0 t after a hit). No block is clicked until this many ticks after this
-       player was hurt: the knockback is taken whole first, then caught. The
-       turn toward the block goes on meanwhile, so the click is ready. A hit
-       lifts the player (motionY ~0.4), so two or three ticks cost no catch. */
+
     public final IntProperty hitSettle = new IntProperty("hit-settle", 2, 0, 6);
-    /* Turn toward a face that is not clickable yet but will be in a few ticks,
-       and with nothing at all to aim at, toward where the player last stood. */
+
     public final BooleanProperty preAim = new BooleanProperty("pre-aim", true);
-    /* With no block that can catch the fall in time, hang a ladder in a cell
-       the body will pass through, then press into it and climb. */
+
     public final BooleanProperty autoLadder = new BooleanProperty("auto-ladder", true);
 
     public final BooleanProperty autoSwitch = new BooleanProperty("auto-switch", true);
     public final BooleanProperty switchBack = new BooleanProperty("switch-back", true);
-    /* 2026-10-09: as Scaffold's / AutoBlockIn's item-spoof -- the slot really
-       changes (the server sees it), only the hand and the hotbar keep showing
-       what was held before the catch. Drawing only: placement is untouched. */
+
     public final BooleanProperty itemSpoof = new BooleanProperty("item-spoof", true, this.autoSwitch::getValue);
-    /* Switch only when the blocks in hand run out mid-catch; holding
-       something else when the catch starts, use nothing. */
+
     public final BooleanProperty onDepletion = new BooleanProperty("only-on-depletion", false,
             this.autoSwitch::getValue);
     public final BooleanProperty swing = new BooleanProperty("swing", true);
     public final BooleanProperty pauseClicker = new BooleanProperty("pause-autoclicker", true);
-    /** Chat as it happens, and every attempt traced tick by tick to config/Atlas/clutch-<stamp>.txt. */
+
     public final ModeProperty log = new ModeProperty("log", 2, new String[]{"OFF", "FILE", "CHAT+FILE"});
 
-    /** One way to put a block where it is wanted. */
     private static final class Plan {
         final BlockPos cell;
         final BlockPos support;
@@ -390,9 +201,9 @@ public class Clutch extends Module {
         final float yaw;
         final float pitch;
         final double cost;
-        /** Tick the feet reach the new block's top, or -1 for a chain step. */
+
         final int catchTick;
-        /** A ladder hung in the cell rather than a block put there. */
+
         boolean ladder;
 
         Plan(BlockPos cell, BlockPos support, EnumFacing side, float yaw, float pitch, double cost, int catchTick) {
@@ -406,9 +217,6 @@ public class Clutch extends Module {
         }
     }
 
-    /* The fall as simulated this tick: path.get(0) is where the player will be
-       after this tick's movement, which is also where the server will think
-       they are when the POST update clicks. */
     private final List<AxisAlignedBB> path = new ArrayList<AxisAlignedBB>();
     private AxisAlignedBB pathStart;
     private int landingTick;
@@ -417,7 +225,6 @@ public class Clutch extends Module {
     private boolean active;
     private Plan plan;
 
-    /** The rotation the server has been, or is about to be, given. */
     private float sentYaw;
     private float sentPitch;
     private boolean hasSent;
@@ -427,155 +234,127 @@ public class Clutch extends Module {
     private int lastHurtTime;
     private long lastHurtAt;
     private int lastHurtTick = -1000;
-    /* The turn so far -- last tick's step, for the rise to this one, and a
-       speed factor that drifts rather than being drawn fresh each tick --
-       kept by the engine shared with the other modules that turn. */
+
     private final RotationEngine engine = new RotationEngine();
-    /** Ticks still to wait before turning back (snapback-delay). */
+
     private int backWait;
-    /** The attempt began with blocks in hand (only-on-depletion). */
+
     private boolean startedWithBlocks;
     private int previousSlot = -1;
     private boolean slotSwapped;
-    /** The slot held before this catch switched, shown while item-spoof is on; -1 when none. */
+
     private int shownSlot = -1;
 
-    /** For the render mixins: the slot to draw instead of the real one, or -1. */
     public int getSpoofSlot() {
         return this.isEnabled() && this.itemSpoof.getValue() && this.slotSwapped ? this.shownSlot : -1;
     }
     private boolean clickerPaused;
 
-    /* One attempt: from the moment a catch is wanted until the player is on
-       the ground again, dead, or somewhere else. */
     private boolean attempt;
     private int attemptPlaced;
     private int attemptRefused;
     private int attemptTick;
     private double attemptStartY;
-    /** The latest reason nothing could be done, for the line that closes the attempt. */
+
     private String attemptProblem;
-    /* The reason as it runs: chat hears of it once it has lasted PROBLEM_TICKS. */
+
     private String problemKey;
     private int problemRun;
     private String saidProblem;
     private final Set<BlockPos> placed = new HashSet<BlockPos>();
-    /** extra-block: the cell under the middle of the landing this tick plans for, and whether this catch had it. */
+
     private BlockPos extraTarget;
     private boolean extraDone;
-    /** Last tick's position, to notice being moved by the server rather than falling. */
+
     private Vec3 lastPosition;
-    /** Where the player last stood: what a catch steers back toward and looks back at. */
+
     private Vec3 lastGround;
-    /*
-     * Owner, 2026-10-23: with keep-y on, a jump straight up -- no keys, no
-     * speed -- may still be built under ("I just jump up, it places for me").
-     * keep-y is there for jumps along a bridge and falls off an edge, where a
-     * block above the layer stood on lifts the player a block every jump
-     * (2026-10-03). Set when leaving the ground, cleared by speed in the air.
-     */
+
     private boolean plainJump;
     private boolean wasOnGround;
-    /** This tick: whether movement is steered, and toward which world yaw. */
+
     private boolean steering;
     private float steerYaw;
     private boolean attemptSteered;
-    /** Ticks left with no movement input, after a steered save. */
+
     private int settleTicks;
-    /** How many ticks ahead the plan was made from: 0 is from where the player is now. */
+
     private int planLead;
-    /** Stairs a diagonal lane walks along what is built before it stops looking: more than one jump can cross. */
+
     private static final int LANE_STAIR_CELLS = 16;
-    /** Ticks to the crossing at or under which a lane look is exact. */
+
     private static final int LANE_HUMAN_TICKS = LANE_RESCUE_TICKS + 3;
     private final atlas.humanize.Humanizer laneHuman = new atlas.humanize.Humanizer(atlas.humanize.Humanizer.CONSUMER_SCAFFOLD);
     private TellyLane lane;
-    /** This tick's blocks go along the lane. */
+
     private boolean laneNow;
-    /** This tick's keys go along the lane, toward laneYaw. */
+
     private boolean laneKeys;
     private float laneYaw;
-    /** Ticks before a landing the look may start home, so the turn back is not one packet. */
+
     private static final int LANE_BACK_TICKS = 3;
-    /** A look further than this from home is already on the blocks: no turning forward to wait. */
+
     private static final float LANE_FORWARD_MAX = 60.0F;
-    /** Blocks the lane still wants this jump. */
+
     private int laneLeft;
-    /** Off the view by more than this, the look is round at the blocks; under the second, it is back. */
+
     private static final float LANE_ROUND = 100.0F;
     private static final float LANE_BACK = 80.0F;
-    /** The side of the view the next jump goes from, 1 or -1. */
+
     private int laneSide = 1;
     private boolean laneRound;
-    /** Ticks until the feet reach the layer being built. */
+
     private int laneCrossing;
-    /** Where the steering heads for: the last standing place, or the ladder. */
+
     private double steerX;
     private double steerZ;
 
-    /* The ladder this attempt hung, if any, and the climb out of it. */
     private BlockPos ladderCell;
     private EnumFacing ladderSide;
     private int ladderTick;
     private boolean rodeLadder;
 
-    /* REAL: where the camera looked before the catch took it. */
     private float viewYaw;
     private float viewPitch;
     private int saves;
     private int attempts;
-    /* The last save, until the server has had time to refuse what it stood on. */
+
     private final Set<BlockPos> savedOn = new HashSet<BlockPos>();
     private int savedAt = -1000;
-    /* This player's own swings: a sprinting swing slows the client by 0.4
-       whether or not the server counts the hit, and the server slows its
-       copy only when it does. */
+
     private int lastAttackTick = -1000;
-    /** The tick of the last correction from the server. */
+
     private int lastCorrectedTick = -1000;
     private boolean lastAttackSprinting;
 
-    /* Server corrections. The update runs inside EntityPlayerSP.onUpdate; a
-       C06 sent outside it is the client confirming a teleport, which is the
-       exact moment the server's position and rotation for the player change. */
     private boolean inUpdate;
     private int tick;
-    /** Even snapback: ticks left for the turn back. */
+
     private int backTicksLeft;
-    /** Ticks left with no clicks, after a correction or a refusal. */
+
     private int pauseTicks;
-    /** Recently placed blocks and the tick each went down, for matching refusals. */
+
     private final Map<BlockPos, Integer> placedAt = new ConcurrentHashMap<BlockPos, Integer>();
-    /** Placed blocks the server set back to air, handed over from the network thread. */
+
     private final ConcurrentLinkedQueue<BlockPos> refused = new ConcurrentLinkedQueue<BlockPos>();
-    /**
-     * Support faces whose click onPlayerRightClick answered false, and the
-     * tick each may be tried again (2026-10-02). The plan is rebuilt every
-     * tick and a failed face is usually still the cheapest, so without this
-     * the same refused click repeated for the rest of the fall.
-     */
+
     private final Map<String, Integer> failedFaces = new HashMap<String, Integer>();
     private static final int FAILED_FACE_TICKS = 10;
-    /** A click was sent this tick (in PRE): no turn until the next tick. */
+
     private boolean holdThisTick;
-    /* The cell an early turn was aimed at last tick: this tick's click along
-       that look may place it even if this tick's plan moved on. */
+
     private BlockPos aimedCell;
     private int aimedTick;
-    /* Set while the click along the held look is tried: its "why not" notes
-       would repeat every tick, and the click after the turn writes its own. */
+
     private boolean quietNotes;
-    /* Yaw steps, for Grim DuplicateRotPlace (its memory is server-side, so
-       these are kept across enables): the last non-zero one sent, and the one
-       that was last when a block was placed. */
+
     private float lastTurn;
     private float placedTurn = -1.0F;
-    /* humanize: the preferred spot on the next face (face coordinates 0-1). */
+
     private final Random noise = new Random();
     private double aimU = 0.5;
     private double aimV = 0.5;
 
-    /* Why nothing could be aimed at this tick, counted over every face tried. */
     private int seenSupports;
     private int facesAway;
     private int facesFar;
@@ -627,7 +406,6 @@ public class Clutch extends Module {
 
     @EventTarget(whenDisabled = true)
     public void onLoadWorld(LoadWorldEvent event) {
-        /* A new world is a new fall, and the old attempt's blocks are gone. */
         abandonAttempt("world changed");
         clearLane();
         this.active = false;
@@ -645,9 +423,6 @@ public class Clutch extends Module {
         this.ladderCell = null;
     }
 
-    // --------------------------------------------------------------- logging
-
-    /** Chat, when the log setting says so, and always the attempt's trace. */
     private void say(String message) {
         trace(message.replaceAll("&[0-9a-fklmnor]", ""));
         if (this.log.getValue() == 2) {
@@ -655,11 +430,6 @@ public class Clutch extends Module {
         }
     }
 
-    /**
-     * One line of the attempt's trace, kept until the attempt ends and then
-     * written in one go -- a file opened every tick of a fall would be the
-     * slowest thing this module does.
-     */
     private void trace(String line) {
         if (this.log.getValue() == 0) {
             return;
@@ -673,7 +443,6 @@ public class Clutch extends Module {
         }
     }
 
-    /** A trace line for why the click did not happen, once per change. */
     private void note(String line) {
         if (this.quietNotes) {
             return;
@@ -691,14 +460,13 @@ public class Clutch extends Module {
         if (this.logTarget == null) {
             this.logTarget = new File(LOG_DIR, "clutch-" + FILE_STAMP.format(new Date()) + ".txt");
         }
-        /* Written on AsyncLog's thread: a file opened mid-tick is a stall. */
+
         List<String> lines = new ArrayList<String>(this.trace);
         lines.add("");
         AsyncLog.append(this.logTarget, lines);
         this.trace.clear();
     }
 
-    /** Ends an attempt that neither landed nor was lost, so its trace still gets written. */
     private void abandonAttempt(String why) {
         if (this.attempt) {
             this.attempt = false;
@@ -718,11 +486,6 @@ public class Clutch extends Module {
                 + held();
     }
 
-    /**
-     * What else was going on this tick that the server's view of the player
-     * depends on: a swing of this player's own, and outgoing packets some
-     * module is holding back. Empty when nothing was.
-     */
     private String held() {
         StringBuilder text = new StringBuilder();
         if (this.lastAttackTick == this.tick) {
@@ -739,14 +502,6 @@ public class Clutch extends Module {
         return text.toString();
     }
 
-    /**
-     * While a catch is placing, the player's own right click (vanilla's, in
-     * the same tick, before Clutch's) would be a second placement between two
-     * movement packets: Grim MultiPlace, and AirLiquidPlace against a block
-     * the server has not applied yet (22:08:51 and 22:09:19, right click held
-     * with FastPlace while towering). active is last tick's decision, which is
-     * exactly the tick whose plan clicks next.
-     */
     @EventTarget
     public void onRightClick(RightClickMouseEvent event) {
         if (!this.isEnabled()) {
@@ -757,14 +512,6 @@ public class Clutch extends Module {
             return;
         }
         if (this.hasSent) {
-            /* Handing the view back after a catch, and the player clicks: the
-               player has taken the view, as when the mouse moves. Their click
-               uses the look at the start of this tick, and the hand-back would
-               have sent the next step of its turn in the same tick's packet --
-               every such block flagged (Grim RotationPlace x6 + DuplicateRotPlace,
-               2026-10-02 22:54:29, FastPlace towering right after a catch, the
-               snapback turning ~12 degrees a tick). Not sending a rotation this
-               tick leaves the camera's, which is the look the click used. */
             this.resetting = false;
             this.hasSent = false;
         }
@@ -776,28 +523,14 @@ public class Clutch extends Module {
             return;
         }
         if (lookMisses(event.getTarget())) {
-            /* An aura's hit while the server has Clutch's look (see onLeftClick). */
             event.setCancelled(true);
             return;
         }
-        /* The tick counter moves in PRE, and swings are made before it. */
+
         this.lastAttackTick = this.tick + 1;
         this.lastAttackSprinting = mc.thePlayer.isSprinting();
     }
 
-    /*
-     * 2026-10-22 (owner: "only skip a hit when Clutch's server-side look is
-     * far from the target; other hits go through"). 19:38-19:51 on Pika:
-     * Clutch was named in 6 of 11 flags, all while fighting with it catching
-     * -- HITS-DROPPED x2 ("4 hits in a row with no reaction") and the one
-     * LOW-DAMAGE. The server judges a hit from the look it last received,
-     * which while Clutch catches is its own (down at a block), not the
-     * crosshair's. A hit whose ray from that look misses the target's hitbox
-     * does not count, and a run of them is what a mitigation check reads. So
-     * such a hit is not sent; any hit the look does reach goes out as before.
-     * The look used is the one already sent (the attack goes out before this
-     * tick's movement packet).
-     */
     private int skippedHits;
 
     private boolean lookMisses(net.minecraft.entity.Entity target) {
@@ -815,7 +548,6 @@ public class Clutch extends Module {
         return true;
     }
 
-    /** A click on an entity the server's look would miss: no swing, no hit. */
     @EventTarget
     public void onLeftClick(LeftClickMouseEvent event) {
         if (!this.isEnabled() || event.isCancelled() || mc.thePlayer == null || mc.objectMouseOver == null
@@ -831,13 +563,10 @@ public class Clutch extends Module {
         return Ping.own();
     }
 
-    /** A round trip in ticks: how long anything the server says takes to be answered. */
     private int roundTripTicks() {
         int ping = ping();
         return ping <= 0 ? 4 : MathHelper.clamp_int((ping + 49) / 50, 2, 8);
     }
-
-    // ----------------------------------------------------------- corrections
 
     @EventTarget
     public void onPacket(PacketEvent event) {
@@ -851,7 +580,7 @@ public class Clutch extends Module {
             }
             return;
         }
-        /* Network thread: only hand the position over. */
+
         if (packet instanceof S23PacketBlockChange && !this.placedAt.isEmpty()) {
             S23PacketBlockChange change = (S23PacketBlockChange) packet;
             BlockPos pos = change.getBlockPosition();
@@ -862,12 +591,6 @@ public class Clutch extends Module {
         }
     }
 
-    /**
-     * The server moved the player and the client has just confirmed it. The
-     * confirmation carries the camera's rotation, so that is now the rotation
-     * the server has; and until the corrections still in flight have landed,
-     * a click is judged from a position the client does not have.
-     */
     private void corrected(C03PacketPlayer.C06PacketPlayerPosLook packet) {
         this.lastCorrectedTick = this.tick;
         this.sentYaw = packet.getYaw();
@@ -880,7 +603,6 @@ public class Clutch extends Module {
         }
     }
 
-    /** Blocks the server took back: nothing placed against them will stand either. */
     private void drainRefusals() {
         BlockPos pos;
         while ((pos = this.refused.poll()) != null) {
@@ -893,8 +615,6 @@ public class Clutch extends Module {
                 this.ladderCell = null;
             }
             if (this.savedOn.contains(pos) && this.tick - this.savedAt <= 40) {
-                /* Refused after the landing: it was on a block the server
-                   never had, and it will move the player off it. */
                 this.savedOn.clear();
                 this.saves--;
                 say(String.format("&cthat save did not stand &8(the server refused %s, %dt after the landing)",
@@ -917,22 +637,6 @@ public class Clutch extends Module {
         }
     }
 
-    /**
-     * Last of all the input handlers, so the global MoveFix, which remaps the
-     * keys the player is holding, cannot undo the steering. The steered keys
-     * are chosen against the yaw movement is worked out from -- the one the
-     * server is sent -- so what the server re-simulates is a key press it
-     * could have seen.
-     */
-    /**
-     * 2026-10-12: no sprint while the view the server has points more than 90
-     * degrees away from the way the keys move the player. Facing back while
-     * sprinting forward is something no keyboard and mouse can do (846 of the
-     * owner's Clutch placements were made sprinting). Runs after vanilla's
-     * own sprint logic for the tick (LivingUpdateEvent fires just before
-     * the movement), so the state sent is the honest one; sprint comes back
-     * by itself once the view turns forward again.
-     */
     @EventTarget
     public void onLivingUpdate(atlas.events.LivingUpdateEvent event) {
         if (!this.isEnabled() || mc.thePlayer == null || !this.hasSent || !mc.thePlayer.isSprinting()
@@ -969,20 +673,12 @@ public class Clutch extends Module {
             return;
         }
         if (this.mode.getValue() == 1 && this.hasSent) {
-            /* REAL: the camera was turned by the catch, not by the player, so
-               the keys still mean what they meant before it turned. */
             press(MoveUtil.adjustYaw(this.viewYaw, MoveUtil.getForwardValue(), MoveUtil.getLeftValue()));
         } else if (this.mode.getValue() == 0 && this.moveFix.getValue() == 1) {
             MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
         }
     }
 
-    /**
-     * Keys that move the player toward this world yaw, against the yaw
-     * movement is worked out from: the nearest of the eight directions keys
-     * can make (sin 22.5 degrees), at the strength vanilla gives keys -- less
-     * when sneaking.
-     */
     private static void press(float worldYaw) {
         float moveYaw = RotationState.isActived() ? RotationState.getSmoothedYaw() : mc.thePlayer.rotationYaw;
         float relative = MathHelper.wrapAngleTo180_float(worldYaw - moveYaw) * 0.017453292F;
@@ -993,7 +689,6 @@ public class Clutch extends Module {
         mc.thePlayer.movementInput.moveStrafe = strafe > 0.38F ? strength : strafe < -0.38F ? -strength : 0.0F;
     }
 
-    /** Steers toward a point, horizontally; false when already there. */
     private boolean steerTo(double x, double z) {
         double dx = x - mc.thePlayer.posX;
         double dz = z - mc.thePlayer.posZ;
@@ -1006,16 +701,6 @@ public class Clutch extends Module {
         return true;
     }
 
-    /**
-     * Into the ladder once it is up: toward a point just inside the plate, so
-     * the body is pushed against it. On a 1.8 ladder the fall is held to 0.15
-     * a tick and the fall distance cleared, and pressing into it -- colliding
-     * sideways -- is what climbs (0.2 a tick up); at the top the body clears
-     * the block the ladder hangs on and steps onto it. Without the press the
-     * player slides out of the bottom of a one-block ladder in seven ticks.
-     * Given up when the player lands, falls well below it, drifts off, holds
-     * keys away from it, or after CLIMB_TICKS.
-     */
     private boolean climbing() {
         if (this.ladderCell == null || !this.attempt || mc.thePlayer.onGround) {
             return false;
@@ -1026,8 +711,6 @@ public class Clutch extends Module {
         double dz = faceZ - mc.thePlayer.posZ;
         if (this.tick - this.ladderTick > CLIMB_TICKS || dx * dx + dz * dz > 2.5 * 2.5
                 || mc.thePlayer.posY < this.ladderCell.getY() - 1.5) {
-            /* Missed it, knocked off it, or stuck on it: this ladder is done
-               with, and the fall may need another. */
             this.ladderCell = null;
             this.rodeLadder = false;
             return false;
@@ -1038,14 +721,6 @@ public class Clutch extends Module {
         return steerTo(faceX, faceZ);
     }
 
-    /**
-     * Whether to steer this tick, and where: back toward where the player
-     * last stood, while they are away from it. A hit sends the player off at
-     * several tenths of a block a tick and the air gives back two or three
-     * hundredths; held for the ten ticks a knockback arc lasts, that is most
-     * of a block less to cover, which is often the whole difference between
-     * a support within reach and none.
-     */
     private boolean decideSteer() {
         if (!this.counterKnockback.getValue() || this.lastGround == null) {
             return false;
@@ -1055,10 +730,7 @@ public class Clutch extends Module {
         if (dx * dx + dz * dz > ANCHOR_RANGE * ANCHOR_RANGE) {
             return false;
         }
-        /* Started only against a hit's push. Without one the player chose to
-           be going this way -- a jump across a gap reads as a fall into the
-           void until the far side is reached -- and so they did with the keys
-           held away from where they stood. Once started, it holds for the fall. */
+
         if (!this.attemptSteered) {
             boolean hitRecently = System.currentTimeMillis() - this.lastHurtAt < KNOCKBACK_MILLIS;
             boolean carriedAway = mc.thePlayer.motionX * dx + mc.thePlayer.motionZ * dz < 0.0;
@@ -1066,17 +738,12 @@ public class Clutch extends Module {
                 return false;
             }
             if (this.tick - this.lastHurtTick < this.counterDelay.getValue()) {
-                /* Not yet: the knockback is taken whole first. */
                 return false;
             }
         }
         return steerTo(this.lastGround.xCoord, this.lastGround.zCoord);
     }
 
-    /**
-     * Whether the keys held point away from this direction -- turned by the
-     * view the player chose, which in REAL is not the camera the catch turned.
-     */
     private boolean keysAway(double dx, double dz) {
         if (!MoveUtil.isForwardPressed()) {
             return false;
@@ -1086,16 +753,6 @@ public class Clutch extends Module {
         return -MathHelper.sin(yaw) * dx + MathHelper.cos(yaw) * dz < 0.0;
     }
 
-    // ------------------------------------------------------------ prediction
-
-    /**
-     * Simulates the fall from the current position and motion, the way the
-     * game moves a player in the air: the air's push from the keys, then move
-     * by the motion against the collision boxes axis by axis, then gravity and
-     * drag. The player's own keys are left out -- two hundredths of a block a
-     * tick -- but steering is not: it is held for the whole fall, so leaving
-     * it out would put every catch cell a block too far out.
-     */
     private void predict(boolean steer) {
         this.path.clear();
         this.landingTick = -1;
@@ -1105,7 +762,7 @@ public class Clutch extends Module {
         double my = mc.thePlayer.motionY;
         double mz = mc.thePlayer.motionZ;
         double apex = box.minY;
-        /* The air's push for a key: speedInAir, three tenths more sprinting. */
+
         double push = steer ? (mc.thePlayer.isSprinting() ? 0.026 : 0.02) : 0.0;
         for (int t = 0; t < HORIZON; t++) {
             if (push > 0.0) {
@@ -1155,11 +812,6 @@ public class Clutch extends Module {
         return this.landingTick < 0;
     }
 
-    /**
-     * The tick at which the feet reach the top of this cell while over it, or
-     * -1 if the fall passes it by. Checked against both ends of each step, so
-     * a fast fall cannot skip a column between two samples.
-     */
     private static int catchTick(List<AxisAlignedBB> path, AxisAlignedBB start, BlockPos cell, int limit) {
         double top = cell.getY() + 1.0;
         AxisAlignedBB previous = start;
@@ -1182,16 +834,6 @@ public class Clutch extends Module {
         return box.intersectsWith(new AxisAlignedBB(cell, cell.add(1, 1, 1)));
     }
 
-    /*
-     * 2026-10-22 (owner: "fix 1", Clutch placements refused). FlagDetector's
-     * BLOCKED-BY-BODY is a block refused with an opponent within 1.2 of it:
-     * vanilla will not place into anyone's hitbox, and the server judges it
-     * where the opponent really is, which this client sees late -- a round
-     * trip behind, interpolated a tick or two more. So no cell an opponent
-     * may be standing in is planned or clicked: each opponent's box where the
-     * client draws them and where the server last put them (serverPos),
-     * grown by how far they move in the time our click takes to arrive.
-     */
     private final List<AxisAlignedBB> opponentBoxes = new ArrayList<AxisAlignedBB>();
 
     private void updateOpponentBoxes() {
@@ -1213,7 +855,6 @@ public class Clutch extends Module {
         }
     }
 
-    /** An opponent may be standing in this cell when our click reaches the server. */
     private boolean opponentIn(BlockPos cell) {
         for (AxisAlignedBB box : this.opponentBoxes) {
             if (intersects(box, cell)) {
@@ -1223,18 +864,10 @@ public class Clutch extends Module {
         return false;
     }
 
-    // --------------------------------------------------------------- trigger
-
     private boolean holdActive() {
         return this.holdKey.getValue() != Keyboard.KEY_NONE && this.holdKey.isDown();
     }
 
-    /**
-     * Whether this fall should be caught. The void always; after a hit, any
-     * drop worse than safe-drop too, even while still rising from the hit --
-     * that rise is the time a catch needs. Without a hit, a big drop onto
-     * ground is taken to be deliberate.
-     */
     private boolean wanted() {
         if (mc.thePlayer.onGround || mc.thePlayer.capabilities.isFlying || mc.thePlayer.isInWater()
                 || mc.thePlayer.isInLava() || mc.thePlayer.isOnLadder() || mc.thePlayer.isRiding()) {
@@ -1248,9 +881,7 @@ public class Clutch extends Module {
             return holdActive();
         }
         boolean hit = System.currentTimeMillis() - this.lastHurtAt < this.combatWindow.getValue();
-        /* Without a hit, not while right click is held: that is someone
-           bridging by hand, and taking the rotation from under them would get
-           their own placements refused. */
+
         boolean edge = mc.thePlayer.fallDistance >= this.edgeFall.getValue()
                 && !mc.gameSettings.keyBindUseItem.isKeyDown();
         boolean auto = intoVoid()
@@ -1262,13 +893,6 @@ public class Clutch extends Module {
         return mode == 0 ? auto : auto || holdActive();
     }
 
-    // ------------------------------------------------------------- inventory
-
-    /**
-     * A block that will hold a player: solid, not something that falls, not
-     * something that opens. The held stack if it qualifies, so a player
-     * already holding blocks is not switched off them; otherwise the biggest.
-     */
     private int pickBlockSlot() {
         int current = mc.thePlayer.inventory.currentItem;
         if (usable(mc.thePlayer.inventory.getStackInSlot(current))) {
@@ -1291,8 +915,7 @@ public class Clutch extends Module {
             return false;
         }
         Block block = ((ItemBlock) stack.getItem()).getBlock();
-        /* A full cube by its bounds rather than isFullCube(), which is false
-           for glass -- the commonest bridging block there is. */
+
         boolean full = block.getBlockBoundsMinX() <= 0.0 && block.getBlockBoundsMaxX() >= 1.0
                 && block.getBlockBoundsMinY() <= 0.0 && block.getBlockBoundsMaxY() >= 1.0
                 && block.getBlockBoundsMinZ() <= 0.0 && block.getBlockBoundsMaxZ() >= 1.0;
@@ -1358,13 +981,10 @@ public class Clutch extends Module {
         }
     }
 
-    // ------------------------------------------------------------- planning
-
     private Vec3 eyesAt(AxisAlignedBB box) {
         return new Vec3((box.minX + box.maxX) / 2.0, box.minY + mc.thePlayer.getEyeHeight(), (box.minZ + box.maxZ) / 2.0);
     }
 
-    /** The vanilla look vector, with the game's own sine table, so the ray is the server's ray. */
     private static Vec3 look(float yaw, float pitch) {
         float cosYaw = MathHelper.cos(-yaw * 0.017453292F - (float) Math.PI);
         float sinYaw = MathHelper.sin(-yaw * 0.017453292F - (float) Math.PI);
@@ -1388,12 +1008,6 @@ public class Clutch extends Module {
         return !BlockUtil.isReplaceable(pos) && !BlockUtil.isInteractable(pos);
     }
 
-    /**
-     * The cheapest look, from these eyes, that puts a block into this cell by
-     * clicking one of its solid neighbours -- including the underside of the
-     * block above it. The ray is traced for every candidate, so a face hidden
-     * behind another block is never chosen.
-     */
     private Plan aim(BlockPos cell, Vec3 eyes, int catchTick) {
         Plan best = null;
         for (EnumFacing toSupport : EnumFacing.values()) {
@@ -1414,21 +1028,13 @@ public class Clutch extends Module {
         return best;
     }
 
-    /**
-     * The cheapest look, from these eyes, that hits this one face of the
-     * support, if it is cheaper than the bound: sampled over the face, each
-     * sample ray-traced. Counts why not, for the diagnosis.
-     */
     private Plan aimFace(BlockPos cell, BlockPos support, EnumFacing side, Vec3 eyes, int catchTick, double bound) {
         Plan best = null;
-        /* Chosen by turn plus, with humanize, a few degrees for each unit of
-           face away from this block's drawn spot; the plan keeps the bare turn
-           as its cost, which is what the timing is judged by. */
+
         double bestScore = Double.MAX_VALUE;
         double spread = spreadWeight();
         double reachSq = this.reach.getValue() * this.reach.getValue();
         {
-            /* The face must face the eyes, or no ray reaches it. */
             double nx = side.getFrontOffsetX();
             double ny = side.getFrontOffsetY();
             double nz = side.getFrontOffsetZ();
@@ -1445,14 +1051,7 @@ public class Clutch extends Module {
             double closest = Double.MAX_VALUE;
             boolean traced = false;
             boolean seen = false;
-            /* Planar multipoint (2026-10-17, owner after a player's advice):
-               every reachable sample of the face first, then the one nearest
-               this block's drawn spot among those within a turn slack of the
-               cheapest -- not the cheapest, which was nearly always the edge
-               nearest the crosshair: rotation-random 15 weighed only 3.6
-               degrees per face against the turn. The slack (rotation-random x
-               0.5 degrees, with humanize) is cut so an urgent catch still
-               turns in time; blocked samples fall through to the next. */
+
             List<double[]> samples = new ArrayList<double[]>();
             double cheapest = Double.MAX_VALUE;
             for (int i = 0; i <= FACE_GRID; i++) {
@@ -1491,7 +1090,7 @@ public class Clutch extends Module {
                 }
             }
             final double limit = cheapest + slack;
-            /* Within the slack, nearest the drawn spot first; then the rest by turn. */
+
             samples.sort((a, b) -> {
                 boolean inA = a[2] <= limit;
                 boolean inB = b[2] <= limit;
@@ -1524,33 +1123,11 @@ public class Clutch extends Module {
         return best;
     }
 
-    /** The cell a 1.8 player is "on a ladder" in: the column of the centre, the layer of the feet. */
     private static BlockPos ladderCellOf(AxisAlignedBB box) {
         return new BlockPos(MathHelper.floor_double((box.minX + box.maxX) / 2.0), MathHelper.floor_double(box.minY),
                 MathHelper.floor_double((box.minZ + box.maxZ) / 2.0));
     }
 
-    /**
-     * A ladder for a fall no block can catch in time. 1.8 decides "on a
-     * ladder" from the cell holding the centre's column and the feet's layer,
-     * at the start of each tick's move -- so a ladder in the cell the player
-     * is in after tick t holds them from tick t+1, whatever the speed: no top
-     * to cross, as a block needs, only a cell to enter. It needs a normal
-     * cube behind it (so not glass), which is what a pillar or an island's
-     * side offers a player falling down past it.
-     *
-     * The click must come while the body is still out of the cell. 1.8 checks
-     * the new ladder against the bodies around it using the ladder class's
-     * shared bounds, which hold whichever ladder was last looked at -- or a
-     * full cube if none has been -- not this one's plate; a body anywhere in
-     * the cell can get the click refused, on the client and on the server.
-     * So for the cell entered at tick t the last click is at the last tick k
-     * before that the body is clear of it, the turn has k+1 ticks, and the
-     * aim is taken from where the eyes will be then.
-     *
-     * The earliest cell that can be turned to in time wins: the sooner the
-     * catch, the less there is to climb.
-     */
     private Plan planLadder() {
         Plan best = null;
         int bestTick = Integer.MAX_VALUE;
@@ -1603,7 +1180,6 @@ public class Clutch extends Module {
         return false;
     }
 
-    /** Distance from the eyes to the nearest block that could be clicked, within a radius. */
     private static double nearestBlock(Vec3 eyes, int radius) {
         double best = Double.MAX_VALUE;
         int cx = MathHelper.floor_double(eyes.xCoord);
@@ -1636,10 +1212,6 @@ public class Clutch extends Module {
         this.chainLeft = 0;
     }
 
-    /**
-     * Why no face could be clicked this tick, as {key, words}: the key says
-     * which reason leads, for chat, and the words carry the numbers.
-     */
     private String[] diagnose(Vec3 eyes) {
         if (this.seenSupports == 0 && this.chainNeed == 0) {
             double nearest = nearestBlock(eyes, 6);
@@ -1676,7 +1248,6 @@ public class Clutch extends Module {
         return new String[]{key, words.toString()};
     }
 
-    /** Columns under the predicted footprint over the next few ticks. */
     private List<int[]> footprint(int ticks) {
         List<int[]> columns = new ArrayList<int[]>();
         Set<Long> seen = new HashSet<Long>();
@@ -1694,17 +1265,6 @@ public class Clutch extends Module {
         return columns;
     }
 
-    /**
-     * The catch cells, highest first: under the footprint, not inside the
-     * player where the click will be sent from, and actually crossed by the
-     * feet. Each level down is a block's worth more fall, so the first level
-     * with any cell wins.
-     *
-     * The click is sent in PRE, before this tick's move (2026-10-03), so "where
-     * the click is sent from" is the box now (pathStart), and the levels start
-     * under the feet now: a cell crossed during this tick's move can still be
-     * caught, the block going down before the move does.
-     */
     private List<List<BlockPos>> catchCells() {
         List<List<BlockPos>> levels = new ArrayList<List<BlockPos>>();
         if (this.path.isEmpty()) {
@@ -1732,29 +1292,13 @@ public class Clutch extends Module {
         return levels;
     }
 
-    /**
-     * keep-y: the highest layer a block may go on -- the layer stood on
-     * before this fall. No limit when keep-y is off or nothing was stood on.
-     */
     private int keepYTop() {
         return (this.keepY.getValue() || scaffoldTellyKeepY()) && this.lastGround != null && !this.plainJump
                 ? MathHelper.floor_double(this.lastGround.yCoord - 1.0E-3) : Integer.MAX_VALUE;
     }
 
-    /** Ticks before the feet reach a level that leave time to build to one landing cell rather than any. */
     static final int ONE_CELL_TICKS = 3;
 
-    /**
-     * One landing cell where there is time for it (owner, 2026-10-23: "the
-     * least blocks, a zigzag on a diagonal"). A diagonal fall crosses two to
-     * four columns per level and every one was a catch cell, so one catch
-     * took this column and the next that one, and chains came in from behind
-     * (12:05 log: 84 2x2 squares in 305 blocks). Vape builds to the cell under
-     * the landing and joins it to the blocks it has. Here: the column under
-     * the middle of the box when the feet cross the level, kept alone when
-     * that is still at least ONE_CELL_TICKS away; nearer than that, any cell
-     * that catches is taken, as before.
-     */
     private List<BlockPos> landingCellOnly(List<BlockPos> cells) {
         for (BlockPos cell : cells) {
             int crossing = catchTick(this.path, this.pathStart, cell, PLAN_TICKS);
@@ -1769,31 +1313,21 @@ public class Clutch extends Module {
         return cells;
     }
 
-    /** Whether the cell's column is the one under the middle of the box. */
     static boolean isUnderMiddle(AxisAlignedBB box, BlockPos cell) {
         return MathHelper.floor_double((box.minX + box.maxX) / 2.0) == cell.getX()
                 && MathHelper.floor_double((box.minZ + box.maxZ) / 2.0) == cell.getZ();
     }
 
-    /** A jump's first tick in the air has motionY about 0.33; walking off an edge has none. */
     static final double PLAIN_JUMP_RISE = 0.3;
-    /** Horizontal speed a jump straight up has none of: a sprint jump adds 0.2, walking 0.1. */
+
     static final double PLAIN_JUMP_SPEED = 0.08;
-    /** Speed picked up in the air that makes it a jump somewhere after all. */
+
     static final double PLAIN_JUMP_LOST = 0.15;
 
-    /** Whether leaving the ground with this motion, keys held or not, is a jump straight up. */
     static boolean isPlainJump(double motionY, double motionX, double motionZ, boolean keys) {
         return motionY > PLAIN_JUMP_RISE && !keys && Math.hypot(motionX, motionZ) < PLAIN_JUMP_SPEED;
     }
 
-    /**
-     * Whether the box rests on one of the cells: any of them directly under
-     * its bottom face. A diagonal fall crosses two to four columns at once,
-     * and each counts as a catch cell; once a block this catch placed holds
-     * the landing, the others are extra blocks (owner, 2026-10-23: a diagonal
-     * catch filled the whole 2x2 under the feet).
-     */
     static boolean restsOn(AxisAlignedBB box, Set<BlockPos> cells) {
         if (box == null || cells.isEmpty()) {
             return false;
@@ -1809,16 +1343,8 @@ public class Clutch extends Module {
         return false;
     }
 
-    /**
-     * extra-block: the cell under the middle of the predicted landing, on the
-     * layer the landing is on -- when this catch has placed a block next to it
-     * and the landing would be on that block's edge with the middle of the
-     * feet over air. Null otherwise. Vape extends a long clutch the same way
-     * (its "extensionTarget": the landing column at the target's height).
-     */
     private BlockPos extraCell() {
         if (this.lane != null && !this.plainJump) {
-            /* The lane has no blocks beside it. */
             return null;
         }
         if (!this.extraBlock.getValue() || !this.attempt || this.extraDone || this.attemptPlaced <= 0
@@ -1833,8 +1359,7 @@ public class Clutch extends Module {
                 || catchTick(this.path, this.pathStart, cell, PLAN_TICKS) < 0) {
             return null;
         }
-        /* Only beside a block this catch placed: ground that was already
-           there is not this module's to extend. */
+
         for (BlockPos pos : this.placed) {
             if (pos.getY() == level && Math.abs(pos.getX() - cell.getX()) <= 1
                     && Math.abs(pos.getZ() - cell.getZ()) <= 1) {
@@ -1844,12 +1369,6 @@ public class Clutch extends Module {
         return null;
     }
 
-    /**
-     * The cheapest direct catch, from the eyes "lead" ticks ahead: the click
-     * goes out in PRE of that tick, before its move, so the feet may cross the
-     * cell during that very move (crossing == lead) -- the block is there
-     * first. A cell crossed in an earlier move is behind.
-     */
     private Plan planCatch(List<List<BlockPos>> levels, Vec3 eyes, int lead) {
         for (List<BlockPos> cells : levels) {
             Plan best = null;
@@ -1870,20 +1389,12 @@ public class Clutch extends Module {
         return null;
     }
 
-    /**
-     * No catch cell can be clicked into: build toward one. A search outward
-     * from the catch cells through empty cells on the same level finds the
-     * nearest cell that does have a support; placing it gives its neighbour
-     * one next time. Only chains short enough to finish before the feet pass
-     * the level are started, since half a bridge catches nothing.
-     */
     private Plan planChain(List<List<BlockPos>> levels, Vec3 eyes, int lead) {
         if (!this.chain.getValue() || this.laneNow) {
-            /* The lane is its own chain: it never searches sideways. */
             return null;
         }
         int interval = Math.max(1, this.placeInterval.getValue());
-        /* The box the clicks go out from: now, before this tick's move. */
+
         AxisAlignedBB next = this.pathStart;
         for (List<BlockPos> cells : levels) {
             int deadline = PLAN_TICKS;
@@ -1905,11 +1416,6 @@ public class Clutch extends Module {
                     break;
                 }
                 if (d > 0) {
-                    /* Every block of the chain, this one included, has to go
-                       down before the feet reach the level: d + 1 clicks, the
-                       first in PRE of tick "lead", the last (the catch cell)
-                       in PRE of tick lead + d * interval, which may be the
-                       tick whose move crosses the level. */
                     if (d * interval + lead > deadline) {
                         int need = d * interval + lead;
                         if ((this.chainNeed == 0 || need < this.chainNeed) && supported(cell)) {
@@ -1943,17 +1449,6 @@ public class Clutch extends Module {
         return null;
     }
 
-    // -------------------------------------------------------------- rotation
-
-    /**
-     * An angular step toward the target, capped per tick. The cap is what the
-     * time left demands -- the angle to cover spread over the ticks before
-     * the catch -- kept between speed and max-speed; and, as a hand does, the
-     * turn gets up to that over a tick or two instead of starting at it, with
-     * its speed drifting rather than jumping about. The step is whole mouse
-     * counts at the player's sensitivity, as every turn a mouse makes is.
-     */
-    /* turn-random's two wandering values in [-1, 1]: speed, and the yaw drift when looking steeply down. */
     private final float[] wander = new float[2];
     private final float[] wanderFrom = new float[2];
     private final float[] wanderTo = new float[2];
@@ -1974,11 +1469,8 @@ public class Clutch extends Module {
         return this.wander[i];
     }
 
-    /** A catch or pre-aim turn: step scaled by turn-random, yaw drifting while the look is steep. */
     private void turnTo(float targetYaw, float targetPitch, float step, boolean urgent) {
         if (this.laneNow && this.laneCrossing > LANE_HUMAN_TICKS) {
-            /* SPEED-TELLY only, and only with time in hand: Humanization's aim error on the way to a lane block. None
-               near the block (HumanTurn.SETTLED) or close to the crossing, so a catch stays what it was. */
             float[] look = atlas.humanize.HumanTurn.apply(this.laneHuman, this.sentYaw, this.sentPitch, targetYaw, targetPitch);
             targetYaw = look[0];
             targetPitch = look[1];
@@ -1987,7 +1479,7 @@ public class Clutch extends Module {
         if (r > 0.0F) {
             float u = wander(0);
             float factor = urgent ? 1.0F + r * (u + 1.0F) / 2.0F : 1.0F + r * u;
-            /* A catch never turns slower than its time left needs; pre-aim may go either way. */
+
             step = urgent ? Math.min(step * factor, Math.max(step, this.maxSpeed.getValue()))
                     : Math.min(step * factor, this.maxSpeed.getValue());
             if (targetPitch > 75.0F) {
@@ -1999,8 +1491,6 @@ public class Clutch extends Module {
 
     private void stepRotation(float targetYaw, float targetPitch, float step) {
         if (this.holdThisTick) {
-            /* A click went out this tick: the movement packet after it has to
-               carry the rotation it was aimed with (see onUpdate). */
             return;
         }
         Set<RotationEngine.Feature> features = EnumSet.noneOf(RotationEngine.Feature.class);
@@ -2019,13 +1509,6 @@ public class Clutch extends Module {
                 && (Math.abs(turn - this.placedTurn) < 1.0E-3F
                 || atlas.management.PlaceRotations.wouldDuplicate(next[0])
                 || this.lane != null && TellyLane.onGrid(next[0])); guard++) {
-            /* Grim DuplicateRotPlace flags a placement whose yaw step equals the
-               one at the previous judged placement (22:09:20, x=0.0). One mouse
-               count more breaks the tie. Checked against the server's memory
-               as the sent packets build it (PlaceRotations, 2026-10-04): this
-               module's own placedTurn missed placements whose packet had no
-               look, the player's own clicks, and looks it did not send
-               (19:55:31, x=0.0). */
             double gcd = RotationUtil.gcd();
             next[0] += Math.signum(MathHelper.wrapAngleTo180_float(next[0] - this.sentYaw))
                     * (float) (gcd > 0.0 ? gcd : 0.01);
@@ -2038,11 +1521,6 @@ public class Clutch extends Module {
         this.sentPitch = next[1];
     }
 
-    /**
-     * humanize: the spot the next block is clicked at, in face coordinates,
-     * from a normal distribution around the middle of the face (sd 0.18),
-     * kept inside the sampled part of it.
-     */
     private void drawAimSpot() {
         double lo = FACE_INSET;
         double hi = 1.0 - FACE_INSET;
@@ -2050,12 +1528,10 @@ public class Clutch extends Module {
         this.aimV = Math.max(lo, Math.min(hi, 0.5 + this.noise.nextGaussian() * 0.18));
     }
 
-    /** Degrees of turn worth one unit of face away from the drawn spot: 6 at rotation-random 25. */
     private double spreadWeight() {
         return this.humanize.getValue() ? this.randomization.getValue() * 0.24 : 0.0;
     }
 
-    /** Within fov of where the player looked when the catch began. */
     private boolean inFov(Plan plan) {
         if (this.fov.getValue() >= 360) {
             return true;
@@ -2065,7 +1541,6 @@ public class Clutch extends Module {
         return RotationEngine.angle(plan.yaw, plan.pitch, yaw, pitch) <= this.fov.getValue() / 2.0F;
     }
 
-    /** Blocks of air straight under the feet, counted up to limit. */
     private int airBelow(int limit) {
         BlockPos feet = new BlockPos(mc.thePlayer.posX, mc.thePlayer.getEntityBoundingBox().minY - 0.01, mc.thePlayer.posZ);
         int air = 0;
@@ -2077,7 +1552,6 @@ public class Clutch extends Module {
 
     private float stepFor(Plan plan) {
         if (plan.catchTick < 0 || this.laneNow && lateTurn()) {
-            /* A chain has a deadline of its own blocks after this one; so has a lane that waited for the top. */
             return this.maxSpeed.getValue();
         }
         float needed = (float) plan.cost / Math.max(1, plan.catchTick);
@@ -2087,21 +1561,13 @@ public class Clutch extends Module {
     private void applyRotation(UpdateEvent event) {
         this.hasSent = true;
         if (this.mode.getValue() == 1) {
-            /* The camera follows across the frames of the tick rather than
-               jumping at its start -- which is a 20 Hz stutter of the whole
-               view -- and is there by the next tick. While it is handed back
-               the mouse still works, and moving it takes the view over. */
             Atlas.rotationManager.setRotation(this.sentYaw, this.sentPitch, ROTATION_PRIORITY, !this.resetting);
         }
         event.setRotation(this.sentYaw, this.sentPitch, ROTATION_PRIORITY);
-        /* The yaw movement is worked out from. Registered at this priority
-           even with move-fix off, so a combat module's cannot slip in under
-           a packet that carries this one. */
+
         event.setPervRotation(this.mode.getValue() == 1 || this.moveFix.getValue() != 0
                 ? this.sentYaw : mc.thePlayer.rotationYaw, ROTATION_PRIORITY);
     }
-
-    // ------------------------------------------------------------------ tick
 
     @EventTarget(Priority.HIGH)
     public void onUpdate(UpdateEvent event) {
@@ -2122,8 +1588,6 @@ public class Clutch extends Module {
         if (this.resetting && this.mode.getValue() == 1
                 && (Math.abs(MathHelper.wrapAngleTo180_float(mc.thePlayer.rotationYaw - this.sentYaw)) > 0.5F
                 || Math.abs(mc.thePlayer.rotationPitch - this.sentPitch) > 0.5F)) {
-            /* REAL: the mouse moved while the camera was being turned back.
-               The player has taken the view; stop handing it back to them. */
             this.resetting = false;
             this.hasSent = false;
         }
@@ -2156,11 +1620,6 @@ public class Clutch extends Module {
             this.wasOnGround = false;
         }
 
-        /* The click is made at the end of this PRE, after this tick's turn
-           (see post()). History: until 2026-10-02 it went out in POST, after
-           the movement packet -- Grim "Post" and "RotationPlace post-flying";
-           then at the start of the next PRE with that tick's turn held, which
-           cost a tick per block. */
         this.holdThisTick = false;
         this.laneKeys = false;
         updateLane();
@@ -2168,12 +1627,12 @@ public class Clutch extends Module {
 
         updateOpponentBoxes();
         predict(false);
-        /* extra-block wants this tick even when the fall itself no longer does. */
+
         BlockPos extra = extraCell();
         this.extraTarget = extra;
         boolean want = mc.currentScreen == null && !scaffolding() && (wanted() || extra != null);
         updateAttempt(want);
-        /* Tell the modules that hold packets or change movement (see Arbiter). */
+
         Arbiter.setCatching(getName(), this.attempt);
         Arbiter.setViewHeld(getName(), this.hasSent && this.mode.getValue() == 1);
         List<String> yielded = Arbiter.drainYielded();
@@ -2188,20 +1647,12 @@ public class Clutch extends Module {
             say("&acaught on the ladder &8(climbing)");
         }
         if (this.attempt && this.tick - this.lastCorrectedTick <= 1) {
-            /* The server is moving the player itself, a tick at a time, along
-               its own copy of the fall (Pika, after a lagback: an S08 every
-               tick until it lets go). Nothing done here reaches it -- clicks
-               are judged from where it is about to put the player, keys and
-               turns only add to what it is correcting. Hands off until it
-               stops; then the catch goes on from wherever that is. */
             this.steering = false;
             trace(state() + " | the server is moving the player: hands off");
             holdRotation(event);
             return;
         }
-        /* Whether to act is decided on the fall as it would go untouched; how,
-           on the fall as it will go with the steering held. On a ladder the
-           fall is not wanted at all, but the climb still has to be pressed. */
+
         this.steering = climbing() || (want && decideSteer());
         if (this.steering) {
             this.attemptSteered = true;
@@ -2220,17 +1671,13 @@ public class Clutch extends Module {
             this.active = false;
             this.aimedCell = null;
             stopPlacing();
-            /* Ease the view back instead of dropping it, so the server does
-               not see the aim vanish in a single tick. */
+
             if (this.hasSent) {
                 if (mc.currentScreen != null && scaffoldTelly()) {
-                    /* Speed Telly, 2026-11-05: no turn with an inventory open (Intave Heuristics, 22:35:15). The look
-                       stays as it is, so the packets carry none, and goes home once the screen closes. */
                     holdRotation(event);
                     return;
                 }
-                /* REAL moved the camera itself, so "back" is where it looked
-                   before the catch; SILENT never moved it. */
+
                 boolean real = this.mode.getValue() == 1;
                 if (real && !this.resetAngle.getValue()) {
                     this.hasSent = false;
@@ -2248,7 +1695,6 @@ public class Clutch extends Module {
                 if (laneJump) {
                     backYaw = laneHome(laneBackYaw());
                     if (laneJumpAngle() > 0.0F) {
-                        /* W and a side key: sprint holds, and the jump's yaw is off the lane, not the walk. */
                         aimAlongLane();
                     }
                 }
@@ -2264,11 +1710,8 @@ public class Clutch extends Module {
                     return;
                 }
                 if (jump && !this.holdThisTick) {
-                    /* Whatever an early start left: a jump goes on the yaw sent, so a little short costs little. */
                     float toYaw = backYaw;
                     if (laneJump) {
-                        /* Not all of it in one packet with the ticks either side still: Intave RotationSnapHeuristic,
-                           [0.00/167.40/0.00] at 21:45:39. The rest goes out next tick. */
                         toYaw = TellyLane.shortOfHome(this.sentYaw, backYaw, 12.0F + this.turnRandomSource.nextFloat() * 8.0F);
                         toYaw = TellyLane.awayFromHalfTurn(this.sentYaw, toYaw, 150.0F + this.turnRandomSource.nextFloat() * 15.0F);
                         this.engine.reset();
@@ -2277,7 +1720,6 @@ public class Clutch extends Module {
                     this.sentYaw = back[0];
                     this.sentPitch = back[1];
                 } else if (this.snapbackStyle.getValue() == 1) {
-                    /* Even: what is left over the ticks left; the last one lands on it. */
                     float left = Math.abs(MathHelper.wrapAngleTo180_float(backYaw - this.sentYaw))
                             + Math.abs(backPitch - this.sentPitch);
                     int ticks = Math.max(1, this.backTicksLeft);
@@ -2291,14 +1733,11 @@ public class Clutch extends Module {
                         && Math.abs(this.sentPitch - backPitch) < 0.5F) {
                     this.resetting = false;
                     if (laneJump && !real) {
-                        /* Not handed over: the camera's own yaw may be on the 45 degree grid. The turn out still
-                           starts from rest. REAL hands over as before: it reads the mouse only once it has. */
                         this.engine.reset();
                         return;
                     }
                     this.hasSent = false;
-                    /* A turn that placed nothing -- pre-aim, a fall that
-                       sorted itself out -- is not the catch it waits for. */
+
                     if (this.disableAfter.getValue() && this.attemptPlaced > 0) {
                         this.setEnabled(false);
                     }
@@ -2310,13 +1749,6 @@ public class Clutch extends Module {
         this.resetting = false;
         BlinkModules blinker = Atlas.blinkManager == null ? BlinkModules.NONE : Atlas.blinkManager.getBlinkingModule();
         if (blinker != BlinkModules.NONE) {
-            /* AntiVoid, Blink and the rest hold every packet, the clicks
-               included, and the server judges them late from a position it
-               is about to be told to forget (09:43:57 Blink, 12:27:22
-               AntiVoid). A catch needs the server current: let the held
-               movement go first. New blinks are refused while the catch is
-               on (Arbiter); Blink switches itself off when it loses the
-               queue. */
             int held = Atlas.blinkManager.blinkedPackets.size();
             Atlas.blinkManager.setBlinkState(false, blinker);
             say(String.format("&e%s was holding %d packets &8(released so the clicks count)", blinker, held));
@@ -2325,7 +1757,6 @@ public class Clutch extends Module {
         int blockSlot = pickBlockSlot();
         int ladderSlot = this.autoLadder.getValue() ? pickLadderSlot() : -1;
         if (!this.autoSwitch.getValue() || this.onDepletion.getValue() && !this.startedWithBlocks) {
-            /* Only what is already in hand. */
             ItemStack held = mc.thePlayer.inventory.getCurrentItem();
             blockSlot = usable(held) ? mc.thePlayer.inventory.currentItem : -1;
             ladderSlot = ladderSlot >= 0 && isLadder(held) ? mc.thePlayer.inventory.currentItem : -1;
@@ -2342,10 +1773,9 @@ public class Clutch extends Module {
         if (this.path.isEmpty()) {
             return;
         }
-        /* The eyes the click goes out from: now, before this tick's move. */
+
         Vec3 eyes = eyesAt(this.pathStart);
         if (extra == null && this.steering && !intoVoid() && this.predictedFall <= this.safeDrop.getValue()) {
-            /* Steering alone puts the player back on something: no block needed. */
             trace(state() + String.format(" | steering lands in %dt, %.1f fall", this.landingTick, this.predictedFall)
                     + steerText());
             holdRotation(event);
@@ -2354,10 +1784,6 @@ public class Clutch extends Module {
         if (extra == null && this.landingTick >= 0 && this.landingTick < this.path.size()
                 && this.predictedFall <= this.safeDrop.getValue() && !this.laneNow
                 && restsOn(this.path.get(this.landingTick), this.placed)) {
-            /* Caught: the fall now lands on a block this catch put down. The
-               columns beside it are still crossed by the feet, and placing
-               there too is what filled a 2x2 on diagonal falls. Vape plans
-               the landing cell once and stops at it. */
             trace(state() + String.format(" | caught: lands on a placed block in %dt, %.1f fall",
                     this.landingTick, this.predictedFall));
             holdRotation(event);
@@ -2392,11 +1818,9 @@ public class Clutch extends Module {
         }
         if (this.plan == null && !levels.isEmpty()) {
             why = diagnose(eyes);
-            /* Nothing clickable from here: look for a face that will be, a few
-               ticks down the fall, and start turning toward it now. */
+
             for (int lead = 1; this.preAim.getValue() && this.plan == null
                     && lead <= PRE_AIM_TICKS && lead < this.path.size(); lead++) {
-                /* PRE of tick "lead": after lead moves. */
                 Vec3 ahead = eyesAt(this.path.get(lead - 1));
                 this.plan = planCatch(levels, ahead, lead);
                 if (this.plan == null) {
@@ -2408,7 +1832,6 @@ public class Clutch extends Module {
             }
         }
         if (this.plan == null && this.laneNow && this.laneCrossing <= LANE_RESCUE_TICKS) {
-            /* The next lane cell cannot be had in time: not falling comes before the straight line. */
             this.laneNow = false;
             levels = catchCells();
             if (!levels.isEmpty()) {
@@ -2419,21 +1842,18 @@ public class Clutch extends Module {
             }
         }
         if (this.plan == null && !this.laneNow && ladderSlot >= 0 && this.ladderCell == null && extra == null) {
-            /* No block can catch this fall in time: hang a ladder in its way. */
             this.plan = planLadder();
             if (this.plan != null) {
                 selectSlot(ladderSlot);
             }
         }
         if (this.plan == null && extra != null) {
-            /* The extra block cannot be reached: the catch already holds. */
             this.extraDone = true;
         }
         if (this.plan == null) {
             trace(state() + " | " + levels(levels) + " | none: " + why[1]
                     + (ladderSlot >= 0 && this.ladderCell == null ? ", no ladder cell either" : "") + steerText());
             if (!this.laneNow) {
-                /* On the lane this is only the first ticks of a jump, before the turn can see the face. */
                 problem(why[0], why[1]);
             }
             lookBack(event, eyes);
@@ -2441,11 +1861,7 @@ public class Clutch extends Module {
         }
         this.problemKey = null;
         this.problemRun = 0;
-        /* Early turn, 1: a click along the look already sent, if it reaches a
-           wanted cell from where the server has the eyes. It costs no tick --
-           the click would go out this tick either way -- and needs no turn:
-           holdThisTick keeps that look for this tick's packet, so the look
-           before the click and the one after it are the same. */
+
         boolean safe = this.safeMode.getValue();
         if (safe) {
             this.quietNotes = true;
@@ -2455,26 +1871,18 @@ public class Clutch extends Module {
                 this.quietNotes = false;
             }
             if (this.plan == null) {
-                /* 2026-10-11: the click above finished the plan (3 NPEs in
-                   stepFor in the owner's logs): nothing left to turn to. */
                 lookBack(event, eyes);
                 return;
             }
         }
         boolean clickedHeld = this.holdThisTick;
-        /* Early turn, 2: a big turn with a tick to spare is made now and
-           clicked along next tick (by 1), aimed from where the eyes will be
-           then. "A tick to spare" is the planners' own test with the click a
-           tick later (lead 1): the catch cell is crossed no sooner, the chain
-           still ends in time. With no tick to spare, the turn and the click
-           share this tick as before. */
+
         boolean early = false;
         if (safe && !clickedHeld && this.planLead == 0 && !this.plan.ladder && this.earlyTurn.getValue() < 180
                 && this.path.size() > 1 && RotationEngine.angle(this.sentYaw, this.sentPitch,
                 this.plan.yaw, this.plan.pitch) > this.earlyTurn.getValue()) {
             Vec3 next = eyesAt(this.path.get(0));
-            /* The same kind of block on the same layer, a tick later: never a
-               direct catch traded for a chain, nor a layer further down. */
+
             Plan later = planCatch(levels, next, 1);
             if (later == null && this.plan.catchTick < 0) {
                 later = planChain(levels, next, 1);
@@ -2499,21 +1907,11 @@ public class Clutch extends Module {
                 this.pauseTicks > 0 ? " | paused " + this.pauseTicks + "t" : "", steerText())
                 + (extra != null ? " | extra block under the feet" : "")
                 + (clickedHeld ? " | clicked along the look already sent" : early ? " | early turn, click next tick" : ""));
-        /* The click, now: after this tick's turn, before this tick's movement
-           packet. The server -- Grim's RotationPlace "post-flying" as much as a
-           vanilla server -- judges it by the rotation that packet carries,
-           from where the player is now, which is exactly the ray post() casts.
-           That is also vanilla's own order (the click uses the look about to
-           be sent) and Vape's, and it places as soon as the turn lands: one
-           block a tick, where clicking a tick later with the turn held made
-           it one in two. Not after a click along the held look (one click a
-           tick), nor after an early turn (its click is next tick's). */
+
         if (!clickedHeld && !early) {
             post();
         }
     }
-
-    // ------------------------------------------------------------------ lane
 
     private void clearLane() {
         this.lane = null;
@@ -2521,17 +1919,12 @@ public class Clutch extends Module {
         this.laneKeys = false;
     }
 
-    /**
-     * WEIRD-TELLY's telly-jump-offset: how far off the view the look comes home for a jump. SILENT only: REAL would swing
-     * the camera with it. Every degree off is two less per jump for Intave RotationSpeed. SPEED-TELLY jumps at the view.
-     */
     private float laneJumpAngle() {
         Scaffold scaffold = (Scaffold) Atlas.moduleManager.getModule(Scaffold.class);
         return scaffold == null || this.mode.getValue() == 1 || !scaffold.isWeirdTelly() ? 0.0F
                 : scaffold.tellyJumpAngle.getValue();
     }
 
-    /** The side changes once per trip round to the blocks: a sprint jump goes along its yaw, so the drift cancels. */
     private void updateLaneSide() {
         if (this.lane == null || !this.hasSent) {
             return;
@@ -2545,14 +1938,12 @@ public class Clutch extends Module {
         }
     }
 
-    /** The yaw home, from the look sent: off the camera's by telly-jump-offset, or the view before a REAL turn. */
     private float laneBackYaw() {
         float view = this.mode.getValue() == 1 ? this.viewYaw : mc.thePlayer.rotationYaw;
         float home = TellyLane.jumpYaw(view, this.laneSide, laneJumpAngle());
         return this.sentYaw + MathHelper.wrapAngleTo180_float(home - this.sentYaw);
     }
 
-    /** Off Intave's 45 degree grid, stopping short of it on the side the look comes from. */
     private float laneHome(float backYaw) {
         return TellyLane.offGrid(backYaw, this.sentYaw, 0.3F + this.turnRandomSource.nextFloat() * 0.4F);
     }
@@ -2562,11 +1953,6 @@ public class Clutch extends Module {
         return scaffold != null && scaffold.tellyLateTurn.getValue();
     }
 
-    /**
-     * Stay facing forward for now: a telly player sprints up the jump and turns near the top (recording of 2026-11-06).
-     * Only while there is clearly time for the turn and every block, and never once anything is off: falling, hurt, or
-     * a block refused goes straight to the normal aim.
-     */
     private boolean laneWaitsForTop() {
         if (!lateTurn() || !MoveUtil.isForwardPressed() || !mc.gameSettings.keyBindJump.isKeyDown()
                 || mc.thePlayer.motionY <= 0.0 || mc.thePlayer.hurtTime > 0
@@ -2579,7 +1965,6 @@ public class Clutch extends Module {
         return TellyLane.waits(this.laneCrossing, this.laneLeft);
     }
 
-    /** The look stays home, following the mouse. Nothing to do while the camera's own look is what goes out. */
     private void laneFaceForward(UpdateEvent event) {
         if (!this.hasSent) {
             return;
@@ -2591,10 +1976,6 @@ public class Clutch extends Module {
         applyRotation(event);
     }
 
-    /**
-     * The lane has what this jump lands on: the last ticks of the air take the look most of the way home, so the jump
-     * does not need it in one packet (Intave SharpRotation counts yaw steps near 180 and cancels the placement).
-     */
     private void laneStartHome(UpdateEvent event) {
         boolean jumping = MoveUtil.isForwardPressed() && mc.gameSettings.keyBindJump.isKeyDown();
         if (!jumping || this.landingTick < 1 || this.landingTick > LANE_BACK_TICKS) {
@@ -2608,10 +1989,6 @@ public class Clutch extends Module {
         applyRotation(event);
     }
 
-    /**
-     * Scaffold's SPEED-TELLY: on the ground, which cell of the lane is stood on. Standing off it, or facing more
-     * than LANE_KEEP away from it, starts a new one from the block under the feet, the way the keys go.
-     */
     private void updateLane() {
         if (!scaffoldTelly()) {
             clearLane();
@@ -2656,7 +2033,6 @@ public class Clutch extends Module {
             return;
         }
         if (this.lane.diagonal()) {
-            /* Same way, but its stairs start from this landing: laneLevels follows the flight from here. */
             this.lane = new TellyLane(stood.getX(), stood.getZ(), layer, this.lane.yaw);
             return;
         }
@@ -2664,7 +2040,6 @@ public class Clutch extends Module {
         this.lane.layer = layer;
     }
 
-    /** The keys, and the prediction with them, go along the lane and back onto it. */
     private void aimAlongLane() {
         double[] point = this.lane.ahead(mc.thePlayer.posX, mc.thePlayer.posZ, LANE_AHEAD);
         this.steerX = point[0];
@@ -2684,7 +2059,6 @@ public class Clutch extends Module {
         return this.lane.indexAt((box.minX + box.maxX) / 2.0, (box.minZ + box.maxZ) / 2.0);
     }
 
-    /** The tick the feet come down to this height, or -1 if they do not. */
     private int crossingTick(double top) {
         AxisAlignedBB previous = this.pathStart;
         for (int t = 0; t < this.path.size(); t++) {
@@ -2697,12 +2071,6 @@ public class Clutch extends Module {
         return -1;
     }
 
-    /**
-     * What the lane wants next, as catch levels of one cell: the first empty cell after the one last stood on, up to
-     * the one under the feet when they come down to the layer. Always that cell, however far the player has flown:
-     * each block is the next one's support. Empty when this jump already lands on the layer; null when the lane
-     * cannot catch it (below the layer, or falling beside it) and any cell will do.
-     */
     private List<List<BlockPos>> laneLevels() {
         double top = this.lane.layer + 1.0;
         if (this.landingTick >= 0 && this.landingTick < this.path.size()
@@ -2732,12 +2100,6 @@ public class Clutch extends Module {
         return null;
     }
 
-    /**
-     * A diagonal lane: from the stood block along what is already built, the one or two cells that carry the stairs
-     * toward the column the feet come down in. Both go in one level, so the plan takes the cheaper click: on a
-     * staircase the next face changes side every block, and a fixed order spent the jump turning back and forth
-     * (2026-11-04, 65 degree turns, then a fall). Empty when the stairs reach the landing.
-     */
     private List<List<BlockPos>> stairLevels(AxisAlignedBB landing) {
         int landX = MathHelper.floor_double((landing.minX + landing.maxX) / 2.0);
         int landZ = MathHelper.floor_double((landing.minZ + landing.maxZ) / 2.0);
@@ -2770,7 +2132,6 @@ public class Clutch extends Module {
         return cells.isEmpty() ? null : Collections.singletonList(cells);
     }
 
-    /** Keep-y off: the block one up where this jump lands, as Clutch built before the lane. Null with keep-y on. */
     private BlockPos laneStep(double top) {
         if (keepYTop() <= this.lane.layer) {
             return null;
@@ -2801,13 +2162,6 @@ public class Clutch extends Module {
         return this.steering ? String.format(" | steer %.0f", MathHelper.wrapAngleTo180_float(this.steerYaw)) : "";
     }
 
-    /**
-     * With nothing to aim at, turn toward the block the player last stood on.
-     * The supports are behind a player who has been knocked off them, and a
-     * face that turns up in a tick or two is then a small turn away instead
-     * of half a circle -- which at the rotation speeds a server will take is
-     * two or three ticks of a fall that may not have them.
-     */
     private void lookBack(UpdateEvent event, Vec3 eyes) {
         if (!this.preAim.getValue() || this.lastGround == null) {
             holdRotation(event);
@@ -2827,7 +2181,6 @@ public class Clutch extends Module {
         applyRotation(event);
     }
 
-    /** The catch levels as y, cell count and the tick the feet cross the first: "L84x3@2". */
     private String levels(List<List<BlockPos>> levels) {
         StringBuilder text = new StringBuilder();
         for (List<BlockPos> cells : levels) {
@@ -2844,26 +2197,12 @@ public class Clutch extends Module {
         return text.toString();
     }
 
-    /**
-     * With nothing to aim at this tick, keep sending the rotation already
-     * sent. Letting it lapse for a tick would have the server see the real
-     * view, and the next step would then start from an angle it never had.
-     */
     private void holdRotation(UpdateEvent event) {
         if (this.hasSent) {
             applyRotation(event);
         }
     }
 
-    /**
-     * The click for this tick's plan, at the end of this tick's PRE: after
-     * this tick's turn, before this tick's move and its movement packet (see
-     * onUpdate). The ray is traced from where the player is now -- where the
-     * server has them -- along the rotation that packet will carry, so the
-     * server checks exactly this. Only a block
-     * that goes where it is wanted is placed: into a catch cell of the fall as
-     * it is now, or the planned chain cell.
-     */
     private void post() {
         if (!this.active || this.plan == null || this.cooldown > 0) {
             return;
@@ -2915,10 +2254,6 @@ public class Clutch extends Module {
         boolean wanted = cell.equals(this.plan.cell)
                 || this.tick - this.aimedTick == 1 && cell.equals(this.aimedCell);
         if (!wanted && !this.laneNow) {
-            /* A partly turned look can still land somewhere useful: under the
-               fall as it now stands -- but not above the keep-y layer (until
-               2026-10-03 this let a steep look onto the top of a catch block
-               put one block up on every jump). */
             predict(this.steering);
             wanted = cell.getY() <= keepYTop() && catchTick(this.path, this.pathStart, cell, PLAN_TICKS) >= 0;
         }
@@ -2931,7 +2266,7 @@ public class Clutch extends Module {
             note("no click: the game would not place at " + cell(cell));
             return;
         }
-        /* From here a C08 goes out whatever onPlayerRightClick answers. */
+
         this.holdThisTick = true;
         this.placedTurn = this.lastTurn;
         if (mc.playerController.onPlayerRightClick(mc.thePlayer, mc.theWorld, held,
@@ -2964,7 +2299,6 @@ public class Clutch extends Module {
         return support.getX() + "," + support.getY() + "," + support.getZ() + "," + side.ordinal();
     }
 
-    /** A click on this face was answered false: leave it out of the next plans for a while. */
     private void failFace(BlockPos support, EnumFacing side) {
         this.failedFaces.put(faceKey(support, side), this.tick + FAILED_FACE_TICKS);
         this.plan = null;
@@ -2982,12 +2316,6 @@ public class Clutch extends Module {
         return true;
     }
 
-    /**
-     * The ladder click. Unlike a block it may go where the body is; what
-     * matters is that the plate is clear of it, that the face clicked is a
-     * side, and that the cell is one the body will be in at the start of a
-     * tick -- the planned one, or any on the fall as it now stands.
-     */
     private void postLadder(ItemStack held, MovingObjectPosition hit, BlockPos cell) {
         if (!hit.sideHit.getAxis().isHorizontal() || !BlockUtil.isReplaceable(cell)
                 || !mc.theWorld.getBlockState(hit.getBlockPos()).getBlock().isNormalCube()) {
@@ -2995,7 +2323,6 @@ public class Clutch extends Module {
             return;
         }
         if (intersects(mc.thePlayer.getEntityBoundingBox(), cell)) {
-            /* See planLadder: the check is against the class's shared bounds. */
             note("no click: the body is already in " + cell(cell));
             return;
         }
@@ -3043,25 +2370,16 @@ public class Clutch extends Module {
         return scaffold != null && scaffold.isEnabled() && !scaffoldTelly();
     }
 
-    /** Scaffold's own keep-y, in SPEED-TELLY: this module's setting stays what it is for the hold key. */
     private boolean scaffoldTellyKeepY() {
         Scaffold scaffold = (Scaffold) Atlas.moduleManager.getModule(Scaffold.class);
         return scaffold != null && scaffold.isSpeedTellyKeepY();
     }
 
-    /** Scaffold's SPEED-TELLY (2026-11-04): the same as the hold key being down, whatever the trigger says. */
     private boolean scaffoldTelly() {
         Scaffold scaffold = (Scaffold) Atlas.moduleManager.getModule(Scaffold.class);
         return scaffold != null && scaffold.isSpeedTelly();
     }
 
-    // -------------------------------------------------------------- attempts
-
-    /**
-     * Remembers why this attempt could not act. Chat hears of a reason once it
-     * has lasted PROBLEM_TICKS -- the first tick off an edge nearly always has
-     * the bridge's side turned away, and that is not news -- and only once.
-     */
     private void problem(String key, String detail) {
         if (!this.attempt) {
             return;
@@ -3075,11 +2393,6 @@ public class Clutch extends Module {
         }
     }
 
-    /**
-     * Opens an attempt when a catch is first wanted, and closes it when the
-     * player lands, dies, or is moved somewhere else: saved if they are
-     * standing on a block this attempt placed.
-     */
     private void updateAttempt(boolean want) {
         if (want && !this.attempt) {
             this.attempt = true;
@@ -3092,8 +2405,6 @@ public class Clutch extends Module {
             this.rodeLadder = false;
             this.startedWithBlocks = usable(mc.thePlayer.inventory.getCurrentItem());
             if (!this.hasSent) {
-                /* The view before this catch; not re-taken while an earlier
-                   catch is still handing the camera back. */
                 this.viewYaw = mc.thePlayer.rotationYaw;
                 this.viewPitch = mc.thePlayer.rotationPitch;
             }
@@ -3128,9 +2439,7 @@ public class Clutch extends Module {
             return;
         }
         this.attemptTick++;
-        /* Pika does not always kill a player who falls into the void: it moves
-           them back to their spawn. A jump of more than eight blocks in one
-           tick is that, and is a fall that was not caught. */
+
         Vec3 now = new Vec3(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ);
         boolean moved = this.lastPosition != null && now.squareDistanceTo(this.lastPosition) > 64.0;
         this.lastPosition = now;
@@ -3168,8 +2477,6 @@ public class Clutch extends Module {
                 this.savedOn.addAll(this.placed);
                 this.savedAt = this.tick;
                 if (this.attemptSteered) {
-                    /* Still holding a key toward the bridge, the player would
-                       walk straight off a one-block landing. */
                     this.settleTicks = SETTLE_TICKS;
                 }
                 say(String.format("&asaved &7with %d block%s, %.1f below the start%s%s", this.attemptPlaced,
@@ -3178,7 +2485,7 @@ public class Clutch extends Module {
                         this.attemptSteered ? " &8(steered)" : ""));
             } else {
                 say("&7landed on ground that was already there" + (this.attemptSteered ? " &8(steered back)" : ""));
-                /* Not a catch, and not a failure either: the attempt did not count. */
+
                 this.attempts--;
             }
         }

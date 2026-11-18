@@ -42,32 +42,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * Holds this player's packets (through LagManager) while closing on a
- * target, so the server's copy of this player arrives late.
- *
- * 2026-10-18 (plan item 4b, "optimise the release"). In the flag logs of
- * 10-15, 10-16 and 10-18, 17 lagbacks named LagRange first, 15 of them 0-6
- * ticks after a hit: every attack set the delay to 0 and LagManager sent the
- * whole queue in that tick -- the dump FakeLag learnt on 09-25 and 10-17 the
- * server answers with a pullback. So, as FakeLag does:
- *   - within melee-distance of the target it stops holding and lets the queue
- *     out, so by the time of the attack there is little or nothing left;
- *   - letting out is gradual (the delay drops a tick a tick, so about two held
- *     packets go each tick) unless let-out is At once;
- *   - an attack, a dig or a placement still sends what is held first (it is
- *     judged where the player really is), then holding pauses for
- *     recoil-time; knockback lets go at once and pauses (the server expects a
- *     reaction); a correction lets go and pauses for flag-pause;
- *   - it does not hold while another module holds movement (PacketHub) or a
- *     fall is being caught (Arbiter), and it no longer sets LagManager's
- *     delay to 0 every tick, which cut across BlockHit's use of it.
- * Each hold and each let-out, with why, goes to config/Atlas/lagrange-*.txt.
- *
- * Settings, in three groups: when to hold (range, melee-distance, weapons,
- * targets), how long (delay), when to let go (let-out, recoil-time,
- * flag-pause).
- */
 public class LagRange extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File LOG_DIR = new File("./config/Atlas/");
@@ -75,13 +49,10 @@ public class LagRange extends Module {
     private static final SimpleDateFormat LINE_STAMP = new SimpleDateFormat("HH:mm:ss");
     private static final String NAME = "LagRange";
 
-    /* 2026-10-23 (owner): RAVEN, Raven bS's rules (LagRangeRaven), is the
-       default; ATLAS is the Pika-tuned behaviour below, kept as it was. A
-       saved config keeps whatever mode it names. */
     private static final int RAVEN = 0;
     private static final int ATLAS = 1;
     public final ModeProperty mode = new ModeProperty("mode", RAVEN, new String[]{"RAVEN", "ATLAS"});
-    // when to hold
+
     public final FloatProperty range = new FloatProperty("range", 6.0F, 3.0F, 100.0F);
     public final FloatProperty meleeDistance = new FloatProperty("melee-distance", 3.0F, 0.0F, 6.0F,
             () -> this.mode.getValue() == ATLAS);
@@ -89,29 +60,27 @@ public class LagRange extends Module {
     public final BooleanProperty allowTools = new BooleanProperty("allow-tools", false, this.weaponsOnly::getValue);
     public final BooleanProperty botCheck = new BooleanProperty("bot-check", true);
     public final BooleanProperty teams = new BooleanProperty("teams", true);
-    // how long
+
     public final IntProperty delay = new IntProperty("delay", 200, 0, 1000);
-    // when to let go
+
     public final ModeProperty letOut = new ModeProperty("let-out", 0, new String[]{"Gradual", "At once"},
             () -> this.mode.getValue() == ATLAS);
     public final IntProperty recoilTime = new IntProperty("recoil-time", 750, 0, 2000,
             () -> this.mode.getValue() == ATLAS);
     public final IntProperty flagPause = new IntProperty("flag-pause", 2000, 0, 5000);
-    /* 2026-10-19 (from Slinky): a W-tap (sprint stopping) lets the queue out
-       at once, so the hit that follows it is judged from where you are. */
+
     public final BooleanProperty releaseOnSprintReset = new BooleanProperty("release-on-sprint-reset", false,
             () -> this.mode.getValue() == ATLAS);
-    /* RAVEN: Raven's flush conditions -- sprint starting again after a W-tap, a sword block starting. */
+
     public final BooleanProperty flushOnSprint = new BooleanProperty("flush-on-sprint", true,
             () -> this.mode.getValue() == RAVEN);
     public final BooleanProperty flushOnBlock = new BooleanProperty("flush-on-block", true,
             () -> this.mode.getValue() == RAVEN);
     private final LagRangeRaven raven = new LagRangeRaven();
-    // display
+
     public final ModeProperty showPosition = new ModeProperty("show-position", 0, new String[]{"NONE", "DEFAULT", "HUD"});
     public final ModeProperty log = new ModeProperty("log", 1, new String[]{"Off", "File"});
 
-    /** The delay, in ticks, this module has LagManager holding now (0: none). */
     private int applied;
     private long recoilUntil;
     private boolean hasTarget;
@@ -120,27 +89,21 @@ public class LagRange extends Module {
     private File logTarget;
     private long holdStart;
     private String holdTarget = "";
-    /* Each player's box distance last tick, for how fast the gap is closing (2026-10-20). */
+
     private final java.util.Map<Integer, Double> lastDistance = new java.util.HashMap<Integer, Double>();
-    /** Vanilla's attack reach, eyes to hitbox. */
+
     private static final double ATTACK_REACH = 3.0;
 
     public LagRange() {
         super(NAME, false);
-        /* One movement holder at a time (PacketHub): its queue is LagManager's while this module set the delay. */
+
         PacketHub.register(NAME, PacketHub.MOVEMENT, () -> this.applied > 0 && Atlas.lagManager != null
                 && NAME.equals(Atlas.lagManager.holder()) ? Atlas.lagManager.packetQueue.size() : 0, () -> {
-            /* Sent in order by LagManager at the next packet or tick. */
             this.applied = 0;
             Atlas.lagManager.setDelay(0);
         });
     }
 
-    /**
-     * The next delay: straight up to what is wanted, down one tick a tick when
-     * gradual (LagManager then sends about two held packets a tick), or down
-     * at once.
-     */
     static int nextDelay(int applied, int wanted, boolean gradual) {
         if (wanted >= applied) {
             return wanted;
@@ -148,18 +111,6 @@ public class LagRange extends Module {
         return gradual ? Math.max(wanted, applied - 1) : wanted;
     }
 
-    /** The delay setting in ticks, at least one. */
-    /**
-     * Where to stop holding (2026-10-20, Pika mitigation). The queue must be
-     * empty before the first swing can land: letting out drops the delay a
-     * tick a tick, so it takes about as many ticks as the delay, plus one;
-     * in that time the gap closes by the closing speed each tick. Stop at
-     * reach + that, plus a margin, and never closer than melee-distance.
-     * Before, holding stopped at a fixed 3.0 -- inside reach -- so the hit
-     * came while 17-36 packets were held and sent them all at once (and the
-     * transaction replies queued with them made the server see a sudden ping
-     * spike): every LOW-DAMAGE on 10-20 20:34 and 20:38 named LagRange.
-     */
     static double stopDistance(double closingPerTick, int queuedTicks, float meleeDistance) {
         double drain = Math.max(0.0, closingPerTick) * (queuedTicks + 1);
         return Math.max(meleeDistance, ATTACK_REACH + drain + 0.3);
@@ -183,7 +134,6 @@ public class LagRange extends Module {
                 && (!this.botCheck.getValue() || !TeamUtil.isBot(entityPlayer));
     }
 
-    /** Things the server judges where the player really is: what is held goes first. */
     private static boolean mustBeCurrent(Packet<?> packet) {
         if (packet instanceof C02PacketUseEntity) {
             return true;
@@ -196,7 +146,6 @@ public class LagRange extends Module {
         return false;
     }
 
-    /** Why not to hold this tick, or null to look for a target. */
     private String ruledOut() {
         BedNuker bedNuker = (BedNuker) Atlas.moduleManager.modules.get(BedNuker.class);
         if (bedNuker.isEnabled() && bedNuker.isReady()) {
@@ -266,11 +215,10 @@ public class LagRange extends Module {
                 double closing = before == null ? 0.0 : before - distance;
                 int queued = Math.max(this.applied, ticksFor(this.delay.getValue()));
                 if (distance <= stopDistance(closing, queued, this.meleeDistance.getValue())) {
-                    /* About to be in reach: let out now, so the queue is empty when the first swing lands. */
                     why = "melee";
                     break;
                 }
-                /* Closing in: nearer now than last tick, or than where the server has this player. */
+
                 if (distance < RotationUtil.distanceToBox(player, lastEye)
                         || distance < RotationUtil.distanceToBox(player, serverEye)) {
                     wanted = ticksFor(this.delay.getValue());
@@ -285,7 +233,6 @@ public class LagRange extends Module {
         apply(wanted, why);
     }
 
-    /** RAVEN: one LagRangeRaven step on the nearest valid target in range. */
     private void ravenTick() {
         String blocked = ravenRuledOut();
         EntityPlayer target = null;
@@ -320,13 +267,6 @@ public class LagRange extends Module {
         }
     }
 
-    /**
-     * RAVEN: what rules holding out -- Raven's GUI, bed-breaking and Autoblock
-     * checks, plus Atlas's own: digging, a correction's flag-pause, a Clutch
-     * catch, another module holding movement. Weapons and items in use are
-     * not here: the weapon is a condition of the step, and Raven holds while
-     * an item is used.
-     */
     private String ravenRuledOut() {
         if (mc.currentScreen != null) {
             return "screen";
@@ -354,7 +294,6 @@ public class LagRange extends Module {
         return null;
     }
 
-    /** The sword is up because KillAura or KillAura2 raised it (Raven lets go while its Autoblock is active). */
     private static boolean auraBlocking() {
         KillAura aura = (KillAura) Atlas.moduleManager.getModule(KillAura.class);
         if (aura != null && aura.isEnabled() && aura.isAuraBlocking()) {
@@ -367,7 +306,6 @@ public class LagRange extends Module {
         int before = this.applied;
         int next = nextDelay(before, wanted, this.letOut.getValue() == 0);
         if (next == before && next == 0) {
-            /* Nothing of ours to set: leave LagManager to whoever else uses it (BlockHit). */
             return;
         }
         this.applied = next;
@@ -381,7 +319,6 @@ public class LagRange extends Module {
         }
     }
 
-    /** Lets everything go at once, ahead of whatever is being sent, and pauses holding. */
     private void releaseNow(String why, long pauseMs) {
         this.recoilUntil = Math.max(this.recoilUntil, System.currentTimeMillis() + pauseMs);
         if (this.applied == 0) {
@@ -403,8 +340,6 @@ public class LagRange extends Module {
         boolean ravenMode = this.mode.getValue() == RAVEN;
         if (event.getType() == EventType.SEND) {
             if (mustBeCurrent(packet)) {
-                /* We are at the head of the send: LagManager sends the queue before this packet.
-                   RAVEN: no pause after it, the next tick may hold again (Raven's onAttack flush). */
                 releaseNow(packet instanceof C02PacketUseEntity ? "attack" : "action",
                         ravenMode ? 0L : this.recoilTime.getValue());
                 if (ravenMode) {
@@ -433,7 +368,7 @@ public class LagRange extends Module {
         } else {
             return;
         }
-        /* The network thread must not set the delay under the client thread: done before its next tick. */
+
         mc.addScheduledTask(() -> {
             if (this.isEnabled()) {
                 releaseNow(cause, pause);
@@ -487,7 +422,6 @@ public class LagRange extends Module {
         this.currentPosition = null;
     }
 
-    /** One file per game session (Backtrack switches this module off and on in fights). */
     private void writeLog(String line) {
         if (this.log.getValue() == 0) {
             return;

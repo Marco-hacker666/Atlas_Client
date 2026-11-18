@@ -16,21 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public class ScaffoldCheck {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
-
-    /*
-     * Lightweight scaffold consistency check
-     *
-     * Goal:
-     * - reduce false positives
-     * - avoid flagging normal bridging
-     * - use buffering instead of instant punish
-     * - track suspicious consistency patterns
-     *
-     * This is NOT Grim-level simulation.
-     * It is a cleaner heuristic-based check.
-     */
 
     private final Map<UUID, Integer> suspiciousPlacements = new HashMap<>();
     private final Map<UUID, Integer> violationBuffer = new HashMap<>();
@@ -40,22 +26,17 @@ public class ScaffoldCheck {
 
     @EventTarget
     public void onClientTick(TickEvent event) {
-
         if (event.getType() != EventType.POST) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
 
         World world = mc.theWorld;
 
         for (EntityPlayer player : world.playerEntities) {
-
             if (player == mc.thePlayer) continue;
             if (player.isDead) continue;
 
             UUID uuid = player.getUniqueID();
 
-            /*
-             * Basic movement info
-             */
             double horizontalSpeed = Math.sqrt(
                     player.motionX * player.motionX +
                             player.motionZ * player.motionZ
@@ -65,9 +46,6 @@ public class ScaffoldCheck {
             boolean airborne = !player.onGround;
             boolean falling = player.motionY < -0.08;
 
-            /*
-             * Check block directly under player
-             */
             BlockPos below = new BlockPos(
                     MathHelper.floor_double(player.posX),
                     MathHelper.floor_double(player.posY - 1.0),
@@ -78,22 +56,10 @@ public class ScaffoldCheck {
 
             boolean hasSupportBlock = !(blockBelow instanceof BlockAir);
 
-            /*
-             * Suspicious pattern:
-             * player is airborne/falling,
-             * moving quickly,
-             * while consistently having support blocks
-             */
             if (airborne && falling && movingFast && hasSupportBlock) {
-
                 int placements = suspiciousPlacements.getOrDefault(uuid, 0) + 1;
                 suspiciousPlacements.put(uuid, placements);
-
             } else {
-
-                /*
-                 * Slowly decay instead of instantly reset
-                 */
                 int placements = suspiciousPlacements.getOrDefault(uuid, 0);
 
                 if (placements > 0) {
@@ -101,12 +67,6 @@ public class ScaffoldCheck {
                 }
             }
 
-            /*
-             * Rotation consistency
-             *
-             * Scaffold cheats often rotate unnaturally
-             * while rapidly bridging.
-             */
             float currentYaw = player.rotationYaw;
             float currentPitch = player.rotationPitch;
 
@@ -120,29 +80,17 @@ public class ScaffoldCheck {
                     yawDiff > 110.0f ||
                             pitchDiff > 35.0f;
 
-            /*
-             * Main detection logic
-             */
             int placements = suspiciousPlacements.getOrDefault(uuid, 0);
 
             if (placements > 8 && suspiciousRotation) {
-
                 int vl = violationBuffer.getOrDefault(uuid, 0) + 1;
                 violationBuffer.put(uuid, vl);
 
-                /*
-                 * Require multiple consistent violations
-                 */
                 if (vl > 3) {
-
                     long now = System.currentTimeMillis();
                     long last = lastFlag.getOrDefault(uuid, 0L);
 
-                    /*
-                     * Prevent spam flagging
-                     */
                     if (now - last > 3000L) {
-
                         CheatFlags.receiveSignal(
                                 player.getName(),
                                 "Scaffold [VL=" + vl + "]"
@@ -151,12 +99,7 @@ public class ScaffoldCheck {
                         lastFlag.put(uuid, now);
                     }
                 }
-
             } else {
-
-                /*
-                 * Violation decay
-                 */
                 int vl = violationBuffer.getOrDefault(uuid, 0);
 
                 if (vl > 0) {

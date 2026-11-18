@@ -62,5 +62,4 @@ public abstract class Component {
         int actualY = this.y - scrollOffset;
         return mouseX >= x && mouseX <= x + width && mouseY >= actualY && mouseY <= actualY + height;
     }
-
 }

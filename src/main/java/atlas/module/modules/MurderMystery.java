@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): chat plus HUD text only — role, map, mode
-// and gold helpers for Murder Mystery. No ESP.
+// Ported from OpenSkid (GPL-3.0)
+
 import atlas.Atlas;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
@@ -213,6 +213,5 @@ public class MurderMystery extends Module {
         goldAnnounced = false;
     }
 
-    /* Merged modules (2026-10-11, ModuleBundle). */
     public final atlas.module.ModuleBundle detectorMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.MurderDetector(), "detector", "Murderer detector", true);
 }

@@ -10,7 +10,7 @@ public abstract class Module {
     protected final boolean defaultEnabled;
     protected final int defaultKey;
     protected final boolean defaultHidden;
-    /* volatile: packet handlers read it on the network thread (2026-10-30, audit). */
+
     protected volatile boolean enabled;
     protected int key;
     protected boolean hidden;
@@ -35,12 +35,9 @@ public abstract class Module {
         return this.name;
     }
 
-    /* The description the menus show (ModuleDocs, 2026-10-04): a Chinese one
-       written for every module, over the module's own, which most lacked. */
     private String shownDescription;
     private String shownDescriptionEn;
 
-    /** In the menu's language (ModuleDocs.isEnglish): the docs' text, else the module's own. */
     public String getDescription() {
         String shown = ModuleDocs.isEnglish() ? this.shownDescriptionEn : this.shownDescription;
         return shown != null ? shown : this.description;
@@ -71,27 +68,17 @@ public abstract class Module {
         return this.enabled;
     }
 
-    /*
-     * 2026-10-11 (ModuleBundle): a host module whose mode hands the work to a
-     * merged module stays on -- its key, its HUD entry -- but its own event
-     * handlers pause while that mode is picked.
-     */
     private java.util.function.BooleanSupplier pausedWhen;
 
     public void pauseWhen(java.util.function.BooleanSupplier condition) {
         this.pausedWhen = condition;
     }
 
-    /** On, and not handing its work to a merged module right now. */
     public boolean isRunning() {
         return this.enabled && (this.pausedWhen == null || !this.pausedWhen.getAsBoolean());
     }
 
     public void setEnabled(boolean enabled) {
-        /* 2026-10-30 (audit): Blink, Fly and LongJump switch themselves off from a packet handler, which runs on the
-           network thread, so onDisabled (motion, timer, flushing held packets) raced the tick. From there the switch
-           waits for the client thread. Only from there: the exit hook restores modules on its own thread on purpose,
-           before the config is saved, when no client tick will run again. */
         if (Thread.currentThread().getName().startsWith("Netty")) {
             net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> this.setEnabled(enabled));
             return;
@@ -99,8 +86,6 @@ public abstract class Module {
         if (this.enabled != enabled) {
             this.enabled = enabled;
             if (enabled) {
-                /* Left on if onEnabled throws: at the startup config load several touch mc.thePlayer before there
-                   is one, and they are meant to be on once in a world (Config.loadNow). */
                 this.onEnabled();
             } else {
                 this.onDisabled();
@@ -116,17 +101,16 @@ public abstract class Module {
                 Atlas.moduleManager.playSound();
             }
 
-            // Add a transient in-game notification for toggles
             try {
                 if (Atlas.notificationManager != null) {
                     String action = this.enabled ? "was toggled successfully" : "was untoggled successfully";
-                    // green for enabled, red for disabled
+
                     int color = this.enabled ? 0x00FF00 : 0xFF0000;
                     Atlas.notificationManager.add(this.getName() + " " + action, color);
                 }
             } catch (Exception ignored) {
             }
-            /* What it now works against, said once (2026-10-23, Conflicts). */
+
             if (this.enabled) {
                 atlas.management.Conflicts.warnOnEnable(this);
             }

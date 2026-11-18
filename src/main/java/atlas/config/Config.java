@@ -25,8 +25,6 @@ public class Config {
             this.name = "default";
         }
         if (!validName(this.name)) {
-            /* 2026-10-30 (audit): ".config save ../../launcher_profiles" wrote outside the folder, and lastConfig
-               then sent every exit save there. Such a name is refused; load and save say so. */
             this.file = null;
             return;
         }
@@ -42,11 +40,6 @@ public class Config {
         }
     }
 
-    /**
-     * A profile name that stays one plain file in ./config/Atlas/: no folder separators or other characters
-     * Windows refuses in a name, no "..", no leading dot, no trailing dot or space, no device name (CON, NUL...).
-     * Anything else stays allowed, "default (1)" among them.
-     */
     public static boolean validName(String name) {
         return name != null && !name.isEmpty() && name.length() <= 64 && !name.contains("..")
                 && !name.matches(".*[\\\\/:*?\"<>|\\p{Cntrl}].*") && !name.startsWith(".") && !name.endsWith(".")
@@ -66,7 +59,6 @@ public class Config {
         return new File(file.getParentFile(), file.getName() + ".bak");
     }
 
-    /** The file's JSON object, or null when it is missing, empty or broken. */
     private static JsonObject readObject(File file) {
         if (!file.isFile() || file.length() == 0L) {
             return null;
@@ -80,7 +72,6 @@ public class Config {
         }
     }
 
-    /** True while a config is being read, so property callbacks can tell a load from a user's change. */
     public static volatile boolean loading;
 
     public void load() {
@@ -97,16 +88,12 @@ public class Config {
 
     private void loadNow() {
         try {
-
             if (!file.exists()) {
                 ChatUtil.sendFormatted(String.format("%sConfig file not found (&c&o%s&r). Creating default config...&r", Atlas.clientName, file.getName()));
                 save();
                 return;
             }
 
-            /* 2026-10-30 (audit): read as UTF-8 and closed (the reader used to stay open, the file locked until GC);
-               a file left empty or half written by a crash during a save falls back to the copy the save before it
-               kept. */
             JsonObject jsonObject = readObject(file);
             if (jsonObject == null) {
                 JsonObject backup = readObject(backupOf(file));
@@ -121,8 +108,6 @@ public class Config {
             for (Module module : Atlas.moduleManager.modules.values()) {
                 JsonElement moduleObj = jsonObject.get(module.getName());
                 if (moduleObj == null) {
-                    /* Saved before a rename: under the old name, which is
-                       the class name (KillAura, BlockHit). */
                     moduleObj = jsonObject.get(module.getClass().getSimpleName());
                 }
                 if (moduleObj != null && moduleObj.isJsonObject()) {
@@ -131,8 +116,6 @@ public class Config {
                     ArrayList<Property<?>> list = Atlas.propertyManager.properties.get(module.getClass());
                     if (list != null) {
                         for (Property<?> property : list) {
-                            /* A DragProperty saves as name_x and name_y, never under its own name: without this its
-                               position (Statistics') was never read back. */
                             if (object.has(property.getName())
                                     || property instanceof atlas.property.properties.DragProperty
                                     && object.has(property.getName() + "_x") && object.has(property.getName() + "_y")) {
@@ -148,10 +131,6 @@ public class Config {
                     if (object.has("toggled")) {
                         JsonElement toggled = object.get("toggled");
                         if (toggled != null && toggled.isJsonPrimitive()) {
-                            /* One module's onEnabled throwing (commonly: it
-                               touched mc.thePlayer during the startup load)
-                               used to abort this whole loop, so every module
-                               after it silently kept its defaults. */
                             try {
                                 module.setEnabled(toggled.getAsBoolean());
                             } catch (Exception e) {
@@ -174,7 +153,7 @@ public class Config {
                         }
                     }
                 }
-                /* Modules merged into this one, saved before the merge under their own names. */
+
                 atlas.module.ModuleBundle.readLegacy(module, jsonObject,
                         moduleObj != null && moduleObj.isJsonObject() ? moduleObj.getAsJsonObject() : null);
             }
@@ -199,10 +178,6 @@ public class Config {
 
             JsonObject object = snapshot();
 
-            /* 2026-10-30 (audit): FileWriter emptied the file and then wrote it, so a crash or a kill in between
-               left an empty profile, every setting at its default on the next start, and the exit save then wrote
-               the defaults over it. Now it is written whole to a temporary file, the previous file is kept as .bak,
-               and the new one is moved into place in one step. UTF-8 whatever the system's code page. */
             File temp = new File(file.getParentFile(), file.getName() + ".tmp");
             try (Writer writer = new OutputStreamWriter(new FileOutputStream(temp), java.nio.charset.StandardCharsets.UTF_8)) {
                 writer.write(gson.toJson(object));
@@ -225,14 +200,6 @@ public class Config {
         }
     }
 
-    /**
-     * Whether saving now would write something different from what the
-     * profile's file holds (2026-10-23, the menu's "unsaved changes"). Compared
-     * value by value, as text, over the entries both have: a setting the file
-     * does not mention was never saved and loads as its default, and numbers
-     * read back from a file print as they were written. False when the file
-     * cannot be read: nothing to warn about then.
-     */
     public static boolean differsFromFile(String name) {
         String clean = name == null || "!".equals(name) ? "default" : name;
         if (!validName(clean)) {
@@ -245,7 +212,6 @@ public class Config {
         return differs(snapshot(), saved);
     }
 
-    /** {@code now} differs from {@code saved} in a value both have (one level of modules, one of settings). */
     public static boolean differs(JsonObject now, JsonObject saved) {
         for (java.util.Map.Entry<String, JsonElement> module : now.entrySet()) {
             JsonElement before = saved.get(module.getKey());
@@ -263,7 +229,6 @@ public class Config {
         return false;
     }
 
-    /** Everything save() writes, without writing it. */
     public static JsonObject snapshot() {
         JsonObject object = new JsonObject();
         for (Module module : Atlas.moduleManager.modules.values()) {

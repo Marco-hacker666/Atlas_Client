@@ -5,10 +5,8 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
 public class RecorderAimTest {
-
     @Test
     public void straightAheadIsZero() {
-        /* yaw 0 looks along +Z */
         float[] err = TellyRecorder.aimError(0.0F, 0.0F, 0, 0, 0, 0, 0, 5);
         assertEquals(0.0F, err[0], 1.0E-4F);
         assertEquals(0.0F, err[1], 1.0E-4F);
@@ -16,7 +14,6 @@ public class RecorderAimTest {
 
     @Test
     public void rightAndBelowArePositive() {
-        /* yaw 0 faces +Z; yaw 90 faces -X, so -X is to the right */
         float[] err = TellyRecorder.aimError(0.0F, 0.0F, 0, 0, 0, -5, -5, 0);
         assertEquals(90.0F, err[0], 1.0E-3F);
         assertEquals(45.0F, err[1], 1.0E-3F);

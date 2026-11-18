@@ -9,7 +9,6 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
-/** The server setting the player's position and look; enumFlags names the relative parts (X, Y, Z, Y_ROT, X_ROT). */
 public class S08 extends SPacket {
     public Vec3 position;
     public float yaw;

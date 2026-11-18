@@ -9,13 +9,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-/**
- * .report [what happened] -- sends the bug report to the Discord channel
- * through the relay (falls back to the clipboard); .report copy -- only
- * copies it (2026-10-07).
- */
 public class ReportCommand extends Command {
-
     public ReportCommand() {
         super(new ArrayList<>(Arrays.asList("report", "bugreport")));
     }

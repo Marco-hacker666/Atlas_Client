@@ -1,8 +1,5 @@
-/*
- * Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0),
- * src/main/java/openskid/module/modules/PotionHUD.java, 2026-10-05: package openskid -> atlas,
- * OpenSkid -> Atlas. Changes after that are marked in comments.
- */
+// Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0), src/main/java/openskid/module/modules/PotionHUD.java
+
 package atlas.module.modules;
 
 import atlas.ui.impl.clickgui.atlas.HudPanel;
@@ -28,7 +25,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-// Active potion effect list with durations. Concept adapted from the raven-bS PotionHUD module.
+// Concept adapted from the raven-bS PotionHUD module.
 public class PotionHUD extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final int LINE_HEIGHT = 10;
@@ -92,9 +89,7 @@ public class PotionHUD extends Module {
             lines.add(name + " §7" + formatDuration(effect.getDuration()));
         }
         activeCount = lines.size();
-        /* Without effects nothing is drawn -- but while the HUD editor is open
-           a placeholder of one line is measured and reported, so it can still
-           be found and placed (2026-10-05). */
+
         boolean placeholder = lines.isEmpty();
         if (placeholder) {
             if (!HudLayout.isEditing()) {
@@ -135,7 +130,6 @@ public class PotionHUD extends Module {
                 break;
         }
 
-        /* HUD editor (2026-10-05): report where this is drawn, so the editor can find and drag it. */
         HudLayout.report("PotionHUD", placeholder ? "PotionHUD (no effects)" : "PotionHUD", x, y, boxW * sc,
                 blockH * sc, HudLayout.ints(offX, posX.getValue() == 2 ? -1 : 1, offY, posY.getValue() == 2 ? -1 : 1),
                 HudLayout.scale(this.scale));

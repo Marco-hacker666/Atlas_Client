@@ -8,9 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** What the bug report must never carry (2026-10-07). */
 public class RedactorTest {
-
     private final Redactor redactor = new Redactor("Steve_123", "0123456789abcdef0123456789abcdef",
             "eyJhbGciOiJIUzI1NiJ9tokenpartlongenough", Arrays.asList("Alex99", "Notch", "Steve_123"),
             "C:\\Users\\someone", "someone");

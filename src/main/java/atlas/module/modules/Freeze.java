@@ -23,21 +23,8 @@ import net.minecraft.network.play.server.S12PacketEntityVelocity;
 import net.minecraft.network.play.server.S19PacketEntityStatus;
 import net.minecraft.network.play.server.S32PacketConfirmTransaction;
 
-/**
- * Holds the knockback you were just sent (adapted from CrewX's Freeze,
- * 2026-10-11).
- *
- * On your hurt animation or your own velocity packet the module stops handing
- * the client the knockback, the confirm-transaction replies and any position
- * correction: they are queued instead of applied, so you keep standing where
- * the hit found you. The hold ends after "max-timeout" ticks -- the counter is
- * shown as the module's suffix, and on screen as well if "render-timer" is on --
- * because a hold that never ends is a desync.
- *
- * A position correction that arrives before the hit clears the hold instead of
- * being queued: that correction is the server moving you, and swallowing it is
- * what turns a freeze into a rollback.
- */
+// Holds the knockback you were just sent (adapted from CrewX's Freeze).
+
 public class Freeze extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
@@ -53,7 +40,6 @@ public class Freeze extends Module {
     public Freeze() {
         super("Freeze", false, false, "Holds incoming knockback so a hit does not move you.");
 
-        /* Incoming holder: one at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
         atlas.management.PacketHub.registerIncoming("Freeze", () -> {
             synchronized (this.held) {
                 return this.held.size();
@@ -68,8 +54,6 @@ public class Freeze extends Module {
 
     @Override
     public void onDisabled() {
-        /* Released rather than dropped: the packets are the world's state, and
-           the client has been running without them. */
         this.flush();
         this.reset();
     }
@@ -142,7 +126,6 @@ public class Freeze extends Module {
         }
     }
 
-    /** Hands the queued packets to the client in the order they arrived. */
     private void flush() {
         synchronized (this.held) {
             for (Packet<INetHandlerPlayClient> packet : this.held) {

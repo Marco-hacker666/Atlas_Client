@@ -11,27 +11,17 @@ import atlas.property.properties.DragProperty;
 import java.util.ArrayList;
 
 // Ported from OpenSkid (GPL-3.0), itself adapted from the MiauMinus
-// online-config concept.
-// Mirrors this client's config JSON shape (config/Atlas/*.json). Every property
-// read is isolated in its own try/catch so one bad value cannot break the rest
-// of the apply.
-public class OnlineConfigApplier {
 
+public class OnlineConfigApplier {
     public static final class Result {
         public int applied;
         public int failed;
         public final ArrayList<String> changed = new ArrayList<String>();
         public final ArrayList<String> failedNames = new ArrayList<String>();
-        /** Left as they were on purpose (see SENSITIVE). */
+
         public final ArrayList<String> skipped = new ArrayList<String>();
     }
 
-    /*
-     * 2026-10-30 (audit): a config from someone else (or rewritten on the way) is not trusted with everything.
-     * Never applied from one: key binds; any text setting (AutoAuth's password, the lines a module would say
-     * in your name, commands to run); and switching on or off a module that runs code, holds a
-     * secret or talks for you.
-     */
     private static final java.util.Set<Class<?>> SENSITIVE = new java.util.HashSet<Class<?>>(java.util.Arrays.asList(
             atlas.module.modules.AutoAuth.class));
 
@@ -50,7 +40,7 @@ public class OnlineConfigApplier {
             if (object == null) {
                 continue;
             }
-            /* 2026-11-03: scripts run code; a shared config never switches one on (ScriptModule is gone). */
+
             if (SENSITIVE.contains(module.getClass()) || module instanceof atlas.script.ScriptHost) {
                 if (object.has("toggled")) {
                     result.skipped.add(module.getName() + ".toggled");

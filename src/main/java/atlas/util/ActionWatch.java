@@ -21,29 +21,6 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-/**
- * What a module did to the player without sending a packet (2026-10-11).
- *
- * The ledger used to see packets only: attacks, placements, digs, swings, holds.
- * A module that changes the player's motion, ground state, look or the game's
- * timer -- Speed, Fly, NoSlow, Velocity, Timer, KillAura's and Scaffold's turns
- * -- was never named when the server corrected the player, and FlagResponder
- * could not act on it. EventManager takes a snapshot before each module's
- * handler of the movement-path events and compares after: a change is that
- * module's doing, recorded as "move", "rotate" or "timer". Client thread only;
- * the same module and kind at most every 250 ms, so a module that turns every
- * tick does not push everything else out of the ledger.
- *
- * 2026-11-11, for MoveCheck's self check: also the keys (movementInput, and the key states at PreMoveInputEvent),
- * the sprint and the push a StrafeEvent carries, and every change of the tick kept by module and kind, with no
- * dedupe (tickMovers). The ledger sees only move, rotate and timer, as before.
- *
- * 2026-11-12, so the self check's lines name who they should: three ways to change a move that left no trace here.
- * A listener that changes a knockback on its way in (KnockbackEvent's values) is kept as "knockback", and one that
- * turns the edge stop on or off (SafeWalkEvent) as "edge" -- neither touches the player itself. And a module whose
- * change is made in a mixin, not in a listener (Jesus in water, KeepSprint's hit slowdown), says so itself through
- * {@link #silent}.
- */
 public final class ActionWatch {
     private static final double MOTION_EPS = 1.0E-4;
     private static final float ANGLE_EPS = 0.01F;
@@ -59,18 +36,14 @@ public final class ActionWatch {
     private static int keys;
     private static double kbX, kbY, kbZ;
     private static boolean kbCancelled, edgeStop;
-    /** Module -> kinds of change, since the last takeTickMovers. Client thread only. */
+
     private static Map<String, TreeSet<String>> tickMovers = new TreeMap<String, TreeSet<String>>();
-    /**
-     * Run just before an UpdateEvent POST goes to any listener: the tick's move is made and its movement packet is
-     * out, and no module has acted since (MoveCheck's end of the tick).
-     */
+
     public static volatile java.util.function.Consumer<UpdateEvent> beforeUpdatePost;
 
     private ActionWatch() {
     }
 
-    /** Events on the movement path, where a module's handler can move or turn the player. */
     public static boolean watches(Event event) {
         return event instanceof UpdateEvent || event instanceof StrafeEvent || event instanceof PlayerUpdateEvent
                 || event instanceof KnockbackEvent || event instanceof JumpEvent || event instanceof TickEvent
@@ -78,10 +51,6 @@ public final class ActionWatch {
                 || event instanceof PreMoveInputEvent || event instanceof SafeWalkEvent;
     }
 
-    /**
-     * A change to this tick's move that no listener made: a mixin applying a module's setting. Kept with the tick's
-     * other changes, under the module's name. Client thread only; from another thread it is dropped.
-     */
     public static void silent(String module, String kind) {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc == null || !mc.isCallingFromMinecraftThread()) {
@@ -93,7 +62,7 @@ public final class ActionWatch {
     public static void before(Event event) {
         armed = false;
         Minecraft mc = Minecraft.getMinecraft();
-        /* No game (tests, a headless run) or another thread: nothing to watch. */
+
         EntityPlayerSP player = mc == null ? null : mc.thePlayer;
         if (player == null || !mc.isCallingFromMinecraftThread()) {
             return;
@@ -216,14 +185,12 @@ public final class ActionWatch {
         kinds.add(kind);
     }
 
-    /** What modules changed since the last call, and starts a new count. */
     public static Map<String, TreeSet<String>> takeTickMovers() {
         Map<String, TreeSet<String>> out = tickMovers;
         tickMovers = new TreeMap<String, TreeSet<String>>();
         return out;
     }
 
-    /** The same so far, without starting a new count. */
     public static Map<String, TreeSet<String>> peekTickMovers() {
         return tickMovers;
     }

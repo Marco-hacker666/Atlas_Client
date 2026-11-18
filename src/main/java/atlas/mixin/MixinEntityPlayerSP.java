@@ -52,17 +52,13 @@ public abstract class MixinEntityPlayerSP extends MixinEntityPlayer {
     )
     private void onUpdate(CallbackInfo callbackInfo) {
         if (atlas.module.modules.TickBase.skipPlayerTick) {
-            /* A tick TickBase owes back for the ones it ran ahead (2026-10-04). */
             callbackInfo.cancel();
             return;
         }
         if (this.worldObj.isBlockLoaded(new BlockPos(this.posX, 0.0, this.posZ))) {
             UpdateEvent event = new UpdateEvent(EventType.PRE, this.lastReportedYaw, this.lastReportedPitch, this.rotationYaw, this.rotationPitch);
             EventManager.call(event);
-            /* K1 (2026-10-07): KillAura's hit, after every module's rotation. */
-            /* 2026-10-30 (audit): called here directly, not through EventManager, so nothing caught what they
-               threw -- a crash mid-fight, and the rotation hand-over below skipped. Same handling as an event
-               handler now: logged, and the tick goes on. */
+
             atlas.module.modules.KillAura aura = (atlas.module.modules.KillAura)
                     atlas.Atlas.moduleManager.modules.get(atlas.module.modules.KillAura.class);
             if (aura != null) {
@@ -156,11 +152,6 @@ public abstract class MixinEntityPlayerSP extends MixinEntityPlayer {
         EventManager.call(new atlas.events.PreMoveInputEvent());
     }
 
-    /*
-     * 2026-11-15 (Freecam): the game sends movement packets, and applies the movement keys, only for the render view
-     * entity. While the Freecam camera is the render view the body still counts as it, so it keeps sending the packets
-     * a player standing still sends (Freecam clears its movement input).
-     */
     @Inject(method = {"isCurrentViewEntity"}, at = {@At("HEAD")}, cancellable = true)
     private void atlas$freecamBody(CallbackInfoReturnable<Boolean> callbackInfo) {
         if (atlas.module.modules.Freecam.keepsBody(this)) {
@@ -188,8 +179,6 @@ public abstract class MixinEntityPlayerSP extends MixinEntityPlayer {
             )
     )
     private boolean isUsing(EntityPlayerSP entityPlayerSP) {
-        /* The rule is NoSlow.slowsMove (moved there unchanged, 2026-11-11), so the movement simulation asks the same
-           question this move does. */
         return NoSlow.slowsMove(entityPlayerSP);
     }
 

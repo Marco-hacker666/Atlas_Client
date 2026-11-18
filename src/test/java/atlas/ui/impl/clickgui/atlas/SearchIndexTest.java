@@ -13,9 +13,7 @@ import java.util.function.Predicate;
 
 import static org.junit.Assert.*;
 
-/** The menu's search over modules and settings (2026-10-23, GUI redesign M3). */
 public class SearchIndexTest {
-
     private static final Predicate<Object> ALL_HERE = m -> true;
 
     private SearchIndex index;
@@ -64,7 +62,7 @@ public class SearchIndexTest {
     @Test
     public void nameMatchesComeBeforeTextMatchesAndExactBeforePrefix() {
         assertEquals(Arrays.<Object>asList("Speed", "SpeedMine"), modulesOf(this.index.search("speed", ALL_HERE, 60)));
-        /* "block": AutoBlock by name; SpeedMine only by its text ("Breaks blocks"). */
+
         assertEquals(Arrays.<Object>asList("AutoBlock", "SpeedMine"), modulesOf(this.index.search("block", ALL_HERE, 60)));
         List<Object> full = settingsOf(this.index.search("full", ALL_HERE, 60));
         assertEquals(Arrays.<Object>asList("full-hold", "full-air"), full);
@@ -94,7 +92,6 @@ public class SearchIndexTest {
         assertEquals(0, this.index.search("  -  ", ALL_HERE, 60).size());
     }
 
-    /** For one-word queries, the modules found by name are exactly the ones the old name-only search found. */
     @Test
     public void oneWordFindsWhatTheOldSearchFound() {
         String[] names = {"KillAura", "KillAura2", "PlainAura", "AutoBlock", "AntiAFK", "FPScounter", "WaterMark2",

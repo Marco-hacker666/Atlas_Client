@@ -42,45 +42,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Counts which swings actually dealt damage, and explains the ones that did not.
- *
- * "It feels wrong" is the hardest kind of bug report to act on, and this client
- * has produced several: an aim that would not settle, a reach that was silently
- * refused, an attack key that was being suppressed entirely by an unrelated
- * right-click setting. Each took several games and several wrong guesses to
- * pin down, and every one of them would have been a single number on screen.
- *
- * Three quantities are kept apart on purpose, because the interesting failures
- * live in the gaps between them:
- *
- *   EXPECTED   - clicks made with an entity under the crosshair.
- *   SWINGS     - how many attack packets actually left the client.
- *   HITS       - how many of those produced damage.
- *
- * Expected is deliberately not "every click". Vanilla only sends an attack
- * when its own raytrace found an entity; swinging at air, breaking blocks and
- * clicking through a screen are supposed to send nothing, and in a bridging
- * game they are most of the clicks there are. Counting those as attacks that
- * went missing produces a large number that means nothing.
- *
- * A gap between expected and swings is therefore the real signal: something
- * inside the client ate an attack that vanilla would have sent, which no amount
- * of aim tuning will fix. A gap between swings and hits means the server
- * refused them, and the reason is recorded per miss rather than guessed at.
- *
- * Landing is detected from the target's hurt timer rather than its health: the
- * timer is set to its maximum on the tick damage is taken and is visible for
- * every player, whereas health is only as current as whatever the server chose
- * to publish. Health is still consulted as a second opinion where it is
- * available.
- *
- * Nothing here is sent anywhere. The module only reads what the client already
- * has, and the one expensive test -- tracing for line of sight -- runs when a
- * miss is being explained, never once per player per tick.
- */
 public class HitCheck extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final int HISTORY = 64;
     private static final File LOG_DIR = new File("./config/Atlas/");
@@ -89,16 +51,9 @@ public class HitCheck extends Module {
 
     public final FloatProperty rangeThreshold = new FloatProperty("range-threshold", 3.0F, 2.5F, 6.0F);
     public final IntProperty windowPad = new IntProperty("window-pad", 6, 0, 20);
-    /**
-     * Above this the target was still in its invulnerability window. In 1.8 a
-     * second hit inside the ten-tick window is refused outright unless it is
-     * stronger than the first, so any non-zero timer already explains the
-     * miss; the setting exists because the client's copy of that timer can be
-     * a tick or two behind the server's.
-     */
+
     public final IntProperty invulnHurtTime = new IntProperty("invuln-hurt-time", 1, 0, 10);
 
-    /* NONE by default since 2026-10-08: the owner wants the screen clean; the log file still records everything. */
     public final ModeProperty hud = new ModeProperty("hud", 0, new String[]{"NONE", "COMPACT", "LIST"});
     public final IntProperty hudX = new IntProperty("hud-x", 4, 0, 800, () -> this.hud.getValue() != 0);
     public final IntProperty hudY = new IntProperty("hud-y", 120, 0, 600, () -> this.hud.getValue() != 0);
@@ -109,42 +64,22 @@ public class HitCheck extends Module {
     public final BooleanProperty chatSummary = new BooleanProperty("chat-summary", false);
     public final IntProperty summarySeconds = new IntProperty("summary-seconds", 30, 5, 300);
 
-    /** One file per session under config/Atlas, so a game can be read back after it. */
     public final BooleanProperty logFile = new BooleanProperty("log-file", true);
-    /** Every miss and every suppressed click, not just the periodic totals. */
+
     public final BooleanProperty logEvents = new BooleanProperty("log-events", true,
             this.logFile::getValue);
 
-    // Own path, for the distance the server could have seen.
     private final double[] selfX = new double[HISTORY];
     private final double[] selfY = new double[HISTORY];
     private final double[] selfZ = new double[HISTORY];
     private int selfIndex;
     private int selfFilled;
 
-    /**
-     * Ticks at which the server sent a hurt animation for an entity.
-     *
-     * This is the signal that separates the two things {@code unknown} was
-     * lumping together. When the server accepts an attack it broadcasts the
-     * hurt animation, and it does so even where the damage itself came to
-     * nothing -- absorbed, armoured, or reduced. When the server discards the
-     * attack packet instead, nothing comes back at all.
-     *
-     * So an attack that produced no damage AND no animation was not a miss in
-     * any sense the client can see: it was not refused for range, or for the
-     * invulnerability window, or for line of sight, all of which are checked
-     * first. It was dropped. Whether that is mitigation, a plugin, or
-     * something else is not decidable from here -- but "the server did not
-     * react at all" is a different fact from "the server said no", and they
-     * should not share a label.
-     */
     private final Map<Integer, Integer> hurtAnimations = new HashMap<Integer, Integer>();
 
     private final Map<Integer, Track> tracks = new HashMap<Integer, Track>();
     private final ArrayDeque<Pending> pending = new ArrayDeque<Pending>();
-    /* A click and the packet it should produce are a tick or two apart at most;
-       anything longer is a different click. */
+
     private static final int EXPECT_TICKS = 2;
     private final ArrayDeque<Expectation> awaiting = new ArrayDeque<Expectation>();
     private final ArrayDeque<int[]> attacks = new ArrayDeque<int[]>();
@@ -157,15 +92,14 @@ public class HitCheck extends Module {
     private int swings;
     private int hits;
     private int misses;
-    /** Swings whose target vanished before they could be judged. */
+
     private int undetermined;
     private int tickCounter;
     private long nextSummaryAt;
 
     private File logTarget;
     private long sessionStart;
-    /* Set by explain() so the log line can carry the distance it already
-       measured, rather than tracing the same path a second time. */
+
     private double lastClosest = -1.0;
 
     public HitCheck() {
@@ -180,8 +114,6 @@ public class HitCheck extends Module {
 
     @Override
     public void onDisabled() {
-        /* The closing total is the one line worth having if nothing else was
-           written: a session that ends without it was cut short. */
         if (this.swings > 0 || this.expected > 0) {
             writeLog("TOTAL  " + plainSummary());
         }
@@ -190,9 +122,6 @@ public class HitCheck extends Module {
     }
 
     private void reset() {
-        /* A world change ends a round as far as these numbers are concerned, so
-           the totals are closed off before they are thrown away -- otherwise a
-           whole game's worth of counting disappears at the next lobby. */
         if (this.swings > 0 || this.expected > 0) {
             writeLog("TOTAL  " + plainSummary());
         }
@@ -217,12 +146,6 @@ public class HitCheck extends Module {
         this.nextSummaryAt = System.currentTimeMillis() + this.summarySeconds.getValue() * 1000L;
     }
 
-    /* LOWEST, and a cancelled click is skipped. The mixin fires this event at
-       the head of clickMouse and only decides afterwards whether vanilla's
-       click runs, so a click AutoHeal or KillAura had deliberately cancelled
-       was still recorded as expected -- and then counted as suppressed when no
-       attack followed. Running last means every other listener has already
-       had its say. */
     @EventTarget(atlas.event.types.Priority.LOWEST)
     public void onLeftClick(LeftClickMouseEvent event) {
         if (!this.isEnabled() || mc.thePlayer == null || mc.currentScreen != null
@@ -230,9 +153,7 @@ public class HitCheck extends Module {
             return;
         }
         this.clicks++;
-        /* The same condition vanilla uses to decide whether this click becomes
-           an attack packet at all. Without it every swing at air and every
-           block broken counts as an attack that went missing. */
+
         MovingObjectPosition over = mc.objectMouseOver;
         if (over == null || over.typeOfHit != MovingObjectPosition.MovingObjectType.ENTITY
                 || over.entityHit == null) {
@@ -245,7 +166,6 @@ public class HitCheck extends Module {
         this.awaiting.addLast(expectation);
     }
 
-    /** An attack packet satisfies any click aimed at the same entity. */
     private void noteAttack(int entityId) {
         this.attacks.addLast(new int[]{entityId, this.tickCounter});
         while (this.attacks.size() > 64) {
@@ -283,7 +203,6 @@ public class HitCheck extends Module {
         }
         if (event.getType() == EventType.RECEIVE) {
             if (event.getPacket() instanceof S01PacketJoinGame) {
-                // Client thread: the tick iterates these collections.
                 mc.addScheduledTask(new Runnable() {
                     @Override
                     public void run() {
@@ -295,9 +214,6 @@ public class HitCheck extends Module {
             if (event.getPacket() instanceof S19PacketEntityStatus) {
                 final S19PacketEntityStatus status = (S19PacketEntityStatus) event.getPacket();
                 if (status.getOpCode() == 2) {
-                    /* This runs on the network thread; the entity lookup and
-                       the map (read by the tick) belong to the client thread.
-                       Scheduled ahead of vanilla's own handling of the packet. */
                     mc.addScheduledTask(new Runnable() {
                         @Override
                         public void run() {
@@ -343,10 +259,7 @@ public class HitCheck extends Module {
         int ping = this.ping();
         int ticks = ping > 0 ? (int) Math.ceil(ping / 50.0) : 4;
         ticks += this.windowPad.getValue();
-        /* 2026-10-12: Backtrack holds what the server sends -- the hurt that
-           answers a hit among it -- so the answer can land after a window
-           sized to the ping alone, and a hit that did land was called
-           dropped (the owner's HITS-DROPPED runs). Its hold is added. */
+
         atlas.module.Module backtrack = atlas.Atlas.moduleManager == null ? null
                 : atlas.Atlas.moduleManager.modules.get(BackTrack.class);
         if (backtrack instanceof BackTrack) {
@@ -407,8 +320,7 @@ public class HitCheck extends Module {
         long now = System.currentTimeMillis();
         if (now >= this.nextSummaryAt) {
             this.nextSummaryAt = now + this.summarySeconds.getValue() * 1000L;
-            /* The periodic line goes to the log whether or not chat wants it:
-               its whole point is being readable after the game. */
+
             if (this.swings > 0 || this.expected > 0) {
                 writeLog("SUMMARY  " + plainSummary());
             }
@@ -427,12 +339,10 @@ public class HitCheck extends Module {
         return false;
     }
 
-    /** Settles every attack whose window has closed, oldest first. */
     private void resolveDue() {
         while (!this.pending.isEmpty() && this.pending.peekFirst().deadline <= this.tickCounter) {
             Pending shot = this.pending.pollFirst();
-            /* Taken off the queue before it is judged: whatever happens while
-               explaining a miss, the same attack is never judged twice. */
+
             resolve(shot);
         }
     }
@@ -453,11 +363,6 @@ public class HitCheck extends Module {
             return;
         }
         if (living == null) {
-            /* The target left the world before the window closed -- killed,
-               out of render distance, or a round change. Nothing can be said
-               about the swing either way, and calling it a miss understates
-               the rate by exactly the killing blows, which is the worst place
-               to be wrong. */
             this.undetermined++;
             if (this.logEvents.getValue()) {
                 writeLog("GONE  target=#" + shot.entityId + "  (killed or despawned)");
@@ -492,7 +397,6 @@ public class HitCheck extends Module {
         }
     }
 
-    /** Landed or dropped, for FlagDetector's HITS-DROPPED (2026-09-28). */
     private void reportToFlagDetector(boolean dropped, int entityId) {
         atlas.module.Module module = atlas.Atlas.moduleManager == null ? null
                 : atlas.Atlas.moduleManager.modules.get(FlagDetector.class);
@@ -506,7 +410,6 @@ public class HitCheck extends Module {
         return entity == null ? ("#" + entityId) : entity.getName();
     }
 
-    /** What was in hand, because a suppressed attack is usually an item's doing. */
     private String heldItem() {
         try {
             return mc.thePlayer.getHeldItem() == null
@@ -516,11 +419,6 @@ public class HitCheck extends Module {
         }
     }
 
-    /**
-     * Why an attack produced nothing, in the order the causes rule each other
-     * out. The cheap facts recorded at swing time settle most of it; the
-     * raytrace is only reached when nothing else explains the miss.
-     */
     private String explain(Pending shot, Track track, EntityLivingBase living) {
         this.lastClosest = -1.0;
         if (shot.usingItem) {
@@ -567,10 +465,7 @@ public class HitCheck extends Module {
         if (!sawIt) {
             return "blocked";
         }
-        /* Everything the client can check has passed: in range, out of the
-           invulnerability window, in line of sight, not using an item. If the
-           server also never sent a hurt animation, it did not evaluate this
-           attack and reject it -- it did not act on it at all. */
+
         Integer animated = this.hurtAnimations.get(shot.entityId);
         if (animated == null || animated < shot.tick || animated > shot.deadline) {
             return "dropped";
@@ -593,7 +488,6 @@ public class HitCheck extends Module {
         return new Vec3(this.selfX[at], this.selfY[at], this.selfZ[at]);
     }
 
-    /** Swings that could actually be judged -- the honest denominator. */
     private int judged() {
         return Math.max(0, this.swings - this.undetermined);
     }
@@ -607,8 +501,6 @@ public class HitCheck extends Module {
         sb.append("&fhits ").append(this.hits).append('/').append(judged())
                 .append(" &7(").append(rate()).append("%)");
         if (this.suppressed > 0) {
-            /* Clicks vanilla would have turned into an attack, that produced no
-               packet. Nothing about aim or range applies to these. */
             sb.append(" &8| &c").append(this.suppressed).append('/').append(this.expected)
                     .append(" suppressed&7");
         }
@@ -618,7 +510,6 @@ public class HitCheck extends Module {
         return sb.toString();
     }
 
-    /** Swings that could be judged, and how many landed. */
     public int judgedSwings() {
         return judged();
     }
@@ -631,7 +522,6 @@ public class HitCheck extends Module {
         return this.suppressed;
     }
 
-    /** Misses attributed to a given reason, for a caller comparing settings. */
     public int missesFor(String reason) {
         Integer seen = this.reasons.get(reason);
         return seen == null ? 0 : seen;
@@ -641,7 +531,6 @@ public class HitCheck extends Module {
         reset();
     }
 
-    /** The same figures as the chat line, without the colour codes. */
     private String plainSummary() {
         StringBuilder sb = new StringBuilder();
         sb.append("hits ").append(this.hits).append('/').append(judged())
@@ -663,11 +552,6 @@ public class HitCheck extends Module {
         return sb.toString();
     }
 
-    /**
-     * One file per session, appended to. Opened lazily, so a session in which
-     * nothing was ever counted leaves no file behind, and never opened at all
-     * while logging is switched off.
-     */
     private void writeLog(String line) {
         if (!this.logFile.getValue()) {
             return;
@@ -675,7 +559,7 @@ public class HitCheck extends Module {
         if (this.logTarget == null) {
             this.logTarget = new File(LOG_DIR, "hits-" + FILE_STAMP.format(new Date()) + ".txt");
         }
-        /* Written on AsyncLog's thread: a file opened mid-tick is a stall. */
+
         AsyncLog.append(this.logTarget, LINE_STAMP.format(new Date()) + "  " + line);
     }
 
@@ -728,7 +612,6 @@ public class HitCheck extends Module {
         GL11.glPopMatrix();
     }
 
-    /** Sits opposite the module list, the same way the flag readout does. */
     private boolean alignRight() {
         HUD hud = (HUD) atlas.Atlas.moduleManager.modules.get(HUD.class);
         return hud != null && hud.isEnabled() && hud.posX.getValue() == 0;
@@ -749,7 +632,6 @@ public class HitCheck extends Module {
         return new String[]{rate() + "%"};
     }
 
-    /** Positions and damage moments for one entity. */
     private static class Track {
         final double[] x = new double[HISTORY];
         final double[] y = new double[HISTORY];
@@ -767,9 +649,7 @@ public class HitCheck extends Module {
             if (this.filled < HISTORY) {
                 this.filled++;
             }
-            /* The hurt timer is reloaded to its maximum on the tick damage
-               lands and counts down from there, so a rise is a fresh hit --
-               and unlike health it is published for every player. */
+
             if (living.hurtTime > this.lastHurtTime) {
                 this.lastDamageTick = tick;
             }

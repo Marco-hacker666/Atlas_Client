@@ -12,9 +12,7 @@ import java.util.Map;
 
 import static org.junit.Assert.*;
 
-/** Mechanical conflicts between modules (2026-10-23, GUI redesign M5). */
 public class ConflictsTest {
-
     private static final Map<String, Integer> NO_KEYS = Collections.emptyMap();
 
     @After

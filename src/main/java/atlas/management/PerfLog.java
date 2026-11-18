@@ -13,17 +13,6 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 
-/**
- * Where the client's own time goes, once a minute, to
- * config/Atlas/perf-<stamp>.txt.
- *
- * Asked for as "optimise the client" (2026-09-25). Nothing had ever been
- * measured, and the one guess that could be checked -- the event bus calling
- * every module's handlers by reflection -- came to well under a millisecond
- * a second. So this measures first: the time in every handler that ran, by
- * handler and by event, with the frame rate beside it, only while in a world.
- * The handlers that come out on top are what is worth making faster.
- */
 public class PerfLog {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final File LOG_DIR = new File("./config/Atlas/");
@@ -46,7 +35,7 @@ public class PerfLog {
         if (this.ticks == 0) {
             this.windowStart = now;
             this.fpsSum = 0L;
-            /* Whatever piled up before the window (the menu, loading) is not it. */
+
             EventManager.takeProfile(1.0, 0);
         }
         this.ticks++;

@@ -9,7 +9,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** The module list laid out: where each rectangle and line of text goes (2026-11-14). Letters are 5 wide, 8 high. */
 public class ListLayoutTest {
     private static final float TEXT = 8.0F;
 
@@ -17,7 +16,6 @@ public class ListLayoutTest {
         return new ListRow(name, name, suffix, category, name.length() * 5.0F, suffix.length() * 5.0F);
     }
 
-    /** Widest first: 65, 40 and 20 of text. */
     private static List<ListRow> rows() {
         List<ListRow> rows = new ArrayList<ListRow>();
         rows.add(row("Scaffold", " Fast", 1));
@@ -67,7 +65,7 @@ public class ListLayoutTest {
         ListFrame frame = ListLayout.frame(style, rows(), TEXT, 0L, null);
         List<ListFrame.Op> rows = backings(frame);
         assertEquals(3, rows.size());
-        /* Right and top: every row ends at x 0, and they follow each other down, 8 of text and 2 above and below. */
+
         float[] widths = {71.0F, 46.0F, 26.0F};
         for (int i = 0; i < 3; i++) {
             assertEquals(0.0F, rows.get(i).x2, 0.0F);
@@ -79,7 +77,7 @@ public class ListLayoutTest {
         assertEquals(0.0F, frame.maxX, 0.0F);
         assertEquals(0.0F, frame.minY, 0.0F);
         assertEquals(36.0F, frame.maxY, 1.0E-4F);
-        /* The text: the name three in from the row's free end, the tag right after it, two down. */
+
         List<ListFrame.Op> texts = texts(frame);
         assertEquals("Scaffold", texts.get(0).text);
         assertEquals(-68.0F, texts.get(0).x1, 1.0E-4F);
@@ -89,7 +87,6 @@ public class ListLayoutTest {
         assertEquals(0xFF3366FF, texts.get(0).argb);
         assertEquals(0xFFAAAAAA, texts.get(1).argb);
 
-        /* Left and bottom: the mirror of it. */
         style.right = false;
         style.bottom = true;
         frame = ListLayout.frame(style, rows(), TEXT, 0L, null);
@@ -122,16 +119,16 @@ public class ListLayoutTest {
         ListStyle style = plain();
         style.corners = ListStyle.Corners.OUTER;
         List<ListFrame.Op> rows = backings(ListLayout.frame(style, rows(), TEXT, 0L, null));
-        /* Right-anchored, widest first: each row's lower free corner shows, the upper one only on the first. */
+
         assertEquals(ListPainter.TOP_LEFT | ListPainter.TOP_RIGHT | ListPainter.BOTTOM_LEFT, rows.get(0).corners);
         assertEquals(ListPainter.BOTTOM_LEFT, rows.get(1).corners);
         assertEquals(ListPainter.BOTTOM_LEFT | ListPainter.BOTTOM_RIGHT, rows.get(2).corners);
         assertEquals(3.0F, rows.get(0).radius, 0.0F);
-        /* Apart, every row is on its own. */
+
         style.gap = 2.0F;
         rows = backings(ListLayout.frame(style, rows(), TEXT, 0L, null));
         assertEquals(ListPainter.ALL, rows.get(1).corners);
-        /* A radius never past half the row. */
+
         style.radius = 40.0F;
         assertEquals(6.0F, backings(ListLayout.frame(style, rows(), TEXT, 0L, null)).get(0).radius, 0.0F);
         style.corners = ListStyle.Corners.NONE;
@@ -148,7 +145,7 @@ public class ListLayoutTest {
         List<ListFrame.Op> rows = backings(frame);
         assertEquals(-2.0F, rows.get(0).x2, 1.0E-4F);
         assertEquals(-73.0F, rows.get(0).x1, 1.0E-4F);
-        /* The side the bar is on stays square. */
+
         assertEquals(ListPainter.TOP_LEFT | ListPainter.BOTTOM_LEFT, rows.get(0).corners);
         int bars = 0;
         for (ListFrame.Op op : frame.ops) {
@@ -161,7 +158,7 @@ public class ListLayoutTest {
         }
         assertEquals(3, bars);
         assertEquals(-70.0F, texts(frame).get(0).x1, 1.0E-4F);
-        /* An inner bar: past each row's free end. */
+
         style.bar = ListStyle.Bar.INNER;
         frame = ListLayout.frame(style, rows(), TEXT, 0L, null);
         assertEquals(-73.0F, frame.minX, 1.0E-4F);
@@ -183,7 +180,7 @@ public class ListLayoutTest {
         frame = ListLayout.frame(style, rows(), TEXT, 0L, null);
         assertEquals(36.0F, frame.maxY, 1.0E-4F);
         assertEquals(6, frame.ops.size() - texts(frame).size());
-        /* An outline is a line's width outside the rows all round. */
+
         style.bar = ListStyle.Bar.OUTLINE;
         style.barWidth = 1.0F;
         frame = ListLayout.frame(style, rows(), TEXT, 0L, null);
@@ -191,7 +188,7 @@ public class ListLayoutTest {
         assertEquals(1.0F, frame.maxX, 1.0E-4F);
         assertEquals(-1.0F, frame.minY, 1.0E-4F);
         assertEquals(37.0F, frame.maxY, 1.0E-4F);
-        /* Two uprights a row, the top, the bottom, and a piece along each of the two steps. */
+
         assertEquals(3 + 3 * 2 + 2 + 2, frame.ops.size() - texts(frame).size());
     }
 
@@ -207,9 +204,9 @@ public class ListLayoutTest {
         assertEquals(-71.0F, block.get(0).x1, 1.0E-4F);
         assertEquals(36.0F, block.get(0).y2, 1.0E-4F);
         assertEquals(ListPainter.ALL, block.get(0).corners);
-        /* The text still ends at the anchored side. */
+
         assertEquals(-43.0F, texts(frame).get(2).x1, 1.0E-4F);
-        /* It fades with the rows in it: whole while one is there, then with the last one to go. */
+
         style.backgroundOpacity = 50;
         List<ListRow> leaving = rows();
         leaving.get(0).appear = 0.5F;
@@ -258,7 +255,7 @@ public class ListLayoutTest {
         });
         assertEquals(0xFF000010, texts(frame).get(0).argb);
         assertEquals(0xFF000020, texts(frame).get(2).argb);
-        /* With nobody to ask it is colour 1. */
+
         assertEquals(0xFF3366FF, texts(ListLayout.frame(style, rows(), TEXT, 0L, null)).get(0).argb);
     }
 
@@ -270,15 +267,15 @@ public class ListLayoutTest {
         List<ListRow> rows = rows();
         rows.get(1).appear = 0.5F;
         ListFrame frame = ListLayout.frame(style, rows, TEXT, 0L, null);
-        /* Half way: an eighth of the slide left to go, toward the edge it comes from. */
+
         assertEquals(25.0F / 8.0F, backings(frame).get(1).x2, 1.0E-4F);
         assertEquals(0x40, backings(frame).get(1).argb >>> 24);
         assertEquals(0x80, texts(frame).get(2).argb >>> 24);
         assertEquals(0.0F, backings(frame).get(0).x2, 0.0F);
-        /* Gone but for the last frame: the text keeps the little alpha the game's font needs. */
+
         rows.get(1).appear = 0.0F;
         assertEquals(4, texts(ListLayout.frame(style, rows, TEXT, 0L, null)).get(2).argb >>> 24);
-        /* A slide alone goes the row's whole width and does not fade. */
+
         style.anim = ListStyle.Anim.SLIDE;
         frame = ListLayout.frame(style, rows, TEXT, 0L, null);
         assertEquals(50.0F, backings(frame).get(1).x2, 1.0E-4F);
@@ -302,7 +299,7 @@ public class ListLayoutTest {
                 style.bottom = (corner & 2) != 0;
                 ListFrame frame = ListLayout.frame(style, rows(), TEXT, 500L, null);
                 assertEquals(name, 4, texts(frame).size());
-                /* Nothing reaches more than a line's width past the anchored corner. */
+
                 float line = style.barWidth + 0.01F;
                 assertTrue(name, style.right ? frame.maxX <= line : frame.minX >= -line);
                 assertTrue(name, style.bottom ? frame.maxY <= line : frame.minY >= -line);

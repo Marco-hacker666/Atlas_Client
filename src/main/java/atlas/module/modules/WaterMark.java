@@ -23,24 +23,21 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.util.Color;
 
-
 import static net.minecraft.init.Items.string;
 
 public class WaterMark extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    /* 2026-10-26: the "Vape" mode (another client's wordmark drawn from two
-       PNGs) is gone; a config that names it falls back to Jello. */
     public final ModeProperty mode = new ModeProperty("Mode", 3,
             new String[] { "Exhibition", "Modern", "WeedHack", "Jello" }).alias("Vape", "Jello");
 
     public final TextProperty modernText = new TextProperty("Text", "Atlas", () -> mode.getValue() == 1);
     public final BooleanProperty shadow = new BooleanProperty("Shadow", true, () -> mode.getValue() == 1);
     public final BooleanProperty enableGlow = new BooleanProperty("Glow", true);
-    /* Added with the HUD editor (2026-10-05): drag it there, or set it here. 0 keeps the original place. */
+
     public final IntProperty offsetX = new IntProperty("offset-x", 0, -1000, 1000);
     public final IntProperty offsetY = new IntProperty("offset-y", 0, -1000, 1000);
-    /* 2026-11-09: every HUD element can be resized and given the shared panel behind it. */
+
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 3.0F);
     public final BooleanProperty background = new BooleanProperty("background", false);
 
@@ -105,7 +102,7 @@ public class WaterMark extends Module {
 
         float[] area = watermarkArea();
         float s = this.scale.getValue();
-        /* Resized about its top-left corner. */
+
         float pivotX = (area != null ? area[0] : 0.0F) + this.offsetX.getValue();
         float pivotY = (area != null ? area[1] : 0.0F) + this.offsetY.getValue();
         if (area != null) {
@@ -146,7 +143,6 @@ public class WaterMark extends Module {
         }
     }
 
-    /** Where the current style draws, before the offset: {x, y, width, height}; null if not known yet. */
     private float[] watermarkArea() {
         switch (mode.getValue()) {
             case 0: {
@@ -172,7 +168,6 @@ public class WaterMark extends Module {
         }
     }
 
-    /** A grey (this file's Color is LWJGL's), swapped to its light-mode counterpart when light mode is on. */
     private static Color neutral(int r, int g, int b) {
         int argb = UiMode.adapt(0xFF000000 | (r << 16) | (g << 8) | b);
         return new Color((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF);
@@ -281,11 +276,6 @@ public class WaterMark extends Module {
         GlStateManager.popMatrix();
     }
 
-    /*
-     * JelloBounce Watermark.svelte: "jello" at 40px with "bounce" beside it at
-     * 27px, a shade darker, both at 80% opacity, no background. Here "atlas"
-     * alone at the big size, in the thin Product Sans, at GUI scale (half the CSS px).
-     */
     private static final float JELLO_BIG = 20.0f;
 
     private float jelloScale(FontRenderer font, float pixels) {
@@ -297,7 +287,6 @@ public class WaterMark extends Module {
         return font != null ? (float) font.getStringWidth(text) : mc.fontRendererObj.getStringWidth(text);
     }
 
-    /** {width, height} of the wordmark. */
     private float[] jelloSize() {
         FontRenderer font = FontManager.productSansLight;
         float big = jelloScale(font, JELLO_BIG);
@@ -347,5 +336,4 @@ public class WaterMark extends Module {
             RenderUtils.drawRect(x + 3 + i, y + 3, 1, 1, new Color(r, g, b));
         }
     }
-
 }

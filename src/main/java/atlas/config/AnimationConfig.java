@@ -3,11 +3,6 @@ package atlas.config;
 import atlas.Atlas;
 import atlas.module.modules.Animations;
 
-/**
- * Thin wrapper that holds animation settings
- * so everything persists through Uzi's config system.
- * Original logic by syuto/animations-1.6, integrated into Uzi
- */
 public class AnimationConfig {
     public static AnimationMode mode       = AnimationMode.VANILLA;
     public static int           renderMode = 1;
@@ -19,9 +14,6 @@ public class AnimationConfig {
     public static int           swingSpeed = 6;
     public static boolean       enabled    = true;
 
-    /**
-     * Sync configuration from the Animations module
-     */
     public static void sync() {
         try {
             Animations animModule = (Animations) Atlas.moduleManager.modules.get(Animations.class);

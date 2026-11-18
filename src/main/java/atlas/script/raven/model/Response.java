@@ -3,7 +3,6 @@ package atlas.script.raven.model;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Raven script API: an HTTP answer (2026-11-02). */
 public class Response {
     private final int responseCode;
     private final String contents;

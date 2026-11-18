@@ -8,10 +8,7 @@ import java.util.Random;
 
 import static org.junit.Assert.assertTrue;
 
-/** AutoClicker's Human randomization (2026-10-25). */
 public class HumanClicksTest {
-
-    /** Clicks for {@code seconds} of a continuous fight; the gaps. */
     private static List<Long> fight(HumanClicks clicks, int min, int max, int seconds, long start) {
         List<Long> gaps = new ArrayList<Long>();
         long now = start;
@@ -65,7 +62,7 @@ public class HumanClicksTest {
         double cv = Math.sqrt(var) / m;
         double skew = third / Math.pow(var, 1.5);
         assertTrue("coefficient of variation " + cv, cv > 0.12 && cv < 0.45);
-        assertTrue("skew " + skew, skew > 0.2); // right-skewed, as a hand
+        assertTrue("skew " + skew, skew > 0.2);
     }
 
     @Test

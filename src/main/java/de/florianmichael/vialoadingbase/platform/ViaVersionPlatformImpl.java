@@ -36,7 +36,6 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class ViaVersionPlatformImpl implements ViaPlatform<UserConnection> {
-
   private final ViaAPI<UserConnection> api = new VLBViaAPIWrapper();
 
   private final Logger logger;

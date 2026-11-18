@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): automatically places blocks around your bed
-// for defense, in a single or double ring layout.
+// Ported from OpenSkid (GPL-3.0)
+
 import com.google.common.base.CaseFormat;
 
 import java.util.ArrayList;

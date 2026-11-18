@@ -14,16 +14,7 @@ import java.util.Set;
 
 import static org.junit.Assert.*;
 
-/**
- * Every setting a module registers has a name of its own (2026-09-28).
- *
- * The config is keyed by setting name within the module; two settings with
- * one name save over each other and load into the same slot. This collects
- * them the way the client's start-up does -- Property fields, then the members of
- * PropertyGroup fields -- for the modules changed this batch.
- */
 public class SettingNamesTest {
-
     private static List<Property<?>> settingsOf(Module module) throws Exception {
         List<Property<?>> out = new ArrayList<Property<?>>();
         for (Field field : module.getClass().getDeclaredFields()) {

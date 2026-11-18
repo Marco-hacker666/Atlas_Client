@@ -21,9 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.*;
 
-/** LagManager: F-28 (flush race) and F-11 (holder name), 2026-09-28. */
 public class LagManagerTest {
-
     public static final class Numbered implements Packet<INetHandler> {
         final int n;
 
@@ -44,7 +42,6 @@ public class LagManagerTest {
         }
     }
 
-    /** Records what would have gone on the wire, and widens race windows. */
     static class Recording extends LagManager {
         final List<Integer> sent = Collections.synchronizedList(new ArrayList<Integer>());
         final AtomicBoolean otherThreadSawFlushing = new AtomicBoolean(false);
@@ -125,8 +122,7 @@ public class LagManagerTest {
                 lag.handlePacket(new Numbered(i));
             }
             lag.setDelay(0);
-            /* Two threads flushing at once: the client thread's tick and the
-               network thread answering a keep-alive. */
+
             CountDownLatch start = new CountDownLatch(1);
             Runnable flusher = () -> {
                 try {
@@ -214,19 +210,12 @@ public class LagManagerTest {
         };
         lag.setDelay(3);
         lag.handlePacket(new Numbered(1));
-        /* Held like any other; dropped at the next flush, which finds no
-           connection to send it on (unchanged behaviour). */
+
         assertEquals(1, lag.packetQueue.size());
         lag.handlePacket(new C00PacketKeepAlive());
         assertTrue(lag.packetQueue.isEmpty());
     }
 
-    /**
-     * 2026-11-10: a server teleport froze the game. Dropping the queue sent
-     * each transaction reply back through the mixin, which held it again
-     * while a delay was set -- an endless loop holding the lock. Here send()
-     * does what the mixin does: offers the packet unless this thread flushes.
-     */
     @Test
     public void droppingOnATeleportSendsEachReplyOnceAndEnds() throws Exception {
         final List<Packet<?>> wire = Collections.synchronizedList(new ArrayList<Packet<?>>());

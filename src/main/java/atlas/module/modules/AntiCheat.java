@@ -24,54 +24,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Reports other players for the two things a client can actually measure.
- *
- * A client sees other players through packets that have already lost most of
- * what a detector would want: rotations arrive quantised to a byte (1.4
- * degrees), positions to a thirty-second of a block, and swings only as an
- * animation the server may not forward. Checks built on those -- clicks per
- * second, movement speed, whether someone is blocking -- produce noise, which
- * is why the ones in this module are limited to measurements taken against
- * this client's own position. That position is computed locally and is exact,
- * so a distance derived from it has no error term beyond the opponent's.
- *
- * REACH. When this player takes a hit, the attacker's distance is measured
- * across the whole latency window rather than at the moment the damage
- * arrives, and the smallest value found is the one tested. A player who was
- * ever legitimately in range inside that window is therefore never flagged,
- * whatever the packet timing did to the numbers.
- *
- * WALL. Same trigger, but asking whether any line of sight existed at all
- * during the window. Unlike distance this has no tolerance to argue about:
- * either a block was between the two players for every sample or it was not.
- *
- * Attribution is the weak point and is treated as such. Damage carries no
- * attacker, so the attacker is inferred from who swung recently and nearby,
- * and when more than one player fits, the event is discarded rather than
- * guessed at. Reports also need several separate hits, so a single unlucky
- * measurement never produces an accusation.
- *
- * The output is advisory. It is evidence for a report, not a verdict.
- */
 public class AntiCheat extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final int HISTORY = 64;
 
     public final BooleanProperty checkReach = new BooleanProperty("reach", true);
-    /* Vanilla lets the server accept up to 6 blocks; survival clients raytrace
-       to 3. This sits above every honest value the measurement can produce at
-       high latency, so what it catches is deliberate extension rather than
-       jitter. */
+
     public final FloatProperty reachThreshold = new FloatProperty("reach-threshold", 3.7F, 3.2F, 6.0F,
             this.checkReach::getValue);
     public final BooleanProperty checkWall = new BooleanProperty("wall-hits", true);
 
-    /** Separate hits needed before a player is named. */
     public final IntProperty hitsRequired = new IntProperty("hits-required", 2, 1, 10);
     public final IntProperty cooldown = new IntProperty("cooldown", 10, 1, 300);
-    /** Extra ticks searched either side of the estimated round trip. */
+
     public final IntProperty windowPad = new IntProperty("window-pad", 4, 0, 20);
     public final FloatProperty candidateRange = new FloatProperty("candidate-range", 12.0F, 4.0F, 32.0F);
 
@@ -152,8 +117,6 @@ public class AntiCheat extends Module {
             }
         }
 
-        /* hurtTime is set to its maximum the tick damage lands and counts down
-           from there, so the rising edge is the event. */
         int hurtTime = mc.thePlayer.hurtTime;
         if (hurtTime > this.lastHurtTime && this.lastHurtTime == 0) {
             this.onDamaged();
@@ -181,10 +144,6 @@ public class AntiCheat extends Module {
             return;
         }
 
-        /* Damage packets name no attacker, so it has to be inferred. Anything
-           that swung inside the window and is close enough to have reached is
-           a candidate; more than one and the event is dropped, because naming
-           the wrong player is worse than missing a real one. */
         List<EntityPlayer> candidates = new ArrayList<EntityPlayer>();
         for (Object object : mc.theWorld.playerEntities) {
             if (!(object instanceof EntityPlayer)) {
@@ -198,9 +157,7 @@ public class AntiCheat extends Module {
             if (track == null || track.filled <= window) {
                 continue;
             }
-            /* lastSwingTick starts at Integer.MIN_VALUE for "never swung", and
-               tickCounter - MIN_VALUE overflows to a negative number, so a
-               player who had never swung passed as a recent swinger. */
+
             if (track.lastSwingTick == Integer.MIN_VALUE
                     || (long) this.tickCounter - track.lastSwingTick > window + 4) {
                 continue;
@@ -252,16 +209,13 @@ public class AntiCheat extends Module {
             this.record(attacker.getName(), "Reach",
                     String.format("closest %.2f blocks over %dt", closest, window));
         }
-        /* Blocks can be broken and placed between the samples and now, so a
-           wall reported here is the wall as it stands, not necessarily as it
-           stood. Requiring several hits is what keeps that honest. */
+
         if (this.checkWall.getValue() && !sawEachOther) {
             this.record(attacker.getName(), "WallHit",
                     String.format("no line of sight for %dt", window));
         }
     }
 
-    /** Shortest distance from a point to a box, zero when inside it. */
     private static double distanceToBox(Vec3 point, AxisAlignedBB box) {
         double dx = Math.max(Math.max(box.minX - point.xCoord, 0.0), point.xCoord - box.maxX);
         double dy = Math.max(Math.max(box.minY - point.yCoord, 0.0), point.yCoord - box.maxY);
@@ -294,7 +248,7 @@ public class AntiCheat extends Module {
         }
         violation.lastReport = now;
         this.named.add(name);
-        /* 2026-11-03: Raven scripts' onAntiCheatFlag(flag, player), as Raven's own Anticheat tells them. */
+
         atlas.script.ScriptDispatcher.INSTANCE.onAntiCheatFlag(check,
                 mc.theWorld == null ? null : mc.theWorld.getPlayerEntityByName(name));
 
@@ -316,7 +270,6 @@ public class AntiCheat extends Module {
         return new String[]{this.named.size() + " flagged"};
     }
 
-    /** Position history and swing timing for one player. */
     private static class Track {
         final double[] x = new double[HISTORY];
         final double[] y = new double[HISTORY];
@@ -354,6 +307,5 @@ public class AntiCheat extends Module {
         long lastReport;
     }
 
-    /* Merged modules (2026-10-11, ModuleBundle). */
     public final atlas.module.ModuleBundle cheatDetectorMerged = atlas.module.ModuleBundle.withSwitch(this, new atlas.module.modules.CheatDetector(), "cheat-detector", "Cheat detector", false);
 }

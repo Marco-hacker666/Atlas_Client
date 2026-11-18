@@ -8,19 +8,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * The sub-groups of the Legit page, and which module goes in which.
- *
- * This table is the only place the grouping lives. Modules are matched by
- * class name, so a module's display name can change without moving it. A Legit
- * module missing from the table is never hidden: it lands in "More".
- */
 final class LegitGroups {
     static final String HUD = "HUD";
     static final String VISUALS = "Visuals";
     static final String STATS = "Stats";
     static final String UTILITY = "Utility";
-    /* Not "Other": the Modules page already has an "Other" category. */
+
     static final String MORE = "More";
 
     private static final String[] ORDER = {HUD, VISUALS, STATS, UTILITY, MORE};
@@ -45,7 +38,6 @@ final class LegitGroups {
         }
     }
 
-    /** The Legit modules split into their groups, in display order, leaving out empty groups. */
     static Map<String, List<Module>> group(List<Module> legit) {
         Map<String, List<Module>> buckets = new LinkedHashMap<String, List<Module>>();
         for (String name : ORDER) {
@@ -67,7 +59,6 @@ final class LegitGroups {
         return out;
     }
 
-    /** The sidebar icon for a group, from the icons the menu already draws. */
     static String icon(String group) {
         if (HUD.equals(group)) {
             return "selection";

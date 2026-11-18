@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** AutoTune's experiment: current, candidate, current, candidate (plan step 11, 2026-09-28). */
 public class TuneExperimentTest {
-
     private static TuneExperiment experiment() {
         return new TuneExperiment(7, "Reach.range", 3.10, 3.15, 2.0, 3);
     }
@@ -39,12 +37,11 @@ public class TuneExperimentTest {
 
     @Test
     public void oneLuckyBlockIsNotEnough() {
-        /* The old rule kept this: one block out-scored the baseline. */
         TuneExperiment e = experiment();
         e.blockScored(90, 30);
-        e.blockScored(96, 30); // +6, lucky
+        e.blockScored(96, 30);
         e.blockScored(92, 30);
-        assertEquals(TuneExperiment.State.REJECTED, e.blockScored(91, 30)); // -1 the second time
+        assertEquals(TuneExperiment.State.REJECTED, e.blockScored(91, 30));
         assertTrue(e.reason(), e.reason().startsWith("not better both times"));
     }
 
@@ -54,7 +51,7 @@ public class TuneExperimentTest {
         e.blockScored(90, 30);
         e.blockScored(90.5, 30);
         e.blockScored(90, 30);
-        assertEquals(TuneExperiment.State.REJECTED, e.blockScored(91, 30)); // mean +0.75 < 2
+        assertEquals(TuneExperiment.State.REJECTED, e.blockScored(91, 30));
     }
 
     @Test
@@ -84,7 +81,7 @@ public class TuneExperimentTest {
         e.blockScored(90, 30);
         assertEquals(TuneExperiment.State.EXPIRED, e.expire("server changed"));
         assertEquals("server changed", e.reason());
-        /* Finished experiments do not change. */
+
         e.blockScored(99, 30);
         assertEquals(TuneExperiment.State.EXPIRED, e.state());
     }

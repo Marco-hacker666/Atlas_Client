@@ -9,9 +9,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/** The Logs switch: which files count as session logs and which are kept while it is off (2026-10-20). */
 public class LogsTest {
-
     @Test
     public void sessionLogsAreRecognisedByTheirStamp() {
         assertEquals("clutch", Logs.sessionPrefix("clutch-20261020-191450.txt"));

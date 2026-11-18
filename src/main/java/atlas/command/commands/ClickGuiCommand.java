@@ -10,7 +10,6 @@ import java.util.Arrays;
 import java.util.Locale;
 
 public class ClickGuiCommand extends Command {
-
     public ClickGuiCommand() {
         super(new ArrayList<>(Arrays.asList("clickgui", "gui")));
     }

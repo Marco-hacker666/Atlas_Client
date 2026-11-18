@@ -27,7 +27,7 @@ public class TeamHealthDisplay extends Module {
     public final BooleanProperty showTicks = new BooleanProperty("show-ticks", true);
     public final BooleanProperty onlyTeam = new BooleanProperty("only-team", false);
     public final BooleanProperty onlyEnemy = new BooleanProperty("only-enemy", false);
-    public final ModeProperty teamCheckMode = new ModeProperty("team-check-mode", 0, new String[]{"FRIEND_MANAGER", "SCOREBOARD_COLOR", "OFF"}); // New property
+    public final ModeProperty teamCheckMode = new ModeProperty("team-check-mode", 0, new String[]{"FRIEND_MANAGER", "SCOREBOARD_COLOR", "OFF"});
 
     public TeamHealthDisplay() {
         super("TeamHealthDisplay", false);
@@ -37,10 +37,6 @@ public class TeamHealthDisplay extends Module {
     public void onPacket(PacketEvent event) {
         if (this.isEnabled() && mc.thePlayer != null && mc.theWorld != null && !event.isCancelled()
                 && event.getPacket() instanceof S1CPacketEntityMetadata) {
-            /* Network thread: the entity lookup, the health read and the chat
-               line all belong to the client thread. Scheduled ahead of
-               vanilla's metadata handler, so the health read is still the old
-               value the difference is taken against. */
             final S1CPacketEntityMetadata packet = (S1CPacketEntityMetadata) event.getPacket();
             mc.addScheduledTask(new Runnable() {
                 @Override
@@ -71,7 +67,7 @@ public class TeamHealthDisplay extends Module {
                             isTeammate = TeamUtil.isSameTeam(targetPlayer);
                             isEnemy = !isTeammate;
                             break;
-                        case 2: // OFF
+                        case 2:
                             isTeammate = false;
                             isEnemy = false;
                             break;
@@ -80,15 +76,13 @@ public class TeamHealthDisplay extends Module {
                     if (this.onlyTeam.getValue() && !isTeammate) return;
                     if (this.onlyEnemy.getValue() && !isEnemy) return;
 
-
-                    if (this.teamCheckMode.getValue() == 2) { // OFF
+                    if (this.teamCheckMode.getValue() == 2) {
                         isTeammate = TeamUtil.isFriend(targetPlayer);
                         isEnemy = !isTeammate && TeamUtil.isTarget(targetPlayer);
                     }
 
-
                     for (DataWatcher.WatchableObject watchableObject : packet.func_149376_c()) {
-                        if (watchableObject.getDataValueId() == 6 && watchableObject.getObject() instanceof Float) { // Health ID
+                        if (watchableObject.getDataValueId() == 6 && watchableObject.getObject() instanceof Float) {
                             float newHealth = (Float) watchableObject.getObject();
                             float healthDifference = newHealth - targetPlayer.getHealth();
 
@@ -102,7 +96,6 @@ public class TeamHealthDisplay extends Module {
                                 } else {
                                     entityType = "Player";
                                 }
-
 
                                 StringBuilder message = new StringBuilder();
                                 message.append(String.format("&7[%s] %s: %s%s", entityType, targetPlayer.getName(), healthColor, df.format(healthDifference)));

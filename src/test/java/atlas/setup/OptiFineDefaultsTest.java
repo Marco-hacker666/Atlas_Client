@@ -9,7 +9,6 @@ import java.util.List;
 import static org.junit.Assert.*;
 
 public class OptiFineDefaultsTest {
-
     @Test
     public void replacesAnExistingValue() {
         List<String> out = OptiFineDefaults.withConnectedTexturesOff(

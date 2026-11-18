@@ -1,35 +1,18 @@
 package atlas.lb.aiming;
 
-/**
- * AngleSmooth "Noise" (2026-11-10, owner: "the Noise modes, for Polar"):
- * Atlas's own turn, after the idea in Augustus's Noise rotations -- the speed
- * and the point aimed at drift with a smooth noise instead of being drawn
- * fresh every tick. Written here from that idea; no code taken.
- *
- * Per axis, per tick:
- *   - the goal is the target plus a wander: a smooth noise, scaled by spread,
- *     so the aim point slides across the box over a second or so;
- *   - the wanted speed is response times what is left to turn, capped at the
- *     aim speed, itself swaying by +-sway with another smooth noise;
- *   - the actual speed moves toward the wanted one by at most acceleration a
- *     tick, so a turn speeds up and slows down instead of starting and
- *     stopping at full speed.
- * A goal that jumps by more than 30 degrees (a new target) keeps the speed
- * but restarts the wander.
- */
 public final class NoiseAim extends AngleSmooth {
     public float speedMin = 18.0F;
     public float speedMax = 26.0F;
-    /** Degrees a tick per tick the turn speed may change. */
+
     public float acceleration = 6.0F;
-    /** Share of what is left that the hand wants to turn this tick. */
+
     public float response = 0.45F;
-    /** How far the aim point wanders, degrees each way. */
+
     public float spreadYaw = 2.0F;
     public float spreadPitch = 1.2F;
-    /** How fast the wander and the speed sway change: noise steps a tick. */
+
     public float scale = 0.08F;
-    /** 0..1: how much the top speed sways. */
+
     public float sway = 0.25F;
 
     private final SmoothNoise wanderYaw = new SmoothNoise(System.nanoTime());
@@ -55,7 +38,6 @@ public final class NoiseAim extends AngleSmooth {
         return turn(current, new Rotation(goalYaw, goalPitch), cap, true);
     }
 
-    /** One tick of the accelerated turn toward {@code goal}, at most {@code cap} degrees a tick on each axis. */
     private Rotation turn(Rotation current, Rotation goal, float cap, boolean keep) {
         float[] left = current.deltaTo(goal);
         float[] out = new float[2];
@@ -64,7 +46,7 @@ public final class NoiseAim extends AngleSmooth {
             float v = this.velocity[axis];
             float change = Rotation.clamp(wanted - v, -this.acceleration, this.acceleration);
             v += change;
-            /* Never swing past the goal: a hand overshoots by a little, not by a whole turn. */
+
             if (Math.signum(v) == Math.signum(left[axis]) && Math.abs(v) > Math.abs(left[axis]) * 1.15F + 0.2F) {
                 v = left[axis] * 1.15F;
             }

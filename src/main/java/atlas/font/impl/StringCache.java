@@ -16,9 +16,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.WeakHashMap;
 
-/**
- * The StringCache is the public interface for rendering of all Unicode strings using OpenType fonts.
- */
 public class StringCache {
     private static final int BASELINE_OFFSET = 0;
     private static final int UNDERLINE_OFFSET = 1;
@@ -152,7 +149,6 @@ public class StringCache {
     }
 
     public int renderString(String str, float startX, float startY, int initialColor, boolean shadowFlag) {
-
         if (str == null) {
             return 0;
         }
@@ -289,8 +285,6 @@ public class StringCache {
 
         GlStateManager.enableBlend();
         return (int) (startX + entry.advance / 2f);
-
-
     }
 
     public int getStringWidth(String str) {

@@ -1,8 +1,3 @@
-//
-// Source code recreated from a .class file by IntelliJ IDEA
-// (powered by FernFlower decompiler)
-//
-
 package atlas.property.properties;
 
 import com.google.gson.JsonObject;
@@ -37,7 +32,6 @@ public class FileProperty extends Property<String> {
         } catch (Exception e) {
             e.printStackTrace();
         }
-
     }
 
     public String getValuePrompt() {

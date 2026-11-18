@@ -17,16 +17,15 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.item.ItemStack;
 
-/** A small armor durability strip above the hotbar. */
 public class ArmorHUD extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final BooleanProperty showDurability = new BooleanProperty("durability", true);
     public final BooleanProperty background = new BooleanProperty("background", true);
-    /* Added with the HUD editor (2026-10-05): drag it there, or set it here. 0 keeps the original place. */
+
     public final IntProperty offsetX = new IntProperty("offset-x", 0, -1000, 1000);
     public final IntProperty offsetY = new IntProperty("offset-y", 0, -1000, 1000);
-    /* 2026-11-09: every HUD element can be resized (here, or with the wheel in the HUD editor). */
+
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
 
     public ArmorHUD() {
@@ -47,7 +46,7 @@ public class ArmorHUD extends Module {
             }
         }
         float s = this.scale.getValue();
-        /* Resized about its bottom centre, so it stays just above the hotbar. */
+
         float pivotX = left - 2 + 41.5F;
         float pivotY = top - 2 + 33;
         if (wearing || HudLayout.isEditing()) {
@@ -64,14 +63,6 @@ public class ArmorHUD extends Module {
     }
 
     private void draw(int left, int top) {
-        /* Backgrounds, then items, then text -- not all three per slot. The
-           item overlay switches lighting on again after its durability bar,
-           so drawing a damaged piece last left the GL lighting on: everything
-           drawn after the HUD, the chat included, came out dark and tinted.
-           It showed when the boots came off and the last piece drawn was a
-           damaged pair of leggings (2026-10-05). Items are now drawn inside
-           the GUI item lighting, as the vanilla hotbar does, and the state is
-           put back before any text or anything else is drawn. */
         ItemStack[] pieces = new ItemStack[4];
         for (int i = 0; i < 4; i++) {
             pieces[i] = mc.thePlayer.inventory.armorItemInSlot(3 - i);

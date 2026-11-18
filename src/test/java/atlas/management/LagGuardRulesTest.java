@@ -10,9 +10,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/** LagGuard's rules (2026-10-28): when a delay module may hold, and what a correction costs it. */
 public class LagGuardRulesTest {
-
     private static LagGuardRules groundedFor(int ticks) {
         LagGuardRules rules = new LagGuardRules();
         for (int t = 0; t < ticks; t++) {
@@ -27,7 +25,7 @@ public class LagGuardRulesTest {
         rules.knockback(10);
         assertEquals("knockback", rules.deny(11, "FakeLag", false));
         assertEquals("knockback", rules.deny(11, "Backtrack", true));
-        // In the air for a while, then down two ticks after the eighth.
+
         for (int t = 11; t < 20; t++) {
             rules.tick(t, t >= 19);
         }
@@ -51,7 +49,7 @@ public class LagGuardRulesTest {
     public void onlyAWholeStreamRunsThroughTheKnockbackWindow() {
         LagGuardRules rules = groundedFor(10);
         rules.knockback(10);
-        // Spike holding only the push: the lone late push is stopped.
+
         assertEquals("knockback", rules.deny(10, "KnockbackDelay", true));
         rules.stream("KnockbackDelay", true);
         assertNull(rules.deny(10, "KnockbackDelay", true));
@@ -74,7 +72,7 @@ public class LagGuardRulesTest {
         assertEquals("the pause", 0L, rules.streamAllowance(110, "KnockbackDelay"));
         assertNull(rules.deny(110, "KnockbackDelay", true));
         assertEquals(65L, rules.streamAllowance(200, "KnockbackDelay"));
-        // Still in the knockback window: a second strike, and it is done for this world.
+
         rules.setback(300, holding);
         assertEquals("struck out", rules.deny(500, "KnockbackDelay", true));
         assertEquals(0L, rules.streamAllowance(500, "KnockbackDelay"));
@@ -99,7 +97,7 @@ public class LagGuardRulesTest {
         assertTrue(rules.setback(103, null).isEmpty());
         assertTrue(rules.setback(106, null).isEmpty());
         assertEquals(1, rules.strikes("Silent Aura"));
-        // The pause runs from the last of the train.
+
         assertEquals("after a correction", rules.deny(150, "FakeLag", false));
         assertNull(rules.deny(167, "FakeLag", false));
     }
@@ -140,7 +138,7 @@ public class LagGuardRulesTest {
         assertEquals(1, rules.strikes("FakeLag"));
         assertEquals(180L, rules.capMs("FakeLag"));
         assertEquals(LagGuardRules.DEFAULT_CAP_MS, rules.capMs("LagRange"));
-        // A second strike: no more holding in this world.
+
         rules.held(300, "FakeLag", 100L);
         rules.setback(305, null);
         assertEquals("struck out", rules.deny(500, "FakeLag", false));

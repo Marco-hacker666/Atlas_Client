@@ -11,10 +11,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Locale;
 
-/**
- * .script: the Scripts tab from chat (2026-11-03). list, reload [name], new [16|17], folder [16|17],
- * import [16|17] (Raven bS's scripts, as that version; 17 when not said), open name, on name, off name.
- */
 public class ScriptCommand extends Command {
     public ScriptCommand() {
         super(new ArrayList<String>(Arrays.asList("script", "scripts")));

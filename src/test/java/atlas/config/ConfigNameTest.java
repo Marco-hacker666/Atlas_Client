@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** A profile name stays one file in ./config/Atlas/ (2026-10-30, audit: ".config save ../../x"). */
 public class ConfigNameTest {
-
     @Test
     public void ordinaryNamesAreKept() {
         assertTrue(Config.validName("default"));

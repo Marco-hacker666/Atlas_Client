@@ -8,9 +8,7 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** 2026-10-22: the menu is English only; no heading it can show is Chinese. */
 public class EnglishOnlyTest {
-
     private static boolean chinese(String s) {
         for (int i = 0; i < s.length(); i++) {
             if (s.charAt(i) >= 0x2E80) {

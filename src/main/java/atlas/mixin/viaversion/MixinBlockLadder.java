@@ -8,7 +8,6 @@ import org.spongepowered.asm.mixin.injection.ModifyConstant;
 
 @Mixin(BlockLadder.class)
 public abstract class MixinBlockLadder {
-
   @ModifyConstant(method = "setBlockBoundsBasedOnState", constant = @Constant(floatValue = 0.125F))
   private float viaversion_LadderBoundingBox(float constant) {
     if (ViaLoadingBase.getInstance().getTargetVersion().getVersion() >= 107) {

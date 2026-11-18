@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-/** MoveCheck's chat lines: once per cause every three seconds, with how many more there were (2026-11-12). */
 public class AlertLimiterTest {
-
     @Test
     public void theFirstOfACauseSpeaksAtOnce() {
         AlertLimiter limiter = new AlertLimiter(3000L);
@@ -20,7 +18,7 @@ public class AlertLimiterTest {
         assertEquals(-1, limiter.pass("Speed:move", 1050L));
         assertEquals(-1, limiter.pass("Speed:move", 3999L));
         assertEquals("two were held back", 2, limiter.pass("Speed:move", 4000L));
-        /* The count starts again. */
+
         assertEquals(-1, limiter.pass("Speed:move", 4050L));
         assertEquals(1, limiter.pass("Speed:move", 7000L));
         assertEquals(0, limiter.pass("Speed:move", 10000L));
@@ -46,7 +44,6 @@ public class AlertLimiterTest {
 
     @Test
     public void aClockThatStartsAtZeroStillSpeaksFirst() {
-        /* The first line must not depend on the time being large. */
         AlertLimiter limiter = new AlertLimiter(3000L);
         assertEquals(0, limiter.pass("plain", 0L));
         assertEquals(-1, limiter.pass("plain", 2999L));

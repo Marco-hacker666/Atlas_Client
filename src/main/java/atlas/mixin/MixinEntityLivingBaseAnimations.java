@@ -1,5 +1,3 @@
-// not rat bro XD
-// Original logic by syuto/animations-1.6, integrated into Uzi
 package atlas.mixin;
 
 import atlas.config.AnimationConfig;
@@ -12,7 +10,6 @@ import org.spongepowered.asm.mixin.Overwrite;
 @SideOnly(Side.CLIENT)
 @Mixin(value = EntityLivingBase.class, priority = 999)
 public abstract class MixinEntityLivingBaseAnimations {
-
     /**
      * @author animations-1.6 (syuto), integrated by Uzi
      * @reason Custom swing speed

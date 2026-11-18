@@ -21,7 +21,6 @@ import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import io.netty.buffer.ByteBuf;
 
 public class VLBViaAPIWrapper extends ViaAPIBase<UserConnection> {
-
   @Override
   public ProtocolVersion getPlayerProtocolVersion(UserConnection player) {
     return player.getProtocolInfo().protocolVersion();

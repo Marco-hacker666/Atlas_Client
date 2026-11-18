@@ -6,9 +6,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** AimAssist's framed styles: the aim point and the helpers (2026-10-20). */
 public class AimAssistSlinkyTest {
-
     @Test
     public void noiseIsSmoothAndBounded() {
         float last = AimAssistSlinky.noise(0.0F);

@@ -5,9 +5,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** NoItemRelease's rule, rebuilt on Slinky's method (2026-10-19). */
 public class NoItemReleaseTest {
-
     @Test
     public void swordModeCoversOnlySwords() {
         assertTrue(NoItemRelease.covers(0, true, false));

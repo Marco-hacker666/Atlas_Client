@@ -27,16 +27,13 @@ import java.util.Map;
 
 import static org.junit.Assert.*;
 
-/** Online updates (2026-10-13): versions, manifest, signature, download, install. */
 public class UpdaterTest {
-
     private File dir;
     private HttpServer server;
     private final Map<String, byte[]> served = new HashMap<String, byte[]>();
     private final Map<String, Integer> hits = new java.util.concurrent.ConcurrentHashMap<String, Integer>();
     private volatile long jarDelayMs;
-    /* 2026-10-29 retry tests: the next this-many jar requests are cut after dropAfterBytes; ranges honoured or not;
-       the next this-many manifest requests answer 503. */
+
     private final java.util.concurrent.atomic.AtomicInteger jarDrops = new java.util.concurrent.atomic.AtomicInteger();
     private volatile int dropAfterBytes;
     private volatile boolean rangesHonoured = true;
@@ -69,7 +66,6 @@ public class UpdaterTest {
             if (body != null && path.endsWith("update.properties") && manifestErrors.getAndDecrement() > 0) {
                 exchange.sendResponseHeaders(503, -1);
             } else if (body != null && path.endsWith(".jar") && jarDrops.getAndDecrement() > 0) {
-                /* Promise the whole file, send part of it, hang up. */
                 exchange.sendResponseHeaders(200, body.length);
                 OutputStream os = exchange.getResponseBody();
                 os.write(body, 0, dropAfterBytes);
@@ -106,8 +102,6 @@ public class UpdaterTest {
         deleteTree(dir);
     }
 
-    // ---------------------------------------------------------------- version
-
     @Test
     public void versionsCompareNumerically() {
         assertTrue(v("2.1.10").isNewerThan(v("2.1.9")));
@@ -128,8 +122,6 @@ public class UpdaterTest {
         assertNull(UpdateVersion.parse(null));
     }
 
-    // --------------------------------------------------------------- manifest
-
     @Test
     public void manifestRejectsPathsInFileName() throws Exception {
         for (String bad : new String[]{"../evil.jar", "a/b.jar", "x.exe", "..jar", "C:\\x.jar"}) {
@@ -147,13 +139,11 @@ public class UpdaterTest {
         UpdateManifest good = UpdateManifest.parse(signed("2.2.0", "Atlas-v2.2.0.jar", jar, keys.getPrivate()));
         assertTrue(UpdateSignature.verify(good, keys.getPublic()));
 
-        // Same signature, different version: must fail (no replaying an old jar as new).
         UpdateManifest relabeled = new UpdateManifest(v("9.9.9"), good.file, good.size, good.sha256, good.signature);
         assertFalse(UpdateSignature.verify(relabeled, keys.getPublic()));
         UpdateManifest otherHash = new UpdateManifest(good.version, good.file, good.size, sha("other"), good.signature);
         assertFalse(UpdateSignature.verify(otherHash, keys.getPublic()));
 
-        // Signed with some other key: must fail.
         KeyPairGenerator g = KeyPairGenerator.getInstance("EC");
         g.initialize(new ECGenParameterSpec("secp256r1"));
         UpdateManifest stranger = UpdateManifest.parse(signed("2.2.0", "Atlas-v2.2.0.jar", jar, g.generateKeyPair().getPrivate()));
@@ -167,8 +157,6 @@ public class UpdaterTest {
         assertEquals(keys.getPublic(), UpdateSignature.parsePublicKey("# comment\n" + b64 + "\n"));
         assertEquals(keys.getPublic(), UpdateSignature.parsePublicKey("-----BEGIN PUBLIC KEY-----\n" + b64 + "\n-----END PUBLIC KEY-----\n"));
     }
-
-    // ------------------------------------------------------- check + download
 
     @Test
     public void newerSignedReleaseIsDownloadedAndVerified() throws Exception {
@@ -188,7 +176,7 @@ public class UpdaterTest {
         Updater u = updater("2.1.1");
         u.check(false);
         assertEquals(Updater.State.READY, u.getState());
-        served.remove("/r/download/v2.2.0/" + f.file); // a second download would now fail
+        served.remove("/r/download/v2.2.0/" + f.file);
         List<String> said = listen(u);
         u.check(true);
         assertEquals(Updater.State.READY, u.getState());
@@ -207,7 +195,7 @@ public class UpdaterTest {
     @Test
     public void tamperedJarIsDiscarded() throws Exception {
         Fixture f = publish("2.2.0", "real".getBytes(StandardCharsets.UTF_8), keys.getPrivate());
-        served.put("/r/download/v2.2.0/" + f.file, "fake".getBytes(StandardCharsets.UTF_8)); // same length, other bytes
+        served.put("/r/download/v2.2.0/" + f.file, "fake".getBytes(StandardCharsets.UTF_8));
         Updater u = updater("2.1.1");
         u.check(false);
         assertEquals(Updater.State.FAILED, u.getState());
@@ -235,7 +223,7 @@ public class UpdaterTest {
         u.check(false);
         assertEquals(Updater.State.AVAILABLE, u.getState());
         assertTrue(said.get(0).contains(".update download"));
-        // The setting is remembered.
+
         assertEquals(Updater.Mode.NOTIFY, updater("2.1.1").getMode());
     }
 
@@ -247,8 +235,6 @@ public class UpdaterTest {
         assertEquals(Updater.State.FAILED, u.getState());
         assertTrue(said.isEmpty());
     }
-
-    // ---------------------------------------------------------------- install
 
     @Test
     public void installerSwapsJarAndKeepsBackup() throws Exception {
@@ -288,7 +274,6 @@ public class UpdaterTest {
         assertFalse(new File(b, "20260101-000000-Atlas.jar").exists());
     }
 
-    /** The whole path: download, then the installer as its own process, from the copied class file. */
     @Test
     public void endToEndInstallerProcess() throws Exception {
         Fixture f = publish("2.2.0", "brand new client".getBytes(StandardCharsets.UTF_8), keys.getPrivate());
@@ -329,10 +314,8 @@ public class UpdaterTest {
         assertEquals(plus.getCanonicalFile(), Updater.toJarFile(plus.toURI().toURL()).getCanonicalFile());
         assertEquals(plus.getCanonicalFile(),
                 Updater.toJarFile(new java.net.URL("jar:" + plus.toURI().toURL() + "!/atlas/update/Updater.class")).getCanonicalFile());
-        assertNull(Updater.toJarFile(dir.toURI().toURL())); // a class folder (development) is not a jar
+        assertNull(Updater.toJarFile(dir.toURI().toURL()));
     }
-
-    // ------------------------------------------------- 2026-10-26 fixes
 
     private static void waitFor(Updater u, Updater.State want) throws InterruptedException {
         long end = System.currentTimeMillis() + 10000L;
@@ -429,8 +412,6 @@ public class UpdaterTest {
         assertNull(hits.get("/r/download/v2.2.0/Atlas-v2.2.0.jar"));
     }
 
-    // ------------------------------------------------- 2026-10-29 retries
-
     private static byte[] bytes(int n) {
         byte[] b = new byte[n];
         new java.util.Random(7).nextBytes(b);
@@ -485,8 +466,6 @@ public class UpdaterTest {
         File[] left = new File(u.workDir(), "pending").listFiles();
         assertTrue(left == null || left.length == 0);
     }
-
-    // ---------------------------------------------------------------- helpers
 
     private static final class Fixture {
         String file;

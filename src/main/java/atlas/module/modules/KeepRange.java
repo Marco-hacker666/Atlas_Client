@@ -20,24 +20,6 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.MovementInput;
 
-/**
- * S-Tap: while comboing someone, do not walk into them (2026-09-28, item 4
- * of the Rise comparison; Rise's KeepRange, rewritten from what it does).
- *
- * Landing hit after hit, the natural thing is to keep holding W -- and the
- * gap closes, the next hit comes at point blank, the target's knockback is
- * wasted pushing into this player, and one lucky swing from them turns the
- * combo round. Once this player has been landing hits without taking any
- * (combo-to-start), and the target is closer than range, the input that
- * would close the gap is dropped (STOP) or turned round (BACKWARDS). Dropping
- * W also ends the sprint, so the next hit is a fresh sprint hit: the S-tap.
- *
- * Off near a drop (disable-near-edge): backing off an edge loses the fight
- * in a different way.
- *
- * Runs last on the movement input (LOWEST), after any silent-rotation move
- * fix has rebuilt it, and reasons in the yaw movement actually uses.
- */
 public class KeepRange extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final int STOP = 0;
@@ -52,7 +34,7 @@ public class KeepRange extends Module {
     private boolean nearEdge;
     private int comboTicks;
     private int ticksSinceAttack = 999;
-    /** Ticks this changed the input, for the suffix. */
+
     private int activeTicks;
 
     public KeepRange() {
@@ -88,7 +70,6 @@ public class KeepRange extends Module {
         }
     }
 
-    /** Any column within reach that is air from the feet down five blocks. */
     private static boolean dropNearby(int reach) {
         BlockPos feet = new BlockPos(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ);
         for (int dx = -reach; dx <= reach; dx++) {
@@ -124,7 +105,7 @@ public class KeepRange extends Module {
         if (!KeepRangeMath.comboReached(this.comboTicks, this.comboToStart.getValue())) {
             return;
         }
-        /* Just after a hit, a little closer is fine: the target is on its way back. */
+
         double keep = this.range.getValue() - (this.ticksSinceAttack <= 7 ? 0.2 : 0.0);
         double distance = Math.sqrt(RotationUtil.distanceSqFromEyeToClosestOnAABB(target));
         if (distance >= keep - 0.05) {

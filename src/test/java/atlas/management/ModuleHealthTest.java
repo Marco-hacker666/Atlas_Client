@@ -5,9 +5,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** The menu's per-module count of corrections it was named for (2026-10-23, GUI redesign M4). */
 public class ModuleHealthTest {
-
     @After
     public void clear() {
         ModuleHealth.resetSession();

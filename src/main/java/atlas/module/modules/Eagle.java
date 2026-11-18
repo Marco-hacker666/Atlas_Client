@@ -30,12 +30,6 @@ public class Eagle extends Module {
     public final BooleanProperty blocksOnly = new BooleanProperty("blocks-only", true);
     public final BooleanProperty sneakOnly = new BooleanProperty("sneaking-only", false);
 
-    /**
-     * Despite the name: whether one more step leaves no floor under the box (true means crouch). 2026-11-12 (owner:
-     * the simulation by default): where the simulation goes, the step is the game's own -- the keys this tick will
-     * have ({@code atMoveInput}: as the modules so far left them; else the keys held), sprint, speed, ice, what is in
-     * the way -- not a flat-ground estimate at the camera's yaw.
-     */
     private boolean canMoveSafely(boolean atMoveInput) {
         if (SimPlayer.supported(mc.thePlayer)) {
             SimPlayer.Snapshot now = SimPlayer.snapshot(mc.thePlayer,
@@ -51,7 +45,6 @@ public class Eagle extends Module {
 
     private boolean shouldSneak() {
         if (atlas.management.Arbiter.catching() || atlas.management.Arbiter.viewHeld()) {
-            /* The catch has the camera and the keys; see Arbiter. */
             return false;
         } else if (this.directionCheck.getValue() && mc.gameSettings.keyBindForward.isKeyDown()) {
             return false;
@@ -67,13 +60,9 @@ public class Eagle extends Module {
     }
 
     public Eagle() {
-        /* Shown as BridgeAssist since 2026-10-20 (owner; OpenSlinky's name for it). Settings saved under
-           "Eagle" still load: Config falls back to the class name. */
         super("BridgeAssist", false);
-        /* 2026-10-31 (owner: "BridgeAssist stops by itself while Scaffold is on"): its edge crouch and its
-           sneak-only un-crouch fought Scaffold's own edge handling (safe-walk, GodBridge's ledge sneak). */
+
         this.pauseWhen(() -> {
-            /* 2026-11-04: a Raven script that turned SafeWalk off (see RavenScript.modules). */
             if (atlas.script.raven.RavenHooks.edgeCrouchHeld) {
                 return true;
             }
@@ -98,7 +87,6 @@ public class Eagle extends Module {
     @EventTarget(Priority.LOWEST)
     public void onMoveInput(MoveInputEvent event) {
         if (this.isEnabled() && mc.currentScreen == null) {
-
             if (sneakOnly.getValue() && Keyboard.isKeyDown(mc.gameSettings.keyBindSneak.getKeyCode()) && shouldSneak()) {
                 mc.thePlayer.movementInput.sneak = false;
                 mc.thePlayer.movementInput.moveForward /= 0.3F;

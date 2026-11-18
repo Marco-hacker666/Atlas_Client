@@ -9,7 +9,6 @@ import atlas.util.PacketUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.play.client.C16PacketClientStatus;
 
-/** Sends the vanilla respawn request after death, with an optional short delay. */
 public class AutoRespawn extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 

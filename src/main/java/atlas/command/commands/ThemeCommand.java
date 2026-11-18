@@ -11,15 +11,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * .theme [list | next | prev | save NAME | load NAME | NAME]: the Theme window's saved looks without opening it
- * (2026-11-14). "load" takes any name, even one that is also a word of this command or a Theme setting (review,
- * PR #42).
- * The Theme module's next-theme-key and previous-theme-key do next and prev from a key.
- *
- * ".theme" was the Theme module's own command (ModuleCommand, which takes every module's name): ".theme mode
- * RAINBOW" set a setting. It still does -- a first word that is one of the module's settings goes to that command.
- */
 public class ThemeCommand extends Command {
     public ThemeCommand() {
         super(new ArrayList<String>(Arrays.asList("theme", "themes")));
@@ -85,7 +76,6 @@ public class ThemeCommand extends Command {
                 + "&8.theme save NAME&7 saves. &8.theme SETTING VALUE&7 still sets the Theme module.");
     }
 
-    /** A setting of the Theme module: handed to the module command, as before this command existed. */
     private static boolean toModuleCommand(ArrayList<String> args) {
         Module theme = Atlas.moduleManager.getModule("Theme");
         if (theme == null || Atlas.propertyManager.getProperty(theme, args.get(1)) == null) {

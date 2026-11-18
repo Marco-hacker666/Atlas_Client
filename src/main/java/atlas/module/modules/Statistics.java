@@ -33,7 +33,6 @@ import net.minecraft.network.play.server.S45PacketTitle;
 import net.minecraft.util.StringUtils;
 
 public class Statistics extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public static int wins, killCount;
@@ -47,7 +46,7 @@ public class Statistics extends Module {
     public final ColorProperty customColor =
             new ColorProperty(
                     "Custom Color", new Color(255, 105, 180).getRGB(), () -> this.colorMode.getValue() == 1);
-    /* 2026-11-09: every HUD element can be resized and have its panel switched off. */
+
     public final FloatProperty scale = new FloatProperty("scale", 1.0F, 0.5F, 2.0F);
     public final BooleanProperty background = new BooleanProperty("background", true);
 
@@ -96,7 +95,6 @@ public class Statistics extends Module {
         width = 130;
         height = 55;
 
-        /* Resized about its top-left corner, the point it is dragged by. */
         float s = this.scale.getValue();
         float[] area = HudLayout.scaledRect(x, y, s, x, y, width, height);
         this.dragging.scale.x = area[2];
@@ -108,7 +106,6 @@ public class Statistics extends Module {
         boolean shaders = hud != null && hud.shaders.getValue();
 
         if (!this.background.getValue()) {
-            /* No panel: the text only. */
         } else if (HudPanel.active()) {
             HudLayout.beginScaled(x, y, s);
             try {
@@ -117,7 +114,6 @@ public class Statistics extends Module {
                 HudLayout.endScaled();
             }
         } else {
-            /* RoundedUtils works in screen pixels, so it gets the scaled rectangle. */
             if (shaders) {
                 BlurUtils.prepareBlur();
                 RoundedUtils.drawRound(area[0], area[1], area[2], area[3], 6 * s, Color.BLACK);
@@ -142,7 +138,6 @@ public class Statistics extends Module {
 
         double padding = 8;
 
-        // Title
         String title = "Session Stats";
         font18.drawString(
                 title,
@@ -150,14 +145,12 @@ public class Statistics extends Module {
                 (float) (y + padding),
                 getAccentColor().getRGB());
 
-        // Time
         font18.drawString(
                 timeString,
                 x + width / 2F - font18.getStringWidth(timeString) / 2F,
                 (float) (y + padding + 19),
                 UiMode.adapt(new Color(255, 255, 255, 200).getRGB()));
 
-        // Kills & Wins
         String killsText = "kills " + killCount;
         String winsText = "wins " + wins;
         font18.drawString(

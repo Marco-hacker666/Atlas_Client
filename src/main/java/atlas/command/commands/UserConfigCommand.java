@@ -23,12 +23,8 @@ import java.util.List;
 import java.util.Locale;
 
 // Ported from OpenSkid (GPL-3.0), itself adapted from the MiauMinus
-// online-config concept.
-// Named user configs with URL-plus-cache semantics. Publish snapshots the
-// current settings to the local cache. There is no account system. Names are
-// local only. Applying always reports what changed.
-public class UserConfigCommand extends Command {
 
+public class UserConfigCommand extends Command {
     public UserConfigCommand() {
         super(new ArrayList<String>(Arrays.asList("userconfig", "usercfg", "ucfg")));
     }
@@ -78,7 +74,6 @@ public class UserConfigCommand extends Command {
 
     private void load(String source) {
         if (OnlineConfigFetcher.looksLikeUrl(source)) {
-            /* 2026-10-30 (audit): downloaded off the client thread (it froze the game), applied back on it. */
             Thread thread = new Thread(() -> {
                 try {
                     String json = OnlineConfigFetcher.fetch(source);

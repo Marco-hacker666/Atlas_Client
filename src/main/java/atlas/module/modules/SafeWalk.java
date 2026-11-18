@@ -28,9 +28,6 @@ public class SafeWalk extends Module {
         if (scaffold.isEnabled()) {
             return false;
         } else if (atlas.management.Arbiter.catching() || atlas.management.Arbiter.viewHeld()) {
-            /* Looking down with blocks in hand is the catch's doing, not
-               bridging; stopping at an edge here eats the knockback the
-               server expects to see. See Arbiter. */
             return false;
         } else if (this.directionCheck.getValue() && mc.gameSettings.keyBindForward.isKeyDown()) {
             return false;

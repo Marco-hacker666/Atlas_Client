@@ -9,7 +9,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Entity.class)
 public abstract class MixinEntityCollision {
-
   @Inject(method = "getCollisionBorderSize", at = @At("HEAD"), cancellable = true)
   private void viaversion_collisionBorder(CallbackInfoReturnable<Float> cir) {
     if (ViaLoadingBase.getInstance().getTargetVersion().getVersion() >= 107) {

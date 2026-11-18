@@ -1,15 +1,6 @@
 package atlas.update;
 
-/**
- * A release version such as "2.1.1" or "v2.1.1".
- *
- * Only the numeric parts are compared ("2.1.10" is newer than "2.1.9").
- * Anything after a '-' or '+' ("2.2.0-beta") counts as a pre-release and is
- * older than the same numbers without it. Missing parts count as 0, so
- * "2.1" equals "2.1.0".
- */
 public final class UpdateVersion implements Comparable<UpdateVersion> {
-
     private final int[] parts;
     private final boolean preRelease;
     private final String text;
@@ -20,7 +11,6 @@ public final class UpdateVersion implements Comparable<UpdateVersion> {
         this.text = text;
     }
 
-    /** Parses a version, or returns null when it is not one (e.g. "dev"). */
     public static UpdateVersion parse(String raw) {
         if (raw == null) {
             return null;

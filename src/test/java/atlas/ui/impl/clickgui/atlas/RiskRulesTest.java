@@ -12,9 +12,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** The menu's risky-value notes (2026-10-23, GUI redesign M4, owner D4). */
 public class RiskRulesTest {
-
     @After
     public void notLoading() {
         Config.loading = false;

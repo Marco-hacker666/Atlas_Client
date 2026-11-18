@@ -15,22 +15,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * The saved profiles: every {@code .json} in {@code config/Atlas}, which is
- * exactly the set {@code .config list} shows and {@code .config load} reads.
- *
- * Nothing here has its own format. Saving and loading go through Config, the
- * same class the command and the shutdown hook use, so a profile made in the
- * menu and one made with {@code .config save} are the same thing.
- *
- * Reading a profile to show what it enables means parsing it, so the result is
- * kept per file and re-read only when the file's modification time changes.
- */
 final class AtlasProfiles {
-
     static final File DIR = new File("./config/Atlas/");
 
-    /** What the menu shows about one profile. */
     static final class Info {
         final String name;
         final long modified;
@@ -48,7 +35,6 @@ final class AtlasProfiles {
     private AtlasProfiles() {
     }
 
-    /** Newest first, the way .config list orders them. */
     static List<Info> list() {
         List<Info> out = new ArrayList<Info>();
         File[] files = DIR.listFiles();
@@ -77,7 +63,6 @@ final class AtlasProfiles {
         return out;
     }
 
-    /** Names of the modules a profile switches on; empty if it cannot be read. */
     private static List<String> enabledIn(File file) {
         List<String> out = new ArrayList<String>();
         Reader reader = null;
@@ -97,13 +82,11 @@ final class AtlasProfiles {
                 }
             }
         } catch (Exception ignored) {
-            // Shown with no modules rather than hidden: it is still a file here.
         } finally {
             if (reader != null) {
                 try {
                     reader.close();
                 } catch (Exception ignored) {
-                    // Nothing further to do.
                 }
             }
         }
@@ -111,7 +94,6 @@ final class AtlasProfiles {
         return out;
     }
 
-    /** The profile loaded or saved last, which is what "in use" means. */
     static String current() {
         return Config.lastConfig == null || Config.lastConfig.equals("!") ? "default" : Config.lastConfig;
     }
@@ -125,7 +107,6 @@ final class AtlasProfiles {
         new Config(name, false).load();
     }
 
-    /** Refuses the default profile, which the game writes on every exit anyway. */
     static boolean delete(String name) {
         if ("default".equalsIgnoreCase(name)) {
             return false;
@@ -134,11 +115,6 @@ final class AtlasProfiles {
         return new File(DIR, name + ".json").delete();
     }
 
-    /**
-     * What may be typed as a profile name: letters, digits, space, dash,
-     * underscore and dot, and not so long it cannot be shown. Anything else
-     * could name a file outside the folder or one the command cannot load.
-     */
     static String clean(String name) {
         StringBuilder sb = new StringBuilder();
         for (char c : name.trim().toCharArray()) {
@@ -160,12 +136,10 @@ final class AtlasProfiles {
             try {
                 org.lwjgl.Sys.openURL(DIR.getCanonicalFile().toURI().toString());
             } catch (Throwable ignored) {
-                // No way to open a folder here; the path is in the hint bar.
             }
         }
     }
 
-    /** "just now", "5m ago", "3h ago", "2d ago". */
     static String age(long modified) {
         long seconds = Math.max(0L, (System.currentTimeMillis() - modified) / 1000L);
         if (seconds < 60) {

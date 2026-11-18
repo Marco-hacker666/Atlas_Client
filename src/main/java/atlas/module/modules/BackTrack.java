@@ -42,87 +42,51 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
- * Keeps the target where the client last saw it for a moment longer while
- * they move away, so a swing reaches the position the server still has in
- * its history for this player's latency.
- *
- * Second version (2026-09-25). What the first got wrong:
- * - The target's position was started from its rendered position, which is
- *   an interpolation three ticks behind the packets, and advanced from there
- *   by the packets' deltas: every decision was taken about a position that
- *   did not exist. It is now the entity's server position (the last one the
- *   client applied) plus whatever is being held.
- * - Distances were feet to feet. What decides a hit is the eyes to the
- *   nearest point of the hitbox, and that is what is compared now.
- * - "Release on hit" fired on hurtTime == 1, which is the end of the hurt,
- *   half a second after the hit. It is now the moment the hurt starts.
- * - Only the target's movement was held; everything else overtook it. The
- *   server's transactions and keep-alives were answered on time while the
- *   entity packets between them came late -- a pattern latency never makes.
- *   ALL (the default) holds the whole stream in order while a hold is open,
- *   which to the server is simply a moment of latency.
- * - The box showing the real position jumped with each packet; it is now
- *   eased and interpolated between frames, and fades in and out.
- */
 public class BackTrack extends Module {
-
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    /** Beyond this many packets the hold is let go whatever else is true. */
     private static final int MAX_HELD = 400;
-    /** Hits taken on this side of this are the hitbox border 1.8 adds. */
+
     private static final double BORDER = 0.1;
 
-    /** Farthest the target's real hitbox may be, from the eyes, for a hold to go on. */
     public final FloatProperty range;
-    /* Nearer than this (the real hitbox, from the eyes) nothing is held: the
-       target is in reach anyway, and a hold would be latency for nothing. */
+
     public final FloatProperty minRange;
-    /* A hold is only opened while the target's hurt time is at most this.
-       Just hit, they cannot be hit again for half a second: holding them
-       then is lag spent on nothing. 10 is off. */
+
     public final IntProperty maxHurtTime;
-    /* After a hold ends, this long before another may open. Holds back to
-       back are a latency that never lets up, which is what a timing check
-       sees; a gap between them is ordinary jitter. */
+
     public final IntProperty cooldown;
-    /* Only while holding a sword (or anything enchanted with Sharpness). */
+
     public final BooleanProperty weaponsOnly;
     public final BooleanProperty adaptive;
     public final IntProperty normalDelay;
     public final IntProperty adaptiveDelay;
     public final BooleanProperty releaseOnHit;
-    /* A window that is always the same length is a measurable constant. The
-       figure above becomes the centre of a range instead, redrawn for each
-       hold so no two are alike. */
+
     public final IntProperty randomize;
-    /* ALL holds every incoming packet, in order, while a hold is open;
-       TARGET only the target's own movement. */
+
     public final ModeProperty hold;
     public final BooleanProperty interruptLagRange;
     public final BooleanProperty players;
     public final BooleanProperty teams;
     public final BooleanProperty botCheck;
     public final BooleanProperty esp;
-    /* The ESP box also shows which way the target is facing. */
+
     public final BooleanProperty espHead;
     public final BooleanProperty hitStats;
-    /* 2026-10-19 (from Slinky): hold only within a second of your own last
-       hit, and/or only while the attack key is held. */
+
     public final BooleanProperty onlyInCombat;
     public final BooleanProperty requireAttackKey;
-    /** The attack key, read on the client thread each tick (holds open on the network thread). */
+
     private volatile boolean attackKeyHeld;
 
     private final Object lock = new Object();
     private final ConcurrentLinkedQueue<Packet<?>> incomingQueue = new ConcurrentLinkedQueue<>();
 
     private volatile EntityLivingBase target;
-    /** The target's position with what is held applied: where the server has them. */
+
     private volatile Vec3 realPosition;
 
-    /** For scripts (Raven bS 17's modules.getBacktrackTarget / getBacktrackPosition), 2026-11-03: read only. */
     public EntityLivingBase getBacktrackTarget() {
         return this.target;
     }
@@ -132,9 +96,9 @@ public class BackTrack extends Module {
     }
     private volatile long backtrackStartTime = 0L;
     private volatile int rolledDelay = 0;
-    /** Holds opened since enabled: the suffix shows it, so it can be seen working. */
+
     private volatile int holds = 0;
-    /** When the last hold ended, for the cooldown. */
+
     private volatile long lastReleaseAt = 0L;
 
     private EntityLivingBase lastAttacked;
@@ -144,23 +108,11 @@ public class BackTrack extends Module {
     private int targetHurtTime = 0;
     private static BackTrack instance;
 
-    /* The box drawn at the real position: eased toward it each tick and
-       interpolated between the frames of the tick, as entities are. */
     private Vec3 espPrevious;
     private Vec3 espCurrent;
     private float espAlphaPrevious;
     private float espAlpha;
 
-    /* Swing accounting. A swing that the server rejects for reach looks
-       exactly like a swing that landed: same animation, same particles, no
-       feedback either way. Counting how many of our attacks are followed by
-       the target actually taking damage turns "it feels better" into a
-       number, which is the only way to tell whether a given delay is
-       spending the reach budget or overrunning it.
-
-       Attribution is approximate - another player hitting the same target
-       inside the window counts as ours - so read the ratio as a trend
-       between settings, not an absolute. */
     private static final long HIT_WINDOW_MS = 600L;
     private int swings = 0;
     private int landed = 0;
@@ -170,9 +122,8 @@ public class BackTrack extends Module {
     public BackTrack() {
         super("Backtrack", false);
 
-        /* Incoming holder: one at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
         atlas.management.PacketHub.registerIncoming("Backtrack", () -> this.incomingQueue.size(), this::releaseIncoming);
-        /* What is held, for PacketHolds (plan step 13). */
+
         atlas.management.PacketHolds.register(() -> {
             int count = this.incomingQueue.size();
             return count == 0 ? null : new atlas.management.PacketHolds.Hold("Backtrack", atlas.management.PacketHolds.Direction.IN, count,
@@ -184,7 +135,6 @@ public class BackTrack extends Module {
                 return getName();
             }
 
-            /* The longest window rollDelay() can draw, and a second more. */
             @Override
             public long ceilingMs() {
                 return Math.max(normalDelay.getValue(), adaptiveDelay.getValue()) + randomize.getValue()
@@ -196,20 +146,15 @@ public class BackTrack extends Module {
                 releaseIncoming();
             }
         });
-        /* 3.0 by default (2.6.1): at 3.15 Intave flagged AttackRaytrace at 3.0011 and 3.0684 blocks (10-21). */
+
         this.range = new FloatProperty("range", 3.0F, 1.0F, 8.0F);
         this.minRange = new FloatProperty("min-range", 0.0F, 0.0F, 4.0F);
         this.maxHurtTime = new IntProperty("max-hurt-time", 10, 0, 10);
-        /* 2026-10-30 (after Slinky's Backtrack): 250 ms between holds and only-in-combat on by default -- it holds
-           only in the second after you hit that target, so it is not holding through a whole fight (the 10-29 hits
-           the server dropped came while it held). */
+
         this.cooldown = new IntProperty("cooldown", 250, 0, 2000);
         this.weaponsOnly = new BooleanProperty("weapons-only", false);
         this.adaptive = new BooleanProperty("adaptive", true);
-        /* Keep both choices editable in the GUI. Adaptive selects which one
-           is used at runtime; hiding the inactive delay made the setting look
-           like it could not be configured until Adaptive was switched off. */
-        /* Only the delay that applies is shown (2026-10-01). */
+
         this.normalDelay = new IntProperty("normal-delay", 100, 50, 1000, () -> !this.adaptive.getValue());
         this.adaptiveDelay = new IntProperty("adaptive-delay", 100, 50, 1000, this.adaptive::getValue);
         this.releaseOnHit = new BooleanProperty("release-on-hit", true);
@@ -262,14 +207,6 @@ public class BackTrack extends Module {
         espCurrent = null;
     }
 
-    /**
-     * 2026-10-27: a new world -- leaving by the menu (no S40 to flush on), a
-     * server switch -- drops what is held instead of keeping it. Kept, it was
-     * processed on the next server's first packet: transactions answered there
-     * with ids that server never sent. Dropped, not released: what is held
-     * describes the world being left. Runs off too, so a hold left when the
-     * module was switched off mid-world cannot survive either.
-     */
     @EventTarget(whenDisabled = true)
     public void onLoadWorld(atlas.events.LoadWorldEvent event) {
         synchronized (lock) {
@@ -289,17 +226,14 @@ public class BackTrack extends Module {
         return adaptive.getValue() ? adaptiveDelay.getValue() : normalDelay.getValue();
     }
 
-    /** The longest the hold now open can keep a packet, in ms; 0 when off. */
     public int holdMs() {
         return this.isEnabled() ? currentMaxDelay() : 0;
     }
 
-    /** Packets currently withheld, for whatever is reporting on causes. */
     public int heldCount() {
         return incomingQueue.size();
     }
 
-    /** The window for the hold currently open, drawn once when it opens. */
     private int currentMaxDelay() {
         return rolledDelay > 0 ? rolledDelay : baseDelay();
     }
@@ -334,9 +268,6 @@ public class BackTrack extends Module {
         return System.currentTimeMillis() - lastAttackTime <= COMBAT_LOCK_MS;
     }
 
-    // ------------------------------------------------------------ positions
-
-    /** The last position of the entity the client applied, exactly as the server sent it. */
     private static Vec3 serverPosition(Entity entity) {
         return new Vec3(entity.serverPosX / 32.0, entity.serverPosY / 32.0, entity.serverPosZ / 32.0);
     }
@@ -347,7 +278,6 @@ public class BackTrack extends Module {
                 pos.xCoord + hw, pos.yCoord + entity.height, pos.zCoord + hw);
     }
 
-    /** From the eyes to the nearest point of the hitbox there, border included. */
     private static double reachTo(Entity entity, Vec3 pos) {
         AxisAlignedBB box = boxAt(entity, pos).expand(BORDER, BORDER, BORDER);
         Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
@@ -357,7 +287,6 @@ public class BackTrack extends Module {
         return Math.sqrt(x * x + y * y + z * z);
     }
 
-    /** Where this packet puts the target from here, or null if it does not move them. */
     private Vec3 advance(Vec3 from, Packet<?> packet) {
         EntityLivingBase t = target;
         if (t == null || mc.theWorld == null) return null;
@@ -374,12 +303,6 @@ public class BackTrack extends Module {
         return null;
     }
 
-    /**
-     * Whether holding the target at the position the client has, with the
-     * real one here, is worth it: the real one within range and farther
-     * than the held one -- the target is getting away -- and the window
-     * not yet used up.
-     */
     private boolean worthHolding(Vec3 real) {
         EntityLivingBase t = target;
         if (t == null || t.isDead || mc.thePlayer == null) return false;
@@ -390,7 +313,6 @@ public class BackTrack extends Module {
         return adaptive.getValue() ? far > near : far > near + 0.1;
     }
 
-    /** Whether a new hold may open now: cooldown over, target hittable, weapon in hand. */
     private boolean mayOpen(EntityLivingBase t) {
         if (onlyInCombat.getValue() && (lastAttacked != t || System.currentTimeMillis() - lastAttackTime > 1000L)) return false;
         if (requireAttackKey.getValue() && !attackKeyHeld) return false;
@@ -400,9 +322,6 @@ public class BackTrack extends Module {
         return true;
     }
 
-    // -------------------------------------------------------------- packets
-
-    /** Packets after which nothing held may stay held: the player's own state changes. */
     private boolean flushes(Packet<?> p) {
         if (p instanceof S12PacketEntityVelocity) {
             return ((S12PacketEntityVelocity) p).getEntityID() == mc.thePlayer.getEntityId();
@@ -412,7 +331,6 @@ public class BackTrack extends Module {
                 || p instanceof S40PacketDisconnect;
     }
 
-    /** The server telling us the target was hurt, or knocked back: a hit landed. */
     private static boolean hitOn(EntityLivingBase t, Packet<?> p) {
         if (p instanceof net.minecraft.network.play.server.S19PacketEntityStatus) {
             net.minecraft.network.play.server.S19PacketEntityStatus status =
@@ -425,7 +343,6 @@ public class BackTrack extends Module {
         return false;
     }
 
-    /** In TARGET, what is held along with the target's movement: the rest of their own packets. */
     private boolean aboutTarget(Packet<?> p) {
         EntityLivingBase t = target;
         if (t == null) return false;
@@ -434,15 +351,6 @@ public class BackTrack extends Module {
         return false;
     }
 
-    /*
-     * Releases run on whichever thread asks, and always empty the queue at
-     * once. On the network thread each vanilla handler reschedules itself
-     * onto the client thread (ThreadQuickExitException, caught), so the held
-     * packets land in the client's task queue in the order they came and
-     * ahead of the packet that asked for the release. The lock keeps a
-     * release on one thread from interleaving with holding or releasing on
-     * the other.
-     */
     private void releaseIncoming() {
         synchronized (lock) {
             if (!incomingQueue.isEmpty()) {
@@ -465,7 +373,6 @@ public class BackTrack extends Module {
         try {
             packet.processPacket((T) Minecraft.getMinecraft().getNetHandler());
         } catch (net.minecraft.network.ThreadQuickExitException ignored) {
-            // Rescheduled onto the client thread by vanilla; nothing lost.
         }
     }
 
@@ -499,8 +406,6 @@ public class BackTrack extends Module {
         synchronized (lock) {
             boolean holding = !incomingQueue.isEmpty();
             if (Arbiter.catching()) {
-                /* A fall is being caught (see Arbiter): the block changes
-                   and corrections it waits on must not be late. */
                 if (holding) {
                     releaseIncoming();
                     Arbiter.yielded(getName());
@@ -508,8 +413,6 @@ public class BackTrack extends Module {
                 return;
             }
             if (flushes(packet)) {
-                /* Released ahead of it, and it goes through: the player's own
-                   knockback or teleport is never made to wait. */
                 if (holding) releaseIncoming();
                 return;
             }
@@ -519,11 +422,6 @@ public class BackTrack extends Module {
                 return;
             }
             if (holding && releaseOnHit.getValue() && hitOn(t, packet)) {
-                /* 2026-10-12: the target's hurt (or the knockback our hit gave
-                   them) is the hit landing. In ALL it used to be held with the
-                   rest, so tickPre never saw the hurt time rise and every hold
-                   ran its full window after a hit had already landed. Release
-                   now, ahead of it, and let it through. */
                 releaseIncoming();
                 return;
             }
@@ -543,7 +441,6 @@ public class BackTrack extends Module {
                     realPosition = next;
                     incomingQueue.add(packet);
                 } else {
-                    /* Nothing to gain any more: everything goes, this last. */
                     releaseIncoming();
                 }
                 return;
@@ -554,8 +451,6 @@ public class BackTrack extends Module {
             }
         }
     }
-
-    // ----------------------------------------------------------------- tick
 
     @EventTarget(Priority.LOW)
     public void onTick(TickEvent event) {
@@ -598,7 +493,7 @@ public class BackTrack extends Module {
             Vec3 real = realPosition;
             boolean release = real == null || !worthHolding(real);
             if (mc.thePlayer.hurtTime == mc.thePlayer.maxHurtTime && mc.thePlayer.maxHurtTime > 0) release = true;
-            /* The hit is in; the knockback that follows is better seen now. */
+
             if (releaseOnHit.getValue() && hitLanded) release = true;
             if (release) releaseIncoming();
         }
@@ -611,8 +506,7 @@ public class BackTrack extends Module {
 
     private void updateEsp(Vec3 real, boolean show) {
         espAlphaPrevious = espAlpha;
-        /* On at once -- a hold is often only a tick or two -- and off slowly,
-           so one can be seen at all. */
+
         espAlpha = show ? 1.0F : Math.max(0.0F, espAlpha - 0.12F);
         if (real == null) {
             return;
@@ -621,7 +515,7 @@ public class BackTrack extends Module {
             espCurrent = target != null ? serverPosition(target) : real;
         }
         espPrevious = espCurrent;
-        /* Half the way each tick: a packet's step reads as motion, not a jump. */
+
         espCurrent = new Vec3(espCurrent.xCoord + (real.xCoord - espCurrent.xCoord) * 0.5,
                 espCurrent.yCoord + (real.yCoord - espCurrent.yCoord) * 0.5,
                 espCurrent.zCoord + (real.zCoord - espCurrent.zCoord) * 0.5);
@@ -638,7 +532,7 @@ public class BackTrack extends Module {
         double x = espPrevious.xCoord + (espCurrent.xCoord - espPrevious.xCoord) * partial;
         double y = espPrevious.yCoord + (espCurrent.yCoord - espPrevious.yCoord) * partial;
         double z = espPrevious.zCoord + (espCurrent.zCoord - espPrevious.zCoord) * partial;
-        /* Nothing to show where the box would sit on the player as drawn. */
+
         double rx = RenderUtil.lerpDouble(t.posX, t.lastTickPosX, partial);
         double ry = RenderUtil.lerpDouble(t.posY, t.lastTickPosY, partial);
         double rz = RenderUtil.lerpDouble(t.posZ, t.lastTickPosZ, partial);
@@ -664,7 +558,6 @@ public class BackTrack extends Module {
         RenderUtil.drawFilledBox(box, color.getRed(), color.getGreen(), color.getBlue(), (int) (fill * alpha));
         RenderUtil.drawBoundingBox(box, color.getRed(), color.getGreen(), color.getBlue(), (int) (line * alpha), width);
         if (espHead.getValue()) {
-            /* A line from the eyes of the box the way the head faces. */
             float yaw = t.prevRotationYawHead + MathHelper.wrapAngleTo180_float(t.rotationYawHead - t.prevRotationYawHead) * partial;
             float pitch = t.prevRotationPitch + (t.rotationPitch - t.prevRotationPitch) * partial;
             Vec3 look = atlas.util.RotationEngine.direction(yaw, pitch);
@@ -683,8 +576,6 @@ public class BackTrack extends Module {
         }
         RenderUtil.disableRenderState();
     }
-
-    // -------------------------------------------------------------- targets
 
     private EntityLivingBase resolveTarget() {
         EntityLivingBase auraTarget = atlas.util.Auras.target();

@@ -7,18 +7,9 @@ import atlas.util.KeyBindUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
 
-/**
- * Stops dead when you let go of W (2026-10-19, Slinky's Instant Stop rebuilt).
- *
- * The tick the forward key comes up on the ground, it works out which single
- * tick of input (back, back-left or back-right) brings the leftover motion
- * closest to zero, and holds those keys for that one tick, as a player
- * tapping S would. Nothing is changed if no tap would help. The keys go back
- * to what is physically held the next tick.
- */
 public class InstantStop extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    /** Returned when no tap brings the motion nearer to zero. */
+
     static final int NONE = 999;
 
     private int phase;
@@ -27,7 +18,6 @@ public class InstantStop extends Module {
         super("InstantStop", false);
     }
 
-    /** One tick of input added to the motion, as moveFlying adds it. */
     static double[] movement(float yaw, float forward, float sideways, float speed) {
         float f = forward * 0.98F;
         float s = sideways * 0.98F;
@@ -44,7 +34,6 @@ public class InstantStop extends Module {
         return new double[]{s * cos - f * sin, f * cos + s * sin};
     }
 
-    /** -1 back-right, 0 back, 1 back-left, or NONE: the tap that leaves the least motion. */
     static int stoppingDirection(double x, double z, float yaw, float speed) {
         double origin = x * x + z * z;
         double best = origin;

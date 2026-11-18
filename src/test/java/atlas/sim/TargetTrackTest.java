@@ -12,26 +12,14 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Another player followed through what the server sends of it, and forecast (2026-11-13).
- *
- * The "other player" is the simulation run by scripted keys, one move a tick. Between it and {@link TargetTrack}
- * stands {@link Tracker}, which does what the server's EntityTrackerEntry does to a player: a position about every
- * second tick, floored to 1/32 and only once it is 4/32 from the last one sent, a yaw in 256ths of a turn and only
- * once it is 4 of those from the last one sent. Each forecast is held against where the scripted player really is
- * a few moves later, and against the straight line through the last two positions, which is what the modules used
- * until now. The numbers asserted are loose bounds around what was measured when this was written.
- */
 public class TargetTrackTest {
-
     private static final double RESTING_FALL = -0.0784000015258789;
     private static final float YAW = -37.0F;
-    /** How many moves ahead a forecast is measured. */
+
     private static final int AHEAD = 5;
     private static final int[] JITTER = {1, 1, 2, 0, 1, 1, 0, 2, 1, 1, 1, 2, 0, 1};
     private static final double[] HIT = {-0.35, 0.36, -0.2};
 
-    /** Ground at y = 0, and whatever boxes are added. */
     private static final class Course implements PlayerSim.World {
         private final List<AxisAlignedBB> solid = new ArrayList<AxisAlignedBB>();
 
@@ -60,7 +48,6 @@ public class TargetTrackTest {
             return 0.6F;
         }
 
-        /** Still water from the ground up to this height; none by default. */
         private double waterTop = -1.0;
 
         Course water(double top) {
@@ -74,7 +61,6 @@ public class TargetTrackTest {
         }
     }
 
-    /** The keys of one tick; it may also change the player before the tick. */
     private interface Script {
         void keys(int tick, PlayerSim.Input in, PlayerSim game);
     }
@@ -87,9 +73,7 @@ public class TargetTrackTest {
         return sim;
     }
 
-    /** EntityTrackerEntry.updatePlayerList for one player (1.8.9), and what the watching client holds of it. */
     private static final class Tracker {
-        /* From 1: the entry was made, and the player spawned for the watcher, a tick ago. */
         private int counter = 1;
         private int encodedX;
         private int encodedY;
@@ -99,7 +83,7 @@ public class TargetTrackTest {
         private boolean encodedGround;
         private boolean lastSprint;
         private boolean lastSneak;
-        /* The watching client's side. */
+
         int x;
         int y;
         int z;
@@ -115,9 +99,7 @@ public class TargetTrackTest {
             this.encodedGround = this.onGround = player.onGround;
         }
 
-        /** One server tick; true when a position reached the client. */
         boolean tick(PlayerSim player, float playerYaw, boolean airborne, boolean sneak) {
-            /* A changed flag is a changed data watcher, which makes this an update tick like a jump does. */
             boolean changed = player.sprinting != this.lastSprint || sneak != this.lastSneak;
             this.lastSprint = player.sprinting;
             this.lastSneak = sneak;
@@ -149,7 +131,6 @@ public class TargetTrackTest {
                         this.onGround = player.onGround;
                     }
                 } else {
-                    /* A teleport: the exact cell, whatever the distance. */
                     this.encodedGround = player.onGround;
                     this.sinceTeleport = 0;
                     this.x = nowX;
@@ -173,7 +154,6 @@ public class TargetTrackTest {
         }
     }
 
-    /** How the forecasts of one run did; errors are sums until asked for. */
     private static final class Stats {
         final TargetTrack track = new TargetTrack();
         int positions;
@@ -186,12 +166,10 @@ public class TargetTrackTest {
         private final double[] lineHeight = new double[AHEAD + 1];
         private final double[] engineWorst = new double[AHEAD + 1];
 
-        /** The forecast's mean level error that many moves ahead, blocks. */
         double engine(int ahead) {
             return this.engine[ahead] / (double) this.measured;
         }
 
-        /** The same for the straight line through the last two positions. */
         double line(int ahead) {
             return this.line[ahead] / (double) this.measured;
         }
@@ -228,12 +206,6 @@ public class TargetTrackTest {
         return follow(world, ticks, script, null, null, false);
     }
 
-    /**
-     * @param movesPerTick how many of the player's moves reach the server in each of its ticks, in turn; null for
-     *                     one a tick
-     * @param hitTicks     the ticks before whose move {@link #HIT} replaces the player's motion, or null
-     * @param told         whether the track is told of each hit as it happens (this client dealt it)
-     */
     private static Stats follow(PlayerSim.World world, int ticks, Script script, int[] movesPerTick, int[] hitTicks,
                                 boolean told) {
         List<PlayerSim> truth = new ArrayList<PlayerSim>();
@@ -291,7 +263,7 @@ public class TargetTrackTest {
                 stats.fits++;
             }
             TargetForecast forecast = stats.track.forecast(world, AHEAD);
-            /* The first positions are the track finding its feet; they are not measured. */
+
             if (last != null && forecast != null && stats.positions > 4) {
                 stats.measured++;
                 if (forecast.simulated) {
@@ -318,7 +290,6 @@ public class TargetTrackTest {
         return stats;
     }
 
-    /** The forecast's error is under this share of the straight line's, that many moves ahead. */
     private static void assertBeatsLine(Stats stats, int ahead, double share) {
         assertTrue(stats.at(ahead), stats.measured > 10 && stats.engine(ahead) < share * stats.line(ahead));
     }
@@ -342,7 +313,7 @@ public class TargetTrackTest {
         assertTrue(stats.track.confidence() > 0.8);
         assertEquals(1, stats.track.keys().forward);
         assertEquals(0, stats.track.keys().strafe);
-        /* The packets give the yaw to 5.6 degrees; the run gives it far finer. */
+
         assertEquals(YAW, stats.track.keys().yaw, 1.0F);
         TargetForecast forecast = stats.track.forecast(new Course(), 3);
         assertEquals(3, forecast.moves());
@@ -381,7 +352,6 @@ public class TargetTrackTest {
 
     @Test
     public void aSprintJumpIsForecastWithItsHeight() {
-        /* The straight line knows no height at all, and no slowing in the air. */
         Script jumping = new Script() {
             @Override
             public void keys(int tick, PlayerSim.Input in, PlayerSim game) {
@@ -395,7 +365,7 @@ public class TargetTrackTest {
         assertBeatsLine(stats, AHEAD, 0.5);
         assertTrue(stats.engineHeight(AHEAD) + " of " + stats.lineHeight(AHEAD),
                 stats.engineHeight(AHEAD) < 0.5 * stats.lineHeight(AHEAD));
-        /* And with the moves reaching the server unevenly. */
+
         assertBeatsLine(follow(new Course(), 160, jumping, JITTER, null, false), AHEAD, 0.5);
     }
 
@@ -419,7 +389,7 @@ public class TargetTrackTest {
                 in.sprint = true;
             }
         }), AHEAD, 0.5);
-        /* Circling a point with the strafe key, as around an opponent. */
+
         assertBeatsLine(follow(new Course(), 160, new Script() {
             @Override
             public void keys(int tick, PlayerSim.Input in, PlayerSim game) {
@@ -440,7 +410,7 @@ public class TargetTrackTest {
             }
         });
         assertBeatsLine(wall, AHEAD, 1.0);
-        /* The line goes on through the wall, a block off; the forecast never does. */
+
         assertTrue("worst " + wall.engineWorst(AHEAD), wall.engineWorst(AHEAD) < 0.25);
         Stats slab = follow(new Course().box(4, 0, -100, 30, 0.5, 100), 60, new Script() {
             @Override
@@ -455,7 +425,6 @@ public class TargetTrackTest {
 
     @Test
     public void aSwimmerIsFollowedThroughWater() {
-        /* Deep water, the jump key held to stay up, turning slowly: water's drag and lift, not the air's. */
         Stats stats = follow(new Course().water(30.0), 200, new Script() {
             @Override
             public void keys(int tick, PlayerSim.Input in, PlayerSim game) {
@@ -468,7 +437,7 @@ public class TargetTrackTest {
                 in.jump = tick % 40 < 20;
             }
         });
-        /* Water is slow, so the line is not far off level; what it does not know at all is the height. */
+
         assertBeatsLine(stats, AHEAD, 0.8);
         assertTrue(stats.engineHeight(AHEAD) + " of " + stats.lineHeight(AHEAD),
                 stats.engineHeight(AHEAD) < 0.5 * stats.lineHeight(AHEAD));
@@ -480,7 +449,7 @@ public class TargetTrackTest {
         int[] hits = {40, 80};
         Stats untold = follow(new Course(), 120, SPRINT, null, hits, false);
         assertBeatsLine(untold, AHEAD, 0.85);
-        /* Told of the hit (this client dealt it), the position after it is explained instead of worked back. */
+
         Stats told = follow(new Course(), 120, SPRINT, null, hits, true);
         assertTrue(told.fits + " fits told, " + untold.fits + " untold", told.fits >= untold.fits);
         assertTrue(told.at(AHEAD) + "; untold " + untold.engine(AHEAD),
@@ -489,7 +458,6 @@ public class TargetTrackTest {
 
     @Test
     public void keysThatKeepChangingStillBeatTheLine() {
-        /* Three moves ahead: past that nobody knows what a player who changes keys every few ticks will do. */
         Stats tap = follow(new Course(), 160, new Script() {
             @Override
             public void keys(int tick, PlayerSim.Input in, PlayerSim game) {
@@ -522,7 +490,6 @@ public class TargetTrackTest {
 
     @Test
     public void unevenArrivalDoesNotThrowASprintOff() {
-        /* Two moves in one server tick and none in the next: the line takes it for a change of speed. */
         Stats stats = follow(new Course(), 120, SPRINT, JITTER, null, false);
         assertTrue(stats.at(3), stats.engine(3) < 0.03);
         assertBeatsLine(stats, 3, 0.3);
@@ -530,8 +497,6 @@ public class TargetTrackTest {
 
     @Test
     public void aPlayerNoKeysExplainIsNotSimulated() {
-        /* A speed cheat: 1.6 times the motion every tick. Nothing a 1.8 player can do fits, so the answer is the
-           straight line and says so. */
         Stats stats = follow(new Course(), 120, new Script() {
             @Override
             public void keys(int tick, PlayerSim.Input in, PlayerSim game) {
@@ -559,7 +524,6 @@ public class TargetTrackTest {
 
     @Test
     public void theFallAfterARiseIsTheGames() {
-        /* In the air with nothing near: three moves up, and the motion the game is left with. */
         PlayerSim.World nothing = new PlayerSim.World() {
             @Override
             public List<AxisAlignedBB> boxes(AxisAlignedBB area) {
@@ -582,12 +546,11 @@ public class TargetTrackTest {
 
     @Test
     public void aVanillaHitAsTheGameDealsIt() {
-        /* The attacker a block to the east: 0.4 to the west, and up by 0.4 less half the resting fall. */
         double[] plain = TargetTrack.vanillaHit(1.0, 0.0, 0.0F, 0);
         assertEquals(-(double) 0.4F, plain[0], 1.0E-9);
         assertEquals(0.36080000519752503, plain[1], 1.0E-12);
         assertEquals(0.0, plain[2], 1.0E-9);
-        /* A sprinting attacker to the north, looking south: half a block more along its look, and 0.1 up. */
+
         double[] sprinted = TargetTrack.vanillaHit(0.0, -1.0, 0.0F, 1);
         assertEquals(0.0, sprinted[0], 1.0E-6);
         assertEquals(0.46080000519752503, sprinted[1], 1.0E-12);

@@ -6,7 +6,6 @@ import net.minecraft.util.ChatComponentText;
 
 import java.util.Locale;
 
-/** A title: type "TITLE", "SUBTITLE", "TIMES", "CLEAR" or "RESET"; times in ticks. */
 public class S45 extends SPacket {
     public String type;
     public String message;

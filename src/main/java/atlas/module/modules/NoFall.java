@@ -43,8 +43,7 @@ public class NoFall extends Module {
     private int voidCacheTick = -1;
     private boolean voidCacheResult = true;
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"PACKET", "BLINK", "NO_GROUND", "SPOOF", "LEGIT", "VULCAN", "TIMER", "OnGround1", "OnGround2", "MatrixSpoof", "HypixelNoGround"})
-            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
-               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+
             .hide("VULCAN", "OnGround1", "OnGround2", "MatrixSpoof", "HypixelNoGround");
     public final FloatProperty distance = new FloatProperty("distance", 3.0F, 0.0F, 20.0F);
     public final IntProperty delay = new IntProperty("delay", 0, 0, 10000);
@@ -62,12 +61,6 @@ public class NoFall extends Module {
     @EventTarget(value = Priority.HIGH, whenDisabled = true)
     public void onPacket(PacketEvent event) {
         if (event.getType() == EventType.RECEIVE && event.getPacket() instanceof S08PacketPlayerPosLook) {
-            /* A correction: the server has put this player somewhere. BLINK's
-               held fall describes where they were, and onDisabled() released
-               it -- the whole fall, sent after the teleport, judged from the
-               new position (2026-10-04). Dropped instead, replies still sent
-               in order, as Blink does. On the client thread, which runs it
-               before vanilla's own handling of this S08 (scheduled after). */
             mc.addScheduledTask(() -> {
                 if (Atlas.blinkManager.getBlinkingModule() == BlinkModules.NO_FALL) {
                     Atlas.blinkManager.discardHeld();
@@ -137,10 +130,10 @@ public class NoFall extends Module {
                         }
                         break;
                     case 4:
-                        // Donor LegitNoFall (MiauMinus): water-bucket clutch handled on tick.
+
                         break;
                     case 5:
-                        // Donor VulcanNoFall (MiauMinus): spoof ground once past the fall threshold.
+
                         if (!packet.isOnGround() && mc.thePlayer.fallDistance > this.vulcanFall.getValue() && this.canTrigger()) {
                             this.packetDelayTimer.reset();
                             ((IAccessorC03PacketPlayer) packet).setOnGround(true);
@@ -149,7 +142,6 @@ public class NoFall extends Module {
                         }
                         break;
                     case 6: {
-                        // Donor TIMER block inside MiauMinus NoFall: re-timed ground spoofs while falling.
                         float fallDist = mc.thePlayer.fallDistance;
                         if (fallDist >= 1.51F && this.timerRepdist == 0.0 && !this.isOverVoid()) {
                             atlas.util.TimerControl.set(this, 0.45F);
@@ -310,11 +302,6 @@ public class NoFall extends Module {
         this.mlgPlaced = false;
     }
 
-    /**
-     * A blink held through a world change belongs to the world that is gone
-     * (2026-10-11); releasing it here is the same cleanup a disable does, and
-     * it is what keeps a held fall from being replayed into the next server.
-     */
     @EventTarget
     public void onLoadWorld(LoadWorldEvent event) {
         this.onDisabled();

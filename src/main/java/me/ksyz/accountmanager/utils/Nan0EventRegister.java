@@ -14,7 +14,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Nan0EventRegister {
-
     public static void register(EventBus bus, Object target) {
         ConcurrentHashMap<Object, ArrayList<IEventListener>> listeners = ReflectionHelper.getPrivateValue(EventBus.class, bus, "listeners");
         Map<Object, ModContainer> listenerOwners = ReflectionHelper.getPrivateValue(EventBus.class, bus, "listenerOwners");

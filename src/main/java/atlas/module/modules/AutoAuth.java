@@ -16,7 +16,6 @@ public class AutoAuth extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final String[] PASSWORD_TOKENS = {"password", "pass"};
 
-    /* 2026-10-30 (audit): empty by default -- "12341234" was registered as is by anyone who switched it on. */
     public final TextProperty password = new TextProperty("password", "");
     public final IntProperty delay = new IntProperty("delay", 1000, 100, 5000);
 

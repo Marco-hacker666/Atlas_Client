@@ -50,10 +50,8 @@ public class FontManager {
             regular18 = new FontRenderer(FontUtil.getResource(locationMap, "regular.ttf", 18));
             regular22 = new FontRenderer(FontUtil.getResource(locationMap, "regular.ttf", 22));
 
-            // Icon Font
             icon20 = new FontRenderer(FontUtil.getResource(locationMap, "icon.ttf", 20));
 
-            // Product Sans (Google Style)
             productSans12 = new FontRenderer(FontUtil.getResource(locationMap, "product_sans_regular.ttf", 12));
             productSans16 = new FontRenderer(FontUtil.getResource(locationMap, "product_sans_regular.ttf", 16));
             productSans18 = new FontRenderer(FontUtil.getResource(locationMap, "product_sans_regular.ttf", 18));
@@ -64,12 +62,10 @@ public class FontManager {
             productSansLight = new FontRenderer(FontUtil.getResource(locationMap, "product_sans_light.ttf", 22));
             productSansMedium = new FontRenderer(FontUtil.getResource(locationMap, "product_sans_medium.ttf", 22));
 
-            // Google Sans
             googleSans18 = new FontRenderer(FontUtil.getResource(locationMap, "Google-Sans.ttf", 18));
             googleSans20 = new FontRenderer(FontUtil.getResource(locationMap, "Google-Sans.ttf", 20));
             googleSans24 = new FontRenderer(FontUtil.getResource(locationMap, "Google-Sans.ttf", 24));
 
-            // Tenacity Fonts
             tenacity12 = new FontRenderer(FontUtil.getResource(locationMap, "tenacity.ttf", 12));
             tenacity16 = new FontRenderer(FontUtil.getResource(locationMap, "tenacity.ttf", 16));
             tenacity20 = new FontRenderer(FontUtil.getResource(locationMap, "tenacity.ttf", 20));
@@ -78,7 +74,6 @@ public class FontManager {
             tenacity32 = new FontRenderer(FontUtil.getResource(locationMap, "tenacity.ttf", 32));
             tenacity80 = new FontRenderer(FontUtil.getResource(locationMap, "tenacity.ttf", 80));
 
-            // Tenacity Bold Fonts
             tenacityBold12 = new FontRenderer(FontUtil.getResource(locationMap, "tenacity-bold.ttf", 12));
             tenacityBold16 = new FontRenderer(FontUtil.getResource(locationMap, "tenacity-bold.ttf", 16));
             tenacityBold20 = new FontRenderer(FontUtil.getResource(locationMap, "tenacity-bold.ttf", 20));
@@ -86,7 +81,6 @@ public class FontManager {
             tenacityBold28 = new FontRenderer(FontUtil.getResource(locationMap, "tenacity-bold.ttf", 28));
             tenacityBold32 = new FontRenderer(FontUtil.getResource(locationMap, "tenacity-bold.ttf", 32));
 
-            // San Francisco Pro
             sfPro12 = new FontRenderer(FontUtil.getResource(locationMap, "San-Francisco-Pro-Fonts.ttf", 12));
             sfPro16 = new FontRenderer(FontUtil.getResource(locationMap, "San-Francisco-Pro-Fonts.ttf", 16));
             sfPro20 = new FontRenderer(FontUtil.getResource(locationMap, "San-Francisco-Pro-Fonts.ttf", 20));
@@ -94,7 +88,6 @@ public class FontManager {
             sfPro28 = new FontRenderer(FontUtil.getResource(locationMap, "San-Francisco-Pro-Fonts.ttf", 28));
             sfPro32 = new FontRenderer(FontUtil.getResource(locationMap, "San-Francisco-Pro-Fonts.ttf", 32));
 
-            // Vision Fonts
             vision12 = new FontRenderer(FontUtil.getResource(locationMap, "Vision.otf", 12));
             vision16 = new FontRenderer(FontUtil.getResource(locationMap, "Vision.otf", 16));
             vision20 = new FontRenderer(FontUtil.getResource(locationMap, "Vision.otf", 20));
@@ -102,7 +95,6 @@ public class FontManager {
             vision28 = new FontRenderer(FontUtil.getResource(locationMap, "Vision.otf", 28));
             vision32 = new FontRenderer(FontUtil.getResource(locationMap, "Vision.otf", 32));
 
-            // NBP Informa
             nbpInforma12 = new FontRenderer(FontUtil.getResource(locationMap, "nbp-informa-fivesix.ttf", 12));
             nbpInforma16 = new FontRenderer(FontUtil.getResource(locationMap, "nbp-informa-fivesix.ttf", 16));
             nbpInforma20 = new FontRenderer(FontUtil.getResource(locationMap, "nbp-informa-fivesix.ttf", 20));
@@ -110,7 +102,6 @@ public class FontManager {
             nbpInforma28 = new FontRenderer(FontUtil.getResource(locationMap, "nbp-informa-fivesix.ttf", 28));
             nbpInforma32 = new FontRenderer(FontUtil.getResource(locationMap, "nbp-informa-fivesix.ttf", 32));
 
-            // Tahoma Bold
             tahomaBold12 = new FontRenderer(FontUtil.getResource(locationMap, "tahomabold.ttf", 12));
             tahomaBold16 = new FontRenderer(FontUtil.getResource(locationMap, "tahomabold.ttf", 16));
             tahomaBold20 = new FontRenderer(FontUtil.getResource(locationMap, "tahomabold.ttf", 20));
@@ -118,7 +109,6 @@ public class FontManager {
             tahomaBold28 = new FontRenderer(FontUtil.getResource(locationMap, "tahomabold.ttf", 28));
             tahomaBold32 = new FontRenderer(FontUtil.getResource(locationMap, "tahomabold.ttf", 32));
 
-            // Notification Icons
             noti12 = new FontRenderer(FontUtil.getResource(locationMap, "noti.ttf", 12));
             noti16 = new FontRenderer(FontUtil.getResource(locationMap, "noti.ttf", 16));
             noti18 = new FontRenderer(FontUtil.getResource(locationMap, "noti.ttf", 18));
@@ -127,7 +117,6 @@ public class FontManager {
             noti28 = new FontRenderer(FontUtil.getResource(locationMap, "noti.ttf", 28));
             noti32 = new FontRenderer(FontUtil.getResource(locationMap, "noti.ttf", 32));
 
-            // Nunito
             nunito12 = new FontRenderer(FontUtil.getResource(locationMap, "nunito.ttf", 12));
             nunito16 = new FontRenderer(FontUtil.getResource(locationMap, "nunito.ttf", 16));
             nunito18 = new FontRenderer(FontUtil.getResource(locationMap, "nunito.ttf", 18));
@@ -138,7 +127,6 @@ public class FontManager {
             nunito48 = new FontRenderer(FontUtil.getResource(locationMap, "nunito.ttf", 48));
             nunito80 = new FontRenderer(FontUtil.getResource(locationMap, "nunito.ttf", 80));
 
-            // Nunito Bold
             nunitoBold12 = new FontRenderer(FontUtil.getResource(locationMap, "Nunito-Bold.ttf", 12));
             nunitoBold16 = new FontRenderer(FontUtil.getResource(locationMap, "Nunito-Bold.ttf", 16));
             nunitoBold18 = new FontRenderer(FontUtil.getResource(locationMap, "Nunito-Bold.ttf", 18));
@@ -487,5 +475,4 @@ public class FontManager {
     public static MinecraftFontRenderer getMinecraft() {
         return MinecraftFontRenderer.INSTANCE;
     }
-
 }

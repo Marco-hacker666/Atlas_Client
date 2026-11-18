@@ -17,9 +17,7 @@ import java.lang.reflect.Field;
 
 import static org.junit.Assert.*;
 
-/** The per-tick action record (2026-09-28, Rise item 2). */
 public class TickActionsTest {
-
     @Before
     public void setUp() {
         TickActions.resetForTests();

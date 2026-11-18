@@ -1,25 +1,17 @@
 package atlas.ui.hud.list;
 
-/**
- * Ready-made module lists (2026-11-14): each sets the shape of a {@link ListStyle} -- its backgrounds, bars,
- * corners, spacing, what the text is drawn in and the blur -- and leaves the colours, the order, the animation, the
- * glow and where the list sits as they are. A start to change from, not a mode: the settings a preset writes are ordinary settings.
- */
 public final class ListPresets {
-
-    /** CUSTOM first: what the choice shows once a setting was changed by hand. */
     public static final String[] NAMES = {"CUSTOM", "CLEAN", "SIDEBAR", "OUTLINE", "PILL", "UNDERLINE", "CARD",
             "GLASS", "SOLID", "CAP", "ROUNDED"};
 
     private ListPresets() {
     }
 
-    /** Sets the style's shape to the preset's; false (and nothing changed) for CUSTOM or an unknown name. */
     public static boolean apply(String name, ListStyle s) {
         if (name == null || "CUSTOM".equals(name)) {
             return false;
         }
-        /* What most of them share. */
+
         ListStyle.Text text = ListStyle.Text.COLOR;
         ListStyle.Suffix suffix = ListStyle.Suffix.GRAY;
         boolean shadow = true;
@@ -37,7 +29,7 @@ public final class ListPresets {
         boolean blur = false;
         switch (name) {
             case "CLEAN":
-                /* Text and nothing else. */
+
                 background = ListStyle.Background.NONE;
                 padX = 2.0F;
                 padY = 1.0F;
@@ -87,7 +79,7 @@ public final class ListPresets {
                 blur = true;
                 break;
             case "SOLID":
-                /* Each row filled with its colour, the text dark on it. */
+
                 opacity = 100;
                 tint = 100;
                 text = ListStyle.Text.DARK;
@@ -127,10 +119,6 @@ public final class ListPresets {
         return true;
     }
 
-    /**
-     * The preset whose shape this style has, or CUSTOM: what the choice shows, worked out from the settings rather
-     * than remembered, so it is right whichever order the settings were read or changed in.
-     */
     public static String match(ListStyle style) {
         for (int i = 1; i < NAMES.length; i++) {
             ListStyle preset = new ListStyle();
@@ -142,7 +130,6 @@ public final class ListPresets {
         return NAMES[0];
     }
 
-    /** Whether two styles agree in everything a preset sets. */
     static boolean sameShape(ListStyle a, ListStyle b) {
         return a.text == b.text && a.suffix == b.suffix && a.textShadow == b.textShadow && near(a.padX, b.padX)
                 && near(a.padY, b.padY) && near(a.gap, b.gap) && a.background == b.background

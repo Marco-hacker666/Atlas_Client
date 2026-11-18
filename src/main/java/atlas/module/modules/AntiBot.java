@@ -123,11 +123,7 @@ public class AntiBot extends Module {
                 || packet instanceof S13PacketDestroyEntities)) {
             return;
         }
-        /* This event arrives on the network thread. Everything below reads the
-           world's entities and writes plain HashSets/HashMaps that isBot()
-           reads from the client thread, so it is handed over. Scheduling here
-           puts it ahead of vanilla's own (also scheduled) handling of the same
-           packet, which is the order it always ran in. */
+
         mc.addScheduledTask(new Runnable() {
             @Override
             public void run() {
@@ -139,7 +135,6 @@ public class AntiBot extends Module {
     }
 
     private void handleReceived(Packet<?> packet) {
-
         if (packet instanceof S14PacketEntity) {
             handleEntityPacket((S14PacketEntity) packet);
         } else if (packet instanceof S0BPacketAnimation) {

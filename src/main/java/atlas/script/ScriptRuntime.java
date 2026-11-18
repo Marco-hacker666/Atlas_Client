@@ -11,14 +11,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Calls a script's hooks (2026-11-02). As in Raven, a hook is a method the script declares, found by its name
- * (any case), its number of parameters and what it returns: void hooks are told, boolean hooks are asked (false
- * cancels), Float[] getRotations() is asked for a look. A script declares only what it uses.
- *
- * A hook that throws is reported once in chat with the line in the user's file, then at most every few seconds;
- * the script keeps running (its author decides when to switch it off).
- */
 final class ScriptRuntime {
     private static final long ERROR_EVERY_MS = 3000L;
     private static final Method NONE;
@@ -46,7 +38,6 @@ final class ScriptRuntime {
             try {
                 method.setAccessible(true);
             } catch (RuntimeException ignored) {
-                // Public anyway, or not callable: then it is not a hook.
             }
             String key = method.getName().toLowerCase(Locale.ROOT);
             List<Method> list = this.byName.get(key);
@@ -62,7 +53,6 @@ final class ScriptRuntime {
         return this.byName.containsKey(name.toLowerCase(Locale.ROOT));
     }
 
-    /** A void hook. */
     void call(String name, Object... args) {
         Method method = this.find(name, Void.TYPE, args);
         if (method != null) {
@@ -70,7 +60,6 @@ final class ScriptRuntime {
         }
     }
 
-    /** A boolean hook: -1 when the script has none (or it threw), 0 for false, 1 for true. */
     int ask(String name, Object... args) {
         Method method = this.find(name, Boolean.TYPE, args);
         if (method == null) {
@@ -80,7 +69,6 @@ final class ScriptRuntime {
         return answer instanceof Boolean ? ((Boolean) answer ? 1 : 0) : -1;
     }
 
-    /** A hook answering something of {@code type}, or null. */
     <T> T value(String name, Class<T> type, Object... args) {
         Method method = this.find(name, type, args);
         if (method == null) {
@@ -90,7 +78,6 @@ final class ScriptRuntime {
         return type.isInstance(answer) ? type.cast(answer) : null;
     }
 
-    /** What the HUD list shows after the script's name: bS 17's (and Atlas's) String getSuffix(), or suffix(). */
     String suffix() {
         if (this.instance instanceof atlas.script.api.AtlasScript) {
             String own = ((atlas.script.api.AtlasScript) this.instance).currentSuffix();
@@ -145,8 +132,6 @@ final class ScriptRuntime {
         return true;
     }
 
-    /** As Method.invoke takes it (and so Raven): unboxed, then widened -- a float hook argument to a double
-     *  parameter, a byte to an int. */
     private static boolean widens(Class<?> boxed, Class<?> primitive) {
         if (box(primitive) == boxed) {
             return true;
@@ -199,7 +184,6 @@ final class ScriptRuntime {
         return null;
     }
 
-    /** A hook threw: where in the user's file, said in chat (not every tick) and kept for the menu. */
     void report(Throwable error, String hook) {
         int line = -1;
         for (StackTraceElement element : error.getStackTrace()) {

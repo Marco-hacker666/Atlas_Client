@@ -3,11 +3,6 @@ package atlas.lb.clicking;
 import java.util.List;
 import java.util.Random;
 
-/**
- * Log-normal intervals around a CPS drawn once per combo (LiquidBounce NextGen
- * HumanClickTiming): mu is shifted by -sigma^2/2 so the mean interval, not the
- * median, lands on the combo's CPS.
- */
 public final class HumanClickTiming implements ClickTiming {
     private static final double SIGMA = 0.45;
     private static final long MIN_INTERVAL_MS = 10L;

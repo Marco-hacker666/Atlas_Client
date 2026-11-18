@@ -1,7 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): holds keep-alive and transaction replies
-// to spoof ping, driven by a tick queue with no lag-core dependency.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import atlas.Atlas;
@@ -35,7 +35,7 @@ public class PingSpoof extends Module {
 
     public PingSpoof() {
         super("PingSpoof", false, false, "Delays keep alive packets to spoof your ping.");
-        /* Replies held on purpose: never one another module has taken (PacketHub, 2026-10-18). */
+
         atlas.management.PacketHub.registerSide("PingSpoof", () -> this.queue.size());
     }
 
@@ -109,8 +109,6 @@ public class PingSpoof extends Module {
         }
     }
 
-    /* 2026-10-30 (audit): a keep-alive or transaction reply held across a server change went to the next server,
-       with the old server's id. It is sent only on the connection it answers. */
     private static Object connection() {
         return mc.getNetHandler() == null ? null : mc.getNetHandler().getNetworkManager();
     }
@@ -121,7 +119,6 @@ public class PingSpoof extends Module {
         }
     }
 
-    /* the client's Disabler names its Matrix switches matrix-disabler / matrix-ta. */
     private boolean isMatrixPingSpoofActive() {
         try {
             if (Atlas.moduleManager == null) return false;
@@ -145,7 +142,7 @@ public class PingSpoof extends Module {
     private static class PacketData {
         private final Packet<?> packet;
         private final long timestamp;
-        /** The NetworkManager it was held on. */
+
         private final Object connection;
 
         private PacketData(Packet<?> packet, long timestamp, Object connection) {

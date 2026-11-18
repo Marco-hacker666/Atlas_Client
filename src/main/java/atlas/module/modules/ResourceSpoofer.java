@@ -25,36 +25,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Hides the client's modded footprint from the server.
- *
- * Two independent leaks, handled separately because they are checked
- * separately:
- *
- * RESOURCE PACK. The server sends S48PacketResourcePackSend and waits for a
- * C19PacketResourcePackStatus. Servers that require a pack kick anyone who
- * answers DECLINED, and the pack itself can be used to detect a modified
- * client through what it fails to render. Cancelling the incoming packet
- * stops the download and the prompt, and the status is answered by hand.
- *
- * PLUGIN CHANNELS. On join the client announces every channel it can speak on
- * the REGISTER channel. Forge registers FML|HS and friends there, so the list
- * says "this player is running Forge" even when the brand string claims
- * vanilla. Filtering the announcement down to channels a vanilla client would
- * have makes the brand spoof consistent rather than contradicted by the very
- * next packet.
- *
- * Note this is not ported from LiquidBounce: it has no equivalent module.
- * The behaviour here follows the 1.8.9 protocol directly.
- */
-public class ResourceSpoofer extends Module {
+// Note this is not ported from LiquidBounce
 
+public class ResourceSpoofer extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final String REGISTER = "REGISTER";
     private static final String UNREGISTER = "UNREGISTER";
     private static final Charset UTF_8 = Charset.forName("UTF-8");
 
-    /** Channels a stock client legitimately speaks on in 1.8.9. */
     private static final String DEFAULT_ALLOWED =
             "MC|Brand,MC|BEdit,MC|BSign,MC|TrList,MC|AdvCdm,MC|PickItem,MC|ItemName,MC|Beacon,MC|Struct";
 
@@ -67,16 +45,8 @@ public class ResourceSpoofer extends Module {
     public final TextProperty allowedChannels = new TextProperty("allowed-channels", DEFAULT_ALLOWED,
             this.filterChannels::getValue);
 
-    /* A pack URL pointing at a loopback, LAN or link-local address is not
-       serving you a texture pack: it is using your client to reach something
-       inside your own network, or to confirm your address to a third party
-       host. Refused regardless of the mode above, because the other modes
-       still let the vanilla download path run. Hosts are matched as literals
-       only -- resolving a name here would perform the very DNS lookup the
-       check exists to avoid. */
     public final BooleanProperty blockPrivateUrls = new BooleanProperty("block-private-urls", true);
 
-    /** Mojang's snooper reports hardware and mod information on a timer. */
     public final BooleanProperty disableTelemetry = new BooleanProperty("disable-telemetry", true);
 
     public final BooleanProperty notify = new BooleanProperty("notify", true);
@@ -103,7 +73,6 @@ public class ResourceSpoofer extends Module {
         }
     }
 
-    /** Host portion of a URL, without resolving anything. */
     private static String hostOf(String url) {
         if (url == null) {
             return "";
@@ -125,11 +94,6 @@ public class ResourceSpoofer extends Module {
         return rest.substring(0, end).toLowerCase();
     }
 
-    /**
-     * Literal addresses that live inside a network rather than on the
-     * internet. Names are only matched against the obvious local suffixes;
-     * anything else is left alone rather than resolved.
-     */
     private static boolean isPrivateHost(String host) {
         if (host.isEmpty() || host.equals("localhost")
                 || host.endsWith(".local") || host.endsWith(".lan")
@@ -217,23 +181,17 @@ public class ResourceSpoofer extends Module {
             return;
         }
 
-        // The address guard above runs even in OFF mode; the rest does not.
         if (this.packMode.getValue() == 0) {
             return;
         }
 
-        /* Cancelling stops both the download and the "Server has requested a
-           resource pack" prompt, which means the status below is the only
-           thing the server ever hears back. */
         if (this.blockDownload.getValue()) {
             event.setCancelled(true);
         }
 
         switch (this.packMode.getValue()) {
             case 1:
-                /* A real client reports ACCEPTED, downloads, then reports
-                   SUCCESSFULLY_LOADED. Sending only the second one is a
-                   sequence no vanilla client produces. */
+
                 PacketUtil.sendPacket(new C19PacketResourcePackStatus(hash, Action.ACCEPTED));
                 PacketUtil.sendPacket(new C19PacketResourcePackStatus(hash, Action.SUCCESSFULLY_LOADED));
                 break;
@@ -265,8 +223,7 @@ public class ResourceSpoofer extends Module {
         if (data == null) {
             return;
         }
-        /* The payload is the channel names joined by NUL bytes. Read a copy so
-           the original reader index is left alone for anything downstream. */
+
         byte[] raw = new byte[data.readableBytes()];
         data.getBytes(data.readerIndex(), raw);
         String[] names = new String(raw, UTF_8).split("\0");
@@ -290,7 +247,6 @@ public class ResourceSpoofer extends Module {
         this.channelsStripped += removed;
 
         if (kept.isEmpty()) {
-            // Announcing nothing is what a client with no extra channels does.
             event.setCancelled(true);
             say("&7dropped &f" + removed + "&7 channel(s) on " + channel);
             return;

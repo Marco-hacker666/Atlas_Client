@@ -10,7 +10,6 @@ import org.spongepowered.asm.mixin.Shadow;
 
 @Mixin(C0FPacketConfirmTransaction.class)
 public class MixinC0FPacketConfirmTransaction {
-
   @Shadow private int windowId;
 
   @Shadow private short uid;

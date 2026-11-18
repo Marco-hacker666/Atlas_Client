@@ -60,10 +60,9 @@ public class TargetHUD extends Module {
     private static final DecimalFormat healthFormat = new DecimalFormat("0.0", new DecimalFormatSymbols(Locale.US));
     private static final DecimalFormat diffFormat = new DecimalFormat("+0.0;-0.0", new DecimalFormatSymbols(Locale.US));
     private static final int ATLAS_STYLE_START = 8;
-    /** JelloBounce's TargetHud.svelte (2026-10-08), the default: drawn by drawJelloStyle. */
+
     private static final int JELLO_STYLE = 15;
-    /* JELLO animation state: the bar's thumb (ease-out 0.3s) and the lost-health
-       trail (0.6s) as in HealthProgress.svelte, per target. */
+
     private EntityLivingBase jelloEntity;
     private float jelloThumb;
     private float jelloTrail;
@@ -91,9 +90,7 @@ public class TargetHUD extends Module {
     public final BooleanProperty shadow = new BooleanProperty("shadow", true, () -> this.style.getValue() == 0);
     public final BooleanProperty kaOnly = new BooleanProperty("ka-only", true);
     public final BooleanProperty chatPreview = new BooleanProperty("chat-preview", false);
-    /* 2026-10-11 (owner): bold, bigger text in every style. All of this
-       module's text goes through mcText / ttfText, and widths through
-       mcWidth / ttfWidth, so right-aligned text stays aligned. */
+
     public final BooleanProperty boldText = new BooleanProperty("bold-text", true);
     public final PercentProperty textSize = new PercentProperty("text-size", 115, 80, 160, null);
 
@@ -118,9 +115,7 @@ public class TargetHUD extends Module {
     private long damageFlashTime;
     private float lastHealthVal;
     private EntityLivingBase renderTarget;
-    /* 2026-11-09: where this frame's style drew, in screen pixels, for the HUD
-       editor; and whether that style hangs from the screen centre (RavenBS)
-       rather than from the corner position-x/-y name. */
+
     private float[] drawnArea;
     private boolean drawnFromCentre;
 
@@ -149,7 +144,6 @@ public class TargetHUD extends Module {
                 && TeamUtil.isEntityLoaded(this.lastTarget)) {
             return this.lastTarget;
         } else if (HudLayout.isEditing()) {
-            /* In the HUD editor: yourself, so there is something to place. */
             return mc.thePlayer;
         } else {
             return this.chatPreview.getValue() && mc.currentScreen instanceof GuiChat ? mc.thePlayer : null;
@@ -166,11 +160,6 @@ public class TargetHUD extends Module {
         return null;
     }
 
-    /**
-     * The health bar colour the chosen style draws at this much health (0-1), for the Theme window's preview
-     * (2026-11-14). JELLO and DEFAULT as they draw it; the other styles by the color setting (HUD, or the health
-     * blend), which is what most of them use.
-     */
     public int previewBarColour(float health) {
         if (this.style.getValue() == 15) {
             return 0xFFC8C8C8;
@@ -185,7 +174,6 @@ public class TargetHUD extends Module {
         return colour.getRGB() | 0xFF000000;
     }
 
-    /** Themed by the Target group; friends and marked targets keep their colours. */
     private Color getTargetColor(EntityLivingBase entityLivingBase) {
         Color own = this.ownTargetColor(entityLivingBase);
         if (entityLivingBase instanceof EntityPlayer && (TeamUtil.isFriend((EntityPlayer) entityLivingBase)
@@ -241,17 +229,10 @@ public class TargetHUD extends Module {
         }
     }
 
-    /** Records where a style drew this frame, already in screen pixels. */
     private void drawn(float x, float y, float width, float height) {
         this.drawnArea = new float[]{x, y, width, height};
     }
 
-    /**
-     * Where the older styles (FACE, THREED, SIMPLE, CIRCLE, BlueDEV) put their
-     * top-left corner. They used to sit at a fixed (100, 100) that nothing
-     * could change; now they follow position-x, position-y and the offsets
-     * like every other style (2026-11-09).
-     */
     private int[] classicOrigin(float width, float height) {
         float[] at = getAtlasPlusPosition(width, height);
         return new int[]{Math.round(at[0]), Math.round(at[1])};
@@ -350,15 +331,6 @@ public class TargetHUD extends Module {
         }
     }
 
-    /*
-     * JelloBounce TargetHud.svelte, at GUI scale (half its CSS px): a 250x79
-     * card (125x39.5) of black at 45% with 12px corners and the soft halo; the
-     * head (rounded 8px) at the left with a red wash for 250ms after damage;
-     * the name at 20px; a heart and the health at 20px in #c8c8c8; Winning /
-     * Losing / Draw on the right at 15px (green / red / orange, half grey);
-     * and the bar: black at 20% under a #c8c8c8 thumb, with the health just
-     * lost trailing behind it in #646464. Scales in on appearing (expoOut).
-     */
     private void drawJelloStyle(EntityLivingBase entity) {
         float appear = this.animatedScale;
         if (fadeTimer != null && !fadingIn && fadeTimer.getElapsedTime() >= 400) {
@@ -413,7 +385,7 @@ public class TargetHUD extends Module {
         this.jelloTrail += (this.jelloThumb - this.jelloTrail) * (1.0F - (float) Math.exp(-dt / 0.2F));
         float thumb = this.jelloThumb;
         float trail = Math.max(thumb, this.jelloTrail);
-        /* Scaled in and faded together (the theme's transition:scale). */
+
         int textAlpha = Math.max(4, Math.round(Math.min(1.0F, eased) * 255.0F)) << 24;
 
         this.drawn(posX * s, posY * s, w * s, h * s);
@@ -437,7 +409,6 @@ public class TargetHUD extends Module {
         }
         long sinceHit = System.currentTimeMillis() - this.damageFlashTime;
         if (sinceHit < 250L) {
-            /* The red wash fades out over 250ms (out:fade). */
             int wash = Math.round(0x66 * (1.0F - sinceHit / 250.0F));
             HudPanel.fill(hx, hy, hx + head, hy + head, 4.5F, (wash << 24) | 0xFF0000);
         }
@@ -447,7 +418,6 @@ public class TargetHUD extends Module {
         String name = TeamUtil.stripName(entity);
         float nameMax = 79.0F;
         if (nameFont != null) {
-            /* The whole name, smaller when long (2026-10-11; it used to be cut). */
             this.ttfTextFit(nameFont, name, 39.0, 5.0, textAlpha | 0xFFFFFF, nameMax);
         } else {
             this.mcTextFit(name, 39, 5, -1, nameMax);
@@ -875,7 +845,7 @@ public class TargetHUD extends Module {
 
     private void drawCircleStyle(EntityLivingBase entity) {
         float alpha = Math.min(1.0F, this.animatedScale);
-        /* About 120 x 40: the ring at the left, the name and health beside it. */
+
         int[] origin = this.classicOrigin(120, 40);
         int baseX = origin[0];
         int baseY = origin[1];
@@ -1020,7 +990,6 @@ public class TargetHUD extends Module {
         if (!glassPane) {
             RenderUtil.drawRoundedRect(x, y, width, height, 10.0F, bgColor);
         } else if (flashAlpha > 0) {
-            /* The damage flash, over the glass. */
             HudPanel.fill(x, y, x + width, y + height, new Color(255, 40, 40, (int) (alpha * 90 * flashAlpha)).getRGB());
         }
 
@@ -1096,8 +1065,6 @@ public class TargetHUD extends Module {
     }
 
     private boolean shouldUseHudBlur() {
-        /* Mobile-safe (2026-10-15): the blur and glow below need a stencil
-           buffer and a shader; neither is safe on gl4es / Krypton Wrapper. */
         if (atlas.util.render.MobileSafe.active()) {
             return false;
         }
@@ -1409,7 +1376,6 @@ public class TargetHUD extends Module {
         float r = Math.min(radius, Math.min(width, height) * 0.5F);
 
         if (atlas.util.render.MobileSafe.active()) {
-            /* No stencil mask: the same gradient as one rounded fan. */
             int start = startColor.getRGB();
             int end = endColor.getRGB();
             atlas.util.render.RoundRectGeometry.fill(x, y, width, height, r, r, r, r, start, end, end, start);
@@ -1476,7 +1442,6 @@ public class TargetHUD extends Module {
         GlStateManager.enableTexture2D();
     }
 
-    /** Themed by the Target group; the offset walks the cycle along the bar. */
     private Color getAtlasPlusColor(int offset) {
         Color own = this.ownAtlasPlusColor(offset);
         ThemeStyle themed = ThemeStyle.active(TargetColors.class);
@@ -1560,7 +1525,6 @@ public class TargetHUD extends Module {
         ResourceLocation skin = info != null ? info.getLocationSkin() : new ResourceLocation("textures/entity/steve.png");
 
         if (atlas.util.render.MobileSafe.active()) {
-            /* No stencil mask: a square face. */
             drawHeadTexture(skin, x, y, w, h);
             return;
         }
@@ -1670,10 +1634,6 @@ public class TargetHUD extends Module {
     }
 
     private void checkSetupFBO() {
-        /* Mobile-safe (2026-10-15): this swaps the game's own depth buffer for
-           a packed depth-stencil one through EXT calls; where a translation
-           layer lacks that format the main framebuffer would be incomplete --
-           a black screen. Nothing uses the stencil in that mode anyway. */
         if (atlas.util.render.MobileSafe.active()) {
             return;
         }
@@ -1691,8 +1651,6 @@ public class TargetHUD extends Module {
 
     @EventTarget
     public void onPacket(PacketEvent event) {
-        /* Without the enabled check, attacks made while the HUD was off were
-           recorded and shown as the target on the next switch-on. */
         if (this.isEnabled() && event.getType() == EventType.SEND && event.getPacket() instanceof C02PacketUseEntity) {
             C02PacketUseEntity packet = (C02PacketUseEntity) event.getPacket();
             if (packet.getAction() == Action.ATTACK) {
@@ -1715,15 +1673,6 @@ public class TargetHUD extends Module {
         this.lastTarget = null;
     }
 
-    // ---- text (2026-10-11): rounded bold text, size, whole names -----------
-    /*
-     * bold-text: every text in every style is drawn in Product Sans Medium --
-     * the rounded face of the Jello look -- sized to the line it replaces
-     * (the Minecraft font's 9 px, or the TTF font's own height) times
-     * text-size. Off: each style's own font, only scaled. Names are never cut:
-     * one too wide for its place is drawn smaller (*Fit).
-     */
-
     private float textScale() {
         return this.textSize.getValue() / 100.0F;
     }
@@ -1736,7 +1685,6 @@ public class TargetHUD extends Module {
         return this.boldText.getValue() && rounded() != null;
     }
 
-    /** Symbols such as the heart are not in Product Sans: those lines keep the Minecraft font. */
     private boolean smooth(String text) {
         if (!smooth() || text == null) {
             return false;
@@ -1749,7 +1697,6 @@ public class TargetHUD extends Module {
         return true;
     }
 
-    /** Scale that makes {@code font} as tall as {@code height} GUI pixels. */
     private static float fitHeight(atlas.util.font.impl.FontRenderer font, double height) {
         double own = font.getHeight();
         return own <= 0.0 ? 1.0F : (float) (height / own);
@@ -1778,7 +1725,6 @@ public class TargetHUD extends Module {
         return mc.fontRendererObj.getStringWidth(text) * textScale();
     }
 
-    /** Draws and returns the width drawn (GUI pixels). */
     private float drawMc(String text, float x, float y, int color, boolean shadow, float extra) {
         float k = textScale() * extra;
         GlStateManager.pushMatrix();
@@ -1828,7 +1774,6 @@ public class TargetHUD extends Module {
         GlStateManager.popMatrix();
     }
 
-    /** The whole name, smaller if it would not fit in {@code max}. */
     private void ttfTextFit(atlas.util.font.impl.FontRenderer font, String text, double x, double y, int color, double max) {
         double width = ttfWidth(font, text);
         drawTtf(font, text, x, y, color, false, width > max ? (float) (max / width) : 1.0F);
@@ -1839,13 +1784,10 @@ public class TargetHUD extends Module {
         drawMc(text, x, y, color, false, width > max ? max / width : 1.0F);
     }
 
-    /** TTF fonts here draw colour codes as text: drop them. */
     private static String strip(String text) {
         return text == null ? "" : text.replaceAll("\u00a7.", "");
     }
 
-    /* 2026-10-31 (audit): a world unload leaves its entities alive (isDead stays false), and one kept here held the
-       whole old world in memory -- for good while this module was off. Dropped when a world loads. */
     @atlas.event.EventTarget(whenDisabled = true)
     public void onWorldDropEntities(atlas.events.LoadWorldEvent event) {
         this.jelloEntity = null;

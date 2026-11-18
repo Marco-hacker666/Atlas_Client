@@ -1,6 +1,5 @@
 package atlas.module.modules;
 
-
 import net.minecraft.client.renderer.GlStateManager;
 import atlas.Atlas;
 import atlas.event.EventTarget;
@@ -34,15 +33,7 @@ public class TickBase extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public static boolean duringTickModification = false;
-    /**
-     * This tick's player update is one of the skipped ones: MixinEntityPlayerSP
-     * cancels EntityPlayerSP.onUpdate, so no movement and no movement packet.
-     *
-     * Until 2026-10-04 the skip was a cancelled TickEvent, which nothing
-     * honours (the runTick injection is not cancellable): the extra ticks ran
-     * and were never paid back, so every activation was simply N movement
-     * packets too many -- a timer burst.
-     */
+
     public static volatile boolean skipPlayerTick = false;
 
     public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"PAST", "FUTURE"});
@@ -104,7 +95,6 @@ public class TickBase extends Module {
         }
 
         if (event.getType() == EventType.PRE) {
-            /* Decided once a tick, here, before the player updates. */
             skipPlayerTick = ticksToSkip > 0;
             if (skipPlayerTick) {
                 ticksToSkip--;
@@ -247,7 +237,6 @@ public class TickBase extends Module {
     }
 
     private void runTickBaseIfPossible() {
-        /* Still paying back the last run: its own extra ticks would be cancelled as skipped ones. */
         if (tickBuffer.isEmpty() || ticksToSkip > 0 || skipPlayerTick) return;
         EntityLivingBase enemy = getNearestEntityInRange();
         if (enemy == null) return;
@@ -270,9 +259,7 @@ public class TickBase extends Module {
         }
 
         int selectedTick = criticalTick != -1 ? criticalTick : bestTick;
-        /* -1 is "no tick gets closer": nothing to do. Only 0 was checked, and
-           with pause-after-tick above 0 a -1 still ran pause-1 extra ticks,
-           every tick an enemy was near (2026-10-04). */
+
         if (selectedTick <= 0) return;
         if (RandomUtil.nextInt(0, 100) > change.getValue() || (onlyOnKillAura.getValue() && !isKillAuraActive())) {
             ticksToSkip = 0;

@@ -5,7 +5,6 @@ import atlas.script.raven.model.Vec3;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S25PacketBlockBreakAnim;
 
-/** Someone breaking a block: progress 0..9, anything else clears it. */
 public class S25 extends SPacket {
     public int entityId;
     public Block block;

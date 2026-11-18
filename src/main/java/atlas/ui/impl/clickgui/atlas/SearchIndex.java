@@ -7,32 +7,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.Predicate;
 
-/**
- * What the search box looks through (2026-10-23, docs/GUI-AUDIT-2026-10-23.md
- * U1): module names and descriptions, and every setting's label, key and help.
- * It used to match module names only, so none of the 2,200 settings, nor
- * the help written for them, could be found.
- *
- * A query is cut into words; an entry matches when every word is in its name
- * (or key) or its text. "full hold" finds full-hold, "slow" finds the setting
- * whose help says it slows you.
- *
- * Order, for modules and for settings alike: matches by name before matches
- * found only in the text; then this page's before the other page's, as the
- * menu always listed them; then an exact name, a name that starts with the
- * query, any other name match; then the menu's own order. For a one-word
- * query the modules found by name are the ones the old search found.
- *
- * Built when the menu opens; holds the modules and settings as plain objects,
- * so it is tested without a game.
- */
 final class SearchIndex {
-
     static final class Entry {
-        /** The module, and for a setting entry the setting (null for a module). */
         final Object module;
         final Object setting;
-        /** What a result row shows: the module's or the setting's name, and the module a setting is in. */
+
         final String title;
         final String owner;
         final int order;
@@ -75,7 +54,6 @@ final class SearchIndex {
         this.modules.add(new Entry(module, null, name, name, this.modules.size(), name, description));
     }
 
-    /** A setting is found by its label ("Full Hold") and its key ("full-hold") alike. */
     void addSetting(Object module, Object setting, String owner, String label, String key, String help) {
         this.settings.add(new Entry(module, setting, label, owner, this.settings.size(),
                 label + " " + key, help));
@@ -89,7 +67,6 @@ final class SearchIndex {
         return this.settings.size();
     }
 
-    /** The matches for a query, at most maxSettings settings; onPage says which modules are on this page. */
     Results search(String query, Predicate<Object> onPage, int maxSettings) {
         String[] words = words(query);
         if (words.length == 0) {
@@ -134,10 +111,6 @@ final class SearchIndex {
         return out;
     }
 
-    /**
-     * 0 the name is the query, 1 the name starts with it, 2 every word is in
-     * the name, 3 every word is in the name or the text; -1 no match.
-     */
     static int rank(Entry entry, String[] words, String whole) {
         boolean allInName = true;
         for (String word : words) {
@@ -168,7 +141,6 @@ final class SearchIndex {
         return cleaned.isEmpty() ? new String[0] : cleaned.split("\\s+");
     }
 
-    /** Lower case, with dashes, underscores, dots and slashes as spaces: "full-hold" reads as "full hold". */
     static String normal(String text) {
         if (text == null) {
             return "";
@@ -182,7 +154,6 @@ final class SearchIndex {
         return out.toString();
     }
 
-    /** Letters and digits only: "Full Hold", "full-hold" and "fullhold" are all "fullhold". */
     static String compact(String text) {
         if (text == null) {
             return "";

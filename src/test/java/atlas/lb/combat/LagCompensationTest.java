@@ -8,7 +8,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/** LagAware (2026-10-26): where the server has the target when the hit lands, and when a hit holds on both sides. */
 public class LagCompensationTest {
     private static final double EPS = 1e-9;
 
@@ -44,13 +43,13 @@ public class LagCompensationTest {
     @Test
     public void aHitOnlyValidOnTheOldPlaceIsHeld() {
         double[] eyes = {0, 1.62, 0};
-        // Shown 2.9 away (in reach), but the target is walking away: on the server it is 0.6 further.
+
         double[] shown = {2.6, 0, -0.4, 3.4, 1.9, 0.4};
         double[] predicted = LagCompensation.offset(shown, 0.6, 0, 0);
         double margin = LagCompensation.margin(240, 0.05);
         assertEquals(0.12, margin, EPS);
         assertFalse(LagCompensation.bothInReach(eyes, shown, predicted, 3.0, margin));
-        // Coming closer instead: holds on both sides.
+
         assertTrue(LagCompensation.bothInReach(eyes, shown, LagCompensation.offset(shown, -0.4, 0, 0), 3.0, margin));
     }
 }

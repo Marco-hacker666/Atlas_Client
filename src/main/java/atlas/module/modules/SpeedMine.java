@@ -26,30 +26,9 @@ import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-/**
- * Mines faster, two ways.
- *
- * BreakSpeed: Forge's PlayerEvent.BreakSpeed, the dig speed the tool,
- * enchantments and potions give, times `multiplier`. Registered on Forge's
- * bus through Nan0EventRegister, as UpdateNotifier is (this client is no mod
- * container). 2026-10-15: first written with the fixed speeds the owner was
- * given (wool 4, end stone and planks 1.56, bed 3, else x1.39); fixed speeds
- * replace the tool's, so shears on wool (5) and any pickaxe on end stone
- * (2-8) got slower, and the owner found no difference. Now it multiplies.
- *
- * FinishEarly: the 1.8 server breaks a block on STOP_DESTROY when the damage
- * it works out from its own tick count is at least 0.7
- * (ItemInWorldManager.blockRemoving). speed 0-100 % runs the finish point
- * from 1.0 down to 0.7. The owner had 30 % (finish at 0.91, ~9 % faster).
- *
- * Both are limited by the server: past what it accepts it puts the block
- * back. `log` writes one line per block (config/Atlas/speedmine-*.txt):
- * ticks taken, the vanilla estimate, and whether the server KEPT the break or
- * REVERTED it, so the setting can be judged from evidence.
- */
 public class SpeedMine extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    /** Lowest finish point a vanilla server accepts. */
+
     private static final float SERVER_FINISH = 0.7F;
     private static final File LOG_DIR = new File("./config/Atlas/");
     private static final SimpleDateFormat FILE_STAMP = new SimpleDateFormat("yyyyMMdd-HHmmss");
@@ -78,17 +57,14 @@ public class SpeedMine extends Module {
         try {
             Nan0EventRegister.register(MinecraftForge.EVENT_BUS, new ForgeHook(this));
         } catch (Throwable ignored) {
-            // No Forge bus (tests): BreakSpeed does nothing.
         }
     }
 
-    /** The damage at which the dig is finished, for speed 0-100 (FinishEarly). */
     static float finishAt(int speedPercent) {
         float share = Math.max(0, Math.min(100, speedPercent)) / 100.0F;
         return 1.0F - (1.0F - SERVER_FINISH) * share;
     }
 
-    /** How many times faster than vanilla the current setting digs. */
     private float factor() {
         return this.mode.getValue() == 0 ? this.multiplier.getValue() : 1.0F / finishAt(this.speed.getValue());
     }
@@ -134,7 +110,6 @@ public class SpeedMine extends Module {
         }
     }
 
-    /** A broken block that comes back within a second was refused by the server. */
     private void watch() {
         if (this.watchPos == null) {
             return;
@@ -169,7 +144,6 @@ public class SpeedMine extends Module {
                 ? String.format("x%.1f", this.multiplier.getValue()) : String.format("%d%%", this.speed.getValue())};
     }
 
-    /** The Forge-bus side; public, as Forge's ASM handlers need. */
     public static final class ForgeHook {
         private final SpeedMine module;
 

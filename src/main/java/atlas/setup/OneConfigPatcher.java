@@ -15,16 +15,8 @@ import java.io.OutputStreamWriter;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Moves OneConfig's GUI key off RightShift, which is this client's ClickGUI
- * key, so the two do not fight. OneConfig keeps the bind in
- * {@code OneConfig/Preferences.json} as
- * {@code {"oneConfigKeyBind":{"keyBinds":[code]}}}, and also in memory, so we
- * patch both. Runs on the first few launches only.
- *
- * <p>Ported from OpenSkid (GPL-3.0); counters live under this client's own
- * config folder.
- */
+// Ported from OpenSkid (GPL-3.0)
+
 public final class OneConfigPatcher {
     private static final int KEY_O = 24;
     private static final int MAX_PATCHES = 3;
@@ -36,7 +28,6 @@ public final class OneConfigPatcher {
     private static boolean listenerRegistered;
     private static File watchedGameDir;
 
-    /** Re-applies the patch every time a world loads, up to {@link #MAX_PATCHES} times. */
     public static void watch(File gameDir) {
         try {
             if (listenerRegistered || gameDir == null) {
@@ -85,12 +76,6 @@ public final class OneConfigPatcher {
         }
     }
 
-    /**
-     * Updates OneConfig's loaded key object in place. The file patch alone
-     * loses because OneConfig keeps RightShift in memory and saves it back over
-     * our file later (for example on world join). Mutating the same object its
-     * keybind registration holds fixes it at the root.
-     */
     private static boolean patchMemory() {
         try {
             Class<?> prefsClass = Class.forName("cc.polyfrost.oneconfig.internal.config.Preferences");

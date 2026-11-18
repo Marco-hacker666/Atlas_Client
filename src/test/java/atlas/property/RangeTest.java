@@ -9,9 +9,7 @@ import java.util.Set;
 
 import static org.junit.Assert.*;
 
-/** The shared min-max setting (2026-09-28, Rise item 5). */
 public class RangeTest {
-
     @Test
     public void anIntRangeIsTwoOrdinarySettings() {
         IntRange range = new IntRange("cps", 8, 14, 1, 20);

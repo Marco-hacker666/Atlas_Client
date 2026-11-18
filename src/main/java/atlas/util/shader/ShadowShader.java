@@ -4,7 +4,6 @@ import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.opengl.GL11;
 
 public class ShadowShader {
-
     private static final String SHADOW_SHADER_SOURCE =
             "#version 120\n" +
                     "\n" +
@@ -28,12 +27,9 @@ public class ShadowShader {
                     "    gl_FragColor = vec4(color.rgb, smoothedAlpha);\n" +
                     "}";
 
-    /* Built on first use, not when the class loads (2026-10-15): in
-       mobile-safe mode it is never built at all. */
     private static ShaderUtil shadowShader;
 
     public static void drawShadow(float x, float y, float width, float height, float radius, float softness, int color) {
-        /* A soft shadow has no cheap plain form: mobile-safe mode goes without. */
         if (atlas.util.render.MobileSafe.active()) {
             return;
         }

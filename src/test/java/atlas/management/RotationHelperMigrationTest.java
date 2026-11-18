@@ -9,10 +9,6 @@ import java.nio.file.Paths;
 
 import static org.junit.Assert.*;
 
-/**
- * The modules moved onto the shared server look (2026-10-31) leave the packet and the keys to it: a module that
- * still set the look itself would fight its own request, and one that still turned the keys would turn them twice.
- */
 public class RotationHelperMigrationTest {
     private static final String[] MOVED = {
             "AimAssist", "ProjectileAimBot", "AntiFireball", "ChestAura", "ThrowAura", "PearlSaver",

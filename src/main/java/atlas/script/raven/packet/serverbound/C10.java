@@ -4,7 +4,6 @@ import atlas.script.raven.model.ItemStack;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C10PacketCreativeInventoryAction;
 
-/** Creative mode: putting an item into a slot. */
 public class C10 extends CPacket {
     public int slot;
     public ItemStack itemStack;

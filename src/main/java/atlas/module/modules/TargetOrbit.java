@@ -26,58 +26,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 
-/**
- * Marks who this player is fighting (2026-10-18; v3 the same day).
- *
- * v1 was a ring nobody saw (aura targets only); v2 billboard flakes the owner
- * found too small and scattered. v3, after the owner's reference shots and
- * "orderly, truly 3D, follow where the enemy faces, special animation, more
- * looks, make the body glow":
- *
- * Who: the aura's target; else the living thing this player last hit, within
- * combat-range and combat-time; else, with preview, the nearest player.
- * Forced on with any aura; while on, TargetESP and KillAura's box stand aside.
- *
- * Crystals are v2's flakes (owner, on v3's 3D bipyramids: "a bit odd, I liked
- * the last one -- give it soft light, make it orderly"): each faces the
- * camera, a white-cored diamond in a diamond of glow in a round soft glow,
- * added light, depth tested so the body hides what is behind it. They sit in
- * regular formations that turn with the enemy's body (local +z is the way it
- * faces):
- *   Crown   three rings at hip, chest and head, the middle turning against
- *           the others, and a larger crystal at eye height pointing forward.
- *   Wings   two fans of crystal blades on the back, beating slowly.
- *   Helix   two strands climbing the body, starting at the front.
- *   Shards  crystals each on its own orbit round the body.
- *   Orbit, Halo, Mark  the v1 ring with comets, foot halo, crystal overhead.
- * Three that are not floating pieces (2026-10-18, owner: "try three new
- * kinds, they need not be floating things"):
- *   Sigil   a magic circle on the ground, turned with the body: two rings,
- *           runes between them, a counter-turning hexagram, an arrow at the
- *           front; it unfolds from the centre; a hit sends a ring outward.
- *   Scan    a hologram column round the body: a soft wall of light fading
- *           upward, turning ribs, a bright ring sweeping up and down; it
- *           rises from the feet; a hit sends a ring from the feet to the top.
- *   Lock    lock-on brackets facing the camera round the body, a turning
- *           dashed ring and an arc of the target's health; they spin in from
- *           twice the size; a hit snaps them in. Drawn over the body.
- * Animation: a new mark flies its crystals in from wide with a little
- * overshoot, one after another; a hit sends a shockwave along the ground,
- * swells the formation and spins it up; a kill shatters the crystals outward
- * under gravity; at rest the formation breathes and crystals glint.
- *
- * Body glow: after the marked entity's model is drawn
- * (MixinRendererLivingEntity, renderModel RETURN) it is drawn twice more, a
- * little larger, untextured, in added light of the mark's colour, breathing,
- * brighter on a hit.
- *
- * renderEffect() draws a look at the origin for a given body, state and
- * facing, so the ClickGUI's preview (OrbitPreview) runs the same code.
- * Plain GL, no shaders, so it draws on gl4es too.
- */
 public class TargetOrbit extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    /** Atlas accent, used when the theme gives no colour. */
+
     private static final int ACCENT = 0xFFB59CFF;
     private static final int LOW_HEALTH = 0xFFFF4D5E;
     private static final float FADE_SECONDS = 0.18F;
@@ -85,17 +36,16 @@ public class TargetOrbit extends Module {
     private static final float APPEAR_SECONDS = 0.45F;
     private static final float STAGGER_SECONDS = 0.012F;
     private static final float BURST_SECONDS = 0.9F;
-    /** How far the formations stand off the body (0.38 until the owner found them bunched). */
+
     private static final float SPREAD = 0.62F;
 
-    /* "pattern": v1 saved "style", v2 "look"; a new key so the new default (Crown) applies. */
     public final ModeProperty style = new ModeProperty("pattern", 0,
             new String[]{"Crown", "Wings", "Helix", "Shards", "Orbit", "Halo", "Mark", "Sigil", "Scan", "Lock"});
     public final ModeProperty colorMode = new ModeProperty("color", 0, new String[]{"Theme", "Health", "Custom"});
-    /* Colours of one's own (owner, 2026-10-18: "every colour must be customisable"). */
+
     public final ColorProperty customColor = new ColorProperty("custom-color", ACCENT & 0xFFFFFF,
             () -> this.colorMode.getValue() == 2);
-    /** The bright highlight: flake and line cores, the arrow, the sweep, a hit's flash. */
+
     public final ColorProperty coreColor = new ColorProperty("core-color", 0xFFFFFF);
     public final FloatProperty size = new FloatProperty("size", 1.0F, 0.6F, 1.6F);
     public final FloatProperty speed = new FloatProperty("speed", 1.0F, 0.2F, 3.0F);
@@ -105,32 +55,30 @@ public class TargetOrbit extends Module {
     public final IntProperty comets = new IntProperty("comets", 3, 0, 5, () -> this.style.getValue() == 4);
     public final IntProperty trail = new IntProperty("trail", 14, 4, 30, () -> this.style.getValue() == 4);
     public final FloatProperty opacity = new FloatProperty("opacity", 0.9F, 0.2F, 1.0F);
-    /* Off by default (owner, 2026-10-18: "remove the glow, or make it a switch"). */
+
     public final BooleanProperty bodyGlow = new BooleanProperty("body-glow", false);
     public final ColorProperty glowTint = new ColorProperty("glow-color", ACCENT & 0xFFFFFF, () -> this.bodyGlow.getValue());
     public final BooleanProperty glowFollows = new BooleanProperty("glow-follows-mark", true, () -> this.bodyGlow.getValue());
-    /* The rings a hit sends out (ground shockwave, Sigil's ring, Scan's falling ring); off by default (owner). */
+
     public final BooleanProperty hitRings = new BooleanProperty("hit-rings", false);
     public final FloatProperty glowStrength = new FloatProperty("glow-strength", 0.5F, 0.1F, 1.0F,
             () -> this.bodyGlow.getValue());
     public final FloatProperty combatRange = new FloatProperty("combat-range", 6.0F, 3.0F, 12.0F);
     public final FloatProperty combatTime = new FloatProperty("combat-time", 4.0F, 1.0F, 10.0F);
-    /* Marks the nearest player within 8 blocks when nothing else is marked, to see the look without a fight. */
+
     public final BooleanProperty preview = new BooleanProperty("preview", false);
 
-    /** One mark's animation: fade, age, hit flash and its own clock. The preview keeps its own. */
     public static final class Fx {
         public float alpha;
         public float shownFor;
         public float flash;
         public double clock;
-        /** Turn so far: speeds up on a hit without jumping (a multiplied clock jumped). */
+
         public double spin;
-        /** The marked one's health, 0-1, for Lock's arc. */
+
         public float health = 1.0F;
         int lastHurt;
 
-        /** Starts the mark over: fades in and its crystals fly in again. */
         public void reset() {
             reset(0);
         }
@@ -144,7 +92,6 @@ public class TargetOrbit extends Module {
         }
     }
 
-    /** A shattered formation: where it was and each piece's start and velocity. */
     public static final class Burst {
         double ox, oy, oz;
         final List<float[]> parts = new ArrayList<float[]>();
@@ -157,40 +104,37 @@ public class TargetOrbit extends Module {
     private EntityLivingBase leaving;
     private final Fx leavingFx = new Fx();
     private final List<Burst> bursts = new ArrayList<Burst>();
-    /** The living thing this player hit last, and when. */
+
     private EntityLivingBase lastHit;
     private long lastHitAt;
     private long lastNanos;
-    /** The highlight colour of what is being drawn (core-color), for the static shape helpers. */
+
     private static int core = 0xFFFFFFFF;
 
     private int core() {
         return 0xFF000000 | this.coreColor.getValue();
     }
 
-    /** The clock of the mark being drawn. */
     private double now;
-    /** Its turn so far (Fx.spin). */
+
     private double spinNow;
-    /* The camera's turn, for flakes to face it: the world's from RenderManager, the preview's its own. */
+
     private float viewYaw;
     private float viewPitch;
-    /** The body yaw the formation being drawn is turned by, undone for each flake. */
+
     private float formationYaw;
 
-    /* Read by the body glow hook: who glows, in what colour, how much. */
     private static Entity glowEntity;
     private static int glowColor = ACCENT;
     private static float glowAmount;
 
-    /* Each crystal's own randomness: angle, radius share, height share, signed speed, bob, phase, size, spin. */
     private static final int MAX = 36;
     private static final float[][] SEED = new float[MAX][];
 
     static {
         Random random = new Random(0xA71A5L);
         for (int i = 0; i < MAX; i++) {
-            float angle = (float) (i * 2.399963);  // golden angle: evenly spread whatever the count
+            float angle = (float) (i * 2.399963);
             float radius = 0.85F + random.nextFloat() * 0.45F;
             float height = 0.05F + random.nextFloat() * 1.05F;
             float speed = (0.35F + random.nextFloat() * 0.55F) * (random.nextBoolean() ? 1.0F : -1.0F);
@@ -215,24 +159,16 @@ public class TargetOrbit extends Module {
         }
     }
 
-    /** Whether marks of other modules should stand aside. */
     public static boolean active() {
         TargetOrbit module = instance();
         return module != null && module.isEnabled();
     }
 
-    // ---- colours and easing ---------------------------------------------
-
-    /**
-     * The colour at this much health (0-1): the base colour down to half
-     * health, then toward red, all red at none.
-     */
     static int healthColor(int base, float ratio) {
         float r = Math.max(0.0F, Math.min(1.0F, ratio));
         return mix(base, LOW_HEALTH, r >= 0.5F ? 0.0F : 1.0F - r / 0.5F);
     }
 
-    /** a to b by t (0-1), each channel, alpha from a. */
     static int mix(int a, int b, float t) {
         float u = Math.max(0.0F, Math.min(1.0F, t));
         int r = Math.round(((a >> 16) & 0xFF) + (((b >> 16) & 0xFF) - ((a >> 16) & 0xFF)) * u);
@@ -241,14 +177,12 @@ public class TargetOrbit extends Module {
         return (a & 0xFF000000) | (r << 16) | (g << 8) | bl;
     }
 
-    /** 0 to 1 with a little overshoot before settling (easeOutBack). */
     static float easeOutBack(float t) {
         float x = Math.max(0.0F, Math.min(1.0F, t)) - 1.0F;
         float c1 = 1.70158F;
         return 1.0F + (c1 + 1.0F) * x * x * x + c1 * x * x;
     }
 
-    /** The mark's colour for this entity, before a hit's flash. */
     public int colorFor(EntityLivingBase entity) {
         int base = ACCENT;
         if (this.colorMode.getValue() == 2) {
@@ -265,8 +199,6 @@ public class TargetOrbit extends Module {
         return base;
     }
 
-    // ---- who --------------------------------------------------------------
-
     @EventTarget
     public void onAttack(atlas.events.AttackEvent event) {
         if (this.isEnabled() && event.getTarget() instanceof EntityLivingBase && event.getTarget() != mc.thePlayer) {
@@ -275,7 +207,6 @@ public class TargetOrbit extends Module {
         }
     }
 
-    /** The thing last hit, while still in range and the fight still fresh. */
     private EntityLivingBase fighting() {
         EntityLivingBase hit = this.lastHit;
         if (hit == null || hit.worldObj != mc.theWorld
@@ -286,7 +217,6 @@ public class TargetOrbit extends Module {
         return mc.thePlayer.getDistanceSqToEntity(hit) <= range * range ? hit : null;
     }
 
-    /** The nearest other player within 8 blocks, for preview. */
     private static EntityLivingBase nearestPlayer() {
         EntityLivingBase best = null;
         double bestSq = 64.0;
@@ -307,7 +237,6 @@ public class TargetOrbit extends Module {
         return entity.isDead || entity.getHealth() <= 0.0F || entity.deathTime > 0;
     }
 
-    /** On with any aura: switched back on the tick after it is switched off. */
     @EventTarget(whenDisabled = true)
     public void onTick(TickEvent event) {
         if (event.getType() == EventType.PRE && !this.isEnabled() && mc.thePlayer != null
@@ -323,8 +252,6 @@ public class TargetOrbit extends Module {
         this.leaving = null;
         this.bursts.clear();
     }
-
-    // ---- world --------------------------------------------------------------
 
     @EventTarget
     public void onRender(Render3DEvent event) {
@@ -347,7 +274,7 @@ public class TargetOrbit extends Module {
         if (target != null && !TeamUtil.isEntityLoaded(target)) {
             target = null;
         }
-        /* A kill: whatever was marked shatters, and is not picked again. */
+
         if (this.shown != null && dying(this.shown)) {
             shatter(this.shown, this.shownFx, partial);
             if (this.lastHit == this.shown) {
@@ -407,7 +334,6 @@ public class TargetOrbit extends Module {
         }
     }
 
-    /** Advances one mark: its clock, fade-in, age and hit flash (a rising hurtTime is a hit). */
     public void step(Fx fx, EntityLivingBase entity, float dt) {
         fx.clock += dt * this.speed.getValue();
         fx.shownFor += dt;
@@ -431,7 +357,6 @@ public class TargetOrbit extends Module {
         return mix(own, core(), fx.flash * 0.5F);
     }
 
-    /** Breathing, brighter on a hit, scaled by glow-strength. */
     public float glowAmountFor(Fx fx) {
         return fx.alpha * this.glowStrength.getValue()
                 * (0.8F + 0.2F * (float) Math.sin(fx.clock * 2.4)) * (1.0F + fx.flash);
@@ -448,16 +373,11 @@ public class TargetOrbit extends Module {
         GL11.glPopMatrix();
     }
 
-    /**
-     * The camera's turn, so flakes face it: in the world RenderManager's
-     * playerViewY and playerViewX; in a view turned by pitch then yaw, (yaw, -pitch).
-     */
     public void setView(float yaw, float pitch) {
         this.viewYaw = yaw;
         this.viewPitch = pitch;
     }
 
-    /** GL state for the marks: untextured, added light, depth tested but not written. end() undoes it. */
     public static void begin() {
         RenderUtil.enableRenderState();
         GlStateManager.disableLighting();
@@ -472,18 +392,11 @@ public class TargetOrbit extends Module {
         GlStateManager.depthMask(true);
         GlStateManager.shadeModel(GL11.GL_FLAT);
         RenderUtil.disableRenderState();
-        /* glColor was set directly: the cached colour is stale, so reset before setting white. */
+
         GlStateManager.resetColor();
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
-    // ---- the look, at the origin -----------------------------------------------
-
-    /**
-     * Draws the chosen look at the origin (the feet) for a body of this width
-     * and height facing bodyYaw, in this colour and state. Between begin()
-     * and end().
-     */
     public void renderEffect(float width, float height, int baseColor, Fx fx, float bodyYaw) {
         float alpha = fx.alpha * this.opacity.getValue();
         if (alpha <= 0.01F) {
@@ -520,7 +433,6 @@ public class TargetOrbit extends Module {
         }
         float body = (width * 0.5F + SPREAD) * this.size.getValue();
         if (fx.flash > 0.0F && this.hitRings.getValue()) {
-            /* The shockwave: a ring running out along the ground. */
             float wave = 1.0F - fx.flash;
             band(body * (0.6F + wave * 1.9F), 0.035F * fx.flash + 0.01F, color, alpha * fx.flash * 0.85F, 0.02F);
         }
@@ -531,7 +443,7 @@ public class TargetOrbit extends Module {
         float unitBase = 0.1F * this.crystalSize.getValue() * this.size.getValue();
         for (int i = 0; i < placed.size(); i++) {
             float[] p = placed.get(i);
-            /* Fly in from wide, one after another, overshooting a little. */
+
             float appear = Math.max(0.0F, Math.min(1.0F, (fx.shownFor - i * STAGGER_SECONDS) / APPEAR_SECONDS));
             if (appear <= 0.0F) {
                 continue;
@@ -552,12 +464,6 @@ public class TargetOrbit extends Module {
         GL11.glPopMatrix();
     }
 
-    /**
-     * Where each crystal sits in the enemy's frame (front = +z, up = +y):
-     * {x, y, z, yaw, tilt, roll, spin, size share, brightness}. Flakes face
-     * the camera, so only roll plus spin (their turn in the picture) is drawn;
-     * yaw and tilt say which way the piece would lie.
-     */
     List<float[]> formation(int look, float width, float height, float flash) {
         List<float[]> out = new ArrayList<float[]>();
         float size = this.size.getValue();
@@ -623,7 +529,7 @@ public class TargetOrbit extends Module {
                                 0.0F, 0.9F, 0.9F});
                     }
                 }
-                /* The pointer: larger, brighter, at eye height, pointing the way the enemy faces. */
+
                 float bob = (float) Math.sin(t * 2.0) * 0.04F;
                 out.add(new float[]{0.0F, height * 0.84F + bob, body * 1.3F, 0.0F, 90.0F, 0.0F,
                         0.0F, 1.6F, 1.25F});
@@ -632,8 +538,6 @@ public class TargetOrbit extends Module {
         }
         return out;
     }
-
-    // ---- shatter ---------------------------------------------------------------
 
     private void shatter(EntityLivingBase entity, Fx fx, float partial) {
         if (this.style.getValue() > 3 || fx.alpha <= 0.05F) {
@@ -650,7 +554,6 @@ public class TargetOrbit extends Module {
         this.bursts.add(burst);
     }
 
-    /** The preview: shatters the formation at the origin into its own list. */
     public void shatterAt(List<Burst> into, float width, float height, int color, Fx fx, float bodyYaw) {
         if (this.style.getValue() > 3) {
             return;
@@ -667,7 +570,6 @@ public class TargetOrbit extends Module {
         double yaw = Math.toRadians(-bodyYaw);
         Random random = new Random();
         for (float[] p : formation(this.style.getValue(), width, height, 0.0F)) {
-            /* Into the world's orientation, the way GL's rotation about y would put it. */
             double x = p[0] * Math.cos(yaw) + p[2] * Math.sin(yaw);
             double z = -p[0] * Math.sin(yaw) + p[2] * Math.cos(yaw);
             double len = Math.max(0.2, Math.sqrt(x * x + z * z));
@@ -677,7 +579,6 @@ public class TargetOrbit extends Module {
         }
     }
 
-    /** Draws and ages bursts; the camera position is subtracted (zero in the preview). */
     public void drawBursts(List<Burst> list, float dt, double camX, double camY, double camZ) {
         Iterator<Burst> it = list.iterator();
         float unitBase = 0.1F * this.crystalSize.getValue() * this.size.getValue();
@@ -703,12 +604,6 @@ public class TargetOrbit extends Module {
         }
     }
 
-    // ---- body glow ----------------------------------------------------------------
-
-    /**
-     * MixinRendererLivingEntity, renderModel RETURN: the marked entity's model
-     * twice more, a little larger, untextured, in added light.
-     */
     public static void glowModel(EntityLivingBase entity, ModelBase model, float limbSwing, float limbSwingAmount,
                                  float ageInTicks, float netHeadYaw, float headPitch, float scale) {
         if (model == null || entity == null || entity != glowEntity || entity.isInvisible() || glowAmount <= 0.01F) {
@@ -717,9 +612,7 @@ public class TargetOrbit extends Module {
         boolean lighting = GL11.glIsEnabled(GL11.GL_LIGHTING);
         boolean blend = GL11.glIsEnabled(GL11.GL_BLEND);
         boolean cull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
-        /* Back faces of a grown copy show only round the outline: the body in front hides the rest (owner,
-           2026-10-18: drawing the whole shell turned the body white). Outward faces are counter-clockwise;
-           a mirrored transform (as in some GUI drawing) turns that round, so cull by the matrices' handedness. */
+
         GlStateManager.enableCull();
         GlStateManager.cullFace(mirrored() ? GL11.GL_BACK : GL11.GL_FRONT);
         GlStateManager.disableTexture2D();
@@ -735,7 +628,7 @@ public class TargetOrbit extends Module {
         try {
             for (float[] layer : layers) {
                 GlStateManager.pushMatrix();
-                /* Grown about the model's middle (its origin is at the shoulders, 1.5 units over the feet). */
+
                 GlStateManager.translate(0.0F, 0.75F, 0.0F);
                 GlStateManager.scale(layer[0], layer[0], layer[0]);
                 GlStateManager.translate(0.0F, -0.75F, 0.0F);
@@ -764,11 +657,6 @@ public class TargetOrbit extends Module {
 
     private static final java.nio.FloatBuffer MATRIX = org.lwjgl.BufferUtils.createFloatBuffer(16);
 
-    /**
-     * Whether the current modelview and projection together mirror the
-     * picture. A normal projection has a negative 3x3 determinant (z runs
-     * away); a GUI's y-down one a positive one; a normal modelview a positive.
-     */
     private static boolean mirrored() {
         return det3(GL11.GL_MODELVIEW_MATRIX) * det3(GL11.GL_PROJECTION_MATRIX) > 0.0F;
     }
@@ -782,7 +670,6 @@ public class TargetOrbit extends Module {
         return a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
     }
 
-    /** The preview: makes this entity glow while drawing runs, then puts the world's glow back. */
     public static void withGlow(Entity entity, int color, float amount, Runnable drawing) {
         Entity savedEntity = glowEntity;
         int savedColor = glowColor;
@@ -799,13 +686,6 @@ public class TargetOrbit extends Module {
         }
     }
 
-    // ---- flakes --------------------------------------------------------------
-
-    /**
-     * A v2 flake facing the camera, half-width w, turned by spin in the
-     * picture: a round soft glow, a diamond of glow, and a diamond with a
-     * white core running to the colour at its rim.
-     */
     private void flake(float w, int color, float alpha, float spin) {
         if (alpha <= 0.01F || w <= 0.0F) {
             return;
@@ -818,7 +698,6 @@ public class TargetOrbit extends Module {
         diamond(w, core, alpha, color, alpha * 0.85F);
     }
 
-    /** A round glow in the picture plane: the colour at the centre, nothing at radius r. */
     private static void softGlow(float r, int color, float alpha) {
         GL11.glBegin(GL11.GL_TRIANGLE_FAN);
         colour(color, alpha);
@@ -831,7 +710,6 @@ public class TargetOrbit extends Module {
         GL11.glEnd();
     }
 
-    /** A diamond in the picture plane, half-width w and 1.7 w tall: centre colour fading to the rim colour. */
     private static void diamond(float w, int centre, float centreAlpha, int rim, float rimAlpha) {
         float h = w * 1.7F;
         GL11.glBegin(GL11.GL_TRIANGLE_FAN);
@@ -846,13 +724,10 @@ public class TargetOrbit extends Module {
         GL11.glEnd();
     }
 
-    // ---- Sigil, Scan, Lock -------------------------------------------------
-
     private float appearOf(Fx fx) {
         return Math.max(0.0F, Math.min(1.0F, fx.shownFor / APPEAR_SECONDS));
     }
 
-    /** A magic circle on the ground, front (+z) marked by an arrow. */
     private void drawSigil(float width, int color, float alpha, Fx fx, float bodyYaw) {
         float appear = appearOf(fx);
         float r = (width * 0.5F + 0.85F) * this.size.getValue() * easeOutBack(appear) * (1.0F + 0.06F * fx.flash);
@@ -864,12 +739,12 @@ public class TargetOrbit extends Module {
         GL11.glPushMatrix();
         GL11.glTranslated(0.0, 0.03, 0.0);
         GL11.glRotatef(-bodyYaw, 0.0F, 1.0F, 0.0F);
-        /* The picture plane onto the ground: picture +y is the front (+z). */
+
         GL11.glRotatef(90.0F, 1.0F, 0.0F, 0.0F);
         fan2(r * 1.2F, color, a * 0.12F);
         arc2(r, 0.03F, 0.0, Math.PI * 2.0, color, a);
         arc2(r * 0.8F, 0.02F, 0.0, Math.PI * 2.0, color, a * 0.8F);
-        /* Runes: dashes of set lengths between the rings, turning slowly. */
+
         for (int i = 0; i < 24; i++) {
             double angle = sp * 0.3 + i * Math.PI * 2.0 / 24;
             float c = (float) Math.cos(angle);
@@ -879,7 +754,7 @@ public class TargetOrbit extends Module {
             float flicker = 0.6F + 0.4F * (float) Math.sin(this.now * 4.0 + SEED[i][5]) * fx.flash;
             line2(c * inner, sn * inner, c * outer, sn * outer, 0.012F, color, a * 0.85F * (0.6F + 0.4F * flicker));
         }
-        /* The hexagram: two triangles turning against each other. */
+
         for (int tri = 0; tri < 2; tri++) {
             double rot = (tri == 0 ? 1.0 : -1.0) * sp * 0.2 + Math.PI / 2.0 + tri * Math.PI;
             float rr = r * 0.74F;
@@ -890,12 +765,12 @@ public class TargetOrbit extends Module {
                         (float) Math.sin(a2) * rr, 0.016F, color, a * 0.75F);
             }
         }
-        /* A dashed ring in the middle. */
+
         for (int i = 0; i < 12; i++) {
             double a0 = -sp * 0.5 + i * Math.PI * 2.0 / 12;
             arc2(r * 0.3F, 0.014F, a0, a0 + Math.PI / 12.0, color, a * 0.7F);
         }
-        /* The arrow at the front. */
+
         float tip = r * 1.22F;
         float base = r * 1.06F;
         GL11.glBegin(GL11.GL_TRIANGLES);
@@ -913,7 +788,6 @@ public class TargetOrbit extends Module {
         GL11.glPopMatrix();
     }
 
-    /** A hologram column round the body with a ring sweeping up and down. */
     private void drawScan(float width, float height, int color, float alpha, Fx fx) {
         float appear = appearOf(fx);
         float r = (width * 0.5F + 0.4F) * this.size.getValue() * (1.0F + 0.08F * fx.flash);
@@ -923,12 +797,12 @@ public class TargetOrbit extends Module {
         }
         float a = alpha * Math.min(1.0F, appear * 2.0F);
         wall(r, 0.0F, top, color, a * (0.22F + 0.2F * fx.flash), 0.0F);
-        /* Ribs: thin upright strips, turning slowly. */
+
         for (int i = 0; i < 10; i++) {
             double angle = this.spinNow * 0.3 + i * Math.PI * 2.0 / 10;
             rib(r * 1.005F, angle, 0.012F, top * 0.92F, color, a * 0.45F);
         }
-        /* The sweeping ring, its trail fading behind it. */
+
         double phase = this.now * 1.8;
         float y = top * (0.5F + 0.46F * (float) Math.sin(phase));
         float trail = 0.22F * (Math.cos(phase) >= 0.0 ? -1.0F : 1.0F);
@@ -941,7 +815,6 @@ public class TargetOrbit extends Module {
         }
     }
 
-    /** Lock-on brackets and a health arc facing the camera, over the body. */
     private void drawLock(float width, float height, int color, int baseColor, float alpha, Fx fx) {
         float appear = appearOf(fx);
         float e = easeOutBack(appear);
@@ -971,7 +844,7 @@ public class TargetOrbit extends Module {
                 double a0 = this.spinNow * 1.2 + i * Math.PI * 2.0 / 12;
                 arc2(ring, 0.012F, a0, a0 + Math.PI / 10.0, color, a * 0.6F);
             }
-            /* Health: a full faint arc, and the part left in colour from the top. */
+
             float hr = ring * 1.12F;
             arc2(hr, 0.018F, 0.0, Math.PI * 2.0, color, a * 0.15F);
             if (fx.health > 0.0F) {
@@ -983,8 +856,6 @@ public class TargetOrbit extends Module {
             GlStateManager.enableDepth();
         }
     }
-
-    /* Soft shapes in the picture plane (x, y): a bright middle fading to nothing at the edges. */
 
     private static final float[] ACROSS = {3.0F, 1.0F, 0.0F, -1.0F, -3.0F};
     private static final float[] ACROSS_ALPHA = {0.0F, 0.8F, 1.0F, 0.8F, 0.0F};
@@ -1048,7 +919,6 @@ public class TargetOrbit extends Module {
         GL11.glEnd();
     }
 
-    /** An upright cylinder of radius r from y0 to y1, alpha a0 at y0 running to a1 at y1. */
     private static void wall(float r, float y0, float y1, int color, float a0, float a1) {
         GL11.glBegin(GL11.GL_TRIANGLE_STRIP);
         for (int i = 0; i <= SEGMENTS; i++) {
@@ -1063,7 +933,6 @@ public class TargetOrbit extends Module {
         GL11.glEnd();
     }
 
-    /** A thin upright strip on the cylinder at this angle, fading upward. */
     private static void rib(float r, double angle, float half, float height, int color, float alpha) {
         double d = half / r;
         float c1 = (float) Math.cos(angle - d);
@@ -1079,8 +948,6 @@ public class TargetOrbit extends Module {
         GL11.glVertex3f(c2 * r, height, s2 * r);
         GL11.glEnd();
     }
-
-    // ---- Orbit, Halo, Mark (v1) ---------------------------------------------
 
     private void drawOrbit(float width, float height, int color, float alpha, float scale) {
         float radius = (width * 0.5F + 0.55F) * scale;
@@ -1098,7 +965,6 @@ public class TargetOrbit extends Module {
         GL11.glPopMatrix();
     }
 
-    /** A comet on the ring at angle head, its tail running back along it. */
     private static void comet(float radius, double head, int length, int color, float alpha) {
         GL11.glBegin(GL11.GL_TRIANGLE_STRIP);
         for (int k = 0; k <= length; k++) {
@@ -1135,11 +1001,8 @@ public class TargetOrbit extends Module {
         GL11.glPopMatrix();
     }
 
-    // ---- shapes ----------------------------------------------------------------
-
     private static final int SEGMENTS = 64;
 
-    /** A flat ring of this half-width at height y. */
     private static void band(float radius, float half, int color, float alpha, float y) {
         GL11.glBegin(GL11.GL_TRIANGLE_STRIP);
         colour(color, alpha);
@@ -1153,7 +1016,6 @@ public class TargetOrbit extends Module {
         GL11.glEnd();
     }
 
-    /** A soft ring: brightest on the radius, fading to nothing over half on each side. */
     private static void glow(float radius, float half, int color, float alpha) {
         for (int side = -1; side <= 1; side += 2) {
             GL11.glBegin(GL11.GL_TRIANGLE_STRIP);
@@ -1170,7 +1032,6 @@ public class TargetOrbit extends Module {
         }
     }
 
-    /** A small filled disc in the horizontal plane. */
     private static void disc(double x, double y, double z, float radius, int color, float alpha) {
         GL11.glBegin(GL11.GL_TRIANGLE_FAN);
         colour(color, alpha);
@@ -1188,8 +1049,6 @@ public class TargetOrbit extends Module {
                 Math.max(0.0F, Math.min(1.0F, alpha)));
     }
 
-    /* 2026-10-31 (audit): a world unload leaves its entities alive (isDead stays false), and one kept here held the
-       whole old world in memory -- for good while this module was off. Dropped when a world loads. */
     @atlas.event.EventTarget(whenDisabled = true)
     public void onWorldDropEntities(atlas.events.LoadWorldEvent event) {
         this.shown = null;

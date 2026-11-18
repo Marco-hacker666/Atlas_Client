@@ -5,9 +5,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-/** Colours typed into the Theme window, and names for saved themes (2026-11-09). */
 public class ThemeColoursTest {
-
     @Test
     public void hexIsSixCapitalDigitsWithoutAlpha() {
         assertEquals("CCFF00", ThemeColours.hex(0xCCFF00));

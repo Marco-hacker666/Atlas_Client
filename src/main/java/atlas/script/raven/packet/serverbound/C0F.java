@@ -3,7 +3,6 @@ package atlas.script.raven.packet.serverbound;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C0FPacketConfirmTransaction;
 
-/** The answer to a window transaction (anticheats also use it as a ping). */
 public class C0F extends CPacket {
     public int windowId;
     public short uid;

@@ -7,7 +7,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class TargetLeadTest {
-
     @Test
     public void nothingKnownIsNoAnswer() {
         assertNull(new TargetLead().predict(5.0, Double.NaN));
@@ -16,7 +15,7 @@ public class TargetLeadTest {
     @Test
     public void aRunnerIsLedTheWholeWay() {
         TargetLead lead = new TargetLead();
-        /* Sprinting along x, the server sending a position every other tick. */
+
         for (int tick = 0; tick < 20; tick++) {
             double x = 0.28 * (tick - tick % 2);
             lead.add(x, 64.0, 0.0, true);
@@ -30,7 +29,7 @@ public class TargetLeadTest {
     @Test
     public void aStraferIsLedToTheMiddleOfItsSwing() {
         TargetLead lead = new TargetLead();
-        /* A-D every 4 ticks at 0.2 a tick: it swings between 0 and 0.8. */
+
         double x = 0.0;
         double v = 0.2;
         for (int tick = 0; tick < 20; tick++) {
@@ -41,7 +40,7 @@ public class TargetLeadTest {
             }
         }
         double[] at = lead.predict(15.0, Double.NaN);
-        /* A straight line from its last speed would put it 3 blocks off; the middle of the swing is 0.4. */
+
         assertTrue("led to " + at[0], Math.abs(at[0] - 0.4) < 1.0);
     }
 
@@ -51,7 +50,7 @@ public class TargetLeadTest {
         for (int tick = 0; tick < 10; tick++) {
             lead.add(0.0, 64.0, 0.0, true);
         }
-        /* The jump: 0.42 up, then the game's fall. */
+
         double y = 64.0;
         double vy = 0.42;
         for (int tick = 0; tick < 2; tick++) {
@@ -65,7 +64,6 @@ public class TargetLeadTest {
         assertEquals(64.0, later[1], 1.0E-9);
     }
 
-    /** Positions every other tick, as the server sends a player's: (x every two ticks) for a run of {@code ticks}. */
     private static double feed(TargetLead lead, double x, int ticks, double v) {
         for (int i = 0; i < ticks; i++) {
             if (i % 2 == 1) {
@@ -95,10 +93,10 @@ public class TargetLeadTest {
             x = feed(lead, x, 6, 0.0);
         }
         assertTrue(lead.typicalBurst() > 0 && lead.typicalBurst() <= 6);
-        /* A new step has begun. */
+
         x = feed(lead, x, 2, 0.2);
         double[] at = lead.predict(15.0, Double.NaN);
-        /* Leading the whole flight would put it 3 blocks on; its steps end within about a block. */
+
         assertTrue("led to " + (at[0] - x), at[0] - x < 1.2);
     }
 

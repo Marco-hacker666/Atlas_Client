@@ -5,10 +5,6 @@ import net.minecraft.entity.player.PlayerCapabilities;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C13PacketPlayerAbilities;
 
-/**
- * The player's abilities. The game's packet has no getters for the two speeds, so a packet that came from the
- * game reports the player's own.
- */
 public class C13 extends CPacket {
     public boolean invulnerable;
     public boolean flying;

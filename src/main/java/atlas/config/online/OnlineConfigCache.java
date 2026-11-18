@@ -23,12 +23,8 @@ import java.util.List;
 import java.util.Locale;
 
 // Ported from OpenSkid (GPL-3.0), itself adapted from the MiauMinus
-// online-config concept.
-// Local disk cache for fetched JSON configs. Nothing here touches the network
-// and nothing applies on its own. Callers fetch, then apply explicitly.
+
 public final class OnlineConfigCache {
-    /* Next to this client's own configs (config/Atlas/), so a shared file sits
-       with the profiles it applies over. */
     private static final File DIR = new File("./config/Atlas/online");
 
     private OnlineConfigCache() {
@@ -65,7 +61,7 @@ public final class OnlineConfigCache {
         if (base.isEmpty() || base.equals("json")) {
             return "shared";
         }
-        /* 2026-10-31 (audit): "con", "nul", "com1"... name a device on Windows, extension or not. */
+
         if (base.matches("(?i)(con|prn|aux|nul|com[0-9]|lpt[0-9])(\\..*)?")) {
             base = "_" + base;
         }
@@ -160,12 +156,9 @@ public final class OnlineConfigCache {
         return null;
     }
 
-    /** Writes the settings in use now, in the same shape the applier reads back. */
     public static File snapshotCurrent(String name) throws IOException {
         JsonObject object = new JsonObject();
-        /* the client keeps its modules in a typed map and its settings per class
-           (Config.save does the same walk), so this follows that, not
-           OpenSkid's allModules()/per-instance property map. */
+
         for (Module module : Atlas.moduleManager.modules.values()) {
             JsonObject moduleObject = new JsonObject();
             moduleObject.addProperty("toggled", module.isEnabled());
@@ -174,8 +167,6 @@ public final class OnlineConfigCache {
             ArrayList<Property<?>> list = Atlas.propertyManager.properties.get(module.getClass());
             if (list != null) {
                 for (Property<?> property : list) {
-                    /* 2026-10-30 (audit): no text settings in a shareable snapshot (AutoAuth's password, chat
-                       lines); OnlineConfigApplier does not apply them either. */
                     if (property instanceof atlas.property.properties.TextProperty) {
                         continue;
                     }

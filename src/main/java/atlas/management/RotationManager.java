@@ -58,7 +58,6 @@ public class RotationManager {
 
             this.yawDelta = MathHelper.wrapAngleTo180_float(patched[0] - mc.thePlayer.rotationYaw);
             this.pitchDelta = MathHelper.clamp_float(patched[1] - mc.thePlayer.rotationPitch, -90.0F, 90.0F);
-            // -------------------------
 
             this.lastUpdate = 0.0F;
             this.rotated = force;

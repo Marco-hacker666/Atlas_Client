@@ -10,9 +10,7 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** The ready-made shapes, which one a style has, and the game's own colours and glow (2026-11-14). */
 public class ListPresetsTest {
-
     @Test
     public void aNewStyleIsTheSidebar() {
         assertEquals("SIDEBAR", ListPresets.match(new ListStyle()));
@@ -23,7 +21,7 @@ public class ListPresetsTest {
         Set<String> seen = new HashSet<String>();
         for (int i = 1; i < ListPresets.NAMES.length; i++) {
             ListStyle style = new ListStyle();
-            /* Whatever the colours, order and animation, the shape decides. */
+
             style.paint = ListStyle.Paint.RAINBOW;
             style.sort = ListStyle.Sort.ALPHABET;
             style.anim = ListStyle.Anim.NONE;
@@ -45,7 +43,7 @@ public class ListPresetsTest {
         assertEquals("PILL", ListPresets.match(style));
         style.backgroundTint = 30;
         assertEquals("CUSTOM", ListPresets.match(style));
-        /* A preset leaves alone what is not its shape. */
+
         style.glow = true;
         style.paint = ListStyle.Paint.PALETTE;
         ListPresets.apply("GLASS", style);
@@ -75,7 +73,7 @@ public class ListPresetsTest {
             ListFrame frame = ListLayout.frame(style, rows, 8.0F, 0L, source);
             assertEquals(0xFF445566, frame.ops.get(frame.ops.size() - 1).argb);
         }
-        /* The glow's shapes: a row each, in its colour, never drawn with the rest. */
+
         ListFrame frame = ListLayout.frame(style, rows, 8.0F, 0L, source);
         assertEquals(2, frame.bodies.size());
         assertEquals(0xFF112233, frame.bodies.get(0).argb);
@@ -94,7 +92,7 @@ public class ListPresetsTest {
         }, 0.5F);
         assertEquals(2, drawn.size());
         assertEquals(0x80112233, (int) drawn.get(0));
-        /* A row on its way out glows less. */
+
         rows.get(1).appear = 0.5F;
         style.anim = ListStyle.Anim.FADE;
         assertEquals(0x80, ListLayout.frame(style, rows, 8.0F, 0L, source).bodies.get(1).argb >>> 24);

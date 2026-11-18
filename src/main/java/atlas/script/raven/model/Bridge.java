@@ -3,9 +3,7 @@ package atlas.script.raven.model;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Raven script API: values scripts share with each other (bridge.add / bridge.get), 2026-11-02. */
 public class Bridge {
-    /** A key added without a value (a flag). */
     private static final Object PRESENT = new Object();
     private final Map<String, Object> values = new ConcurrentHashMap<String, Object>();
 

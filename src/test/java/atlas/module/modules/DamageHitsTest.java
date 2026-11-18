@@ -4,9 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
-/** AttackOnDamage's count and clock, shared by both aura engines (2026-11-05). */
 public class DamageHitsTest {
-
     @Test
     public void knockbackGivesTheClicksUntilTheyAreSpent() {
         DamageHits hits = new DamageHits();

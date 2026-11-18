@@ -2,11 +2,8 @@ package atlas.module.modules;
 
 import net.minecraft.entity.player.EntityPlayer;
 
-// Ported from OpenSkid (GPL-3.0): pure fall-camera math used by ViewClip's FALL
-// mode. Deliberately NOT a registered module: it holds no state and needs no
-// toggle of its own, so it must stay out of the module registry, the category
-// table and the docs. Nothing in the client calls it yet; the client's own ViewClip has its
-// own fall handling.
+// Ported from OpenSkid (GPL-3.0)
+
 public final class FallView {
     private FallView() {
     }

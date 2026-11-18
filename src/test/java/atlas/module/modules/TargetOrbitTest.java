@@ -5,9 +5,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** TargetOrbit's colours, and easing (2026-10-18). */
 public class TargetOrbitTest {
-
     @Test
     public void mixRunsChannelByChannel() {
         assertEquals(0xFF000000, TargetOrbit.mix(0xFF000000, 0xFFFFFFFF, 0.0F));

@@ -104,7 +104,6 @@ public class AutoAnduril extends Module {
 
     @Override
     public void onDisabled() {
-        /* Same as AutoTool: restore before forgetting. */
         if (this.previousSlot != -1 && mc.thePlayer != null) {
             mc.thePlayer.inventory.currentItem = this.previousSlot;
         }

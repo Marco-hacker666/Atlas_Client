@@ -1,8 +1,3 @@
-//
-// Source code recreated from a .class file by IntelliJ IDEA
-// (powered by FernFlower decompiler)
-//
-
 package atlas.module.modules;
 
 import java.util.ArrayDeque;
@@ -66,7 +61,7 @@ public class Disabler extends Module {
     public final BooleanProperty onlyCombat = new BooleanProperty("only-combat", true);
     public final BooleanProperty intaveFly = new BooleanProperty("intave-fly", false);
     private boolean shouldDelay = false;
-    // use diamond operator to avoid raw type warnings
+
     private final LinkedBlockingQueue<Packet<INetHandlerPlayClient>> packets = new LinkedBlockingQueue<>();
     public final BooleanProperty noRotationDisabler = new BooleanProperty("no-rotation-disabler", false);
     public final ModeProperty modifyMode = new ModeProperty("modify-mode", 0, new String[]{"ConvertNull", "Spoof", "Zero", "SpoofZero", "Negative", "OffsetYaw"});
@@ -125,7 +120,7 @@ public class Disabler extends Module {
     public final IntProperty verusExpVoidTPDelay = new IntProperty("exp-void-tp-delay", 1000, 0, 30000);
     private long lastVoidTP = 0L;
     private int cancelNext = 0;
-    // Preset selector. Index 0 Custom preserves every legacy toggle exactly. Others UNTESTED, need live servers.
+
     private static final int PRESET_CUSTOM = 0;
     private static final int PRESET_POLAR = 1;
     private static final int PRESET_INTAVE = 2;
@@ -137,8 +132,7 @@ public class Disabler extends Module {
     private static final int PRESET_KKCRAFT = 8;
     private static final int PRESET_BLOCKSMC = 9;
     public final ModeProperty preset = new ModeProperty("preset", 0, new String[]{"Custom", "Polar", "Intave", "GrimExtreme", "GrimSpec", "Mineland", "Hypixel", "HypixelMotion", "KKCraft", "BlocksMC"})
-            /* 2026-11-09 (owner: "too many modes -- keep what is really needed"; tests on Grim, Intave and Polar,
-               Hypixel ones no longer work): hidden from the menus, code kept; a config naming one still loads it. */
+
             .hide("Mineland", "Hypixel", "HypixelMotion", "KKCraft", "BlocksMC");
     public final BooleanProperty presetPolarAirline = new BooleanProperty("preset-polar-airline", false, () -> preset.getValue() == PRESET_POLAR);
     public final BooleanProperty presetIntaveCloud = new BooleanProperty("preset-intave-cloud", false, () -> preset.getValue() == PRESET_INTAVE);
@@ -166,7 +160,7 @@ public class Disabler extends Module {
 
     public Disabler() {
         super("Disabler", false, false, "Bypasses anticheat checks by altering outbound packets.");
-        /* Replies held on purpose: never one another module has taken (PacketHub, 2026-10-18). */
+
         atlas.management.PacketHub.registerSide("Disabler",
                 () -> this.c00s.size() + this.c0fs.size() + this.presetCloud.size()
                         + this.packets.size() + this.presetDelayed.size());
@@ -174,7 +168,6 @@ public class Disabler extends Module {
 
     @EventTarget
     public void onPacket(PacketEvent event) {
-        // use deobfuscated player reference
         if (this.isEnabled() && mc.thePlayer != null) {
             Packet<?> packet = event.getPacket();
             if (this.matrixDisabler.getValue()) {
@@ -211,7 +204,7 @@ public class Disabler extends Module {
                     this.debugMessage("Cancelled C13-Abilities");
                 } else if (packet instanceof C03PacketPlayer && this.cancelC03.getValue()) {
                     C03PacketPlayer c03 = (C03PacketPlayer)packet;
-                    // if packet is not a pure rotation/position packet, cancel
+
                     if (!(c03 instanceof C03PacketPlayer.C04PacketPlayerPosition) && !(c03 instanceof C03PacketPlayer.C05PacketPlayerLook) && !(c03 instanceof C03PacketPlayer.C06PacketPlayerPosLook)) {
                         if (this.c03NoMove.getValue() && this.isMoving()) {
                             return;
@@ -228,7 +221,7 @@ public class Disabler extends Module {
                 int mode = this.modifyMode.getValue();
                 switch (mode) {
                     case 0:
-                        // ConvertNull: resend a simple packet using current player position/ground
+
                         if (c03 instanceof C03PacketPlayer.C04PacketPlayerPosition || c03 instanceof C03PacketPlayer.C06PacketPlayerPosLook) {
                             PacketUtil.sendPacket(new C03PacketPlayer.C04PacketPlayerPosition(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ, c03.isOnGround()));
                         } else {
@@ -237,12 +230,12 @@ public class Disabler extends Module {
                         event.setCancelled(true);
                         break;
                     case 3:
-                        // SpoofZero / PosLook spoof -> send a packet with zero rotation
+
                         PacketUtil.sendPacket(new C03PacketPlayer.C06PacketPlayerPosLook(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ, 0.0F, 0.0F, c03.isOnGround()));
                         event.setCancelled(true);
                         break;
                     default:
-                        // Other modify modes relied on mixin accessors for yaw/pitch which are not available here; skip modification
+
                         break;
                 }
             }
@@ -278,7 +271,7 @@ public class Disabler extends Module {
 
             if (this.grimPlace.getValue() && packet instanceof C08PacketPlayerBlockPlacement) {
                 C08PacketPlayerBlockPlacement place = (C08PacketPlayerBlockPlacement)packet;
-                // safest approach: cancel original and resend a simple placement using the held item
+
                 event.setCancelled(true);
                 PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(mc.thePlayer.getHeldItem()));
                 this.debugMessage("§cModified §aPlace §cPacket§7.");
@@ -324,7 +317,7 @@ public class Disabler extends Module {
                         if (mc.thePlayer.ticksExisted % this.betaVerusFlagDelay.getValue() == 0 && mc.thePlayer.ticksExisted > this.betaVerusFlagDelay.getValue() + 1 && !this.betaVerusModified) {
                             this.debugMessage("Packet C03 -> BetaVerus Y offset");
                             this.betaVerusModified = true;
-                            // can't modify packet internals safely here, so just set a flag and cancel on server position look
+
                             event.setCancelled(true);
                         }
                     } else if (packet instanceof S08PacketPlayerPosLook) {
@@ -381,7 +374,6 @@ public class Disabler extends Module {
                     this.debugMessage("VerusExp cancelled server position look");
                 }
             }
-
         }
     }
 
@@ -483,7 +475,6 @@ public class Disabler extends Module {
                     this.savedAbusePacket = -2;
                 }
             }
-
         }
     }
 
@@ -508,7 +499,6 @@ public class Disabler extends Module {
                 this.betaVerusPacketBuffer.clear();
                 this.betaVerusLagTimer.reset();
             }
-
         }
     }
 
@@ -519,7 +509,7 @@ public class Disabler extends Module {
     private void handleMatrixPacket(PacketEvent event, Packet<?> packet) {
         if (packet instanceof C0FPacketConfirmTransaction && this.matrixT.getValue() == 1) {
             C0FPacketConfirmTransaction c0f = (C0FPacketConfirmTransaction)packet;
-            // avoid calling obfuscated getter, store 0 as fallback
+
             this.lastPongId = 0;
             if (atlas.management.PacketHub.take(event, "Disabler")) {
                 long firstTime = !this.c0fs.isEmpty() ? this.c0fs.getLast().getRequiredMs() : 100L;
@@ -550,7 +540,6 @@ public class Disabler extends Module {
         if (packet instanceof C0BPacketEntityAction && this.matrixAllDir.getValue()) {
             C0BPacketEntityAction c0b = (C0BPacketEntityAction)packet;
             try {
-                // attempt to avoid calling obfuscated method; cancel common sprint actions by class name check
                 event.setCancelled(true);
             } catch (Exception ignored) {
             }
@@ -559,7 +548,6 @@ public class Disabler extends Module {
         if (packet instanceof C03PacketPlayer && this.matrixT.getValue() == 1) {
             C03PacketPlayer c03 = (C03PacketPlayer)packet;
             try {
-                // cannot reliably inspect obfuscated movement flags; decrement savedAbusePacket conservatively
                 --this.savedAbusePacket;
             } catch (Exception ignored) {
             }
@@ -607,7 +595,6 @@ public class Disabler extends Module {
             this.flagSkip = 0;
             this.lastSAPtimer.reset();
         }
-
     }
 
     private void handleCustomPacket(PacketEvent event, Packet<?> packet) {
@@ -650,8 +637,8 @@ public class Disabler extends Module {
         boolean send = event.getType() == EventType.SEND;
         boolean receive = event.getType() == EventType.RECEIVE;
         if (p == PRESET_POLAR) {
-            // Adapted from Raven S+ PolarDisabler. UNTESTED, needs live server.
-            /* 2026-10-27: PingFix keeps keep-alives untouched both ways, these included. */
+            // Adapted from Raven S+ PolarDisabler.
+
             if (send && packet instanceof C00PacketKeepAlive && !PingFix.exempt(packet)) {
                 event.setCancelled(true);
                 this.debugMessage("Polar cancelled C00");
@@ -661,7 +648,7 @@ public class Disabler extends Module {
                 this.debugMessage("Polar spoofed keepalive");
             }
         } else if (p == PRESET_INTAVE) {
-            // Adapted from Raven S+ IntaveDisabler. UNTESTED, needs live server.
+            // Adapted from Raven S+ IntaveDisabler.
             if (send && packet instanceof C19PacketResourcePackStatus && this.presetIntaveResource.getValue()) {
                 event.setCancelled(true);
                 this.debugMessage("Intave cancelled resource pack status");
@@ -674,7 +661,7 @@ public class Disabler extends Module {
                 }
             }
         } else if (p == PRESET_GRIM_EXTREME) {
-            // Adapted from Raven S+ GrimExtremeDisabler, cancel plus resend since packets are read-only here. UNTESTED, needs live server.
+            // Adapted from Raven S+ GrimExtremeDisabler, cancel plus resend since packets are read-only here.
             if (send && (packet instanceof C03PacketPlayer.C04PacketPlayerPosition || packet instanceof C03PacketPlayer.C06PacketPlayerPosLook)) {
                 event.setCancelled(true);
                 double x = mc.thePlayer.posX + this.presetGrimX.getValue();
@@ -688,7 +675,7 @@ public class Disabler extends Module {
                 this.debugMessage("GrimExtreme offset position");
             }
         } else if (p == PRESET_GRIM_SPEC) {
-            // Adapted from Raven S+ GrimSpecDisabler. UNTESTED, needs live server.
+            // Adapted from Raven S+ GrimSpecDisabler.
             if (receive && packet instanceof S08PacketPlayerPosLook) {
                 if (mc.thePlayer.capabilities.isFlying && !this.presetGrimDelayed) {
                     this.presetGrimDelayed = true;
@@ -706,7 +693,7 @@ public class Disabler extends Module {
                 }
             }
         } else if (p == PRESET_MINELAND) {
-            // Adapted from Raven S+ MinelandDisabler. UNTESTED, needs live server.
+            // Adapted from Raven S+ MinelandDisabler.
             if (send && packet instanceof C0FPacketConfirmTransaction) {
                 event.setCancelled(true);
                 this.debugMessage("Mineland cancelled C0F");
@@ -715,7 +702,7 @@ public class Disabler extends Module {
                 this.debugMessage("Mineland cancelled bare C03");
             }
         } else if (p == PRESET_HYPIXEL) {
-            // Adapted from Raven S+ HypixelDisabler. UNTESTED, needs live server.
+            // Adapted from Raven S+ HypixelDisabler.
             if (receive && packet instanceof S08PacketPlayerPosLook) {
                 if (mc.thePlayer.isBlocking()) {
                     PacketUtil.sendPacket(new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.UP));
@@ -724,7 +711,7 @@ public class Disabler extends Module {
                 }
             }
         } else if (p == PRESET_HYPIXEL_MOTION) {
-            // Adapted from Raven S+ HypixelMotionDisabler. UNTESTED, needs live server.
+            // Adapted from Raven S+ HypixelMotionDisabler.
             if (this.presetHypixelMotionLobby.getValue() && this.isLobby()) {
                 return;
             }
@@ -737,9 +724,8 @@ public class Disabler extends Module {
                 }
             }
         } else if (p == PRESET_KKCRAFT) {
-            // KKCraft slot and chest dance has no the client equivalent, tick burst only. UNTESTED, needs live server.
         } else if (p == PRESET_BLOCKSMC) {
-            // Adapted from Raven S+ BlocksMCDisabler, resend replaces uid accessor writes. UNTESTED, needs live server.
+            // Adapted from Raven S+ BlocksMCDisabler, resend replaces uid accessor writes.
             if (send && packet instanceof C08PacketPlayerBlockPlacement && this.presetBlocksPlace.getValue()) {
                 event.setCancelled(true);
                 PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(mc.thePlayer.getHeldItem()));
@@ -765,7 +751,6 @@ public class Disabler extends Module {
             return;
         }
         if (p == PRESET_INTAVE && mc.thePlayer != null && mc.thePlayer.ticksExisted > 20) {
-            // Reach/Strong bursts. UNTESTED, needs live server.
             if (this.presetIntaveReach.getValue() && mc.thePlayer.ticksExisted % 20 == 0) {
                 PacketUtil.sendPacket(new C03PacketPlayer.C04PacketPlayerPosition(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ, mc.thePlayer.onGround));
             }
@@ -776,13 +761,13 @@ public class Disabler extends Module {
             }
         }
         if (p == PRESET_POLAR && this.presetPolarAirline.getValue()) {
-            // Adapted from Raven S+ PolarDisabler airline offset. UNTESTED, needs live server.
+            // Adapted from Raven S+ PolarDisabler airline offset.
             PacketUtil.sendPacket(new C03PacketPlayer.C04PacketPlayerPosition(mc.thePlayer.posX + 1024.0D, mc.thePlayer.posY + 1024.0D, mc.thePlayer.posZ + 1024.0D, mc.thePlayer.onGround));
         } else if (p == PRESET_HYPIXEL && this.presetHypixelSprint.getValue()) {
-            // Adapted from Raven S+ HypixelDisabler sprint cancel. UNTESTED, needs live server.
+            // Adapted from Raven S+ HypixelDisabler sprint cancel.
             mc.thePlayer.setSprinting(false);
         } else if (p == PRESET_HYPIXEL_MOTION && !this.presetMotionDone) {
-            // Adapted from Raven S+ HypixelMotionDisabler. UNTESTED, needs live server.
+            // Adapted from Raven S+ HypixelMotionDisabler.
             if (this.presetHypixelMotionLobby.getValue() && this.isLobby()) {
                 return;
             }
@@ -804,7 +789,7 @@ public class Disabler extends Module {
                 }
             }
         } else if (p == PRESET_KKCRAFT && this.presetKkAutoban.getValue()) {
-            // Adapted from Raven S+ KKCraftDisabler auto ban burst. UNTESTED, needs live server.
+            // Adapted from Raven S+ KKCraftDisabler auto ban burst.
             for (int i = 0; i < 6; ++i) {
                 PacketUtil.sendPacket(new C03PacketPlayer.C06PacketPlayerPosLook(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ, mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch, mc.thePlayer.onGround));
             }
@@ -825,7 +810,6 @@ public class Disabler extends Module {
         if (this.chatDebug.getValue()) {
             mc.thePlayer.addChatMessage(new ChatComponentText("§7[§bDisabler§7] §f" + msg));
         }
-
     }
 
     public void onEnabled() {

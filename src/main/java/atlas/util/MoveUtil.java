@@ -155,23 +155,9 @@ public class MoveUtil {
         return new double[]{0.0, 0.0};
     }
 
-    /* fixStrafe's once-a-tick guard: the tick and the yaw it last turned the input to. */
     private static int fixedTick = Integer.MIN_VALUE;
     private static float fixedYaw;
 
-    /**
-     * Turns this tick's movement input from the camera's yaw to the yaw the
-     * server is told, as the nearest of the eight key directions at the same
-     * strength.
-     *
-     * 2026-10-17 (a player: "your movement fix is broken, you're not moving
-     * properly"): this used to REBUILD the input from the raw W/A/S/D keys and
-     * overwrite movementInput, so whatever another module had done to it this
-     * tick was lost -- SprintReset's released forward, a soft forward, a
-     * module's own steering -- and the strength was reset to 1. Now it takes
-     * the input as it stands. It runs once a tick: called again (MoveFix and a
-     * rotating module both call it) it would turn an input already turned.
-     */
     public static void fixStrafe(float targetYaw) {
         MovementInput input = MoveUtil.mc.thePlayer.movementInput;
         int tick = MoveUtil.mc.thePlayer.ticksExisted;
@@ -185,10 +171,6 @@ public class MoveUtil {
         input.moveStrafe = out[1];
     }
 
-    /**
-     * What {@link #fixStrafe} makes of these keys, without touching the
-     * input: for a forecast made before it runs (atlas.sim.SimPlayer).
-     */
     public static float[] fixedStrafe(float targetYaw, float forward, float strafe) {
         TargetStrafe targetStrafe = (TargetStrafe) Atlas.moduleManager.modules.get(TargetStrafe.class);
         if (targetStrafe != null && targetStrafe.isEnabled() && !Float.isNaN(targetStrafe.getTargetYaw())
@@ -199,30 +181,21 @@ public class MoveUtil {
         return turnInput(MoveUtil.mc.thePlayer.rotationYaw, targetYaw, forward, strafe);
     }
 
-    /** Whether this tick's keys were already turned for this yaw (a second fixStrafe does nothing). */
     public static boolean strafeFixedThisTick(float targetYaw) {
         return MoveUtil.mc.thePlayer != null && MoveUtil.mc.thePlayer.ticksExisted == fixedTick
                 && MathHelper.wrapAngleTo180_float(targetYaw - fixedYaw) == 0.0F;
     }
 
-    /**
-     * {forward, strafe} that move toward the same world direction as
-     * {@code forward}/{@code strafe} do at {@code cameraYaw}, but at
-     * {@code moveYaw}: the nearest of the eight key directions, at the
-     * input's strength (the larger of the two magnitudes, so a sneak's 0.3 or
-     * a soft forward stays). No input, no movement.
-     */
     public static float[] turnInput(float cameraYaw, float moveYaw, float forward, float strafe) {
         if (forward == 0.0F && strafe == 0.0F) {
             return new float[]{0.0F, 0.0F};
         }
         float strength = Math.max(Math.abs(forward), Math.abs(strafe));
-        /* World direction of the input (moveFlying: strafe to the left turns it by -90). */
+
         float world = cameraYaw - (float) Math.toDegrees(Math.atan2(strafe, forward));
         return keysToward(world, moveYaw, strength);
     }
 
-    /** Keys, at {@code strength}, that move toward {@code worldYaw} when moving by {@code moveYaw}. */
     static float[] keysToward(float worldYaw, float moveYaw, float strength) {
         float relative = MathHelper.wrapAngleTo180_float(worldYaw - moveYaw);
         int sector = Math.round(relative / 45.0F);
@@ -257,7 +230,6 @@ public class MoveUtil {
                         Math.abs(number1 - 360) - Math.abs(number2 - 0),
                         Math.abs(number2 - 360) - Math.abs(number1 - 0)));
     }
-
 
     public static void fixMovement(final float yaw) {
         final float forward = mc.thePlayer.movementInput.moveForward;

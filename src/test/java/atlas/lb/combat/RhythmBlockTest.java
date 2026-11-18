@@ -6,9 +6,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** Rhythm block (2026-10-27): when the sword is up, when it comes down, and which click deals damage. */
 public class RhythmBlockTest {
-
     private static RhythmBlock.Input fight(int tick, boolean using, int targetHurt, int rtt) {
         RhythmBlock.Input in = new RhythmBlock.Input();
         in.tick = tick;
@@ -48,7 +46,7 @@ public class RhythmBlockTest {
         RhythmBlock.Input in = fight(0, false, 8, 2);
         in.selfHurt = 9;
         assertFalse(rb.tick(in).key);
-        // 3 - 2 <= 1: our invulnerability is over by the time a block sent now arrives.
+
         in = fight(1, false, 7, 2);
         in.selfHurt = 3;
         assertTrue(rb.tick(in).key);
@@ -68,9 +66,9 @@ public class RhythmBlockTest {
     public void comesDownTheTickBeforeTheHitIsDueButNotBeforeMinHold() {
         RhythmBlock rb = new RhythmBlock();
         assertTrue(rb.tick(fight(0, false, 8, 2)).raise);
-        // Due next tick (3 - 2 = 1) but raised only one tick ago: stays up.
+
         assertTrue(rb.tick(fight(1, true, 3, 2)).key);
-        // Held two ticks: comes down; the click is next tick's.
+
         RhythmBlock.Decision d = rb.tick(fight(2, true, 3, 2));
         assertFalse(d.key);
         assertFalse(d.hitNow);
@@ -102,7 +100,7 @@ public class RhythmBlockTest {
         RhythmBlock rb = new RhythmBlock();
         assertTrue(rb.tick(fight(10, false, 0, 3)).hitNow);
         rb.attackSent(10);
-        // The hurt shows only a round trip later; until then the target is taken as invulnerable from our hit.
+
         RhythmBlock.Decision d = rb.tick(fight(11, true, 0, 3));
         assertFalse(d.hitNow);
         assertEquals(9, d.wait);
@@ -126,7 +124,7 @@ public class RhythmBlockTest {
         assertTrue(rb.tick(fight(10, false, 0, 2)).hitNow);
         rb.attackSent(10);
         assertFalse(rb.tick(fight(11, false, 0, 2)).hitNow);
-        // No hurt within rtt + 3 ticks: that hit did not land.
+
         for (int t = 12; t <= 15; t++) {
             rb.tick(fight(t, false, 0, 2));
         }
@@ -170,7 +168,7 @@ public class RhythmBlockTest {
             in.reachNow = false;
             assertTrue("stays up at the edge, tick " + t, rb.tick(in).key);
         }
-        // The look lands: down now, the hit next tick.
+
         assertFalse(rb.tick(fight(8, true, 0, 2)).key);
         assertTrue(rb.tick(fight(9, false, 0, 2)).hitNow);
     }
@@ -184,7 +182,7 @@ public class RhythmBlockTest {
         boolean using = false;
         int toggles = 0;
         boolean last = false;
-        // Strafing at the edge: by distance in reach two ticks of three, the look never on.
+
         for (; t < 40; t++) {
             in = fight(t, using, 0, 2);
             in.reachNow = false;
@@ -227,7 +225,7 @@ public class RhythmBlockTest {
         RhythmBlock rb = new RhythmBlock();
         rb.guard = 2;
         int rtt = 2;
-        // Hit at tick 0 (hurt 10). What we send at tick 8 reaches the server as our invulnerability ends.
+
         for (int t = 0; t <= 14; t++) {
             RhythmBlock.Input in = fight(t, false, 8, rtt);
             in.threat = false;
@@ -237,7 +235,7 @@ public class RhythmBlockTest {
             boolean window = t >= 7 && t <= 10;
             assertEquals("tick " + t, window, key);
         }
-        // No hit taken: an enemy merely near is not enough.
+
         RhythmBlock fresh = new RhythmBlock();
         RhythmBlock.Input in = fight(0, false, 8, rtt);
         in.threat = false;
@@ -256,7 +254,7 @@ public class RhythmBlockTest {
     @Test
     public void learnsTheRoundTripFromItsOwnHit() {
         RhythmBlock rb = new RhythmBlock();
-        // Reported 2, really 5: the first hit's hurt comes back five ticks after the click.
+
         assertTrue(rb.tick(fight(0, false, 0, 2)).hitNow);
         rb.attackSent(0);
         for (int t = 1; t < 5; t++) {
@@ -264,17 +262,10 @@ public class RhythmBlockTest {
         }
         RhythmBlock.Decision d = rb.tick(fight(5, true, 10, 2));
         assertEquals(5, d.rtt);
-        // From now on the wait uses it: hurt 6 with a round trip of 5 is one tick away.
+
         assertEquals(1, rb.tick(fight(9, true, 6, 2)).wait);
     }
 
-    /**
-     * A trade against a model server: the enemy lands a hit on the first tick
-     * we can take one (it clicks fast), we hit on ours. The sword is up when
-     * the enemy's hits land, and down most of the time in between: up only
-     * from just before our invulnerability ends until two ticks after, at any
-     * ping.
-     */
     @Test
     public void aTradeBlocksTheEnemysHitsWithTheSwordUpOnlyAroundThem() {
         for (int rtt = 0; rtt <= 6; rtt += 2) {
@@ -293,7 +284,6 @@ public class RhythmBlockTest {
                 int up = 0;
                 for (int t = 0; t < ticks; t++) {
                     if (t == enemyHit) {
-                        /* Judged against the sword as it left us half a trip ago. */
                         int sent = t - oneWay - 1;
                         if (sent >= 0 && upAfter[sent]) {
                             blocked++;
@@ -325,18 +315,12 @@ public class RhythmBlockTest {
                 }
                 String at = "rtt " + rtt + " phase " + phase;
                 assertTrue(at + ": blocked " + blocked + "/" + taken, blocked * 10 >= taken * 8);
-                /* Up from a tick before the enemy's hit can land until Guard (2) ticks after: whatever the ping. */
+
                 assertTrue(at + ": up " + up + "/" + ticks, up * 100 <= ticks * 45);
             }
         }
     }
 
-    /**
-     * The whole exchange against a model server: hits travel half the round
-     * trip, the target's hurt comes back the other half, 1.8's ten ticks of
-     * invulnerability. Every damaging hit is exactly ten ticks apart, none is
-     * wasted, and the sword is up for most of the fight.
-     */
     @Test
     public void aFightKeepsTheDamageAndBlocksMostOfTheTime() {
         for (int rtt = 0; rtt <= 8; rtt += 2) {

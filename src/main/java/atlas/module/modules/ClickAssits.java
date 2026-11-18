@@ -160,19 +160,15 @@ public class ClickAssits extends Module {
             return;
         }
 
-        // Track for CPS if needed (after the enabled check, or the list grows
-        // with every click while the module is off)
         if (this.aboveCPSLeft.getValue()) {
             this.leftClicks.add(System.currentTimeMillis());
         }
 
-        // If this is the extra click we injected, ignore it
         if (this.ignoreNextLeft) {
             this.ignoreNextLeft = false;
             return;
         }
 
-        // Check if we should inject an extra click
         if (this.shouldDoubleClickLeft()) {
             this.bot.mouseRelease(16);
             this.bot.mousePress(16);
@@ -200,13 +196,11 @@ public class ClickAssits extends Module {
             this.rightClicks.add(System.currentTimeMillis());
         }
 
-        // If this is the extra click we injected, ignore it
         if (this.ignoreNextRight) {
             this.ignoreNextRight = false;
             return;
         }
 
-        // Check if we should inject an extra click
         if (this.shouldDoubleClickRight()) {
             this.bot.mouseRelease(4);
             this.bot.mousePress(4);
@@ -214,10 +208,6 @@ public class ClickAssits extends Module {
         }
     }
 
-    /* These were named onEnable/onDisable, which the framework never calls --
-       Module's hooks are onEnabled/onDisabled. So the Robot was never created
-       and the first injected click threw a NullPointerException. @Override
-       now makes a misspelling a compile error. */
     @Override
     public void onEnabled() {
         try {
@@ -233,7 +223,6 @@ public class ClickAssits extends Module {
 
     @Override
     public void onDisabled() {
-        /* Release anything still held down before dropping the bot. */
         if (this.bot != null) {
             if (this.ignoreNextLeft) {
                 this.bot.mouseRelease(16);

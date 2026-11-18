@@ -11,12 +11,6 @@ import java.util.List;
 
 import static org.junit.Assert.assertTrue;
 
-/**
- * The two halves together (2026-11-16): a full bow shot at a player standing some way off who, a few ticks after
- * the arrow leaves, gets out of the way by each of the ways the simulation runs. How many of those the arrow still
- * hits, aimed at the middle as before and aimed by {@link DodgeAim}. Hits here are the game's own (the box grown by
- * 0.3), not the cautious ones the aim is picked by.
- */
 public class DodgeShotTest {
     private static final double EYE = 1.62;
 
@@ -38,7 +32,6 @@ public class DodgeShotTest {
         }
     };
 
-    /** A path as a target: the player's box {@code ticks} after the shot, the path's index 0 being the shot. */
     private static ProjectileSolver.Target along(final TargetForecast path) {
         return ticks -> {
             double at = Math.max(0.0, Math.min(path.moves(), ticks));
@@ -52,7 +45,6 @@ public class DodgeShotTest {
         };
     }
 
-    /** {hits aimed at the middle, hits aimed by DodgeAim, ways} for a target {@code distance} off reacting after {@code reaction} ticks. */
     private static int[] shoot(double distance, int reaction, double speed) {
         PlayerSim player = new PlayerSim();
         player.box = new AxisAlignedBB(-0.3, 0.0, distance - 0.3, 0.3, 1.8, distance + 0.3);
@@ -65,7 +57,7 @@ public class DodgeShotTest {
         seen.onGround = true;
         TargetTrack track = new TargetTrack();
         track.observe(seen, WORLD, 0.0);
-        /* It faces the shooter. */
+
         List<TargetForecast> paths = TargetDodges.pathsAtRest(track, WORLD, 60, reaction, 180.0F);
         List<ProjectileSolver.Target> dodges = new ArrayList<ProjectileSolver.Target>();
         for (TargetForecast path : paths) {
@@ -98,18 +90,17 @@ public class DodgeShotTest {
             for (int reaction = 2; reaction <= 8; reaction += 2) {
                 int[] hit = shoot(distance, reaction, 3.0);
                 table.append(String.format("  react %d: %2d -> %2d of %d", reaction, hit[0], hit[1], hit[2]));
-                /* Never fewer than aiming at the middle. */
+
                 assertTrue(table.toString(), hit[1] >= hit[0]);
                 middle += hit[0];
                 proofed += hit[1];
                 all += hit[2];
             }
         }
-        /* Measured when written: 224 of 308 aimed at the middle, 233 aimed for the dodges. */
+
         assertTrue(table.toString(), proofed >= middle + 5);
     }
 
-    /** The same for a player running across the shooter's view: {middle, proofed, ways}. */
     private static int[] shootRunner(double distance, int reaction, boolean sprint) {
         float yaw = 90.0F;
         PlayerSim game = new PlayerSim();
@@ -174,7 +165,7 @@ public class DodgeShotTest {
                 }
             }
         }
-        /* Measured when written: 390 of 616 aimed at the middle, 446 aimed for the dodges. */
+
         assertTrue(table.toString(), proofed >= middle + 40);
     }
 }

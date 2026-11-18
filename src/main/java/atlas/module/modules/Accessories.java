@@ -13,24 +13,11 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.player.EntityPlayer;
 import org.lwjgl.opengl.GL11;
 
-/**
- * Headwear and wings for the players you can see (adapted from CrewX's
- * Accessories, 2026-10-11).
- *
- * Everything is drawn from coloured geometry rather than textures, so the
- * module carries no assets of its own and the two colours are settings. Each
- * model is built in the wearer's own frame: local +X is their right and local
- * +Z is the way they are facing, which is the frame the body yaw rotation
- * below produces, so the pieces turn with the head and sit right whether the
- * player is standing or sneaking.
- *
- * This is a cosmetic only the wearer sees: nothing is sent to the server, and
- * with "all-players" off it is drawn on you alone.
- */
+// Headwear and wings for the players you can see (adapted from CrewX's Accessories).
+
 public class Accessories extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    /** Headwear styles, in menu order; index 0 is off. */
     private static final String[] HEADWEAR = {
             "OFF", "HALO", "CROWN", "BUNNY EARS", "CAT EARS", "DEMON HORNS", "STRAW HAT", "CAP"
     };
@@ -97,13 +84,12 @@ public class Accessories extends Module {
         GL11.glPopMatrix();
     }
 
-    /** One style of headwear, sitting on the head top the caller measured. */
     private void headModel(int style, double top, float red, float green, float blue) {
         switch (style) {
-            case 1: // halo: a ring floating above the head
+            case 1:
                 this.ring(top + 0.14, 0.26, 0.34, red, green, blue, 0.95F);
                 break;
-            case 2: { // crown: a band with five points
+            case 2: {
                 this.band(top + 0.02, top + 0.14, 0.30, red, green, blue);
                 for (int i = 0; i < 5; i++) {
                     double angle = Math.PI * 2.0 * i / 5.0;
@@ -113,23 +99,23 @@ public class Accessories extends Module {
                 }
                 break;
             }
-            case 3: // bunny ears
+            case 3:
                 this.box(-0.17, top + 0.02, -0.03, -0.06, top + 0.44, 0.03, red, green, blue, 1.0F);
                 this.box(0.06, top + 0.02, -0.03, 0.17, top + 0.44, 0.03, red, green, blue, 1.0F);
                 break;
-            case 4: // cat ears
+            case 4:
                 this.triangle(top + 0.02, -0.20, -0.02, 0.06, top + 0.26, red, green, blue);
                 this.triangle(top + 0.02, 0.20, 0.02, 0.06, top + 0.26, red, green, blue);
                 break;
-            case 5: // demon horns, leaning out
+            case 5:
                 this.horn(-1.0, top, red, green, blue);
                 this.horn(1.0, top, red, green, blue);
                 break;
-            case 6: // straw hat: a wide brim and a small cone
+            case 6:
                 this.ring(top + 0.02, 0.30, 0.62, red, green, blue, 1.0F);
                 this.cone(top + 0.02, 0.30, 0.26, red, green, blue);
                 break;
-            case 7: // cap: a shallow dome and a brim over the face
+            case 7:
                 this.box(-0.31, top - 0.04, -0.31, 0.31, top + 0.14, 0.31, red, green, blue, 1.0F);
                 this.quad(-0.31, top + 0.02, 0.31, 0.31, top + 0.02, 0.31,
                         0.31, top + 0.02, 0.62, -0.31, top + 0.02, 0.62, red, green, blue, 0.9F);
@@ -139,7 +125,6 @@ public class Accessories extends Module {
         }
     }
 
-    /** Two wings that flap from the shoulders, behind the wearer. */
     private void wingsModel(double top, float red, float green, float blue, long now) {
         float flap = (float) Math.sin(now / 260.0) * 12.0F;
         for (int side = -1; side <= 1; side += 2) {
@@ -158,7 +143,6 @@ public class Accessories extends Module {
         }
     }
 
-    /** A box from two corners, every face drawn. */
     private void box(double x0, double y0, double z0, double x1, double y1, double z1,
                      float red, float green, float blue, float alpha) {
         this.quad(x0, y1, z0, x1, y1, z0, x1, y1, z1, x0, y1, z1, red, green, blue, alpha);
@@ -169,7 +153,6 @@ public class Accessories extends Module {
         this.quad(x0, y0, z1, x0, y0, z0, x0, y1, z0, x0, y1, z1, red, green, blue, alpha);
     }
 
-    /** A flat ring in the XZ plane, for brims and halos. */
     private void ring(double y, double inner, double outer, float red, float green, float blue, float alpha) {
         GlStateManager.color(red, green, blue, alpha);
         GL11.glBegin(GL11.GL_QUAD_STRIP);
@@ -183,7 +166,6 @@ public class Accessories extends Module {
         GL11.glEnd();
     }
 
-    /** A cylinder wall between two heights. */
     private void band(double bottom, double top, double radius, float red, float green, float blue) {
         GlStateManager.color(red, green, blue, 1.0F);
         GL11.glBegin(GL11.GL_QUAD_STRIP);
@@ -197,7 +179,6 @@ public class Accessories extends Module {
         GL11.glEnd();
     }
 
-    /** A cone with its point above a circular base. */
     private void cone(double base, double radius, double height, float red, float green, float blue) {
         GlStateManager.color(red, green, blue, 1.0F);
         GL11.glBegin(GL11.GL_TRIANGLE_FAN);
@@ -209,7 +190,6 @@ public class Accessories extends Module {
         GL11.glEnd();
     }
 
-    /** An upright ear: a triangle standing on the head. */
     private void triangle(double base, double x, double halfWidth, double height, double top,
                           float red, float green, float blue) {
         this.quad(x - halfWidth, base, 0.0, x + halfWidth, base, 0.0, x, top, 0.0, x, top, 0.0,
@@ -218,7 +198,6 @@ public class Accessories extends Module {
                 red, green, blue, 1.0F);
     }
 
-    /** A horn: a box leaning outward, narrower at the tip. */
     private void horn(double side, double top, float red, float green, float blue) {
         GL11.glPushMatrix();
         GL11.glTranslated(side * 0.16, top + 0.02, 0.0);

@@ -31,13 +31,6 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * The base of a Raven bS 17 script (2026-11-03): bS 16's API (RavenScript) and what bS 17 adds -- 71 methods by
- * the two versions' sources side by side: nanoTime, clickBlock, swingReset, setTabName, client-only mobs, titles,
- * the slider's bounds and option name, texture and colour calls with ints or doubles, beams, the hovered slot ...
- * Each API class extends bS 16's, so a bS 17 script reaches both through the same name (gl.color(255, 0, 0, 60)
- * takes the int one, as bS 17 does). Written for Atlas; Raven's names and behaviour are matched, not its code.
- */
 public class Raven17Script extends RavenScript {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
@@ -46,15 +39,10 @@ public class Raven17Script extends RavenScript {
             return System.nanoTime();
         }
 
-        /** Starts breaking the block, as a left click on that face does. */
         public static void clickBlock(Vec3 blockpos, String side) {
             mc.playerController.clickBlock(Vec3.getBlockPos(blockpos), facing(side));
         }
 
-        /**
-         * Raven draws the held item as in use (its block animation) with this; Atlas's own animations draw
-         * blocking themselves, so there is nothing to switch here.
-         */
         public static void setItemInUse(boolean inUse) {
         }
 
@@ -62,7 +50,6 @@ public class Raven17Script extends RavenScript {
             mc.thePlayer.ridingEntity = entity == null ? null : entity.entity;
         }
 
-        /** The name shown for a player in the tab list (here only). */
         public static void setTabName(String name, String displayName) {
             if (name == null || displayName == null || mc.getNetHandler() == null) {
                 return;
@@ -79,7 +66,6 @@ public class Raven17Script extends RavenScript {
             ((IAccessorTimer) ((IAccessorMinecraft) mc).getTimer()).setTimerSpeed((float) timer);
         }
 
-        /** A swing that also restarts the held item's equip animation. */
         public static void swingReset() {
             mc.thePlayer.swingItem();
             mc.getItemRenderer().resetEquippedProgress();
@@ -91,7 +77,6 @@ public class Raven17Script extends RavenScript {
             return mc.theWorld != null;
         }
 
-        /** A mob only this client sees ("Zombie", "Villager" ...); null when the type is unknown. */
         public static Entity spawnMob(String type, double x, double y, double z) {
             return ClientMobs.spawn(type, x, y, z);
         }
@@ -112,7 +97,6 @@ public class Raven17Script extends RavenScript {
             mc.theWorld.playSound(x, y, z, name, volume, pitch, false);
         }
 
-        /** Still in the world. */
         public static boolean isValidEntity(Entity entity) {
             return mc.theWorld != null && entity != null && mc.theWorld.loadedEntityList.contains(entity.entity);
         }
@@ -135,12 +119,10 @@ public class Raven17Script extends RavenScript {
             super(scriptName);
         }
 
-        /** AimAssist keeps no target between ticks in Atlas: null. */
         public Entity getAimAssistTarget() {
             return null;
         }
 
-        /** LagRange keeps no target between ticks in Atlas: null. */
         public Entity getLagRangeTarget() {
             return null;
         }
@@ -154,7 +136,6 @@ public class Raven17Script extends RavenScript {
             return backtrack == null ? null : Entity.convert(backtrack.getBacktrackTarget());
         }
 
-        /** Where the server has the backtracked target. */
         public Vec3 getBacktrackPosition() {
             atlas.module.modules.BackTrack backtrack = backtrack();
             net.minecraft.util.Vec3 position = backtrack == null ? null : backtrack.getBacktrackPosition();
@@ -193,7 +174,6 @@ public class Raven17Script extends RavenScript {
             return 0.0;
         }
 
-        /** A choice slider's chosen option; "" for any other setting. */
         public String getSliderString(String moduleName, String name) {
             Property<?> property = slider(moduleName, name);
             return property instanceof ModeProperty ? ((ModeProperty) property).getModeString() : "";
@@ -217,7 +197,6 @@ public class Raven17Script extends RavenScript {
             GlStateManager.color((float) r, (float) g, (float) b, (float) a);
         }
 
-        /** 0..255 each -- unless all four are 0 or 1, which are taken as they are. */
         public static void color(int r, int g, int b, int a) {
             if (r <= 1 && g <= 1 && b <= 1 && a <= 1) {
                 GlStateManager.color(r, g, b, a);
@@ -274,7 +253,6 @@ public class Raven17Script extends RavenScript {
             GL11.glVertex3d(x, y, z);
         }
 
-        /** bS 17 also sets the colour back to white. */
         public static void resetColor() {
             GlStateManager.resetColor();
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
@@ -301,10 +279,6 @@ public class Raven17Script extends RavenScript {
             THEMES.put("vine", new Color[]{new Color(0, 255, 25), new Color(180, 255, 180)});
         }
 
-        /**
-         * A Raven theme's colour now (RGB): its two colours swinging into each other, Rainbow round the hues,
-         * Default (or an unknown name) Atlas's own HUD colour.
-         */
         public static int getThemeRGB(String theme) {
             String key = theme == null ? "" : theme.trim().toLowerCase(Locale.ROOT).replace(' ', '_');
             long now = System.currentTimeMillis();
@@ -327,7 +301,6 @@ public class Raven17Script extends RavenScript {
             beam(position.x, position.y, position.z, height, width, color, alpha);
         }
 
-        /** A see-through column standing on the block at x, y, z (in onRenderWorld). */
         public static void beam(double x, double y, double z, double height, double width, int color, float alpha) {
             x -= mc.getRenderManager().viewerPosX;
             y -= mc.getRenderManager().viewerPosY;
@@ -369,7 +342,6 @@ public class Raven17Script extends RavenScript {
     }
 
     public static class inventory extends RavenScript.inventory {
-        /** The slot number under the mouse in an open window, -1 for none. */
         public static int getHoveringSlot() {
             if (!(mc.currentScreen instanceof GuiContainer)) {
                 return -1;
@@ -391,7 +363,6 @@ public class Raven17Script extends RavenScript {
     public static class config extends RavenScript.config {
     }
 
-    /** bS 17's client-only mobs: spawned with ids no server entity uses, gone with the world or on request. */
     static final class ClientMobs {
         private static final Map<net.minecraft.entity.Entity, Integer> SPAWNED = new HashMap<net.minecraft.entity.Entity, Integer>();
         private static int nextId = -1000000;

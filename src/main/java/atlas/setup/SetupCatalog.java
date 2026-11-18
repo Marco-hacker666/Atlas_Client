@@ -4,32 +4,21 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * The list of things the setup screen can fetch. Ported from OpenSkid
- * (GPL-3.0) and kept in one place so the catalog is easy to edit.
- *
- * <p>Every entry here was checked to resolve to a real jar or zip. The
- * CurseForge API link OpenSkid used for Controlling now answers 404, so it
- * points at the ForgeCDN file that the API redirect used to hand out.
- */
+// Ported from OpenSkid (GPL-3.0) and kept in one place so the catalog is easy to edit.
+
 public final class SetupCatalog {
     private SetupCatalog() {
     }
 
     public static List<SetupEntry> mods() {
         List<SetupEntry> out = new ArrayList<>();
-        /* 2026-10-11: from optifine.net itself (it used to be a copy of a preview
-           build in someone's GitHub repo), the stable 1.8.9 build, checked
-           against the file's SHA-1 so nothing else can be installed. */
+
         out.add(new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.OPTIFINE,
                 "OptiFine", "Performance plus zoom (official, optifine.net). Installs silently.",
                 "OptiFine_1.8.9_HD_U_M5.jar",
                 "https://optifine.net/adloadx?f=OptiFine_1.8.9_HD_U_M5.jar",
                 2585014L, true, true, "d362d58a28f5373b141b9e426e8e160638bfafcd"));
-        /* 2026-10-30 (audit): the other mods are pinned too -- they are code the game runs, and only OptiFine was
-           checked. SHA-1 and size as served by these links (Modrinth's own hashes for 3DSkinLayers, WaveyCapes and
-           Controlling; the CDN's MD5 ETag and size for CreamyKeys, whose version page is gone but whose file is still
-           served). */
+
         out.add(new SetupEntry(SetupEntry.Section.MODS, SetupEntry.Source.DIRECT,
                 "3DSkinLayers", "3D skin layers on players.",
                 "3dSkinLayers-forge-mc1.8.9-1.2.0.jar",
@@ -110,7 +99,6 @@ public final class SetupCatalog {
         return Collections.unmodifiableList(out);
     }
 
-    /** The entries installed without asking, the first time the client runs. */
     public static List<SetupEntry> autoEntries() {
         List<SetupEntry> out = new ArrayList<>();
         for (SetupEntry entry : all()) {
@@ -121,7 +109,6 @@ public final class SetupCatalog {
         return Collections.unmodifiableList(out);
     }
 
-    /** Everything in one section, catalog order preserved. */
     public static List<SetupEntry> bySection(SetupEntry.Section section) {
         List<SetupEntry> out = new ArrayList<>();
         for (SetupEntry entry : all()) {

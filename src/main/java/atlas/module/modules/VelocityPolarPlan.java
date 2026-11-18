@@ -3,31 +3,12 @@ package atlas.module.modules;
 import java.util.ArrayDeque;
 import java.util.Random;
 
-/**
- * Velocity's Polar mode: what to do about one knockback (2026-10-26, owner:
- * "a Polar velocity"). Nothing here changes motion or holds a packet; the
- * two answers are things a hand does:
- *
- *   counter  -- hit back while sprinting, before this tick's movement: 1.8's
- *               own attack code takes 40 % off the horizontal speed
- *               (Velocity runs it through Silent Aura's vanilla click)
- *   jump     -- jump on the knockback tick, on the ground (a jump reset)
- *
- * and how often: a chance for each, a smaller chance for both on one hit,
- * at most max-rate of the last 10 knockbacks answered (from the 4th on), a
- * run of answers broken somewhere between half of max-streak and all of it,
- * and min-interval between two. The counter-hit waits 0..react-max ticks, a
- * reaction; the jump has only the knockback tick.
- *
- * Clock and dice come in, so it is tested on its own.
- */
 final class VelocityPolarPlan {
-
     static final class Decision {
         static final Decision NONE = new Decision(false, false, -1);
         final boolean counter;
         final boolean jump;
-        /** Ticks after the knockback the counter-hit goes out (0 = this tick), -1 without one. */
+
         final int counterTick;
 
         Decision(boolean counter, boolean jump, int counterTick) {
@@ -62,10 +43,6 @@ final class VelocityPolarPlan {
         this.lastAnsweredAt = Long.MIN_VALUE / 2;
     }
 
-    /**
-     * One knockback. {@code canCounter}: sprinting with a target to hit;
-     * {@code canJump}: on the ground, pushed up, nothing in the way of a jump.
-     */
     Decision decide(long now, boolean canCounter, boolean canJump, Random random) {
         if (!canCounter && !canJump || now - this.lastAnsweredAt < this.minIntervalMs
                 || rateFull() || streakBroken(random)) {
@@ -74,7 +51,6 @@ final class VelocityPolarPlan {
         boolean counter = canCounter && roll(random, this.counterChance);
         boolean jump = canJump && roll(random, this.jumpChance);
         if (counter && jump && !roll(random, this.bothChance)) {
-            /* Usually one or the other. */
             if (random.nextBoolean()) {
                 counter = false;
             } else {
@@ -93,7 +69,6 @@ final class VelocityPolarPlan {
         return new Decision(counter, jump, tick);
     }
 
-    /** The answer decided on did not happen after all (no hit landed, no jump made). */
     void didNotHappen() {
         if (!this.recent.isEmpty() && this.recent.peekLast()) {
             this.recent.removeLast();
@@ -102,7 +77,6 @@ final class VelocityPolarPlan {
         this.streak = Math.max(0, this.streak - 1);
     }
 
-    /** Answers in the window, for tests and the debug line. */
     int answeredInWindow() {
         int made = 0;
         for (Boolean b : this.recent) {
@@ -130,9 +104,7 @@ final class VelocityPolarPlan {
         }
     }
 
-    /** True when one more answer would put the last 10 over max-rate (from the 4th knockback on). */
     private boolean rateFull() {
-        /* This knockback and the 9 before it (not the 10 before it: that would be 11). */
         int before = Math.min(WINDOW - 1, this.recent.size());
         int made = 0;
         int skip = this.recent.size() - before;
@@ -148,7 +120,6 @@ final class VelocityPolarPlan {
         return window >= 4 && (made + 1) * 100 > this.maxRate * window;
     }
 
-    /** True when this answer would make the run too long. */
     private boolean streakBroken(Random random) {
         int max = this.maxStreak;
         if (max <= 0) {

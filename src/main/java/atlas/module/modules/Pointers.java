@@ -22,19 +22,9 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-/**
- * Arrowheads around the crosshair pointing at other players (2026-10-19,
- * Slinky's Pointers rebuilt).
- *
- * Each player within range gets a dart on a ring around the screen centre,
- * turned toward where they stand. 3D tilts the ring with your pitch, as if
- * it lay on the ground. Colours: by distance (near colour to far colour
- * across the near-far band), by name tag (team colour), or manual (enemies
- * and friendlies). The farthest are drawn first so the nearest sit on top.
- */
 public class Pointers extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    /** The dart: tip, left wing, notch, right wing (unit size, pointing up). */
+
     private static final float[][] DART = {{0.0F, -1.0F}, {-1.0F, 1.0F}, {0.0F, 0.5F}, {1.0F, 1.0F}};
 
     public final IntProperty range = new IntProperty("range", 100, 10, 1000);
@@ -65,7 +55,6 @@ public class Pointers extends Module {
         return TeamUtil.isFriend(player) || TeamUtil.isSameTeam(player);
     }
 
-    /** Degrees from the view direction to the point, -180..180. */
     private static float angle(double dx, double dz, float yaw) {
         return MathHelper.wrapAngleTo180_float((float) (Math.atan2(dz, dx) * 180.0 / Math.PI - 90.0) - yaw);
     }

@@ -13,9 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.*;
 
-/** The packet-holder registry (plan step 13, 2026-09-28). */
 public class PacketHoldsTest {
-
     public static final class P implements Packet<INetHandler> {
         @Override
         public void readPacketData(PacketBuffer buf) {
@@ -99,8 +97,7 @@ public class PacketHoldsTest {
     public void delayManagerLetsGoForACatch() {
         DelayManager delay = new DelayManager();
         delay.delay(atlas.enums.DelayModules.BED_NUKER);
-        /* Before a catch: held. (A world-render or keep-alive packet would pass;
-           a plain one is held.) */
+
         @SuppressWarnings("unchecked")
         Packet<net.minecraft.network.play.INetHandlerPlayClient> plain =
                 (Packet<net.minecraft.network.play.INetHandlerPlayClient>) (Packet<?>) new P();

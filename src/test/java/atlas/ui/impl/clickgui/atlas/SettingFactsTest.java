@@ -19,9 +19,7 @@ import java.util.List;
 
 import static org.junit.Assert.*;
 
-/** Defaults, ranges, "changed" and Reset (2026-10-23, GUI redesign M2). */
 public class SettingFactsTest {
-
     @After
     public void notLoading() {
         Config.loading = false;

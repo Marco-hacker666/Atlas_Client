@@ -10,13 +10,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Raven script API: an HTTP request (2026-11-02). fetch() waits for the answer, so call it from client.async, not
- * from a hook (a hook on the client thread would freeze the game until the server answers).
- */
 public class Request {
     private static final int MAX_BYTES = 8 * 1024 * 1024;
-    /** What Raven says it is when the script names nothing. */
+
     private static final String BROWSER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
             + " Chrome/120.0.0.0 Safari/537.36";
 
@@ -28,7 +24,6 @@ public class Request {
     public int readTimeout = 5000;
     public String content = "";
 
-    /** As in Raven: "POST" or "GET" (anything else is a GET). */
     public Request(String method, String URL) {
         this.method = "POST".equals(method) || "GET".equals(method) ? method : "GET";
         this.url = URL;
@@ -54,11 +49,6 @@ public class Request {
         this.content = content;
     }
 
-    /**
-     * The answer, or null when there was none (no connection, timeout, no url). As Raven sends it: a browser's
-     * User-Agent unless one was set, a body only for a POST with content (as JSON), and the answer's lines joined
-     * without their line breaks.
-     */
     public Response fetch() {
         if (this.url == null || this.url.isEmpty()) {
             return null;

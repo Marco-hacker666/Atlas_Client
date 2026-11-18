@@ -1,13 +1,9 @@
-/*
- * Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0),
- * src/main/java/openskid/module/modules/FKCounter.java, 2026-10-05: package openskid -> atlas,
- * OpenSkid -> Atlas. Changes after that are marked in comments.
- */
+// Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0), src/main/java/openskid/module/modules/FKCounter.java
+
 package atlas.module.modules;
 
 // Adapted from Expo FKCounter (chat-driven final-kill attribution per scoreboard team).
-// Rebuilt defensively: counts any chat line with FINAL KILL, resolves the killer
-// team from tab info, degrades to an unknown bucket. No pasted code.
+
 import atlas.ui.impl.clickgui.atlas.HudPanel;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;
@@ -146,7 +142,7 @@ public class FKCounter extends Module {
             return;
         }
         int boxWidth = Math.max(this.textWidth, mc.fontRendererObj.getStringWidth(text));
-        /* HUD editor (2026-10-05): report where this is drawn, so the editor can find and drag it. */
+
         HudLayout.report("FKCounter", "FKCounter", baseX - 2.0F * scaleValue, baseY - 2.0F * scaleValue,
                 (boxWidth + 4) * scaleValue, (mc.fontRendererObj.FONT_HEIGHT + 3) * scaleValue,
                 HudLayout.ints(this.offsetX, 1, this.offsetY, 1), HudLayout.scale(this.scale));

@@ -15,13 +15,7 @@ import java.util.Map;
 
 import static org.junit.Assert.*;
 
-/**
- * Scripts as players write them compile against this client's classes alone -- no Minecraft classes, as in the
- * game, where the Minecraft jar on the class path is obfuscated -- with the JDK's compiler and with ECJ (the one
- * players download, in a JVM of its own: see IsolatedEcj), and their hooks are called (2026-11-03).
- */
 public class ScriptCompileTest {
-
     static final String RAVEN = String.join("\n",
             "void onLoad() {",
             "    modules.registerSlider(\"Range\", 3.0, 1.0, 6.0, 0.1);",

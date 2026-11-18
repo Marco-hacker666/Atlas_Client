@@ -56,10 +56,7 @@ public abstract class MixinEntityRenderer {
                     this.mc.thePlayer.inventory.currentItem = slot;
                 }
             }
-            /* 2026-10-16: AutoBlockIn's item-spoof was applied in updateRenderer
-               (each tick) but not here (each frame), unlike Scaffold's: the hand
-               showed the blocks on frames and the spoofed item on ticks, and the
-               equip animation restarted over and over. */
+
             AutoBlockIn autoBlockIn = (AutoBlockIn) Atlas.moduleManager.modules.get(AutoBlockIn.class);
             if (this.slot == null && autoBlockIn.isEnabled() && autoBlockIn.itemSpoof.getValue()) {
                 int abSlot = autoBlockIn.getSlot();
@@ -119,7 +116,6 @@ public abstract class MixinEntityRenderer {
 
         AutoBlockIn autoBlockIn = (AutoBlockIn) Atlas.moduleManager.modules.get(AutoBlockIn.class);
         if (this.slot == null && autoBlockIn.isEnabled() && autoBlockIn.itemSpoof.getValue()) {
-            /* Not over Scaffold's spoof: overwriting this.slot lost the real slot. */
             int slot = autoBlockIn.getSlot();
             if (slot >= 0) {
                 this.slot = new Box<>(this.mc.thePlayer.inventory.currentItem);
@@ -157,14 +153,6 @@ public abstract class MixinEntityRenderer {
         EventManager.call(new Render3DEvent(float2));
     }
 
-    /*
-     * 2026-11-15 (Freecam underground): RenderGlobal.setupTerrain finds the chunks to draw by flooding out from the
-     * camera through open faces; from inside solid stone nothing is open and only the camera's own chunk was drawn.
-     * The game drops that occlusion culling for a spectator inside an opaque block; the same while the Freecam camera
-     * flies. Set here, on the call's argument by its place in the signature: a @ModifyVariable inside setupTerrain
-     * (the first try) can land on the int frame counter where the method has no local variable table (OptiFine), and
-     * then only one chunk is ever drawn.
-     */
     @ModifyArg(
             method = {"renderWorldPass"},
             at = @At(
@@ -178,8 +166,6 @@ public abstract class MixinEntityRenderer {
         return playerSpectator || atlas.module.modules.Freecam.camera() != null;
     }
 
-    /* 2026-11-15 (Freecam): the hand belongs to the body, not to the camera flying about. Vanilla's signature only and
-       not required: OptiFine reworks renderHand, and a hand left showing is better than a game that will not start. */
     @Inject(method = {"renderHand(FI)V"}, at = {@At("HEAD")}, cancellable = true, require = 0)
     private void atlas$freecamHand(float partialTicks, int xOffset, CallbackInfo callbackInfo) {
         if (atlas.module.modules.Freecam.camera() != null) {
@@ -187,10 +173,6 @@ public abstract class MixinEntityRenderer {
         }
     }
 
-    /*
-     * 2026-11-15 (Freecam): the crosshair is traced from the render view, the camera. Unless camera-interact is on,
-     * nothing is under it: no outline, nothing to break, attack or use from where the body could not reach.
-     */
     @Inject(method = {"getMouseOver"}, at = {@At("RETURN")})
     private void atlas$freecamMouseOver(float partialTicks, CallbackInfo callbackInfo) {
         if (atlas.module.modules.Freecam.blocksInteraction() && this.mc.thePlayer != null) {
@@ -302,9 +284,6 @@ public abstract class MixinEntityRenderer {
         if (Atlas.moduleManager == null) {
             return block.getMaterial();
         } else {
-            /* isNoClipActive, not isEnabled: the "no-clip" setting and the
-               VANILLA mode have to be able to leave fog alone, or the setting
-               is inert while the module is on. */
             return ((ViewClip) Atlas.moduleManager.modules.get(ViewClip.class)).isNoClipActive() ? Material.air : block.getMaterial();
         }
     }
@@ -359,11 +338,7 @@ public abstract class MixinEntityRenderer {
         }
         return ((IAccessorEntityLivingBase) entityPlayerSP).getActivePotionsMap().containsKey(potion.id);
     }
-    /* Free look swaps the view entity's rotation for the camera's only while
-       the camera transform is being built, then puts it straight back. Every
-       other consumer of those fields -- the movement packet, the player model,
-       the hand, the attack raytrace -- runs outside this window and so still
-       sees the direction the body is actually facing. */
+
     @Unique
     private float atlas$realYaw;
     @Unique
@@ -421,5 +396,4 @@ public abstract class MixinEntityRenderer {
         view.prevRotationYaw = this.atlas$realPrevYaw;
         view.prevRotationPitch = this.atlas$realPrevPitch;
     }
-
 }

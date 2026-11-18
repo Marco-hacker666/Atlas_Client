@@ -3,12 +3,8 @@ package atlas.lb.render;
 import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.opengl.GL11;
 
-/**
- * Drawing for the LiquidBounce aura's indicators (2026-10-25, LiquidBounce
- * NextGen port, GPL-3.0; KillAuraRangeIndicator, KillAuraNotifyWhenFail's
- * boxes, TargetRenderer's Legacy / Circle / GlowingCircle / Ghost), in plain
- * 1.8 OpenGL. Coordinates are relative to the camera. Colors are ARGB.
- */
+// Drawing for the LiquidBounce aura's indicators (LiquidBounce NextGen port, GPL-3.0)
+
 public final class AuraRender {
     private AuraRender() {
     }
@@ -53,7 +49,6 @@ public final class AuraRender {
         return (Math.max(0, Math.min(255, alpha)) << 24) | (rgb & 0xFFFFFF);
     }
 
-    /** Linear blend of two ARGB colors. */
     public static int lerp(int a, int b, float t) {
         t = Math.max(0.0F, Math.min(1.0F, t));
         int out = 0;
@@ -65,7 +60,6 @@ public final class AuraRender {
         return out;
     }
 
-    /** A flat ring (or disc, inner 0) at height y around (x, z), filled, with an optional outline. */
     public static void disc(double x, double y, double z, double inner, double outer, int fill, int outline, int segments) {
         if (alpha(fill) > 0) {
             color(fill);
@@ -95,7 +89,6 @@ public final class AuraRender {
         GL11.glEnd();
     }
 
-    /** A vertical band fading from {@code bottom} at y to {@code top} at y + height, around (x, z). */
     public static void glow(double x, double y, double z, double radius, double height, int bottom, int top, int segments) {
         GL11.glBegin(GL11.GL_QUAD_STRIP);
         for (int i = 0; i <= segments; i++) {
@@ -110,7 +103,6 @@ public final class AuraRender {
         GL11.glEnd();
     }
 
-    /** A box from (x0, y0, z0) to (x1, y1, z1), filled and outlined. */
     public static void box(double x0, double y0, double z0, double x1, double y1, double z1, int fill, int outline) {
         if (alpha(fill) > 0) {
             color(fill);
@@ -147,7 +139,6 @@ public final class AuraRender {
         GL11.glVertex3d(dx, dy, dz);
     }
 
-    /** Ghost: {@code length} points trailing behind a point orbiting the target's middle, fading out. */
     public static void ghost(double x, double y, double z, double radius, double height, float size, int argb,
                              int length, long timeMs) {
         GL11.glPointSize(Math.max(1.0F, size * 10.0F));
@@ -165,7 +156,6 @@ public final class AuraRender {
         GL11.glPointSize(1.0F);
     }
 
-    /** Hue-cycling color (LiquidBounce's rainbow()), at full alpha. */
     public static int rainbow(long timeMs) {
         return 0xFF000000 | (java.awt.Color.HSBtoRGB((timeMs % 4000L) / 4000.0F, 0.7F, 1.0F) & 0xFFFFFF);
     }

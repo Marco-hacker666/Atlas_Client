@@ -8,13 +8,7 @@ import java.lang.reflect.Constructor;
 
 import static org.junit.Assert.*;
 
-/**
- * 2026-10-11: every "atlas:" font and image the code asks for resolves through
- * the jar's own resource pack (AtlasResources). Before it, all 16 fonts failed
- * in game because the jar had no resource pack at all.
- */
 public class AtlasResourcesTest {
-
     private static AtlasResources pack() throws Exception {
         Constructor<AtlasResources> c = AtlasResources.class.getDeclaredConstructor();
         c.setAccessible(true);
@@ -41,7 +35,7 @@ public class AtlasResourcesTest {
     public void logoIsServed() throws Exception {
         AtlasResources pack = pack();
         assertTrue(pack.resourceExists(new ResourceLocation("atlas", "assets/atlas-logo.png")));
-        /* 2026-10-26: another client's wordmark images were removed with the WaterMark mode that drew them. */
+
         assertFalse(pack.resourceExists(new ResourceLocation("atlas", "assets/textvape.png")));
         assertFalse(pack.resourceExists(new ResourceLocation("atlas", "assets/textv4.png")));
     }

@@ -26,7 +26,7 @@ public class ThrowAura extends Module {
     public final FloatProperty maxRange = new FloatProperty("max-range", 20.0F, 3.0F, 64.0F);
     public final ModeProperty moveFix = new ModeProperty("move-fix", 1, new String[]{"NONE", "SILENT", "REAL"});
     private final TimerUtil timer = new TimerUtil();
-    /** The last sent look within this many degrees of the aim counts as on the target (the aim's own dead zone is 1). */
+
     private static final float ON_TARGET = 2.0F;
 
     public ThrowAura() {
@@ -56,21 +56,13 @@ public class ThrowAura extends Module {
                             180.0F,
                             0.0F
                     );
-                    /* 2026-10-31: the look goes through the shared engine (RotationHelper), which turns it as a
-                       hand does -- it used to jump onto the target in one tick -- turns the keys for SILENT and
-                       hands the look back while the cooldown runs. KillAura, setting its own look at the same
-                       priority, still keeps the packet when it rotates too. */
+
                     float[] look = RotationHelper.request(this, want[0], want[1], 1, this.moveMode(), false,
                             RotationHelper.NO_LIMIT);
                     if (look != null && moveFix.getModeString().equals("REAL")) {
-                        /* REAL: the camera turns as well, along the look the server gets, spread over this
-                           tick's frames by RotationManager; the mouse still works (not forced). */
                         Atlas.rotationManager.setRotation(look[0], look[1], 1, false);
                     }
-                    /* The server throws along the look it already has: the last packet's, since this tick's
-                       comes after the throw. So the throw waits until that look is on the target -- at the aim,
-                       or with its line through the target's box (KillAura's look, when it kept the packet);
-                       before, it went out the first tick, along wherever the player had been looking. */
+
                     float border = target.getCollisionBorderSize();
                     if (RotationEngine.angle(event.getYaw(), event.getPitch(), want[0], want[1]) > ON_TARGET
                             && RotationUtil.rayTrace(target.getEntityBoundingBox().expand(border, border, border),
@@ -92,7 +84,6 @@ public class ThrowAura extends Module {
         }
     }
 
-    /** move-fix as the engine's movement yaw: NONE the camera's, SILENT the look's with the keys turned, REAL the look's. */
     private int moveMode() {
         switch (moveFix.getValue()) {
             case 0:

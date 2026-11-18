@@ -29,44 +29,25 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * The scripts (2026-11-02, owner: "a tab that loads everyone's own scripts; Raven's script API and ours"). Replaces
- * the OpenSkid port, which compiled with javac only -- absent from the launchers' JRE -- and gave scripts strings.
- *
- *  - Atlas scripts are the .java files in config/Atlas/scripts, Raven's those in config/Atlas/scripts/raven16 and
- *    raven17, by the version they are written for (Raven bS's own folder, .minecraft/keystrokes/scripts, can be
- *    copied in from the Scripts tab). A file whose name starts with "_" is left alone, as in Raven.
- *  - Files are watched: a changed file is compiled again and its new version replaces the old, keeping its
- *    settings, key and on/off. A version that does not compile leaves the old one running and shows why.
- *  - Compiling runs on a thread of its own (ScriptCompiler); loading, onLoad and registering on the client
- *    thread, where the module and property maps are read.
- *  - Each script is a module: its key, HUD entry and settings work like any module's and are kept in profiles,
- *    and in config/Atlas/scripts/state.json, which is what a script gets back when it loads.
- *
- * Loading a script runs its code with this client's rights (owner's choice: no sandbox). Only load scripts whose
- * source you have read.
- */
 public final class ScriptManager {
     public static final File ROOT = new File("./config/Atlas/scripts");
-    /* 2026-11-03 (owner: "a bS 16 and a bS 17 separately"): one folder for each Raven version. raven/, the one
-       folder of the first version, is read as bS 16. */
+
     public static final File RAVEN16_DIR = new File(ROOT, "raven16");
     public static final File RAVEN17_DIR = new File(ROOT, "raven17");
     static final File LEGACY_RAVEN_DIR = new File(ROOT, "raven");
     static final File BUILD_DIR = new File(ROOT, ".build");
     static final File STATE_FILE = new File(ROOT, "state.json");
-    /** The rotation priority scripts ask with (modules use 0-6). */
+
     public static final int PRIORITY = 4;
     private static final int POLL_TICKS = 20;
     private static final int SAVE_TICKS = 200;
 
     private static final ScriptManager INSTANCE = new ScriptManager();
-    /** The script being constructed on this thread, for AtlasScript's constructor (its fields make settings). */
+
     static final ThreadLocal<ScriptEntry> CONSTRUCTING = new ThreadLocal<ScriptEntry>();
 
-    /** Every script file known, loaded or not. */
     private final List<ScriptEntry> all = new CopyOnWriteArrayList<ScriptEntry>();
-    /** The loaded ones, for the dispatcher (any thread). */
+
     final List<ScriptEntry> running = new CopyOnWriteArrayList<ScriptEntry>();
     private final ExecutorService worker = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "Atlas-Scripts");
@@ -76,7 +57,7 @@ public final class ScriptManager {
     private JsonObject state = new JsonObject();
     private String savedState = "";
     private int generation;
-    /** Goes up whenever a script's module appears, changes or goes: what the menu's search index is checked by. */
+
     private volatile int version;
     private int ticks;
     private boolean started;
@@ -88,8 +69,6 @@ public final class ScriptManager {
     public static ScriptManager get() {
         return INSTANCE;
     }
-
-    // ---- what the menu reads ---------------------------------------------
 
     public List<ScriptEntry> entries() {
         return new ArrayList<ScriptEntry>(this.all);
@@ -117,7 +96,6 @@ public final class ScriptManager {
         return null;
     }
 
-    /** The script whose module this is, or null. */
     public static ScriptEntry of(Module module) {
         return module instanceof ScriptHost ? ((ScriptHost) module).entry() : null;
     }
@@ -139,9 +117,6 @@ public final class ScriptManager {
         return ScriptCompiler.status();
     }
 
-    // ---- start, watch, reload ------------------------------------------
-
-    /** At startup, once the modules and the config are loaded. */
     public void start() {
         if (this.started) {
             return;
@@ -154,7 +129,6 @@ public final class ScriptManager {
         this.scan(false);
     }
 
-    /** Every client tick: watch the files, save the state now and then. */
     void tick() {
         if (!this.started) {
             return;
@@ -168,7 +142,6 @@ public final class ScriptManager {
         }
     }
 
-    /** Compiles every script again. */
     public void reloadAll() {
         ensureDirs();
         this.scan(true);
@@ -181,7 +154,6 @@ public final class ScriptManager {
         }
     }
 
-    /** New files get an entry, changed ones are compiled, gone ones unloaded. */
     private void scan(boolean force) {
         List<File> files = new ArrayList<File>();
         files.addAll(javaFiles(ROOT));
@@ -209,7 +181,6 @@ public final class ScriptManager {
         }
     }
 
-    /** The version a file is written for, by its folder. */
     static ScriptKind kindOf(File file) {
         File dir = file.getAbsoluteFile().getParentFile();
         if (dir.equals(RAVEN17_DIR.getAbsoluteFile())) {
@@ -221,7 +192,6 @@ public final class ScriptManager {
         return ScriptKind.ATLAS;
     }
 
-    /** The folder a version's new scripts go in. */
     public static File dirOf(ScriptKind kind) {
         return kind == ScriptKind.RAVEN16 ? RAVEN16_DIR : kind == ScriptKind.RAVEN17 ? RAVEN17_DIR : ROOT;
     }
@@ -255,7 +225,6 @@ public final class ScriptManager {
         return name.endsWith(".java") ? name.substring(0, name.length() - 5) : name;
     }
 
-    /** A module name nothing else has: a built-in module or another script keeps its own. */
     private String freeName(String base, ScriptKind kind) {
         String name = base;
         if (this.taken(name)) {
@@ -277,9 +246,6 @@ public final class ScriptManager {
         return module != null && !(module instanceof ScriptHost);
     }
 
-    // ---- compile (worker) and install (client) -----------------------------
-
-    /** What compiling one script gave. */
     static final class Compiled {
         final boolean ok;
         final List<String> problems;
@@ -320,7 +286,6 @@ public final class ScriptManager {
         });
     }
 
-    /** Wraps and compiles one script (worker thread); the class files come back as bytes. */
     Compiled build(ScriptEntry entry, String source, int gen) throws Exception {
         ScriptSource.Wrapped wrapped = ScriptSource.wrap(entry.kind, entry.name, source, gen);
         if (wrapped.problem != null) {
@@ -362,7 +327,6 @@ public final class ScriptManager {
         }
     }
 
-    /** The compiled classes by binary name. */
     static Map<String, byte[]> readClasses(File root) throws Exception {
         Map<String, byte[]> out = new HashMap<String, byte[]>();
         readClasses(root, root, out);
@@ -385,7 +349,6 @@ public final class ScriptManager {
         }
     }
 
-    /** On the client thread: the new version replaces the old, keeping its state. */
     private void install(ScriptEntry entry, Compiled compiled) {
         entry.compiling = false;
         if (!this.all.contains(entry)) {
@@ -454,7 +417,6 @@ public final class ScriptManager {
         }
     }
 
-    /** Switched off (its onDisable runs), its state kept, its module taken out. */
     private void unload(ScriptEntry entry) {
         ScriptHost host = entry.host;
         if (host != null && this.running.contains(entry)) {
@@ -463,7 +425,6 @@ public final class ScriptManager {
                     host.setEnabled(false);
                 }
             } catch (Throwable ignored) {
-                // Its onDisable threw; it is going anyway.
             }
             this.state.add(entry.name, snapshot(host, entry.properties));
         }
@@ -486,9 +447,6 @@ public final class ScriptManager {
         entry.loader = null;
     }
 
-    // ---- state ----------------------------------------------------------
-
-    /** A module as profiles write it: on/off, key, hidden, its settings. */
     static JsonObject snapshot(Module module, List<Property<?>> properties) {
         JsonObject object = new JsonObject();
         object.addProperty("toggled", module.isEnabled());
@@ -498,7 +456,6 @@ public final class ScriptManager {
             try {
                 property.write(object);
             } catch (Exception ignored) {
-                // One setting that cannot be written does not lose the others.
             }
         }
         return object;
@@ -513,7 +470,6 @@ public final class ScriptManager {
                 try {
                     property.read(object);
                 } catch (Exception ignored) {
-                    // A value from an older version of the script: its default stays.
                 }
             }
         }
@@ -532,7 +488,6 @@ public final class ScriptManager {
         return element != null && element.isJsonObject() ? element.getAsJsonObject() : null;
     }
 
-    /** Writes state.json when something changed (and at exit). */
     public synchronized void saveState() {
         try {
             for (ScriptEntry entry : this.running) {
@@ -570,9 +525,6 @@ public final class ScriptManager {
         return new JsonObject();
     }
 
-    // ---- the tab's buttons -------------------------------------------------
-
-    /** A new script from the template, opened in the system's editor; its file. */
     public File newScript(ScriptKind kind) {
         ensureDirs();
         File dir = dirOf(kind);
@@ -605,14 +557,12 @@ public final class ScriptManager {
         }
     }
 
-    /** Raven bS's folder, where Raven players keep their scripts. */
     public static File ravenHome() {
         Minecraft mc = Minecraft.getMinecraft();
         File base = mc == null || mc.mcDataDir == null ? new File(".") : mc.mcDataDir;
         return new File(base, "keystrokes" + File.separator + "scripts");
     }
 
-    /** Copies Raven bS's scripts in as that version's (none overwritten); how many came. */
     public int importRaven(ScriptKind kind) {
         ensureDirs();
         int copied = 0;
@@ -635,7 +585,6 @@ public final class ScriptManager {
         return copied;
     }
 
-    /** The system's file browser or editor, off the client thread. */
     private static void openInSystem(File file) {
         Thread thread = new Thread(() -> {
             try {
@@ -651,8 +600,6 @@ public final class ScriptManager {
         thread.setDaemon(true);
         thread.start();
     }
-
-    // ---- helpers -------------------------------------------------------
 
     private static void ensureDirs() {
         ROOT.mkdirs();
@@ -679,7 +626,6 @@ public final class ScriptManager {
         file.delete();
     }
 
-    /** Every loaded script's module that is switched on, for the dispatcher. */
     List<ScriptEntry> running() {
         return this.running;
     }

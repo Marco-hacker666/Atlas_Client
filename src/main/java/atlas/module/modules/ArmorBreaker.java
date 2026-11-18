@@ -1,6 +1,6 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): swaps to an axe mid-fight to shred armor.
+// Ported from OpenSkid (GPL-3.0)
 import atlas.Atlas;
 import atlas.event.EventTarget;
 import atlas.event.types.EventType;

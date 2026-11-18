@@ -13,12 +13,7 @@ import java.util.function.BooleanSupplier;
 
 public class ModeProperty extends Property<Integer> {
     private String[] modes;
-    /*
-     * 2026-10-08: modes kept in the code but left out of the menus (hide), and
-     * old names a saved config may still use (alias). A hidden mode still
-     * loads from a config and still works; while it is the current value the
-     * menu lists it too, so it can be switched away from.
-     */
+
     private final Set<Integer> hidden = new HashSet<>();
     private final Map<String, String> aliases = new HashMap<>();
 
@@ -31,7 +26,6 @@ public class ModeProperty extends Property<Integer> {
         this.modes = modes;
     }
 
-    /** Leaves these modes out of the menus. */
     public ModeProperty hide(String... names) {
         for (String name : names) {
             for (int i = 0; i < this.modes.length; i++) {
@@ -43,10 +37,6 @@ public class ModeProperty extends Property<Integer> {
         return this;
     }
 
-    /**
-     * 2026-10-31 (consolidation): a mode taken out. It stays in the array, so every index the code compares with
-     * keeps its meaning, but no menu offers it and a config naming it loads {@code replacement} instead.
-     */
     public ModeProperty retire(String replacement, String... names) {
         this.hide(names);
         for (String name : names) {
@@ -55,13 +45,11 @@ public class ModeProperty extends Property<Integer> {
         return this;
     }
 
-    /** A config saying {@code old} means {@code now}. */
     public ModeProperty alias(String old, String now) {
         this.aliases.put(old.toLowerCase(), now);
         return this;
     }
 
-    /** The indices the menus offer, in order: the visible modes and the current one. */
     public int[] visibleIndices() {
         List<Integer> out = new ArrayList<>();
         Integer current = this.getValue();
@@ -77,10 +65,6 @@ public class ModeProperty extends Property<Integer> {
         return array;
     }
 
-    /**
-     * The names the menus offer, in visibleIndices' order. The Atlas menu used
-     * to get them by splitting getValuePrompt on commas (2026-10-23).
-     */
     public String[] visibleModes() {
         int[] visible = this.visibleIndices();
         String[] names = new String[visible.length];
@@ -95,13 +79,11 @@ public class ModeProperty extends Property<Integer> {
         return String.join(", ", visibleModes());
     }
 
-    /** Picks the {@code index}-th entry of the menu (getValuePrompt's order). */
     public boolean setVisible(int index) {
         int[] visible = this.visibleIndices();
         return index >= 0 && index < visible.length && this.setValue(visible[index]);
     }
 
-    /** The name of mode {@code index}; empty when out of range. */
     public String modeName(int index) {
         return index >= 0 && index < this.modes.length ? this.modes[index] : "";
     }
@@ -141,7 +123,7 @@ public class ModeProperty extends Property<Integer> {
     @Override
     public boolean read(JsonObject jsonObject) {
         com.google.gson.JsonElement value = jsonObject.get(this.getName());
-        /* Saved as the mode's name; a number is its index (a hand-edited file, or MobileSafe.readMode's form). */
+
         if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber()) {
             int index = value.getAsInt();
             return index >= 0 && index < this.modes.length && this.setValue(index);

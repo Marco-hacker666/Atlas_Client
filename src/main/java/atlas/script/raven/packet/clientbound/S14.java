@@ -5,9 +5,6 @@ import net.minecraft.network.play.server.S14PacketEntity;
 
 import java.lang.reflect.Field;
 
-/**
- * An entity's relative move and/or look: position in 1/32 blocks, angles in 1/256 turns, as the game sends them.
- */
 public class S14 extends SPacket {
     private static Field entityIdField;
 
@@ -63,7 +60,6 @@ public class S14 extends SPacket {
         return out;
     }
 
-    /** The id is a protected field with no getter: "entityId" here, its SRG name in the game. */
     private static int entityId(S14PacketEntity packet) {
         try {
             if (entityIdField == null) {

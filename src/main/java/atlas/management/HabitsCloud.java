@@ -22,24 +22,11 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
-/**
- * Dodge habits shared through the relay (2026-11-16, owner: everyone's dodge data in one place, a record per player
- * created on first meeting, read by everyone after). The relay's /habits route (report-relay/src/habits.js) keeps
- * one record per lower-case name, cracked accounts apart, old observations halved every 30 days.
- *
- * - ask(): the first time a player is met this session, its record is read, on a thread of its own; until it comes
- *   the local habits (DodgeHabits) are used, and when the relay has none the player starts empty.
- * - tell(): one shot watched (a reaction and a way) goes to the relay, while Client Settings > Privacy >
- *   share-dodge-data is on (on unless turned off). What is sent: the player's name, whether it is cracked, the
- *   reaction in ticks and the way. Nothing about this client.
- *
- * Nothing here ever holds the game up: a slow or absent relay only means the local habits are used.
- */
 public final class HabitsCloud {
     private static final SharedHabits SHARED = new SharedHabits();
     private static final Pattern NAME = Pattern.compile("[A-Za-z0-9_]{1,16}");
     private static final Set<String> ASKED = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
-    /* One worker; at most a few hundred jobs waiting, the rest dropped (a busy lobby must not pile up requests). */
+
     private static final ExecutorService WORKER = new ThreadPoolExecutor(1, 1, 30L, TimeUnit.SECONDS,
             new LinkedBlockingQueue<Runnable>(256), r -> {
         Thread t = new Thread(r, "Atlas habits");
@@ -55,7 +42,6 @@ public final class HabitsCloud {
         return SHARED;
     }
 
-    /** share-dodge-data (Client Settings > Privacy). */
     public static void setSharing(boolean on) {
         sharing = on;
     }
@@ -64,7 +50,6 @@ public final class HabitsCloud {
         return sharing;
     }
 
-    /** Reads this player's record once a session (in the background). */
     public static void ask(String name, boolean cracked) {
         if (name == null || !NAME.matcher(name).matches()) {
             return;
@@ -99,13 +84,11 @@ public final class HabitsCloud {
                 }
                 SHARED.fetched(key, counts, o.get("reactionSum").getAsDouble(), o.get("reactionN").getAsDouble());
             } catch (Exception e) {
-                /* Asked again the next time it is met. */
                 ASKED.remove(key);
             }
         });
     }
 
-    /** One shot watched: counted here at once, sent to the relay while sharing. */
     public static void tell(String name, boolean cracked, double reaction, int way) {
         if (name == null || !NAME.matcher(name).matches()) {
             return;
@@ -139,7 +122,6 @@ public final class HabitsCloud {
                 out.close();
                 c.getResponseCode();
             } catch (Exception ignored) {
-                // Not sent: the local habits still have it.
             }
         });
     }

@@ -3,7 +3,6 @@ package atlas.script.raven.packet.clientbound;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S48PacketResourcePackSend;
 
-/** The server asking the client to load a resource pack. */
 public class S48 extends SPacket {
     public String url;
     public String hash;

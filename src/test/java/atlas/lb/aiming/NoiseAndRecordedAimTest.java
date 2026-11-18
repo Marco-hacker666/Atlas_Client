@@ -8,9 +8,7 @@ import java.util.Random;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** The Noise, Noise-React and Recorded turns (2026-11-10). */
 public class NoiseAndRecordedAimTest {
-
     private static SmoothContext live(Rotation previousTarget) {
         return new SmoothContext(true, null, previousTarget, 3.0, false);
     }
@@ -22,7 +20,7 @@ public class NoiseAndRecordedAimTest {
         for (int i = 0; i < 2000; i++) {
             float v = noise.advance(0.05F);
             assertTrue(v >= -1.0F && v <= 1.0F);
-            /* A smoothstep between two values in [-1, 1], 20 steps apart: never a jump. */
+
             assertTrue("jumped " + (v - last), Math.abs(v - last) < 0.2F);
             last = v;
         }
@@ -45,7 +43,7 @@ public class NoiseAndRecordedAimTest {
             assertTrue("overshot to " + next.yaw, next.yaw <= 60.0F * 1.15F + 0.5F);
             look = next;
         }
-        /* It speeds up instead of starting at full speed. */
+
         assertTrue(firstStep <= aim.acceleration + 1e-3F);
         assertTrue(look.deltaLengthTo(target) < 1.0F);
     }
@@ -58,7 +56,7 @@ public class NoiseAndRecordedAimTest {
         aim.tremor = 0.0F;
         aim.prediction = 0.0F;
         Rotation look = new Rotation(0.0F, 0.0F);
-        /* The target is at 0 for a while, then steps to 20 degrees. */
+
         Rotation still = new Rotation(0.0F, 0.0F);
         for (int i = 0; i < 5; i++) {
             look = aim.process(live(still), look, still);
@@ -69,7 +67,7 @@ public class NoiseAndRecordedAimTest {
             look = aim.process(live(moved), look, moved);
             yaws[i] = look.yaw;
         }
-        /* The first ticks after the step still see the old place. */
+
         assertEquals(0.0F, yaws[0], 1e-3F);
         assertEquals(0.0F, yaws[2], 1e-3F);
         assertTrue(yaws[3] > 0.0F);
@@ -93,12 +91,12 @@ public class NoiseAndRecordedAimTest {
                 row(1, "e5w1", 0.0F, 0.0F, 10.0F, 2.0F, 0),
                 row(2, "e5w1", 4.0F, 0.5F, 6.0F, 1.5F, 0),
                 row(3, "e5w1", 7.0F, 1.0F, 3.0F, 1.0F, 0),
-                /* A gap: not the next tick. */
+
                 row(5, "e5w1", 8.0F, 1.0F, 2.0F, 1.0F, 0),
-                /* Another module was on: neither side of this pair is used. */
+
                 row(6, "e5w1", 9.0F, 1.0F, 1.0F, 1.0F, 8),
                 row(7, "e5w1", 9.5F, 1.0F, 0.5F, 1.0F, 0),
-                /* A different target on the next tick. */
+
                 row(8, "e6w1", 100.0F, 1.0F, 30.0F, 1.0F, 0)));
         assertEquals(2, library.size());
         AimLibrary.Sample first = library.get(0);
@@ -125,14 +123,14 @@ public class NoiseAndRecordedAimTest {
     @Test
     public void recordedTurnIsMirroredAndScaled() {
         AimLibrary.Sample sample = new AimLibrary.Sample(10.0F, 2.0F, 4.0F, 1.0F, -1);
-        /* Same side, same size: as recorded. */
+
         float[] same = RecordedAim.turnFor(sample, new float[]{10.0F, 2.0F}, 1.0F);
         assertEquals(4.0F, same[0], 1e-4F);
         assertEquals(1.0F, same[1], 1e-4F);
-        /* Target on the left, error twice as big (capped at 1.6x). */
+
         float[] mirrored = RecordedAim.turnFor(sample, new float[]{-20.0F, 2.0F}, 1.0F);
         assertEquals(-4.0F * 1.6F, mirrored[0], 1e-4F);
-        /* Half strength. */
+
         assertEquals(2.0F, RecordedAim.turnFor(sample, new float[]{10.0F, 2.0F}, 0.5F)[0], 1e-4F);
     }
 
@@ -170,7 +168,7 @@ public class NoiseAndRecordedAimTest {
         library.addLive(row(3, "a", 7.0F, 0.0F, 3.0F, 0.0F, 0));
         assertEquals(2, library.size());
         assertEquals(1, library.get(0).next);
-        /* A new recording's header starts over: no link across it. */
+
         library.addLive(HEADER);
         library.addLive(row(4, "a", 8.0F, 0.0F, 2.0F, 0.0F, 0));
         assertEquals(2, library.size());

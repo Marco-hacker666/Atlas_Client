@@ -1,8 +1,5 @@
-/*
- * Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0),
- * src/main/java/openskid/module/modules/TNTTimer.java, 2026-10-05: package openskid -> atlas,
- * OpenSkid -> Atlas. Changes after that are marked in comments.
- */
+// Ported from OpenSkid (https://github.com/loloshelly102-a11y/OpenSkid, GPL-3.0), src/main/java/openskid/module/modules/TNTTimer.java
+
 package atlas.module.modules;
 
 import atlas.event.EventTarget;
@@ -23,7 +20,7 @@ import org.lwjgl.opengl.GL11;
 import java.awt.Color;
 import java.util.Locale;
 
-// Countdown labels above primed TNT. Concept adapted from the raven-bS TNTTimer module.
+// Concept adapted from the raven-bS TNTTimer module.
 public class TNTTimer extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final float FULL_FUSE = 80.0f;

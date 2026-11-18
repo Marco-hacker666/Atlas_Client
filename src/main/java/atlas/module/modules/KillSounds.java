@@ -1,10 +1,7 @@
 package atlas.module.modules;
 
-// Ported from OpenSkid (GPL-3.0): plays a chosen sound on every kill.
-//
-// The pack lives at /assets/atlas/sounds and is played from the classpath with
-// javax.sound.sampled on a daemon thread, as upstream does, so the module keeps
-// its own sounds rather than borrowing vanilla ones.
+// Ported from OpenSkid (GPL-3.0)
+
 import java.io.BufferedInputStream;
 import java.io.InputStream;
 import javax.sound.sampled.AudioInputStream;
@@ -159,8 +156,6 @@ public class KillSounds extends Module {
                     } catch (Exception ignored) {
                     }
                     try {
-                        /* The buffered stream is not owned by the clip, so it
-                           is closed here too: one kill must not leak a line. */
                         if (buffered != null) {
                             buffered.close();
                         }
@@ -178,8 +173,6 @@ public class KillSounds extends Module {
         this.lastAttackAt = 0L;
     }
 
-    /* 2026-10-31 (audit): a world unload leaves its entities alive (isDead stays false), and one kept here held the
-       whole old world in memory -- for good while this module was off. Dropped when a world loads. */
     @atlas.event.EventTarget(whenDisabled = true)
     public void onWorldDropEntities(atlas.events.LoadWorldEvent event) {
         this.target = null;

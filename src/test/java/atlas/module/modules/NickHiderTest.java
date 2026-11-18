@@ -7,7 +7,6 @@ import java.util.regex.Pattern;
 import static org.junit.Assert.assertEquals;
 
 public class NickHiderTest {
-
     private static String hide(String name, String text) {
         return Pattern.compile(NickHider.spaced(name), Pattern.CASE_INSENSITIVE).matcher(text).replaceAll("You");
     }

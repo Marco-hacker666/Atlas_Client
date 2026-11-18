@@ -40,7 +40,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public class TimerRange extends Module {
    private static final Minecraft mc = Minecraft.getMinecraft();
 
-   /* SLINKY and LEGIT (2026-10-19): OpenSlinky's Timer Range, Regular and Legit (TimerRangeSlinky). */
    public final ModeProperty timerBoostMode = new ModeProperty("mode", 2, new String[]{"NORMAL", "SMART", "MODERN", "SLINKY", "LEGIT"});
    static final int MODE_SLINKY = 3;
    static final int MODE_LEGIT = 4;
@@ -97,7 +96,7 @@ public class TimerRange extends Module {
    private final Queue<Packet<?>> packetsReceived = new ConcurrentLinkedQueue<>();
    private boolean blinked = false;
    private boolean shouldReset = false;
-   /** A lagback or knockback arrived (network thread): reset on the next client tick. */
+
    private volatile boolean resetFromPacket;
    private volatile String resetWhy = "";
    private boolean confirmTick = false;
@@ -107,16 +106,13 @@ public class TimerRange extends Module {
    public TimerRange() {
       super("TimerRange", false);
 
-      /* Incoming holder: one at a time, never a packet another module has taken (PacketHub, 2026-10-18). */
       atlas.management.PacketHub.registerIncoming("TimerRange", () -> this.packetsReceived.size(), this::unblink);
    }
 
    @Override
    public void onDisabled() {
       slinky.reset();
-      /* 2026-10-30 (audit): shouldResetTimer() is a no-op while shouldReset is already true, which it is during a
-         boost (set by the last reset before it, never cleared by the boost), so a TimerRange switched off mid-boost
-         left the game at the boost speed. Off means 1.0. */
+
       shouldResetTimer();
       setTimerSpeed(1f);
       resetFromPacket = false;
@@ -187,9 +183,6 @@ public class TimerRange extends Module {
 
    @EventTarget
    public void onTick(TickEvent event) {
-      /* Every handler here used to run with the module switched off: in
-         MODERN mode that boosted the timer while "off", and the reset path
-         kept forcing it back to 1 over Timer and Scaffold. */
       if (!this.isEnabled()) return;
       if (slinkyModes.getAsBoolean()) {
          if (event.getType() == EventType.PRE) {
@@ -333,8 +326,6 @@ public class TimerRange extends Module {
       }
 
       if (event.getType() == EventType.RECEIVE) {
-         /* 2026-10-30 (audit): this runs on the network thread; the timer is reset on the next client tick
-            instead of from here (resetFromPacket). */
          if (resetOnLagBack.getValue() && packet instanceof S08PacketPlayerPosLook) {
             resetFromPacket = true;
             resetWhy = "Lagback";
@@ -468,9 +459,6 @@ public class TimerRange extends Module {
       return yawDiff <= maxAngleDiff;
    }
 
-
-   /* 2026-10-30 (audit): through the accessor, as every other module does; it looked both fields up by
-      reflection on every call, several times a tick. */
    private void setTimerSpeed(float speed) {
       if (speed == 1f) {
          atlas.util.TimerControl.release(this);

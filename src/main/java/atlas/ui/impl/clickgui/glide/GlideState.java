@@ -8,12 +8,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Where the Glide windows were left: config/Atlas/glide-gui.txt, one line per
- * window ("title TAB x TAB y TAB folded TAB hidden"). The first line names the
- * window width, so a file saved for another width is ignored and the windows
- * lay out afresh.
- */
 final class GlideState {
     private static final File FILE = new File("./config/Atlas/glide-gui.txt");
 

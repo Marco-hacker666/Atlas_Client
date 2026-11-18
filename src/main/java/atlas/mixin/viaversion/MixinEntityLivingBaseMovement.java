@@ -8,7 +8,6 @@ import org.spongepowered.asm.mixin.injection.ModifyConstant;
 
 @Mixin(EntityLivingBase.class)
 public abstract class MixinEntityLivingBaseMovement {
-
   @ModifyConstant(method = "onLivingUpdate", constant = @Constant(doubleValue = 0.005D))
   private double viaversion_movementThreshold(double constant) {
     if (ViaLoadingBase.getInstance().getTargetVersion().getVersion() >= 107) {

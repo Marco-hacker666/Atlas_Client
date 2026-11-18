@@ -33,7 +33,6 @@ import net.minecraft.world.World;
 public class FixedSoundEngine {
   private static final Minecraft mc = Minecraft.getMinecraft();
 
-  /** Fix for block breaking sounds on protocols above 1.8.x */
   public static boolean destroyBlock(World world, BlockPos pos, boolean dropBlock) {
     IBlockState iblockstate = world.getBlockState(pos);
     Block block = iblockstate.getBlock();
@@ -51,7 +50,6 @@ public class FixedSoundEngine {
     }
   }
 
-  /** Fix for block placing sounds on protocols above 1.8.x */
   public static boolean onItemUse(
       ItemBlock iblock,
       ItemStack stack,
@@ -89,7 +87,6 @@ public class FixedSoundEngine {
 
         if (ViaLoadingBase.getInstance().getTargetVersion().getOriginalVersion()
             != ViaMCP.NATIVE_VERSION) {
-
           mc.theWorld.playSoundAtPos(
               pos.add(0.5, 0.5, 0.5),
               iblock.getBlock().stepSound.getPlaceSound(),

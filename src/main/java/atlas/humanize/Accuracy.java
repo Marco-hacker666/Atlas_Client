@@ -3,31 +3,14 @@ package atlas.humanize;
 import java.util.ArrayDeque;
 import java.util.Random;
 
-/**
- * Whether this click lands, so that over a fight the clicks that land come to
- * the profile's hit rate, the way a person's do (2026-10-25).
- *
- * The aim is not a fixed coin: it drifts slowly around hitRate
- * (Ornstein-Uhlenbeck, within +-spread), goes hot or cold for a few clicks,
- * and is moved by the situation -- distance, a strafing or airborne target,
- * being in the air, having just been hit, the first click of a combo, a target
- * nearly dead. The measured rate over the last clicks pulls the chance back
- * toward the aim (correction), so the long-run rate is accurate while short
- * runs still vary. A rate guard keeps hits a second within min..max.
- *
- * The caller asks {@link #decide} on a click and reports what really happened
- * with {@link #record}: a planned hit can still miss (the ray did not land),
- * and that is what the rate is measured on.
- */
 public final class Accuracy {
-    /** What the situation of this click is. */
     public static final class Situation {
         public double distance;
-        /** Blocks a tick the target moves across the look. */
+
         public double targetLateralSpeed;
         public boolean targetAirborne;
         public boolean selfAirborne;
-        /** Ticks since this player was hit (-1: not recently). */
+
         public int ticksSinceHurt = -1;
         public float targetHealth = 20.0F;
     }
@@ -59,14 +42,13 @@ public final class Accuracy {
         this.state = STATE_NORMAL;
         this.stateLeft = 0;
         this.hitTimes.clear();
-        /* 2026-10-26 (review): the drift, its clock, the last hit and the last aim also start over. */
+
         this.drift = 0.0;
         this.lastDriftAt = Long.MIN_VALUE;
         this.lastHitAt = Long.MIN_VALUE;
         this.lastAim = 0.0;
     }
 
-    /** The measured rate over the window (0..1), or -1 before 5 clicks. */
     public double measured(int windowSize) {
         int n = Math.min(this.count, Math.max(1, Math.min(windowSize, this.window.length)));
         if (n < 5) {
@@ -82,7 +64,6 @@ public final class Accuracy {
         return hits / (double) n;
     }
 
-    /** The rate aimed at for the last decision (0..1), for stats. */
     public double lastAim() {
         return this.lastAim;
     }
@@ -95,7 +76,6 @@ public final class Accuracy {
         return this.state == STATE_COLD;
     }
 
-    /** The rate aimed at for this click, 0.02..0.98. */
     public double aim(HumanProfile p, Situation s, long now) {
         double spread = Math.max(0.0, p.hitRateSpread) / 100.0;
         if (this.lastDriftAt == Long.MIN_VALUE) {
@@ -121,7 +101,6 @@ public final class Accuracy {
         return this.lastAim;
     }
 
-    /** Points off the hit rate for the situation (negative: a bonus). */
     public double situationPenalty(HumanProfile p, Situation s, long now) {
         if (s == null) {
             return 0.0;
@@ -147,7 +126,6 @@ public final class Accuracy {
         return points;
     }
 
-    /** Whether this click should land. */
     public boolean decide(HumanProfile p, Situation s, long now) {
         stepState(p);
         while (!this.hitTimes.isEmpty() && now - this.hitTimes.peekFirst() > 1000L) {
@@ -189,7 +167,6 @@ public final class Accuracy {
         }
     }
 
-    /** What really happened to this click. */
     public void record(boolean hit, long now) {
         this.window[this.pos] = hit;
         this.pos = (this.pos + 1) % this.window.length;

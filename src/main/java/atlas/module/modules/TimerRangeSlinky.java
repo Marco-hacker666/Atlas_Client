@@ -20,25 +20,6 @@ import org.lwjgl.input.Mouse;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
- * OpenSlinky's Timer Range, ported for TimerRange's SLINKY and LEGIT modes
- * (2026-10-19, owner: "bring in Slinky's legit TimerRange; ours is useful but
- * brings mitigation").
- *
- * Ours freezes on an attack and then runs at timer-boost for a while. Slinky
- * only acts when, walking forward on the ground at a target that can be hit
- * (hurt time 1 or less), a short prediction says the crosshair will be on the
- * target's box within 1-4 ticks (duration), at least min-dist away. Then:
- *   Regular (SLINKY): the next frame runs those ticks at once (ahead of
- *     time), and the game then stands still for as long, paying the time
- *     back; optionally blocking while it stands.
- *   Legit (LEGIT): the game stands still first, for those ticks, with every
- *     outgoing packet held; then the ticks are run at once and the held
- *     packets go first.
- * Either way no time is gained overall (no timer speed above 1), the jump is
- * at most four ticks, and an attack is clicked on each of those ticks while
- * the crosshair is on a player. A cooldown (seconds) follows each use.
- */
 final class TimerRangeSlinky {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final String HUB = "TimerRange/out";
@@ -57,8 +38,7 @@ final class TimerRangeSlinky {
     private EntityPlayer target;
     private double targetDistanceSq;
     private final ConcurrentLinkedQueue<Packet<?>> held = new ConcurrentLinkedQueue<Packet<?>>();
-    /* The trigger log (2026-10-20, owner: LEGIT still seemed to bring mitigation; each use is written with the
-       time to the millisecond, so it can be lined up with FlagDetector's HIT-DMG and mitigation lines). */
+
     private static final java.io.File LOG_DIR = new java.io.File("./config/Atlas/");
     private static final java.text.SimpleDateFormat FILE_STAMP = new java.text.SimpleDateFormat("yyyyMMdd-HHmmss");
     private static final java.text.SimpleDateFormat LINE_STAMP = new java.text.SimpleDateFormat("HH:mm:ss.SSS");
@@ -79,8 +59,6 @@ final class TimerRangeSlinky {
     private static Timer timer() {
         return ((IAccessorMinecraft) mc).getTimer();
     }
-
-    // ---- target, as Slinky's TargetCombatStatus picks it ----------------------
 
     private static boolean hostile(EntityPlayer p) {
         return p != mc.thePlayer && p.getHealth() > 0.0F && !p.isPlayerSleeping() && !TeamUtil.isFriend(p)
@@ -135,8 +113,6 @@ final class TimerRangeSlinky {
         this.targetDistanceSq = best;
     }
 
-    // ---- once a tick (TickEvent PRE) ------------------------------------------------
-
     void tick() {
         if (mc.thePlayer == null || mc.theWorld == null) {
             return;
@@ -179,15 +155,12 @@ final class TimerRangeSlinky {
         }
     }
 
-    /** Where the server last put this player (the end of the client's smoothing). */
     private static Vec3 server(EntityPlayer p) {
         if (!(p instanceof EntityOtherPlayerMP)) {
             return new Vec3(p.posX, p.posY, p.posZ);
         }
         return new Vec3(p.serverPosX / 32.0, p.serverPosY / 32.0, p.serverPosZ / 32.0);
     }
-
-    // ---- once a frame (Render3DEvent) -------------------------------------------------
 
     void frame(float renderPartialTicks) {
         long now = System.nanoTime();
@@ -214,7 +187,6 @@ final class TimerRangeSlinky {
                 releaseUse();
             }
             if (legit()) {
-                /* The ticks the game stood still for, run at once on the next frame. */
                 timer.elapsedPartialTicks = (float) this.remaining;
             }
         }
@@ -303,7 +275,6 @@ final class TimerRangeSlinky {
         atlas.util.AsyncLog.append(this.logTarget, LINE_STAMP.format(new java.util.Date()) + "  " + line);
     }
 
-    /** Vanilla's ground input step, as Slinky's RotationMath.movement. */
     static double[] movement(float yaw, float forward, float sideways, float speed) {
         float f = forward * 0.98F;
         float s = sideways * 0.98F;
@@ -340,16 +311,12 @@ final class TimerRangeSlinky {
         this.useOwned = false;
     }
 
-    // ---- packets -----------------------------------------------------------------------
-
-    /** Legit: everything going out while the game stands still waits for it to move again. */
     void onPacket(PacketEvent event) {
         if (this.packetHold && PacketHub.take(event, HUB)) {
             this.held.add(event.getPacket());
         }
     }
 
-    /** A correction or a world change: stop standing still at once. */
     void interrupt() {
         if (this.frozen || this.packetHold || this.useOwned) {
             reset();
@@ -372,7 +339,7 @@ final class TimerRangeSlinky {
         this.frozen = false;
         this.packetHold = false;
         flushHeld();
-        /* 2026-10-31 (audit): TimerRange calls this on a world load too; the old target held its world. */
+
         this.target = null;
         if (this.useOwned) {
             releaseUse();

@@ -5,7 +5,6 @@ import static org.lwjgl.opengl.GL11.*;
 import net.minecraft.client.renderer.GlStateManager;
 
 public class GLUtil {
-
     public static void enableDepth() {
         GlStateManager.enableDepth();
         GlStateManager.depthMask(true);

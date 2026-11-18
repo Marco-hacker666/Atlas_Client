@@ -8,9 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** GODBRIDGE2's rhythm (2026-11-18): the start from standing, the jumps, the reset, the hand's jump key. */
 public class GodBridgeRhythmTest {
-
     private static GodBridgeRhythm.Input walking() {
         GodBridgeRhythm.Input in = new GodBridgeRhythm.Input();
         in.forward = true;
@@ -29,7 +27,6 @@ public class GodBridgeRhythmTest {
         return s;
     }
 
-    /** Ticks until the start lets the walk go. */
     private static int startTicks(GodBridgeRhythm r, GodBridgeRhythm.Settings s) {
         for (int i = 1; i < 100; i++) {
             GodBridgeRhythm.Keys k = r.tick(walking(), s);

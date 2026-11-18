@@ -31,51 +31,37 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * The Glide style's settings, opened in place under a module's row (stage
- * G2): what is open, what is being dragged, typed into or bound, how tall it
- * all is, and how each kind of setting is drawn and changed.
- *
- * Rows: the module's key first, then every setting its module shows now.
- * Switch: click. Number: drag the track (Shift for fine steps), double click
- * to type a value. Mode: click for the next, right click for the list.
- * Colour: click to open the picker (shade box, hue bar, hex). Text: click to
- * type. Key: click, then press a key (Esc, Delete or Backspace clears; right
- * click clears too). Middle click on any setting puts it back to its default.
- */
 final class GlideSettings {
     static final float ROW = 14.0F;
     static final float SLIDER = 22.0F;
     static final float OPTION = 12.0F;
     static final float SV_H = 46.0F;
     static final float HUE_H = 6.0F;
-    /** The colour picker under a colour row: shade box, hue bar, hex field and gaps. */
+
     static final float PICKER = 4.0F + SV_H + 4.0F + HUE_H + 4.0F + ROW + 3.0F;
-    /** Space above and below the rows of one module's settings. */
+
     static final float INSET = 2.0F;
     private static final long DOUBLE_CLICK_MS = 300L;
 
     private final GlideClickGui gui;
     private final GlideAnim anim;
     private final Set<Module> expanded = new HashSet<Module>();
-    /** Which module each drawn setting belongs to (Property does not say), for key-conflict names. */
+
     private final Map<Property<?>, Module> owners = new HashMap<Property<?>, Module>();
 
     private ModeProperty modeOpen;
     private ColorProperty colorOpen;
-    /** The open picker's hue, saturation and brightness: kept apart so a grey keeps its hue while dragging. */
+
     private final float[] hsb = new float[3];
 
     private Module listeningModule;
     private KeyProperty listeningKey;
 
-    /** A number, text or hex field being typed into, and whether its last Enter was refused. */
     private Property<?> editing;
     private boolean editingHex;
     private final TextInput input = new TextInput(64, false);
     private boolean refused;
 
-    /** The slider or picker part being dragged, and a slider's unrounded value (for Shift steps). */
     private GlideHit drag;
     private float dragValue;
     private float dragLastX;
@@ -88,8 +74,6 @@ final class GlideSettings {
         this.anim = anim;
     }
 
-    // ---- state ---------------------------------------------------------
-
     boolean isExpanded(Module module) {
         return this.expanded.contains(module);
     }
@@ -100,12 +84,10 @@ final class GlideSettings {
         }
     }
 
-    /** How far a module's settings are open, eased (0-1). */
     float openness(Module module) {
         return this.anim.ease("open:" + module.getName(), this.expanded.contains(module) ? 1.0F : 0.0F, 14.0F);
     }
 
-    /** Whether keys go to a field or a key binding now, not to the menu. */
     boolean capturesKeys() {
         return this.editing != null || this.listeningModule != null || this.listeningKey != null;
     }
@@ -114,7 +96,6 @@ final class GlideSettings {
         return this.drag != null;
     }
 
-    /** Leaves whatever is half done: a field is committed if it parses, else dropped. */
     void close() {
         if (this.editing != null) {
             commit(false);
@@ -138,9 +119,6 @@ final class GlideSettings {
         return out;
     }
 
-    // ---- sizes ---------------------------------------------------------
-
-    /** Full height of a module's settings, opened all the way. */
     float height(Module module) {
         float h = 2 * INSET + ROW;
         for (Property<?> property : visibleOf(module)) {
@@ -162,9 +140,6 @@ final class GlideSettings {
         return ROW;
     }
 
-    // ---- drawing -------------------------------------------------------
-
-    /** Draws a module's settings from {@code top}, {@code shown} tall (the rest is clipped); returns nothing. */
     void draw(GlideFrame frame, Module module, float x, float top, float shown, float fade, int accent) {
         float w = GlideTheme.WIDTH;
         GlideDraw.pushClip(x, top, x + w, top + shown);
@@ -206,7 +181,6 @@ final class GlideSettings {
                 GlideTheme.alpha(listening ? accent : module.getKey() > 0 ? GlideTheme.TEXT : GlideTheme.FAINT, fade));
     }
 
-    /** The hover tint of a settings row. */
     private void hover(GlideHit hit, float x, float rowY, float h, float fade) {
         float t = this.anim.ease("shv:" + System.identityHashCode(hit.target) + ":" + hit.kind,
                 this.gui.isOver(hit) ? 1.0F : 0.0F, 18.0F);
@@ -316,7 +290,6 @@ final class GlideSettings {
             GlideDraw.textRight(font, value, right, rowY, ROW,
                     GlideTheme.alpha(listening ? accent : key > 0 ? GlideTheme.TEXT : GlideTheme.FAINT, fade));
         } else {
-            /* Lists, files and the like: shown here, set from the Atlas menu or a command. */
             GlideHit hit = hit(GlideHit.Kind.OTHER, frame, property, x, rowY, x + GlideTheme.WIDTH, rowY + ROW);
             hover(hit, x, rowY, ROW, fade);
             String value = String.valueOf(property.getValue());
@@ -343,7 +316,7 @@ final class GlideSettings {
             Color.RGBtoHSB(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255, this.hsb);
         }
         float y = rowY + ROW + 4.0F;
-        /* Shade box: the hue at full strength, washed to white leftward and to black downward. */
+
         int pure = Color.HSBtoRGB(this.hsb[0], 1.0F, 1.0F) | 0xFF000000;
         RenderUtil.drawRect(left, y, right, y + SV_H, GlideTheme.alpha(pure, fade));
         GlideDraw.gradientH(left, y, right, y + SV_H, GlideTheme.alpha(0xFFFFFFFF, fade), 0x00FFFFFF);
@@ -390,7 +363,6 @@ final class GlideSettings {
         return text.substring(0, caret) + (blink ? "|" : " ") + text.substring(caret);
     }
 
-    /** The hover help of a settings hit, or null. */
     String help(GlideHit hit) {
         if (hit.kind == GlideHit.Kind.BIND) {
             return "The key that switches " + ((Module) hit.target).getName()
@@ -421,9 +393,6 @@ final class GlideSettings {
         return out.length() == 0 ? null : out.toString().trim();
     }
 
-    // ---- input ---------------------------------------------------------
-
-    /** A click on one of this class's hits. True when it was handled. */
     boolean click(GlideHit hit, float mx, float my, int button) {
         if (this.editing != null && !(hit.target == this.editing
                 && (hit.kind == GlideHit.Kind.NUM || hit.kind == GlideHit.Kind.TEXT || hit.kind == GlideHit.Kind.COLOR_HEX))) {
@@ -532,7 +501,6 @@ final class GlideSettings {
         }
     }
 
-    /** A click on nothing of this class's: a field being typed into is committed. */
     void clickElsewhere() {
         if (this.editing != null) {
             commit(false);
@@ -548,11 +516,10 @@ final class GlideSettings {
         this.editingHex = hex;
         this.refused = false;
         this.input.set(text);
-        /* Select it all, so typing replaces the value (Ctrl+A in TextInput). */
+
         this.input.key('\u0001', Keyboard.KEY_A, true, () -> "");
     }
 
-    /** Called every frame while a mouse button is held. */
     void dragTo(float mx, float my) {
         GlideHit hit = this.drag;
         if (hit == null) {
@@ -588,7 +555,6 @@ final class GlideSettings {
         property.setBase(Property.Source.USER, Integer.valueOf(Color.HSBtoRGB(this.hsb[0], this.hsb[1], this.hsb[2]) & 0xFFFFFF));
     }
 
-    /** A key while {@link #capturesKeys()}. */
     void key(char typed, int key) {
         if (this.listeningModule != null) {
             int bound = clears(key) ? 0 : key;
@@ -635,10 +601,6 @@ final class GlideSettings {
         }
     }
 
-    /**
-     * Applies the field. With {@code keep}, a value the setting refuses keeps
-     * the field open in red; otherwise it is dropped.
-     */
     private void commit(boolean keep) {
         Property<?> property = this.editing;
         if (property == null) {
@@ -675,8 +637,6 @@ final class GlideSettings {
             this.gui.say("Not a value for " + property.getLabel() + (range.isEmpty() ? "" : " (" + range + ")"), true);
         }
     }
-
-    // ---- numbers -------------------------------------------------------
 
     static boolean isNumeric(Property<?> property) {
         return property instanceof IntProperty || property instanceof FloatProperty

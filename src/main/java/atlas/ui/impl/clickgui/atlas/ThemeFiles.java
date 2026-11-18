@@ -30,28 +30,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Named themes (2026-11-09): everything about how the client looks, saved
- * under a name and put back with one click from the Theme screen.
- *
- * A theme holds three things: the menu's Appearance settings (AtlasTheme);
- * the Theme tab -- the Theme module, its colour groups and HUDStyle, each
- * with whether it is on; and the part of the HUD module that is its look
- * (colours, panels, font, the list's bar). Positions, sizes, which modules
- * the list hides and every setting that is not about looks stay out, so
- * loading a theme never moves anything or changes how anything plays.
- *
- * Files: config/Atlas/themes/NAME.json, plain JSON in the config's own
- * format (each setting writes and reads itself), so a theme can later be
- * shared as text.
- */
 final class ThemeFiles {
-
     static final File DIR = new File("./config/Atlas/themes");
     static final int VERSION = 1;
     static final int MAX_NAME = 24;
 
-    /** The HUD module's settings that are its look. */
     static final Set<String> HUD_LOOK = hudLook(new HashSet<String>(Arrays.asList(
             "color", "color-speed", "color-saturation", "color-brightness", "custom-color-1", "custom-color-2",
             "custom-color-3", "color-dist", "hud-theme", "background", "bg-alpha", "blur", "blur-radius", "glow",
@@ -59,7 +42,6 @@ final class ThemeFiles {
             "Shaders", "suffixes", "separator-mode", "lower-case", "font-mode", "rounded", "corner-radius",
             "padding")));
 
-    /* 2026-11-14: which module list is drawn (interface), and every setting of the custom one. */
     private static Set<String> hudLook(Set<String> names) {
         names.add("interface");
         names.addAll(Arrays.asList(HUD.LIST_SETTINGS));
@@ -69,10 +51,6 @@ final class ThemeFiles {
     private ThemeFiles() {
     }
 
-    /**
-     * A name fit for a file: letters, digits, spaces, dashes and
-     * underscores, trimmed, at most MAX_NAME long; empty when nothing is left.
-     */
     static String cleanName(String raw) {
         if (raw == null) {
             return "";
@@ -91,7 +69,6 @@ final class ThemeFiles {
         return new File(DIR, cleanName(name) + ".json");
     }
 
-    /** Saved themes, by name, A to Z. */
     static List<String> list() {
         List<String> names = new ArrayList<String>();
         File[] files = DIR.listFiles();
@@ -112,9 +89,6 @@ final class ThemeFiles {
         return !cleanName(name).isEmpty() && fileOf(name).isFile();
     }
 
-    // ---- what a theme holds -----------------------------------------------
-
-    /** The modules a theme holds settings of, in a stable order, and which settings (null: all of them). */
     static Map<Module, Set<String>> lookModules() {
         Map<Module, Set<String>> out = new LinkedHashMap<Module, Set<String>>();
         if (Atlas.moduleManager == null) {
@@ -141,7 +115,6 @@ final class ThemeFiles {
         return list == null ? Collections.<Property<?>>emptyList() : list;
     }
 
-    /** Everything a theme holds, as it is now. */
     static JsonObject capture(AtlasTheme theme) {
         JsonObject look = new JsonObject();
         look.addProperty("version", VERSION);
@@ -158,12 +131,11 @@ final class ThemeFiles {
         for (Map.Entry<Module, Set<String>> entry : lookModules().entrySet()) {
             Module module = entry.getKey();
             JsonObject object = new JsonObject();
-            /* The HUD module itself is never switched by a theme: only its look is. */
+
             if (entry.getValue() == null) {
                 object.addProperty("toggled", module.isEnabled());
             }
             for (Property<?> property : propertiesOf(module)) {
-                /* A key is how a look is switched, not part of one (Theme's next-theme-key, 2026-11-14). */
                 if (property instanceof KeyProperty) {
                     continue;
                 }
@@ -177,12 +149,6 @@ final class ThemeFiles {
         return look;
     }
 
-    /**
-     * Puts a theme's values back. Anything the theme does not name keeps its
-     * value, so a theme saved before a setting existed still loads. Read as a
-     * config is (Config.loading), so the Theme module's preset is not
-     * re-applied over the colours that were saved with it.
-     */
     static void apply(JsonObject look, AtlasTheme theme) {
         if (look == null) {
             return;
@@ -222,7 +188,6 @@ final class ThemeFiles {
                         try {
                             module.setEnabled(on);
                         } catch (Exception ignored) {
-                            // A module that cannot switch now keeps its state; the colours still load.
                         }
                     }
                 }
@@ -245,11 +210,8 @@ final class ThemeFiles {
         try {
             property.read(from);
         } catch (Exception ignored) {
-            // One bad value keeps its current setting; the rest still load.
         }
     }
-
-    // ---- files ------------------------------------------------------------
 
     static boolean save(String name, AtlasTheme theme) {
         String clean = cleanName(name);
@@ -278,7 +240,6 @@ final class ThemeFiles {
         }
     }
 
-    /** A saved theme's contents, or null when it is missing or broken. */
     static JsonObject read(String name) {
         File file = fileOf(name);
         if (!file.isFile()) {

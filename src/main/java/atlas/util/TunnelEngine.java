@@ -1,7 +1,7 @@
 package atlas.util;
 
-// Ported from OpenSkid (GPL-3.0): tunnel stuck/back/turn state, adapted from
-// the Expo AutoTunnel concept. Used by Tower's Tunnel mode.
+// Ported from OpenSkid (GPL-3.0)
+
 public class TunnelEngine {
     public enum Action {
         NONE,

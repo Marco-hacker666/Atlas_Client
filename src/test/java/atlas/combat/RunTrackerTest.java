@@ -6,15 +6,12 @@ import java.util.Collections;
 
 import static org.junit.Assert.*;
 
-/** Velocity from server updates that come every second tick (2026-11-01). */
 public class RunTrackerTest {
-
     @Test
     public void updatesEverySecondTickGiveASteadySpeed() {
         RunTracker tracker = new RunTracker();
         double v = 0.28;
         for (int t = 0; t <= 20; t++) {
-            /* The position changes only on even ticks, by two ticks' worth. */
             double x = (t / 2) * 2 * v;
             tracker.observe(t, 1, x, 0.0);
             if (t >= 4) {

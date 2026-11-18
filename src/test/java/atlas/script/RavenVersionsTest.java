@@ -15,12 +15,6 @@ import java.util.Map;
 
 import static org.junit.Assert.*;
 
-/**
- * Raven bS 16 and bS 17 as two versions (2026-11-03): bS 17's additions exist only for bS 17 scripts, its rule
- * for nested types, and a real bS 17 script (the owner's LEGITTELLY, kept out of the repository in
- * backups/scripts-work) compiling against this client's classes alone with both compilers and answering its
- * hooks with bS 17's arguments.
- */
 public class RavenVersionsTest {
     private static final File REAL_SCRIPT = new File("../backups/scripts-work/LEGITTELLY.java");
 
@@ -86,7 +80,6 @@ public class RavenVersionsTest {
         assertEquals("no line moves", source.split("\n").length, out.split("\n").length);
     }
 
-    /** Full check, 2026-11-03: Method.invoke widens, so Raven calls these; the hook lookup has to find them too. */
     @Test
     public void hookArgumentsWidenAsInRaven() throws Exception {
         JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
@@ -124,7 +117,6 @@ public class RavenVersionsTest {
         }
     }
 
-    /** A script for OpenB4 calls getScriptName(); one that declares it itself keeps its own. */
     @Test
     public void getScriptNameIsThereWhenCalled() throws Exception {
         JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
@@ -205,7 +197,7 @@ public class RavenVersionsTest {
                     "onWorldJoin", "onPostMotion", "onMouse", "onKey"}) {
                 assertTrue(hook, runtime.has(hook));
             }
-            /* bS 17 asks onMouse with the pointer; not running, not armed: the click goes through. */
+
             assertEquals(1, runtime.ask("onMouse", 1, true, 100, 100));
             assertEquals("bS 16's two-argument onMouse is not this script's", -1, runtime.ask("onMouse", 1, true));
         } finally {

@@ -5,7 +5,6 @@ import net.minecraft.network.play.client.C16PacketClientStatus;
 
 import java.util.Locale;
 
-/** "PERFORM_RESPAWN", "REQUEST_STATS" or "OPEN_INVENTORY_ACHIEVEMENT". */
 public class C16 extends CPacket {
     public String status;
 

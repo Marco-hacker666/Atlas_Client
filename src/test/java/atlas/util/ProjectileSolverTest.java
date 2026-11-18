@@ -9,10 +9,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ProjectileSolverTest {
-
     private static final double EYE = 1.62;
 
-    /** A player standing at (x, y, z), moving (vx, vy, vz) blocks a tick. */
     private static ProjectileSolver.Target player(double x, double y, double z, double vx, double vy, double vz) {
         return t -> new double[]{x + vx * t - 0.3, y + vy * t, z + vz * t - 0.3,
                 x + vx * t + 0.3, y + vy * t + 1.8, z + vz * t + 0.3};
@@ -42,7 +40,7 @@ public class ProjectileSolverTest {
         double[] one = flight.path.get(1);
         assertEquals(3.0, one[2], 1.0E-9);
         double[] two = flight.path.get(2);
-        /* After the first tick: motion 3 x 0.99 across, 0 x 0.99 - 0.05 down. */
+
         assertEquals(3.0 + 2.97, two[2], 1.0E-9);
         assertEquals(EYE - 0.1 - 0.05, two[1], 1.0E-9);
     }
@@ -63,12 +61,11 @@ public class ProjectileSolverTest {
 
     @Test
     public void aRunningTargetIsLed() {
-        /* Sprinting across the line of fire, 0.28 a tick, and strafing up a slope. */
         ProjectileSolver.Target target = player(0.0, 0.0, 35.0, 0.28, 0.05, -0.1);
         ProjectileSolver.Aim aim = ProjectileSolver.solve(0.0, EYE, 0.0, 3.0, ProjectileSolver.ARROW, target, false);
         assertNotNull(aim);
         assertTrue(fly(aim, 3.0, ProjectileSolver.ARROW, target, ProjectileSolver.OPEN).hits());
-        /* Not led, the same shot misses. */
+
         ProjectileSolver.Aim still = ProjectileSolver.solve(0.0, EYE, 0.0, 3.0, ProjectileSolver.ARROW,
                 player(0.0, 0.0, 35.0, 0.0, 0.0, 0.0), false);
         assertFalse(fly(still, 3.0, ProjectileSolver.ARROW, target, ProjectileSolver.OPEN).hits());
@@ -99,7 +96,7 @@ public class ProjectileSolverTest {
     @Test
     public void theHighArcGoesOverAWallTheLowOneHits() {
         ProjectileSolver.Target target = player(0.0, 0.0, 30.0, 0.0, 0.0, 0.0);
-        /* A wall 4 high halfway. */
+
         ProjectileSolver.Blocks wall = (x1, y1, z1, x2, y2, z2) -> {
             if ((z1 - 15.0) * (z2 - 15.0) > 0.0) {
                 return 2.0;
@@ -119,7 +116,6 @@ public class ProjectileSolverTest {
 
     @Test
     public void theSideStartIsAimedFor() {
-        /* Close in, 0.16 to the side matters: the yaw is turned to make up for it. */
         ProjectileSolver.Target target = player(0.0, 0.0, 4.0, 0.0, 0.0, 0.0);
         ProjectileSolver.Aim aim = ProjectileSolver.solve(0.0, EYE, 0.0, 3.0, ProjectileSolver.ARROW, target, false);
         assertTrue(Math.abs(aim.yaw) > 1.0F);

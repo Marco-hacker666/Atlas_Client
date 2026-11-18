@@ -18,9 +18,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.*;
 
-/** Brain persistence and ageing (plan step 9, 2026-09-28). */
 public class BrainTest {
-
     private static final long DAY = 24L * 3600L * 1000L;
 
     @Rule
@@ -43,7 +41,6 @@ public class BrainTest {
                 System::currentTimeMillis);
     }
 
-    /** Simulates a restart: memory gone, same files. */
     private void restart() {
         Brain.useForTests(this.data, this.archive, this.now::get);
     }
@@ -56,7 +53,6 @@ public class BrainTest {
         return map;
     }
 
-    /** Twenty minutes with Reach on, twenty off; 30 flags with it on, 2 without. */
     private void someEvidence() {
         Brain.noteExposure(states("Reach", true), 20.0);
         Brain.noteExposure(states("Reach", false), 20.0);
@@ -135,7 +131,7 @@ public class BrainTest {
 
         this.now.addAndGet(14L * DAY);
         Brain.Exposure aged = Brain.exposure("Reach");
-        Brain.suspects(0.1); // forces ageing
+        Brain.suspects(0.1);
         aged = Brain.exposure("Reach");
         assertEquals(10.0, aged.minutesOn, 1e-3);
         Brain.Suspect old = Brain.suspects(0.1).get(0);
@@ -148,9 +144,9 @@ public class BrainTest {
     @Test
     public void newEvidenceOutweighsOldAfterAChange() {
         Brain.setServer("a.example");
-        someEvidence(); // Reach used to add 1.4 flags/min
+        someEvidence();
         this.now.addAndGet(60L * DAY);
-        /* Two months later the server no longer minds: equal rates either way. */
+
         Brain.noteExposure(states("Reach", true), 20.0);
         Brain.noteExposure(states("Reach", false), 20.0);
         Brain.noteFlag("LAGBACK|air", 2, states("Reach", true));
@@ -178,7 +174,7 @@ public class BrainTest {
                 "E\tBroken\tnot-a-number\t1\t1\t1",
                 "K\tLAGBACK|air\t32\t32.0000\t1\t2",
                 "F\tLAGBACK|air\tReach\t30.0000\t2.0000"
-                /* no "end": truncated */), StandardCharsets.UTF_8);
+                ), StandardCharsets.UTF_8);
         Brain.setServer("a.example");
         assertTrue(Brain.lastProblem(), Brain.lastProblem().contains("truncated"));
         assertTrue(Brain.lastProblem(), Brain.lastProblem().contains("1 unreadable"));
@@ -198,7 +194,7 @@ public class BrainTest {
                 "E\tReach\t100.0000\t40.0000",
                 "K\tLAGBACK|air\t50",
                 "F\tLAGBACK|air\tReach\t40.00\t10.00"), StandardCharsets.UTF_8);
-        /* Last written fourteen days ago: its evidence is aged from then. */
+
         assertTrue(old.setLastModified(this.now.get() - 14L * DAY));
         Brain.setServer("a.example");
         assertTrue(Brain.lastProblem(), Brain.lastProblem().startsWith("migrated from brain-1"));

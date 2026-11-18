@@ -4,7 +4,6 @@ import atlas.script.raven.model.Vec3;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S29PacketSoundEffect;
 
-/** A sound played at a position ("random.explode", "mob.zombie.hurt" ...). */
 public class S29 extends SPacket {
     public String sound;
     public Vec3 position;

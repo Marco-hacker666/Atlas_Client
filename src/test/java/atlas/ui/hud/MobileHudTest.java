@@ -8,7 +8,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/** HUD elements on a phone kept off the touch buttons (2026-11-11). */
 public class MobileHudTest {
     private static final float W = 600.0F;
     private static final float H = 300.0F;
@@ -20,7 +19,6 @@ public class MobileHudTest {
 
     @Test
     public void aWatermarkTopLeftMovesJustBelowTheButtons() {
-        /* The top-left zone ends at 16% of 300 = 48; two pixels of gap. */
         assertArrayEquals(new float[]{0, 46}, MobileHud.nudge(4, 4, 80, 14, W, H), 1e-4F);
     }
 
@@ -44,7 +42,6 @@ public class MobileHudTest {
 
     @Test
     public void nothingFarAwayIsTried() {
-        /* Too big to fit anywhere clear: left where it is rather than thrown across the screen. */
         assertNull(MobileHud.nudge(0, 0, 590, 290, W, H));
     }
 }

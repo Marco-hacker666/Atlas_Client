@@ -8,10 +8,7 @@ import java.util.Random;
 
 import static org.junit.Assert.*;
 
-/** ServerProfiles' rule string, shared with the menu's Servers page (2026-10-23, GUI redesign M6). */
 public class ServerProfilesRulesTest {
-
-    /** ServerProfiles.match before M6, verbatim but static. */
     private static String oldMatch(String raw, String address) {
         if (raw == null || raw.trim().isEmpty()) {
             return null;

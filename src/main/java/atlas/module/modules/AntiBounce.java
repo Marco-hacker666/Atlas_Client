@@ -35,6 +35,8 @@ import java.util.function.Predicate;
 public class AntiBounce extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final double STEP = 0.05;
+    static final double VANILLA_PUSH = 0.1;
+    static final int FRESH_TICKS = 20;
     private static final File LOG_DIR = new File("./config/Atlas/");
     private static final int ESCAPE = 0;
     private static final int WATCH = 1;
@@ -174,6 +176,16 @@ public class AntiBounce extends Module {
         if (this.insideTicks < 2) {
             return;
         }
+
+        int fresh = this.freshOwnBlockTicks(inside);
+        if (fresh >= 0) {
+            this.exitWay = "none: in our own block placed " + fresh + "t ago (may be refused), left to the server";
+            return;
+        }
+        if (this.tick - this.lastCorrection <= 3) {
+            this.exitWay = "none: corrected " + (this.tick - this.lastCorrection) + "t ago";
+            return;
+        }
         double[] box = {bb.minX, bb.minY, bb.minZ, bb.maxX, bb.maxY, bb.maxZ};
         double[] way = escape(box, b -> !mc.theWorld.getCollidingBoundingBoxes(mc.thePlayer,
                         new AxisAlignedBB(b[0], b[1], b[2], b[3], b[4], b[5]).contract(0.001, 0.001, 0.001)).isEmpty(),
@@ -186,7 +198,8 @@ public class AntiBounce extends Module {
         if (this.mode.getValue() == WATCH) {
             return;
         }
-        double cap = this.speed.getValue();
+
+        double cap = Math.min(this.speed.getValue(), VANILLA_PUSH);
         double length = Math.sqrt(way[0] * way[0] + way[2] * way[2]);
         if (length > 1e-6) {
             double scale = Math.min(cap, length + 0.02) / length;
@@ -196,6 +209,18 @@ public class AntiBounce extends Module {
         if (way[1] > 0 && mc.thePlayer.onGround) {
             mc.thePlayer.motionY = Math.min(0.42, way[1] + 0.05);
         }
+    }
+
+    private int freshOwnBlockTicks(List<AxisAlignedBB> inside) {
+        int best = -1;
+        for (AxisAlignedBB box : inside) {
+            BlockPos at = new BlockPos((box.minX + box.maxX) / 2, (box.minY + box.maxY) / 2, (box.minZ + box.maxZ) / 2);
+            Integer when = this.placed.get(at);
+            if (when != null && this.tick - when < FRESH_TICKS && (best < 0 || this.tick - when < best)) {
+                best = this.tick - when;
+            }
+        }
+        return best;
     }
 
     private double[] walkedWay() {

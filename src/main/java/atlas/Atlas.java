@@ -242,6 +242,7 @@ public class Atlas {
         moduleManager.modules.put(TellyRecorder.class, new TellyRecorder());
         moduleManager.modules.put(ItemUseFix.class, new ItemUseFix());
         moduleManager.modules.put(AutoAuth.class, new AutoAuth());
+        moduleManager.modules.put(MommyIsHere.class, new MommyIsHere());
         moduleManager.modules.put(Capes.class, new Capes());
         moduleManager.modules.put(MoveFix.class, new MoveFix());
         moduleManager.modules.put(Timer.class, new Timer());
@@ -305,6 +306,8 @@ public class Atlas {
         commandManager.commands.add(new BindCommand());
         commandManager.commands.add(new atlas.command.commands.ReportCommand());
         commandManager.commands.add(new atlas.command.commands.RunDataCommand());
+        commandManager.commands.add(new atlas.command.commands.MommyCommand());
+        commandManager.commands.add(new atlas.command.commands.SupportCommand());
         commandManager.commands.add(new atlas.command.commands.TargetsCommand());
         commandManager.commands.add(new atlas.command.commands.ThemeCommand());
         commandManager.commands.add(new ClickGuiCommand());

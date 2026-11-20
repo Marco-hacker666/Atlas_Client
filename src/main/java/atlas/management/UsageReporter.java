@@ -211,6 +211,7 @@ public final class UsageReporter {
         } else if (ms - lastBeat >= BEAT_MS) {
             lastBeat = ms;
             send("beat", this.payload("beat"));
+
             if (ms - lastDiag >= DiagReporter.EVERY_MS) {
                 lastDiag = ms;
                 final String open = sid;
@@ -218,6 +219,20 @@ public final class UsageReporter {
                 WORKER.execute(() -> DiagReporter.logs(open, player));
             }
         }
+        SupportLink.tick(sid, sessionPlayer);
+    }
+
+    static String currentSid() {
+        return sid;
+    }
+
+    static String currentPlayer() {
+        return sessionPlayer;
+    }
+
+    static String call(String path, JsonObject body) {
+        String base = atlas.util.BugReport.relayBase();
+        return base.isEmpty() ? null : request(base + path, path, body);
     }
 
     private JsonObject payload(String event) {

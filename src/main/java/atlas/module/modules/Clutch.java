@@ -336,6 +336,38 @@ public class Clutch extends Module {
 
     private final Map<BlockPos, Integer> placedAt = new ConcurrentHashMap<BlockPos, Integer>();
 
+    private final java.util.Set<BlockPos> confirmed = java.util.Collections.newSetFromMap(
+            new ConcurrentHashMap<BlockPos, Boolean>());
+
+    private final Map<BlockPos, BlockPos> supportOf = new ConcurrentHashMap<BlockPos, BlockPos>();
+
+    private volatile double sentPosX = Double.NaN;
+    private volatile double sentPosY = Double.NaN;
+    private volatile double sentPosZ = Double.NaN;
+
+    private PendingClick pendingClick;
+
+    private static final class PendingClick {
+        final ItemStack held;
+        final BlockPos support;
+        final EnumFacing side;
+        final Vec3 hitVec;
+        final BlockPos cell;
+        final boolean urgent;
+        final int tick;
+
+        PendingClick(ItemStack held, BlockPos support, EnumFacing side, Vec3 hitVec, BlockPos cell, boolean urgent,
+                     int tick) {
+            this.held = held;
+            this.support = support;
+            this.side = side;
+            this.hitVec = hitVec;
+            this.cell = cell;
+            this.urgent = urgent;
+            this.tick = tick;
+        }
+    }
+
     private final ConcurrentLinkedQueue<BlockPos> refused = new ConcurrentLinkedQueue<BlockPos>();
 
     private final Map<String, Integer> failedFaces = new HashMap<String, Integer>();
@@ -575,6 +607,12 @@ public class Clutch extends Module {
         }
         Packet<?> packet = event.getPacket();
         if (event.getType() == EventType.SEND) {
+            if (packet instanceof C03PacketPlayer && ((C03PacketPlayer) packet).isMoving() && !event.isCancelled()) {
+                C03PacketPlayer move = (C03PacketPlayer) packet;
+                this.sentPosX = move.getPositionX();
+                this.sentPosY = move.getPositionY();
+                this.sentPosZ = move.getPositionZ();
+            }
             if (packet instanceof C03PacketPlayer.C06PacketPlayerPosLook && !this.inUpdate) {
                 corrected((C03PacketPlayer.C06PacketPlayerPosLook) packet);
             }
@@ -584,9 +622,12 @@ public class Clutch extends Module {
         if (packet instanceof S23PacketBlockChange && !this.placedAt.isEmpty()) {
             S23PacketBlockChange change = (S23PacketBlockChange) packet;
             BlockPos pos = change.getBlockPosition();
-            if (pos != null && change.getBlockState() != null
-                    && change.getBlockState().getBlock() == Blocks.air && this.placedAt.containsKey(pos)) {
-                this.refused.add(pos);
+            if (pos != null && change.getBlockState() != null && this.placedAt.containsKey(pos)) {
+                if (change.getBlockState().getBlock() == Blocks.air) {
+                    this.refused.add(pos);
+                } else {
+                    this.confirmed.add(pos);
+                }
             }
         }
     }
@@ -607,6 +648,8 @@ public class Clutch extends Module {
         BlockPos pos;
         while ((pos = this.refused.poll()) != null) {
             Integer at = this.placedAt.remove(pos);
+            this.confirmed.remove(pos);
+            this.supportOf.remove(pos);
             if (at == null) {
                 continue;
             }
@@ -630,7 +673,10 @@ public class Clutch extends Module {
         if (!this.placedAt.isEmpty()) {
             Iterator<Map.Entry<BlockPos, Integer>> it = this.placedAt.entrySet().iterator();
             while (it.hasNext()) {
-                if (this.tick - it.next().getValue() > 100) {
+                Map.Entry<BlockPos, Integer> e = it.next();
+                if (this.tick - e.getValue() > 100) {
+                    this.confirmed.remove(e.getKey());
+                    this.supportOf.remove(e.getKey());
                     it.remove();
                 }
             }
@@ -845,7 +891,8 @@ public class Clutch extends Module {
                 continue;
             }
             double speed = Math.min(0.6, Math.hypot(p.posX - p.lastTickPosX, p.posZ - p.lastTickPosZ));
-            double grow = Math.min(1.0, 0.1 + speed * lead);
+
+            double grow = Math.min(1.2, 0.2 + (atlas.util.Ping.own() > 150 ? 0.1 : 0.0) + speed * lead);
             AxisAlignedBB drawn = p.getEntityBoundingBox();
             double sx = p.serverPosX / 32.0 - p.posX;
             double sy = p.serverPosY / 32.0 - p.posY;
@@ -2247,6 +2294,11 @@ public class Clutch extends Module {
             note("turning: the look would place at " + cell(cell) + ", which is taken or inside the player");
             return;
         }
+
+        if (!Double.isNaN(this.sentPosX) && intersects(serverBox(), cell)) {
+            note("no click: " + cell(cell) + " is inside the player where the server has them");
+            return;
+        }
         if (opponentIn(cell)) {
             note("no click: an opponent may be standing in " + cell(cell) + " on the server");
             return;
@@ -2267,10 +2319,59 @@ public class Clutch extends Module {
             return;
         }
 
+        boolean urgent = this.plan.catchTick >= 0 && this.plan.catchTick <= 1;
+        if (!urgent && ghostDepth(hit.getBlockPos()) >= 2) {
+            note("no click: " + cell(hit.getBlockPos()) + " stands on another block of ours the server has not confirmed");
+            return;
+        }
+
         this.holdThisTick = true;
         this.placedTurn = this.lastTurn;
+        this.pendingClick = new PendingClick(held, hit.getBlockPos(), hit.sideHit, hit.hitVec, cell, urgent, this.tick);
+    }
+
+    private int ghostDepth(BlockPos support) {
+        int depth = 0;
+        BlockPos at = support;
+        while (at != null && depth < 3 && this.placedAt.containsKey(at) && !this.confirmed.contains(at)) {
+            depth++;
+            at = this.supportOf.get(at);
+        }
+        return depth;
+    }
+
+    private AxisAlignedBB serverBox() {
+        double half = mc.thePlayer.width / 2.0;
+        return new AxisAlignedBB(this.sentPosX - half, this.sentPosY, this.sentPosZ - half,
+                this.sentPosX + half, this.sentPosY + mc.thePlayer.height, this.sentPosZ + half).contract(0.001, 0.001, 0.001);
+    }
+
+    @EventTarget(Priority.LOWEST)
+    public void onUpdateClick(UpdateEvent event) {
+        if (event.getType() != EventType.PRE) {
+            return;
+        }
+        PendingClick click = this.pendingClick;
+        this.pendingClick = null;
+        if (click == null || !this.isEnabled() || mc.thePlayer == null || click.tick != this.tick) {
+            return;
+        }
+        float[] look = atlas.management.RotationHelper.packetLook(event);
+        MovingObjectPosition hit = ray(mc.thePlayer.getPositionEyes(1.0F), look[0], look[1]);
+        boolean same = hit != null && hit.typeOfHit == MovingObjectType.BLOCK
+                && hit.getBlockPos().equals(click.support) && hit.sideHit == click.side;
+        if (!same && !click.urgent) {
+            note("re-aim: the look this packet carries is not on " + cell(click.support) + " " + click.side.getName());
+            return;
+        }
+        this.click(click.held, click.support, click.side, same ? hit.hitVec : click.hitVec, click.cell);
+    }
+
+    private void click(ItemStack held, BlockPos support, EnumFacing side, Vec3 hitVec, BlockPos cell) {
+        MovingObjectPosition hit = new MovingObjectPosition(hitVec, side, support);
         if (mc.playerController.onPlayerRightClick(mc.thePlayer, mc.theWorld, held,
                 hit.getBlockPos(), hit.sideHit, hit.hitVec)) {
+            this.supportOf.put(cell, support);
             this.lastNote = null;
             this.attemptPlaced++;
             this.placed.add(cell);
@@ -2288,7 +2389,7 @@ public class Clutch extends Module {
             drawAimSpot();
             say("&aplaced &7" + cell(cell) + " &8on " + cell(hit.getBlockPos()) + " " + hit.sideHit.getName()
                     + (extra ? " (extra, under the feet)"
-                    : this.plan.catchTick < 0 ? " (chain)" : " (catch in " + this.plan.catchTick + "t)"));
+                    : this.plan == null ? "" : this.plan.catchTick < 0 ? " (chain)" : " (catch in " + this.plan.catchTick + "t)"));
         } else {
             failFace(hit.getBlockPos(), hit.sideHit);
             note("no click: the client refused the placement at " + cell(cell));

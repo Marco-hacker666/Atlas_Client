@@ -100,6 +100,14 @@ public class TimerRange extends Module {
    private volatile boolean resetFromPacket;
    private volatile String resetWhy = "";
    private boolean confirmTick = false;
+
+   private boolean boosting = false;
+
+   private volatile boolean lagbackStop;
+
+   private int holdOff = 0;
+
+   private int boostTicks = 0;
    private boolean confirmStop = false;
    private boolean confirmAttack = false;
 
@@ -125,6 +133,9 @@ public class TimerRange extends Module {
       confirmTick = false;
       confirmStop = false;
       confirmAttack = false;
+      lagbackStop = false;
+      holdOff = 0;
+      boostTicks = 0;
    }
 
    @EventTarget(whenDisabled = true)
@@ -169,7 +180,7 @@ public class TimerRange extends Module {
          shouldSlowed = smartTick >= randomTickDelay && entityDistance <= randomRange;
       }
 
-      if (shouldSlowed && confirmAttack) {
+      if (shouldSlowed && confirmAttack && holdOff <= 0) {
          if (updateDistance(targetEntity)) {
             confirmAttack = false;
             playerTicks = ticksValue.getValue();
@@ -189,6 +200,33 @@ public class TimerRange extends Module {
             slinky.tick();
          }
          return;
+      }
+      if (event.getType() == EventType.PRE) {
+         if (lagbackStop) {
+            lagbackStop = false;
+            playerTicks = 0;
+            confirmTick = false;
+            confirmAttack = false;
+            smartTick = 0;
+            cooldownTick = 0;
+            holdOff = HOLD_OFF_TICKS;
+            shouldResetTimer();
+            if (blink.getValue() && blinked) {
+               unblink();
+            }
+         } else if (holdOff > 0) {
+            holdOff--;
+         }
+
+         if (boosting) {
+            boostTicks++;
+            if (playerTicks <= 0 && boostTicks > 1 || boostTicks > ticksValue.getValue() + 2) {
+               playerTicks = 0;
+               shouldResetTimer();
+            }
+         } else {
+            boostTicks = 0;
+         }
       }
       if (event.getType() == EventType.PRE && resetFromPacket) {
          resetFromPacket = false;
@@ -252,7 +290,7 @@ public class TimerRange extends Module {
          if (isPlayerMoving() && !confirmStop) {
             if (isLookingOnEntities(nearbyEntity, maxAngleDifference.getValue())) {
                float entityDistance = mc.thePlayer.getDistanceToEntity(nearbyEntity);
-               if (confirmTick && entityDistance >= randomRange && entityDistance <= maxRange.getValue()) {
+               if (confirmTick && holdOff <= 0 && entityDistance >= randomRange && entityDistance <= maxRange.getValue()) {
                   if (updateDistance(nearbyEntity)) {
                      playerTicks = ticksValue.getValue();
                      confirmTick = false;
@@ -325,6 +363,9 @@ public class TimerRange extends Module {
          }
       }
 
+      if (event.getType() == EventType.RECEIVE && packet instanceof S08PacketPlayerPosLook) {
+         lagbackStop = true;
+      }
       if (event.getType() == EventType.RECEIVE) {
          if (resetOnLagBack.getValue() && packet instanceof S08PacketPlayerPosLook) {
             resetFromPacket = true;
@@ -411,19 +452,9 @@ public class TimerRange extends Module {
    }
 
    private void shouldResetTimer() {
-      EntityLivingBase nearest = getNearestEntityInRange();
-      if (nearest == null || nearest.isDead) {
-         if (!shouldReset) {
-            setTimerSpeed(1f);
-            shouldReset = true;
-         }
-      } else {
-         if (!shouldReset && getTimerSpeed() != 1f) {
-            setTimerSpeed(1f);
-            shouldReset = true;
-         } else {
-            shouldReset = false;
-         }
+      if (boosting || atlas.util.TimerControl.owner() == this) {
+         setTimerSpeed(1f);
+         shouldReset = true;
       }
    }
 
@@ -462,10 +493,15 @@ public class TimerRange extends Module {
    private void setTimerSpeed(float speed) {
       if (speed == 1f) {
          atlas.util.TimerControl.release(this);
+         boosting = false;
+         boostTicks = 0;
       } else {
          atlas.util.TimerControl.set(this, speed);
+         boosting = true;
       }
    }
+
+   static final int HOLD_OFF_TICKS = 20;
 
    private float getTimerSpeed() {
       net.minecraft.util.Timer timer = ((atlas.mixin.IAccessorMinecraft) mc).getTimer();

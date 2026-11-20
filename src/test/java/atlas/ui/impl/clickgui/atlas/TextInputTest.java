@@ -155,6 +155,22 @@ public class TextInputTest {
     }
 
     @Test
+    public void ctrlBackspaceAndCtrlDeleteTakeAWord() {
+        TextInput input = new TextInput(0, false);
+        input.set("Stop-Process -Name chrome");
+        assertEquals(TextInput.Result.EDITED, input.key('\0', Keyboard.KEY_BACK, true, null));
+        assertEquals("Stop-Process -Name ", input.text());
+        input.key('\0', Keyboard.KEY_BACK, true, null);
+        assertEquals("Stop-Process ", input.text());
+        press(input, Keyboard.KEY_HOME);
+        input.key('\0', Keyboard.KEY_DELETE, true, null);
+        assertEquals("", input.text());
+        input.set("a b");
+        press(input, Keyboard.KEY_BACK);
+        assertEquals("a ", input.text());
+    }
+
+    @Test
     public void withoutADrawingAClickGoesToTheEnd() {
         TextInput input = new TextInput(0, false);
         input.set("abc");

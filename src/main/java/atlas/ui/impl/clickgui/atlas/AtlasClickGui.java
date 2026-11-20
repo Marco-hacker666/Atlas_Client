@@ -4806,6 +4806,11 @@ public class AtlasClickGui extends GuiScreen {
 
     @Override
     protected void keyTyped(char typed, int key) {
+        boolean typing = this.reportConfirm || this.editing != null || this.profileNameFocused || this.searchFocused;
+        syncKeyRepeat(typing);
+        if (Keyboard.isRepeatEvent() && !typing) {
+            return;
+        }
         if (this.dialog != null) {
             Dialog open = this.dialog;
             if (key == Keyboard.KEY_ESCAPE) {
@@ -4961,6 +4966,15 @@ public class AtlasClickGui extends GuiScreen {
         atlas.util.ChatUtil.sendFormatted("&7[&bAtlas&7] &f" + message);
     }
 
+    private boolean repeatOn;
+
+    private void syncKeyRepeat(boolean typing) {
+        if (typing != this.repeatOn) {
+            this.repeatOn = typing;
+            Keyboard.enableRepeatEvents(typing);
+        }
+    }
+
     @Override
     public void initGui() {
         atlas.ui.GuiPerf.step("before-init");
@@ -5046,6 +5060,9 @@ public class AtlasClickGui extends GuiScreen {
 
     @Override
     public void onGuiClosed() {
+        this.repeatOn = false;
+        Keyboard.enableRepeatEvents(false);
+
         this.closing = true;
         commitEdit();
         this.dragging = null;

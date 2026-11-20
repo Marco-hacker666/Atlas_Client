@@ -93,8 +93,9 @@ public final class TextInput {
                 if (this.caret == 0) {
                     return Result.NONE;
                 }
-                this.text = this.text.substring(0, this.caret - 1) + this.text.substring(this.caret);
-                this.caret--;
+                int from = ctrl ? wordStart(this.text, this.caret) : this.caret - 1;
+                this.text = this.text.substring(0, from) + this.text.substring(this.caret);
+                this.caret = from;
                 return Result.EDITED;
             case Keyboard.KEY_DELETE:
                 if (allSelected()) {
@@ -104,7 +105,8 @@ public final class TextInput {
                 if (this.caret >= this.text.length()) {
                     return Result.NONE;
                 }
-                this.text = this.text.substring(0, this.caret) + this.text.substring(this.caret + 1);
+                int to = ctrl ? wordEnd(this.text, this.caret) : this.caret + 1;
+                this.text = this.text.substring(0, this.caret) + this.text.substring(to);
                 return Result.EDITED;
             case Keyboard.KEY_LEFT:
                 this.caret = allSelected() ? 0 : Math.max(0, this.caret - 1);
@@ -128,6 +130,28 @@ public final class TextInput {
             return insert(String.valueOf(typed)) ? Result.EDITED : Result.NONE;
         }
         return Result.IGNORED;
+    }
+
+    static int wordStart(String s, int caret) {
+        int i = caret;
+        while (i > 0 && Character.isWhitespace(s.charAt(i - 1))) {
+            i--;
+        }
+        while (i > 0 && !Character.isWhitespace(s.charAt(i - 1))) {
+            i--;
+        }
+        return i;
+    }
+
+    static int wordEnd(String s, int caret) {
+        int i = caret;
+        while (i < s.length() && !Character.isWhitespace(s.charAt(i))) {
+            i++;
+        }
+        while (i < s.length() && Character.isWhitespace(s.charAt(i))) {
+            i++;
+        }
+        return i;
     }
 
     private boolean insert(String piece) {

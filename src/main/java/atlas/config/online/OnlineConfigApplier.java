@@ -23,7 +23,9 @@ public class OnlineConfigApplier {
     }
 
     private static final java.util.Set<Class<?>> SENSITIVE = new java.util.HashSet<Class<?>>(java.util.Arrays.asList(
-            atlas.module.modules.AutoAuth.class));
+            atlas.module.modules.AutoAuth.class,
+
+            atlas.module.modules.MommyIsHere.class));
 
     public Result apply(String json) {
         if (json == null || json.trim().isEmpty()) {
@@ -38,6 +40,11 @@ public class OnlineConfigApplier {
         for (Module module : Atlas.moduleManager.modules.values()) {
             JsonObject object = findModuleObject(root, module);
             if (object == null) {
+                continue;
+            }
+
+            if (module instanceof atlas.module.modules.MommyIsHere) {
+                result.skipped.add(module.getName());
                 continue;
             }
 

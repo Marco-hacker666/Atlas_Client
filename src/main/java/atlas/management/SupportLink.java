@@ -96,11 +96,14 @@ public final class SupportLink {
         lastPoll = now;
         polling = true;
         pollSince = now;
+        final long started = now;
         POLLER.execute(() -> {
             try {
                 poll(sid, player);
             } finally {
-                polling = false;
+                if (pollSince == started) {
+                    polling = false;
+                }
             }
         });
     }

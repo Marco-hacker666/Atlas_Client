@@ -56,6 +56,8 @@ public class TimerRange extends Module {
    private final TimerRangeSlinky slinky = new TimerRangeSlinky(this);
    public final IntProperty ticksValue = new IntProperty("ticks", 10, 1, 20, ours);
 
+   public final IntProperty maxTargetHurt = new IntProperty("max-target-hurt", 3, 0, 10, ours);
+
    public final FloatProperty timerBoostValue = new FloatProperty("timer-boost", 1.5F, 0.01F, 35.0F, ours);
    public final FloatProperty boostDelayMin = new FloatProperty("boost-delay-min", 0.5F, 0.1F, 1.0F, ours);
    public final FloatProperty boostDelayMax = new FloatProperty("boost-delay-max", 0.55F, 0.1F, 1.0F, ours);
@@ -180,7 +182,7 @@ public class TimerRange extends Module {
          shouldSlowed = smartTick >= randomTickDelay && entityDistance <= randomRange;
       }
 
-      if (shouldSlowed && confirmAttack && holdOff <= 0) {
+      if (shouldSlowed && confirmAttack && holdOff <= 0 && hittable(targetEntity)) {
          if (updateDistance(targetEntity)) {
             confirmAttack = false;
             playerTicks = ticksValue.getValue();
@@ -290,7 +292,8 @@ public class TimerRange extends Module {
          if (isPlayerMoving() && !confirmStop) {
             if (isLookingOnEntities(nearbyEntity, maxAngleDifference.getValue())) {
                float entityDistance = mc.thePlayer.getDistanceToEntity(nearbyEntity);
-               if (confirmTick && holdOff <= 0 && entityDistance >= randomRange && entityDistance <= maxRange.getValue()) {
+               if (confirmTick && holdOff <= 0 && entityDistance >= randomRange && entityDistance <= maxRange.getValue()
+                       && hittable(nearbyEntity)) {
                   if (updateDistance(nearbyEntity)) {
                      playerTicks = ticksValue.getValue();
                      confirmTick = false;
@@ -449,6 +452,10 @@ public class TimerRange extends Module {
          }
       }
       return nearest;
+   }
+
+   private boolean hittable(EntityLivingBase target) {
+      return maxTargetHurt.getValue() >= 10 || target.hurtTime <= maxTargetHurt.getValue();
    }
 
    private void shouldResetTimer() {

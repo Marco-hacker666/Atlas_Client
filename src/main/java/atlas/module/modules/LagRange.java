@@ -69,6 +69,9 @@ public class LagRange extends Module {
             () -> this.mode.getValue() == ATLAS);
     public final IntProperty flagPause = new IntProperty("flag-pause", 2000, 0, 5000);
 
+    public final IntProperty skipEvery = new IntProperty("skip-every", 0, 0, 10);
+    private final LagSkip skip = new LagSkip();
+
     public final BooleanProperty releaseOnSprintReset = new BooleanProperty("release-on-sprint-reset", false,
             () -> this.mode.getValue() == ATLAS);
 
@@ -230,7 +233,29 @@ public class LagRange extends Module {
                 why = "not-closing";
             }
         }
+        if (wanted > 0 && (this.skip.skipping() || this.applied == 0 && this.skip.startSkips(this.skipEvery.getValue()))) {
+            skipNote();
+            wanted = 0;
+            why = "skip";
+            this.hasTarget = false;
+        } else if ("no-target".equals(why)) {
+            this.skip.approachOver();
+        }
         apply(wanted, why);
+    }
+
+    private boolean skipLogged;
+
+    private void skipNote() {
+        if (!this.skipLogged) {
+            this.skipLogged = true;
+            writeLog("SKIP this approach (skip-every " + this.skipEvery.getValue() + ") | " + this.holdTarget);
+        }
+    }
+
+    private void approachOver() {
+        this.skip.approachOver();
+        this.skipLogged = false;
     }
 
     private void ravenTick() {
@@ -256,8 +281,18 @@ public class LagRange extends Module {
                 target == null ? 0.0 : best * best, rangeSq, mc.thePlayer.hurtTime,
                 target == null ? 0 : target.hurtTime, moving, weaponOk, mc.thePlayer.isSprinting(),
                 mc.thePlayer.isBlocking(), this.flushOnSprint.getValue(), this.flushOnBlock.getValue());
+        if (target == null) {
+            approachOver();
+        }
         if (step == LagRangeRaven.Step.START) {
             this.holdTarget = target.getName() + " " + String.format("%.1f", best) + " RAVEN";
+            if (this.skip.startSkips(this.skipEvery.getValue())) {
+                skipNote();
+                this.raven.released();
+                this.hasTarget = false;
+                apply(0, "skip");
+                return;
+            }
         }
         this.hasTarget = this.raven.lagging;
         if (step == LagRangeRaven.Step.FLUSH) {
@@ -342,6 +377,9 @@ public class LagRange extends Module {
             if (mustBeCurrent(packet)) {
                 releaseNow(packet instanceof C02PacketUseEntity ? "attack" : "action",
                         ravenMode ? 0L : this.recoilTime.getValue());
+                if (packet instanceof C02PacketUseEntity) {
+                    approachOver();
+                }
                 if (ravenMode) {
                     this.raven.released();
                 }
@@ -373,6 +411,7 @@ public class LagRange extends Module {
             if (this.isEnabled()) {
                 releaseNow(cause, pause);
                 this.raven.released();
+                approachOver();
             }
         });
     }

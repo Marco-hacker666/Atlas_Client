@@ -682,23 +682,23 @@ public class KillAura extends Module {
     private boolean performAttack(float yaw, float pitch) {
         if (!Atlas.playerStateManager.digging && !Atlas.playerStateManager.placing) {
             if (this.isPlayerBlocking() && this.autoBlock.getValue() != 1) {
-                return false;
+                return this.refuse("still blocking (" + this.autoBlock.getModeString() + ")");
             } else if (this.attackDelayMS > 0L && !this.exitingRange()) {
                 return false;
             } else if (this.otherActionsThisTick) {
                 atlas.management.TickActions.refuse();
-                return false;
+                return this.refuse("other action this tick");
             } else {
                 if ((this.rotations.getValue() == 4 || this.rotations.getValue() == 6)
                         && !(this.kbDisplacing && this.isBoxInAttackRange(this.target.getBox()))
                         && !this.aimedAt(yaw, pitch)) {
-                    return false;
+                    return this.refuse("look not on target");
                 }
                 boolean forced = this.damageHits.due(System.currentTimeMillis());
                 if (!forced && (this.noAirSprintHit.getValue() && !mc.thePlayer.onGround && mc.thePlayer.isSprinting()
                         || this.hitSelectHolds())) {
                     this.spendHeldClick();
-                    return false;
+                    return this.refuse(this.hitSelectHolds() ? "HitSelect holding" : "NoAirSprintHit");
                 }
                 if (forced) {
                     this.damageHits.spend();
@@ -721,7 +721,7 @@ public class KillAura extends Module {
                     if (human.miss != atlas.humanize.Misses.Style.SKIP) {
                         mc.thePlayer.swingItem();
                     }
-                    return false;
+                    return this.refuse("Humanization miss");
                 }
                 if (this.simulateClicks.getValue()) {
                     if (this.cpsMode.getValue() == 1) {
@@ -737,7 +737,8 @@ public class KillAura extends Module {
                             this.atlasHumanizer.unlucky(humanNow);
                         }
                     }
-                    return this.hitRegistered;
+                    return this.hitRegistered || this.refuse("simulate-clicks: crosshair not on target ("
+                            + (mc.objectMouseOver == null ? "none" : mc.objectMouseOver.typeOfHit) + ")");
                 }
                 mc.thePlayer.swingItem();
 
@@ -747,7 +748,7 @@ public class KillAura extends Module {
 
                 if (this.rotations.getValue() != 4 && this.rotations.getValue() != 6
                         && !this.aimedAt(yaw, pitch)) {
-                    return false;
+                    return this.refuse("look not on target");
                 }
                 if (Hitflick.holdsHit(this.target.getEntity())) {
                     if (human != null) {
@@ -824,38 +825,96 @@ public class KillAura extends Module {
 
     private boolean canAttack() {
         if (this.inventoryCheck.getValue() && mc.currentScreen instanceof GuiContainer) {
-            return false;
+            return this.refuse("inventory open");
         } else if (!(Boolean) this.weaponsOnly.getValue()
                 || ItemUtil.hasRawUnbreakingEnchant()
                 || this.allowTools.getValue() && ItemUtil.isHoldingTool()) {
             if (((IAccessorPlayerControllerMP) mc.playerController).getIsHittingBlock()) {
-                return false;
+                return this.refuse("mining a block");
             } else if ((ItemUtil.isEating() || ItemUtil.isUsingBow()) && PlayerUtil.isUsingItem()) {
-                return false;
+                return this.refuse("eating or bow");
             } else {
                 AutoHeal autoHeal = (AutoHeal) Atlas.moduleManager.modules.get(AutoHeal.class);
                 if (autoHeal.isEnabled() && autoHeal.isSwitching()) {
-                    return false;
+                    return this.refuse("AutoHeal switching");
                 } else {
                     BedNuker bedNuker = (BedNuker) Atlas.moduleManager.modules.get(BedNuker.class);
                     if (bedNuker.isEnabled() && bedNuker.isReady()) {
-                        return false;
+                        return this.refuse("BedNuker");
                     } else if (Atlas.moduleManager.modules.get(Scaffold.class).isEnabled()) {
-                        return false;
+                        return this.refuse("Scaffold on");
                     } else if (atlas.management.Arbiter.catching()) {
                         atlas.management.Arbiter.yielded("Silent Aura");
-                        return false;
+                        return this.refuse("Clutch catching");
                     } else if (this.requirePress.getValue()) {
-                        return PlayerUtil.isAttacking();
+                        return PlayerUtil.isAttacking() || this.refuse("RequirePress, not pressed");
                     } else {
                         return !this.allowMining.getValue() || mc.objectMouseOver == null
-                                || !mc.objectMouseOver.typeOfHit.equals(MovingObjectType.BLOCK) || !PlayerUtil.isAttacking();
+                                || !mc.objectMouseOver.typeOfHit.equals(MovingObjectType.BLOCK) || !PlayerUtil.isAttacking()
+                                || this.refuse("AllowMining: pressing on a block");
                     }
                 }
             }
         } else {
-            return false;
+            return this.refuse("WeaponsOnly, no weapon");
         }
+    }
+
+    private boolean refuse(String why) {
+        this.refusal = why;
+        return false;
+    }
+
+    private String refusal;
+    private int watchTicks;
+    private int watchInRange;
+    private int watchHits;
+    private final java.util.Map<String, Integer> watchWhy = new java.util.TreeMap<String, Integer>();
+
+    private void watchTick() {
+        if (mc.thePlayer == null || mc.theWorld == null) {
+            return;
+        }
+        String why = null;
+        double range = this.attackRange.getValue();
+        if (this.target == null) {
+            net.minecraft.entity.EntityLivingBase near = null;
+            double best = range;
+            for (Object o : mc.theWorld.loadedEntityList) {
+                if (o instanceof net.minecraft.entity.EntityLivingBase && o != mc.thePlayer
+                        && !((net.minecraft.entity.EntityLivingBase) o).isDead) {
+                    double d = mc.thePlayer.getDistanceToEntity((net.minecraft.entity.Entity) o);
+                    if (d <= best) {
+                        best = d;
+                        near = (net.minecraft.entity.EntityLivingBase) o;
+                    }
+                }
+            }
+            if (near != null) {
+                why = "no target: nearest " + near.getClass().getSimpleName() + " (Players "
+                        + this.players.getValue() + ", Mobs " + this.mobs.getValue() + ", Animals "
+                        + this.animals.getValue() + ")";
+            }
+        } else if (RotationUtil.distanceToEntity(this.target.getEntity()) <= range) {
+            why = this.refusal == null ? "no click due" : this.refusal;
+        }
+        this.refusal = null;
+        if (why != null) {
+            this.watchInRange++;
+            Integer n = this.watchWhy.get(why);
+            this.watchWhy.put(why, n == null ? 1 : n + 1);
+        }
+        if (++this.watchTicks < 20) {
+            return;
+        }
+        if (this.watchInRange >= 15 && this.watchHits == 0) {
+            atlas.util.DiagNotes.note("Silent Aura", "no hit for 1 s with something in range | engine "
+                    + this.engine.getModeString() + " | " + this.watchWhy, true);
+        }
+        this.watchTicks = 0;
+        this.watchInRange = 0;
+        this.watchHits = 0;
+        this.watchWhy.clear();
     }
 
     private boolean canAutoBlock() {
@@ -1241,10 +1300,12 @@ public class KillAura extends Module {
                 this.otherActionsThisTick = atlas.management.TickActions.any(
                         atlas.management.TickActions.USE | atlas.management.TickActions.DIG
                                 | atlas.management.TickActions.INVENTORY);
-                boolean attack = this.target != null && this.canAttack() && this.invulnAllowsAttack();
+                this.watchTick();
+                boolean attack = this.target != null && this.canAttack()
+                        && (this.invulnAllowsAttack() || this.refuse("InvulnTiming waiting"));
                 boolean block = attack && this.canAutoBlock();
                 if (this.autoBlock.getValue() >= YURI_FIRST && !this.yuriAutoBlock(block)) {
-                    attack = false;
+                    attack = this.refuse("auto-block holding the click");
                 }
                 if (!block) {
                     Atlas.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
@@ -2094,6 +2155,10 @@ public class KillAura extends Module {
     @EventTarget(Priority.LOWEST)
     public void onPacket(PacketEvent event) {
         if (this.isEnabled() && !event.isCancelled()) {
+            if (event.getType() == EventType.SEND && event.getPacket() instanceof C02PacketUseEntity
+                    && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK) {
+                this.watchHits++;
+            }
             if (event.getPacket() instanceof C07PacketPlayerDigging) {
                 C07PacketPlayerDigging packet = (C07PacketPlayerDigging) event.getPacket();
                 if (packet.getStatus() == C07PacketPlayerDigging.Action.RELEASE_USE_ITEM) {

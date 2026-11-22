@@ -311,6 +311,7 @@ public final class BugReport {
         tail(sb, "Clutch (last 80)", newest("clutch-"), 80);
         tail(sb, "Fights (last 60)", newest("fights-"), 60);
         tail(sb, "Hits (last 60)", newest("hits-"), 60);
+        tail(sb, "Notes (last 120)", newest("notes-"), 120);
         gameLog(sb, 250);
         sb.append("```\n");
     }

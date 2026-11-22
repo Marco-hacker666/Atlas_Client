@@ -426,8 +426,8 @@ public class Velocity extends Module {
             mc.thePlayer.motionX *= factor;
             mc.thePlayer.motionZ *= factor;
             this.intaveReduced = true;
-            if (this.debugLog.getValue()) {
-                ChatUtil.sendFormatted(Atlas.clientName + "Intave reduce");
+            {
+                this.debugSay(Atlas.clientName + "Intave reduce");
             }
         } else if (this.mode.getValue() == 6) {
             if (mc.thePlayer.hurtTime <= 0 || this.matrixReduced) return;
@@ -673,8 +673,8 @@ public class Velocity extends Module {
                         mc.thePlayer.motionZ *= 0.6;
                         mc.thePlayer.setSprinting(false);
                         this.slapAnInt++;
-                        if (this.debugLog.getValue()) {
-                            ChatUtil.sendFormatted(Atlas.clientName + "Attack reduce " + this.slapAnInt);
+                        {
+                            this.debugSay(Atlas.clientName + "Attack reduce " + this.slapAnInt);
                         }
                     }
                 }
@@ -699,8 +699,8 @@ public class Velocity extends Module {
                         mc.thePlayer.motionX *= 0.6;
                         mc.thePlayer.motionZ *= 0.6;
                     }
-                    if (this.debugLog.getValue()) {
-                        ChatUtil.sendFormatted(Atlas.clientName + "Grim reduce");
+                    {
+                        this.debugSay(Atlas.clientName + "Grim reduce");
                     }
                 }
                 this.grimPending--;
@@ -710,8 +710,8 @@ public class Velocity extends Module {
         if (this.mode.getValue() == 7 && event.getType() == EventType.PRE) {
             if (this.polarPending && mc.thePlayer != null && mc.thePlayer.hurtTime == this.polarHurtTime && mc.thePlayer.onGround) {
                 mc.thePlayer.jump();
-                if (this.debugLog.getValue()) {
-                    ChatUtil.sendFormatted(Atlas.clientName + "Polar jump");
+                {
+                    this.debugSay(Atlas.clientName + "Polar jump");
                 }
                 this.polarHurtTime = 7 + (int) (Math.random() * 3);
                 if (mc.thePlayer.hurtTime == 0) {
@@ -755,8 +755,8 @@ public class Velocity extends Module {
                         mc.thePlayer.setSprinting(false);
                     }
                     this.oldGrimAttacked = true;
-                    if (this.debugLog.getValue()) {
-                        ChatUtil.sendFormatted(Atlas.clientName + "OldGrim reduce");
+                    {
+                        this.debugSay(Atlas.clientName + "OldGrim reduce");
                     }
                 }
             }
@@ -905,8 +905,8 @@ public class Velocity extends Module {
                         if (this.explosionHorizontal.getValue() == 0 || this.explosionVertical.getValue() == 0) {
                             event.setCancelled(true);
                         }
-                        if (this.debugLog.getValue()) {
-                            ChatUtil.sendFormatted(
+                        {
+                            this.debugSay(
                                     String.format(
                                             "%sExplosion (&otick: %d, x: %.2f, y: %.2f, z: %.2f&r)&r",
                                             Atlas.clientName,
@@ -934,8 +934,8 @@ public class Velocity extends Module {
 
                     if (this.mode.getValue() == 3 && this.slapReduce.getValue()) {
                         this.slapReduceTicks = this.calculateSlapTicks(packet.getMotionX(), packet.getMotionZ());
-                        if (this.debugLog.getValue()) {
-                            ChatUtil.sendFormatted(Atlas.clientName + "Attack reduceTicks: " + this.slapReduceTicks);
+                        {
+                            this.debugSay(Atlas.clientName + "Attack reduceTicks: " + this.slapReduceTicks);
                         }
                     }
 
@@ -975,8 +975,8 @@ public class Velocity extends Module {
                             mc.thePlayer.motionY = ((double) packet.getMotionY() / 8000.0) * this.delayVerticalProp.getValue();
                             event.setCancelled(true);
                         }
-                        if (this.debugLog.getValue()) {
-                            ChatUtil.sendFormatted(Atlas.clientName + "Delay hold");
+                        {
+                            this.debugSay(Atlas.clientName + "Delay hold");
                         }
                     }
                     if (this.mode.getValue() == 19) {
@@ -992,8 +992,8 @@ public class Velocity extends Module {
                             event.setCancelled(true);
                         }
                     }
-                    if (this.debugLog.getValue()) {
-                        ChatUtil.sendFormatted(
+                    {
+                        this.debugSay(
                                 String.format(
                                         "%sVelocity (&otick: %d, x: %.2f, y: %.2f, z: %.2f&r)&r",
                                         Atlas.clientName,
@@ -1111,8 +1111,8 @@ public class Velocity extends Module {
         this.polarJumpAge = 0;
         this.polarOutstanding = (d.counter ? 1 : 0) + (d.jump ? 1 : 0);
         this.polarLanded = false;
-        if (this.debugLog.getValue() && d.any()) {
-            ChatUtil.sendFormatted(String.format("%sPolar: %s%s (in %d t), %d/10 answered&r", Atlas.clientName,
+        if (d.any()) {
+            this.debugSay(String.format("%sPolar: %s%s (in %d t), %d/10 answered&r", Atlas.clientName,
                     d.counter ? "counter" : "", d.jump ? (d.counter ? " + jump" : "jump") : "",
                     Math.max(0, d.counterTick), plan.answeredInWindow()));
         }
@@ -1304,5 +1304,12 @@ public class Velocity extends Module {
     @Override
     public String[] getSuffix() {
         return new String[]{this.mode.getModeString()};
+    }
+
+    private void debugSay(String line) {
+        atlas.util.DiagNotes.note("Velocity", line, true);
+        if (this.debugLog.getValue()) {
+            ChatUtil.sendFormatted(line);
+        }
     }
 }

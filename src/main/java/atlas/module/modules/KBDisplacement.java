@@ -143,7 +143,7 @@ public class KBDisplacement extends Module {
     }
 
     private void debug(String what, KnockbackPlanner.Plan plan) {
-        if (!this.debug.getValue() || mc.thePlayer == null) {
+        if (mc.thePlayer == null) {
             return;
         }
         String line = plan == null
@@ -152,7 +152,10 @@ public class KBDisplacement extends Module {
         if (!line.equals(this.lastDebug) || mc.thePlayer.ticksExisted - this.lastDebugTick >= 8) {
             this.lastDebug = line;
             this.lastDebugTick = mc.thePlayer.ticksExisted;
-            ChatUtil.sendFormatted("&7[&bKBDisplacement&7] " + line);
+            atlas.util.DiagNotes.note("KBDisplacement", line);
+            if (this.debug.getValue()) {
+                ChatUtil.sendFormatted("&7[&bKBDisplacement&7] " + line);
+            }
         }
     }
 }

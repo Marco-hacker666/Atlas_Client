@@ -22,11 +22,24 @@ public class LogsTest {
 
     @Test
     public void offKeepsOnlyFlagsAmongTheLogs() {
-        assertTrue(Logs.allows(new File("config/Atlas/flags-20261020-185144.txt")));
-        assertFalse(Logs.allows(new File("config/Atlas/clutch-20261020-191450.txt")));
-        assertFalse(Logs.allows(new File("config/Atlas/gui-perf.txt")));
-        assertFalse(Logs.allows(new File("config/Atlas/servers.txt")));
-        assertTrue(Logs.allows(new File("config/Atlas/hud-anchors.txt")));
-        assertTrue(Logs.allows(new File("some-temp-file.log")));
+        Logs.setFull(false);
+        try {
+            assertTrue(Logs.allows(new File("config/Atlas/flags-20261020-185144.txt")));
+            assertFalse(Logs.allows(new File("config/Atlas/clutch-20261020-191450.txt")));
+            assertFalse(Logs.allows(new File("config/Atlas/notes-20261020-191450.txt")));
+            assertFalse(Logs.allows(new File("config/Atlas/gui-perf.txt")));
+            assertFalse(Logs.allows(new File("config/Atlas/servers.txt")));
+            assertTrue(Logs.allows(new File("config/Atlas/hud-anchors.txt")));
+            assertTrue(Logs.allows(new File("some-temp-file.log")));
+        } finally {
+            Logs.setFull(true);
+        }
+    }
+
+    @Test
+    public void onByDefaultEveryLogIsWritten() {
+        assertTrue(new Logs().isEnabled());
+        assertTrue(Logs.allows(new File("config/Atlas/clutch-20261020-191450.txt")));
+        assertTrue(Logs.allows(new File("config/Atlas/notes-20261020-191450.txt")));
     }
 }

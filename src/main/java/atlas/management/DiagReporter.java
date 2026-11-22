@@ -24,7 +24,7 @@ final class DiagReporter {
     private static final File CRASH_DIR = new File("./crash-reports/");
     private static final File CRASH_SEEN = new File(ATLAS_DIR, "diag-crash-seen.txt");
     private static final String[] LOGS = {"flags-", "moves-", "lagguard-", "perf-", "places-", "snapspeed-",
-            "godbridge-"};
+            "godbridge-", "notes-"};
 
     private static final long GAME_START = startTime();
 

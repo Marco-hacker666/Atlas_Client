@@ -157,6 +157,7 @@ public class Config {
                 atlas.module.ModuleBundle.readLegacy(module, jsonObject,
                         moduleObj != null && moduleObj.isJsonObject() ? moduleObj.getAsJsonObject() : null);
             }
+            atlas.module.modules.Logs.applyDiagnosticDefaults();
             ChatUtil.sendFormatted(String.format("%sConfig has been loaded (&a&o%s&r)&r", Atlas.clientName, file.getName()));
         } catch (JsonSyntaxException e) {
             ChatUtil.sendFormatted(String.format("%sConfig has invalid JSON syntax (&c&o%s&r)&r", Atlas.clientName, file.getName()));

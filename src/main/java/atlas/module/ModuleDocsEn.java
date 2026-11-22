@@ -536,6 +536,7 @@ final class ModuleDocsEn {
         d("Debug", "One switch for all diagnostic tools.");
         d("Logs", "Master switch for the diagnostic logs in config/Atlas. Off (default): only the flags log (lagbacks and other corrections) is written. On: every module's session log, for testing. Logs older than keep-days are deleted at startup.");
         help("Logs", "keep-days", "Session logs older than this many days are deleted when the game starts.");
+        help("Logs", "diagnostics-defaults", "Internal: whether the default diagnostics were already switched on for this config (done once).");
         d("PacketLogger", "Records packets and writes them to a file when you are kicked.");
         d("ServerFingerprint", "Records what a server reveals about itself and guesses its anticheat.");
         d("AutoTune", "Tries setting values and keeps the ones that measure better.");

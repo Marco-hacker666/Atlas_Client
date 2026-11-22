@@ -824,6 +824,7 @@ public final class ModuleDocs {
         d("Debug", "所有診斷工具的總開關。");
         d("Logs", "config/Atlas 診斷紀錄的總開關。關（預設）：只寫 flags 紀錄（拉回等伺服器修正）。開：所有模組的測試紀錄都寫。每次啟動時刪除超過 keep-days 天的舊紀錄。");
         help("Logs", "keep-days", "啟動遊戲時，刪除超過這麼多天的紀錄。");
+        help("Logs", "diagnostics-defaults", "內部用：記錄是否已經替這份設定打開過預設的診斷紀錄（只做一次）。");
         d("PacketLogger", "記錄封包，被踢出時寫成檔案方便查原因。");
         d("ServerFingerprint", "記錄伺服器透露的資訊，推測它用哪種反作弊。");
         d("AutoTune", "自動試不同的設定值，保留實測表現較好的。");

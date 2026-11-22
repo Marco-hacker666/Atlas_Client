@@ -818,6 +818,13 @@ public class Clutch extends Module {
         double mx = mc.thePlayer.motionX;
         double my = mc.thePlayer.motionY;
         double mz = mc.thePlayer.motionZ;
+
+        double[] held = EdgeGuard.pendingKnockback();
+        if (held != null) {
+            mx = held[0];
+            my = held[1];
+            mz = held[2];
+        }
         double apex = box.minY;
 
         double push = steer ? (mc.thePlayer.isSprinting() ? 0.026 : 0.02) : 0.0;
@@ -856,8 +863,9 @@ public class Clutch extends Module {
             if (box.minY < -64.0) {
                 break;
             }
-            mx = ox != mx ? 0.0 : mx * 0.91;
-            mz = oz != mz ? 0.0 : mz * 0.91;
+            double drag = t == 0 && held != null ? 0.6 * 0.91 : 0.91;
+            mx = ox != mx ? 0.0 : mx * drag;
+            mz = oz != mz ? 0.0 : mz * drag;
             my = oy != my ? 0.0 : (my - 0.08) * 0.98;
         }
         double already = mc.thePlayer.motionY < 0.0 ? mc.thePlayer.fallDistance : 0.0;
@@ -927,7 +935,7 @@ public class Clutch extends Module {
     }
 
     private boolean wanted() {
-        if (mc.thePlayer.onGround || mc.thePlayer.capabilities.isFlying || mc.thePlayer.isInWater()
+        if (mc.thePlayer.onGround && EdgeGuard.pendingKnockback() == null || mc.thePlayer.capabilities.isFlying || mc.thePlayer.isInWater()
                 || mc.thePlayer.isInLava() || mc.thePlayer.isOnLadder() || mc.thePlayer.isRiding()) {
             return false;
         }

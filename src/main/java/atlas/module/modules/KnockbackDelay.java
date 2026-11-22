@@ -400,11 +400,18 @@ public class KnockbackDelay extends Module {
         if (!this.conditionsMet) {
             return false;
         }
+        if (EdgeGuard.claimsPush()) {
+            return false;
+        }
         if (this.mode.getValue() == AIR) {
             return RandomUtil.nextInt(0, 100) < this.airChance.getValue();
         }
         if (System.currentTimeMillis() - this.lastTrigger < (long) this.cooldown.getValue()) {
             return false;
+        }
+
+        if (FightBrain.forcesKnockbackDelay()) {
+            return true;
         }
         return RandomUtil.nextInt(0, 100) <= this.chance.getValue();
     }

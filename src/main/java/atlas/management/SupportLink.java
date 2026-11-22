@@ -49,7 +49,9 @@ public final class SupportLink {
 
     private static volatile long lastPoll;
     private static volatile long activeUntil;
+    private static final long POLL_STUCK_MS = 60_000L;
     private static volatile boolean polling;
+    private static volatile long pollSince;
     private static volatile boolean asked;
     private static volatile String consentCache;
 
@@ -88,11 +90,12 @@ public final class SupportLink {
     static void tick(final String sid, final String player) {
         long now = System.currentTimeMillis();
         long every = now < activeUntil ? FAST_POLL_MS : POLL_MS;
-        if (sid == null || polling || now - lastPoll < every) {
+        if (sid == null || now - lastPoll < every || polling && now - pollSince < POLL_STUCK_MS) {
             return;
         }
         lastPoll = now;
         polling = true;
+        pollSince = now;
         POLLER.execute(() -> {
             try {
                 poll(sid, player);
@@ -299,7 +302,7 @@ public final class SupportLink {
     }
 
     static void applyChange(String sid, String player, JsonObject change) {
-        if (!"yes".equals(consent()) || !change.has("items")) {
+        if (!"yes".equals(consent()) || !change.has("items") || !change.get("items").isJsonArray()) {
             return;
         }
         List<String> done = new ArrayList<String>();
@@ -313,6 +316,10 @@ public final class SupportLink {
             String prop = str(it, "p");
             String value = str(it, "v");
             String label = cls + "." + prop;
+            if (cls == null || prop == null) {
+                failed.add(label);
+                continue;
+            }
             Module m = null;
             for (Module x : Atlas.moduleManager.modules.values()) {
                 if (x.getClass().getSimpleName().equals(cls)) {
@@ -367,7 +374,7 @@ public final class SupportLink {
         JsonObject body = new JsonObject();
         body.addProperty("sid", sid);
         body.addProperty("player", player.isEmpty() ? "-" : player);
-        body.addProperty("id", change.has("id") ? change.get("id").getAsLong() : -1L);
+        body.addProperty("id", changeId(change));
         body.addProperty("applied", done.size());
         JsonArray f = new JsonArray();
         for (String s : failed) {
@@ -376,6 +383,14 @@ public final class SupportLink {
         body.add("failed", f);
         body.add("settings", snapshot());
         POLLER.execute(() -> UsageReporter.call("/usage/support/result", body));
+    }
+
+    static long changeId(JsonObject change) {
+        try {
+            return change.has("id") && change.get("id").isJsonPrimitive() ? change.get("id").getAsLong() : -1L;
+        } catch (RuntimeException e) {
+            return -1L;
+        }
     }
 
     private static String str(JsonObject o, String k) {

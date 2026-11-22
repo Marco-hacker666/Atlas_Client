@@ -57,6 +57,10 @@ public class Logs extends Module {
         full = false;
     }
 
+    static void setFull(boolean on) {
+        full = on;
+    }
+
     static String sessionPrefix(String name) {
         Matcher m = SESSION_LOG.matcher(name);
         return m.matches() ? m.group(1) : null;

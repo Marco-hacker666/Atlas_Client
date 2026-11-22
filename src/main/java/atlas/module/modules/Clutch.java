@@ -419,7 +419,17 @@ public class Clutch extends Module {
         this.refused.clear();
         this.failedFaces.clear();
         this.logTarget = null;
+        this.forgetServerState();
         clearLane();
+    }
+
+    private void forgetServerState() {
+        this.sentPosX = Double.NaN;
+        this.sentPosY = Double.NaN;
+        this.sentPosZ = Double.NaN;
+        this.confirmed.clear();
+        this.supportOf.clear();
+        this.pendingClick = null;
     }
 
     @Override
@@ -439,6 +449,7 @@ public class Clutch extends Module {
     @EventTarget(whenDisabled = true)
     public void onLoadWorld(LoadWorldEvent event) {
         abandonAttempt("world changed");
+        this.forgetServerState();
         clearLane();
         this.active = false;
         this.plan = null;

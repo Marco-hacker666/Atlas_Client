@@ -56,8 +56,10 @@ public class FakeLag extends Module {
     private static final int DYNAMIC = 1;
     private static final int REPEL = 2;
 
+    private static final int PING = 3;
+
     public final ModeProperty mode = new ModeProperty("mode", 0,
-            new String[]{"LATENCY", "DYNAMIC", "REPEL"}).alias("LIQUID", "DYNAMIC")
+            new String[]{"LATENCY", "DYNAMIC", "REPEL", "PING"}).alias("LIQUID", "DYNAMIC")
 
             .retire("DYNAMIC", "REPEL");
 
@@ -86,7 +88,7 @@ public class FakeLag extends Module {
             () -> this.mode.getValue() == DYNAMIC);
 
     public final IntProperty catchUp = new IntProperty("catch-up", 2, 2, 5,
-            () -> this.mode.getValue() == DYNAMIC);
+            () -> this.mode.getValue() == DYNAMIC || this.mode.getValue() == PING && !this.dash.getValue());
 
     public final ModeProperty releaseStyle = new ModeProperty("release-style", 0,
             new String[]{"IN_ORDER", "COLLAPSE"});
@@ -94,15 +96,38 @@ public class FakeLag extends Module {
     public final IntProperty delayRandom = new IntProperty("delay-random", 100, 0, 500);
 
     public final BooleanProperty holdTransactions = new BooleanProperty("hold-transactions", true,
-            () -> this.mode.getValue() == DYNAMIC);
+            () -> this.mode.getValue() == DYNAMIC || this.mode.getValue() == PING);
 
     public final IntProperty flagPause = new IntProperty("flag-pause", 2000, 0, 5000);
 
     public final BooleanProperty weaponsOnly = new BooleanProperty("weapons-only", true,
-            () -> this.mode.getValue() != LATENCY);
+            () -> this.mode.getValue() != LATENCY && this.mode.getValue() != PING);
 
     public final ModeProperty log = new ModeProperty("log", 2,
             new String[]{"OFF", "FILE", "CHAT+FILE"}, () -> this.mode.getValue() != LATENCY);
+
+    private final java.util.function.BooleanSupplier ping = () -> this.mode.getValue() == PING;
+    public final ModeProperty ramp = new ModeProperty("ramp", 0, new String[]{"INSTANT", "SMOOTH"}, this.ping);
+    public final IntProperty rampSpeed = new IntProperty("ramp-speed", 110, 20, 400,
+            () -> this.mode.getValue() == PING && this.ramp.getValue() == 1);
+    public final IntProperty dashTime = new IntProperty("dash-time", 40, 0, 100, this.ping);
+    public final FloatProperty resetDistance = new FloatProperty("reset-distance", 3.05F, 3.0F, 4.0F, this.ping);
+    public final FloatProperty serverReach = new FloatProperty("server-reach", 5.0F, 0.0F, 8.0F, this.ping);
+    public final IntProperty startDelay = new IntProperty("start-delay", 125, 0, 1000, this.ping);
+    public final IntProperty flushTime = new IntProperty("flush-time", 200, 20, 1000, this.ping);
+
+    public final BooleanProperty dash = new BooleanProperty("dash", true, this.ping);
+
+    private final PingCurve pingCurve = new PingCurve();
+
+    private volatile double pingNow = -1.0;
+
+    private volatile boolean pingQueueing;
+
+    private long pingLagFrom;
+
+    private volatile long pingFlushUntil;
+    private String pingWhy = "";
 
     private final ConcurrentLinkedQueue<Held> queue = new ConcurrentLinkedQueue<Held>();
 
@@ -126,7 +151,14 @@ public class FakeLag extends Module {
     }
 
     private int holdDelay() {
+        if (this.mode.getValue() == PING) {
+            return (int) Math.max(0.0, this.pingNow);
+        }
         return budgetedDelay(this.rolledDelay, Ping.own(), this.pingBudget.getValue());
+    }
+
+    private int recoilMs() {
+        return this.mode.getValue() == PING ? this.flushTime.getValue() : this.recoilTime.getValue();
     }
 
     static int budgetedDelay(int rolled, int ping, int budget) {
@@ -242,7 +274,12 @@ public class FakeLag extends Module {
         this.drainingOut = false;
         this.holdAllowed = false;
 
-        this.recoilUntil = System.currentTimeMillis() + this.recoilTime.getValue();
+        this.recoilUntil = System.currentTimeMillis() + recoilMs();
+        this.pingCurve.clear();
+        this.pingNow = -1.0;
+        this.pingQueueing = false;
+        this.pingLagFrom = 0L;
+        this.pingFlushUntil = 0L;
         this.blockedBy = null;
         this.currentTarget = null;
         this.episodeStart = 0L;
@@ -286,7 +323,11 @@ public class FakeLag extends Module {
     private boolean holdsReply(Packet<?> packet) {
         int mode = this.mode.getValue();
         return packet instanceof net.minecraft.network.play.client.C0FPacketConfirmTransaction
-                && this.holdTransactions.getValue() && mode == DYNAMIC;
+                && this.holdTransactions.getValue() && (mode == DYNAMIC || mode == PING);
+    }
+
+    private boolean holdsKeepAlive(Packet<?> packet) {
+        return this.mode.getValue() == PING && packet instanceof net.minecraft.network.play.client.C00PacketKeepAlive;
     }
 
     private static boolean keepsOrder(Packet<?> packet) {
@@ -315,9 +356,9 @@ public class FakeLag extends Module {
             if (packet instanceof S08PacketPlayerPosLook || packet instanceof S07PacketRespawn) {
                 this.flushRequested = true;
                 this.recoilUntil = System.currentTimeMillis()
-                        + Math.max(this.recoilTime.getValue(), this.flagPause.getValue());
+                        + Math.max(recoilMs(), this.flagPause.getValue());
             } else if (hitsThisPlayer(packet)) {
-                this.recoilUntil = System.currentTimeMillis() + this.recoilTime.getValue();
+                this.recoilUntil = System.currentTimeMillis() + recoilMs();
                 final String cause = packet instanceof S12PacketEntityVelocity ? "knockback"
                         : packet instanceof S27PacketExplosion ? "explosion" : "damage";
 
@@ -343,7 +384,15 @@ public class FakeLag extends Module {
             this.flushRequested = false;
             return;
         }
-        if (keepsOrder(packet) || this.holdsReply(packet)) {
+        if (this.mode.getValue() == PING && (packet instanceof net.minecraft.network.play.client.C0EPacketClickWindow
+                || packet instanceof net.minecraft.network.play.client.C0DPacketCloseWindow)) {
+            this.pingFlushUntil = System.currentTimeMillis() + this.flushTime.getValue();
+            if (!this.queue.isEmpty()) {
+                releaseAll("inventory");
+            }
+            return;
+        }
+        if (keepsOrder(packet) || this.holdsReply(packet) || this.holdsKeepAlive(packet)) {
             if (!this.queue.isEmpty() && !Arbiter.catching()) {
                 if (!atlas.management.PacketHub.take(event, HUB)) {
                             return;
@@ -376,7 +425,19 @@ public class FakeLag extends Module {
             return;
         }
         if (mustBeCurrent(packet)) {
-            this.recoilUntil = System.currentTimeMillis() + this.recoilTime.getValue();
+            this.recoilUntil = System.currentTimeMillis() + recoilMs();
+            if (this.mode.getValue() == PING) {
+                this.pingFlushUntil = System.currentTimeMillis() + this.flushTime.getValue();
+                if (!this.queue.isEmpty() && !Arbiter.catching()) {
+                    if (!atlas.management.PacketHub.take(event, HUB)) {
+                        return;
+                    }
+                    this.queue.offer(new Held(packet, System.currentTimeMillis()));
+                    noteHeld();
+                    enforceLimits();
+                    return;
+                }
+            }
             if (this.mode.getValue() == DYNAMIC && !this.queue.isEmpty() && !Arbiter.catching()) {
                 if (!atlas.management.PacketHub.take(event, HUB)) {
                     return;
@@ -441,8 +502,24 @@ public class FakeLag extends Module {
         boolean attack = packet instanceof C02PacketUseEntity
                 && ((C02PacketUseEntity) packet).getAction() == C02PacketUseEntity.Action.ATTACK;
         if (attack && this.mode.getValue() != LATENCY && this.releaseOnAttack.getValue()) {
-            this.recoilUntil = System.currentTimeMillis() + this.recoilTime.getValue();
+            this.recoilUntil = System.currentTimeMillis() + recoilMs();
             releaseAll("attack");
+            return;
+        }
+        if (this.mode.getValue() == PING) {
+            if (!this.pingQueueing
+                    || !mc.theWorld.isBlockLoaded(new BlockPos(mc.thePlayer.posX, 0.0, mc.thePlayer.posZ))) {
+                if (!this.queue.isEmpty()) {
+                    releaseAll(this.pingWhy.isEmpty() ? "ping" : this.pingWhy);
+                }
+                return;
+            }
+            if (!atlas.management.PacketHub.take(event, HUB)) {
+                return;
+            }
+            this.queue.offer(new Held(packet, System.currentTimeMillis()));
+            noteHeld();
+            enforceLimits();
             return;
         }
         if (!this.holdAllowed || System.currentTimeMillis() < this.recoilUntil) {
@@ -550,6 +627,10 @@ public class FakeLag extends Module {
         int current = this.mode.getValue();
         if (current == DYNAMIC) {
             dynamicTick();
+            return;
+        }
+        if (current == PING) {
+            pingTick();
             return;
         }
         if (current == LATENCY) {
@@ -678,6 +759,103 @@ public class FakeLag extends Module {
         double ticksLeft = (serverDistance - meleeDistance) / closingPerTick;
         double ticksToEmpty = heldPositions / (double) Math.max(1, catchUp - 1);
         return ticksToEmpty + 1.0 >= ticksLeft;
+    }
+
+    private void pingTick() {
+        long now = System.currentTimeMillis();
+        String why = null;
+        if (mc.isSingleplayer()) {
+            why = "singleplayer";
+        } else if (mc.currentScreen != null) {
+            why = "screen";
+        } else if (mc.thePlayer.isUsingItem()) {
+            why = "using-item";
+        }
+        if (why != null) {
+            this.pingFlushUntil = Math.max(this.pingFlushUntil, now + this.flushTime.getValue());
+        }
+        EntityPlayer close = pingReset();
+        if (close != null) {
+            int spread = 25;
+            this.pingLagFrom = now + Math.max(0, this.startDelay.getValue() - spread
+                    + (int) (Math.random() * (2 * spread + 1)));
+            why = "reset " + close.getName();
+        } else if (why == null && now < this.pingFlushUntil) {
+            why = "flush";
+        } else if (why == null && now < this.recoilUntil) {
+            why = "recoil";
+        } else if (why == null && now < this.pingLagFrom) {
+            why = "start-delay";
+        }
+        PingCurve.Config c = new PingCurve.Config();
+        c.min = this.delay.getValue();
+        c.max = this.delay.getValue() + this.delayRandom.getValue();
+        c.smooth = this.ramp.getValue() == 1;
+        c.rampSpeed = this.rampSpeed.getValue();
+        c.dashMin = Math.max(0, this.dashTime.getValue() - 5);
+        c.dashMax = this.dashTime.getValue() + 5;
+        double d;
+        if (why != null) {
+            d = this.pingCurve.reset(now, c);
+        } else {
+            d = this.pingCurve.hold(now, c);
+            int budget = this.pingBudget.getValue();
+            int own = Ping.own();
+            if (budget > 0 && own >= 0) {
+                d = Math.min(d, budget - own);
+                if (d < MIN_WORTH_HOLDING) {
+                    d = this.pingCurve.reset(now, c);
+                    why = "ping";
+                }
+            }
+        }
+        this.pingNow = d;
+        this.pingQueueing = d > 0.0;
+        this.pingWhy = why == null ? "" : why;
+        this.holdAllowed = why == null;
+        observe(close, why);
+        long cutoff = d < 0.0 ? Long.MAX_VALUE : now - (long) d;
+        int positions = this.dash.getValue() || why == null ? Integer.MAX_VALUE : this.catchUp.getValue();
+        releaseDue(cutoff, positions);
+        if (this.queue.isEmpty()) {
+            closeEpisode(this.pingWhy.isEmpty() ? "drained" : this.pingWhy);
+        }
+    }
+
+    private EntityPlayer pingReset() {
+        Vec3 server = this.lastSent;
+        for (Object object : mc.theWorld.loadedEntityList) {
+            if (!(object instanceof EntityPlayer)) {
+                continue;
+            }
+            EntityPlayer player = (EntityPlayer) object;
+            if (player == mc.thePlayer || player.isDead || player.deathTime > 0 || !TargetFilter.accepts(player)
+                    || TeamUtil.isFriend(player) || TeamUtil.isSameTeam(player) || TeamUtil.isBot(player)) {
+                continue;
+            }
+            double feet = mc.thePlayer.getDistanceToEntity(player);
+            if (feet > 15.0) {
+                continue;
+            }
+            if (feet < this.resetDistance.getValue()) {
+                return player;
+            }
+            float reach = this.serverReach.getValue();
+            if (reach > 0.0F && server != null) {
+                double half = mc.thePlayer.width / 2.0;
+                net.minecraft.util.AxisAlignedBB box = new net.minecraft.util.AxisAlignedBB(server.xCoord - half,
+                        server.yCoord, server.zCoord - half, server.xCoord + half, server.yCoord + mc.thePlayer.height,
+                        server.zCoord + half);
+                double x = Math.max(box.minX, Math.min(box.maxX, player.posX)) - player.posX;
+                double y = Math.max(box.minY, Math.min(box.maxY, player.posY + player.getEyeHeight()))
+                        - (player.posY + player.getEyeHeight());
+                double z = Math.max(box.minZ, Math.min(box.maxZ, player.posZ)) - player.posZ;
+                if (Math.sqrt(x * x + y * y + z * z) < reach) {
+                    return player;
+                }
+            }
+        }
+        return null;
     }
 
     private static boolean easesOut(String reason) {
@@ -914,7 +1092,7 @@ public class FakeLag extends Module {
             return;
         }
         if (!this.queue.isEmpty() && this.mode.getValue() != LATENCY && this.releaseOnAttack.getValue()) {
-            this.recoilUntil = System.currentTimeMillis() + this.recoilTime.getValue();
+            this.recoilUntil = System.currentTimeMillis() + recoilMs();
             releaseAll("attack");
         }
         send(new C0APacketAnimation());
@@ -1083,6 +1261,9 @@ public class FakeLag extends Module {
     @Override
     public String[] getSuffix() {
         String label = this.mode.getModeString().toLowerCase();
+        if (this.mode.getValue() == PING && this.pingNow > 0.0) {
+            label = label + " " + (int) this.pingNow + "ms";
+        }
         int held = this.queue.size();
         String hits = this.mode.getValue() == REPEL ? this.hitsHeld + " held, " + this.hitsMerged + " merged" : null;
         if (held == 0) {

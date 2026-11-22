@@ -8,8 +8,15 @@ import static org.junit.Assert.assertTrue;
 
 public class FakeLagModeTest {
     @Test
-    public void theModesAreLatencyAndDynamic() {
-        assertArrayEquals(new String[]{"LATENCY", "DYNAMIC"}, new FakeLag().mode.visibleModes());
+    public void theModesAreLatencyDynamicAndPing() {
+        assertArrayEquals(new String[]{"LATENCY", "DYNAMIC", "PING"}, new FakeLag().mode.visibleModes());
+    }
+
+    @Test
+    public void aConfigSayingPingLoadsAsPing() {
+        FakeLag fakeLag = new FakeLag();
+        assertTrue(fakeLag.mode.parseString("PING"));
+        assertEquals("PING", fakeLag.mode.getModeString());
     }
 
     @Test

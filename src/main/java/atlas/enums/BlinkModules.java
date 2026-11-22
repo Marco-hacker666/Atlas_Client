@@ -12,6 +12,7 @@ public enum BlinkModules {
     BLINK("Blink", -1L),
     DISPLACE("Displace", 2000L),
     HITFLICK("Hitflick", 2000L),
+    INVULN_BLINK("InvulnBlink", 1000L),
 
     NO_FALL("NoFall", 10000L),
 

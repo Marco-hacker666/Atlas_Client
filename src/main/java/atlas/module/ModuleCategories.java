@@ -17,7 +17,7 @@ public final class ModuleCategories {
                 AimAssist.class, AutoClicker.class, AutoWeapon.class, BackTrack.class, HitBox.class, HitSelect.class, KnockbackDelay.class, LagRange.class,
                 Piercing.class, Reach.class, SprintReset.class, TimerRange.class, Velocity.class, BlockHit.class,
                 KillAura.class, NoDelay.class, JumpReset.class, Wtap.class,
-                MoreKB.class, KeepRange.class, Hitflick.class, InvulnTiming.class,
+                MoreKB.class, KeepRange.class, Hitflick.class, InvulnTiming.class, InvulnBlink.class,
                 SpeedBlocker.class,
                 Humanization.class);
         put(Category.PLAYER,

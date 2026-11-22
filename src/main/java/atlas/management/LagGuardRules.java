@@ -23,12 +23,18 @@ public final class LagGuardRules {
     public static final int KB_RECENT_TICKS = 20;
 
     private static final Set<String> UNGUARDED = new HashSet<String>();
+    private static final Set<String> KNOCKBACK_TOLERANT = new HashSet<String>();
 
     static {
         UNGUARDED.add("AntiVoid");
         UNGUARDED.add("NoFall");
         UNGUARDED.add("Scaffold");
         UNGUARDED.add("Blink");
+        KNOCKBACK_TOLERANT.add("InvulnBlink");
+    }
+
+    public static boolean knockbackTolerant(String holder) {
+        return holder != null && KNOCKBACK_TOLERANT.contains(holder);
     }
 
     private int grounded;
@@ -173,7 +179,7 @@ public final class LagGuardRules {
         if (tick < this.setbackUntil) {
             return "after a correction";
         }
-        if (this.kbActive) {
+        if (this.kbActive && !knockbackTolerant(holder)) {
             return "knockback";
         }
         if (!incoming && tick < this.blockUntil) {

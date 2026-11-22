@@ -381,7 +381,23 @@ public final class MoveCheck {
         }
     }
 
-    private static String changes(Map<String, java.util.TreeSet<String>> movers) {
+    static java.util.List<String> movers(String tag) {
+        java.util.List<String> out = new java.util.ArrayList<String>();
+        StringBuilder name = new StringBuilder();
+        for (String part : tag.split(" ")) {
+            int colon = part.indexOf(':');
+            if (colon < 0) {
+                name.append(part).append(' ');
+                continue;
+            }
+            name.append(part, 0, colon);
+            out.add(name.toString());
+            name.setLength(0);
+        }
+        return out;
+    }
+
+        private static String changes(Map<String, java.util.TreeSet<String>> movers) {
         if (movers.isEmpty()) {
             return "plain";
         }
@@ -423,8 +439,7 @@ public final class MoveCheck {
             this.selfPlainTicks++;
             this.selfPlainOff += off ? 1 : 0;
         } else {
-            for (String part : tag.split(" ")) {
-                String module = part.substring(0, part.indexOf(':'));
+            for (String module : movers(tag)) {
                 int[] counts = this.selfBy.get(module);
                 if (counts == null) {
                     counts = new int[2];

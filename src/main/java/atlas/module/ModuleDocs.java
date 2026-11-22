@@ -349,6 +349,12 @@ public final class ModuleDocs {
         d("AutoHeal", "血量低時自動使用治療物品（湯、藥水、頭）。");
         d("BackTrack", "對手往後退時，暫時把他留在你最後看到的位置，讓攻擊還能打到伺服器記錄中的位置。");
         d("Hitflick", "改變你打出去的擊退方向：FLICK 打中瞬間甩開視角再轉回；HAZARD 靜默轉向附近的虛空或岩漿；DISPLACE 攻擊瞬間轉向虛空或指定角度。");
+        help("InvulnBlink", "max-ticks", "最多扣住幾 tick。實際會依延遲自動縮短，保證在你的無敵結束前放出。");
+        help("InvulnBlink", "min-ticks", "算出來能扣的 tick 少於這個就不啟動（延遲太高時不值得）。");
+        help("InvulnBlink", "margin", "保留幾 tick 的安全餘量，越大越早放出。");
+        help("InvulnBlink", "range", "這個距離內有敵人才會啟動（格）。");
+        help("InvulnBlink", "release-on-hit", "扣住期間一出手就立刻放出，讓攻擊最快送到。");
+        help("InvulnBlink", "cooldown", "放出後至少隔幾 tick 才能再啟動。");
         help("Hitflick", "Keep-hitbox", "FLICK：只甩到視角還打得到對手碰撞箱的角度（Grim、Polar 會檢查），開著時只有 5～10 度。關掉可以照 Direction 甩滿，但會檢查視角的伺服器不算那一下。");
         help("Hitflick", "mode", "FLICK：甩開再轉回。HAZARD：原本的 KBDisplacement。DISPLACE：原本的 Displace。VOID：只在目標靠近虛空邊緣時轉向，把人打下去。各自的設定在下面。");
         help("Hitflick", "displace-Turn-range", "只在目標距離這麼多格內才轉；更遠的打擊直接用原本視角送出。打擊仍要命中時，1 格約可轉 22 度，2 格約 11 度，3 格約 8 度。0 為關閉。");
@@ -437,6 +443,7 @@ public final class ModuleDocs {
         help("Displace", "Keep-hitbox", "打人的那一下伺服器那邊的視角只轉到還能打到對手碰撞箱的角度（Grim、Polar 會檢查視角打不打得到）；轉太多那一下就不算。開著時只能偏 5～10 度，而且只影響疾跑和擊退附魔那部分的擊退，在 Pika、Grim 這類伺服器上效果很小。關掉＝照設定的角度轉，只適合不檢查攻擊視角的伺服器。");
         d("KeepSprint", "攻擊後不讓衝刺被打斷，保持移動速度。");
         d("InvulnTiming", "算準目標無敵時間結束的時機再出手，並把多餘的攻擊轉給打得動的人。");
+        d("InvulnBlink", "被打中後你有約半秒無敵，這段時間把自己的封包扣住：你照常移動、出手，對手看到的你是定住的；無敵結束前一次放出，你瞬間出現在新位置，攻擊同時送到。延遲太高、附近沒敵人、腳下是虛空、在水裡或梯子上時不會啟動；伺服器拉回時立刻停止。");
         d("KeepRange", "連擊中自動放開前進（S-tap），避免貼太近浪費對手的擊退。");
         d("KBDisplacement", "手動打人時，靜默把擊退方向轉向附近的危險（虛空、岩漿）。");
         // Ported from OpenSkid

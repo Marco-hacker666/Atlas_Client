@@ -66,6 +66,12 @@ final class ModuleDocsEn {
         d("AutoHeal", "Uses healing items (soup, potions, heads) when health is low.");
         d("BackTrack", "Keeps a retreating target where you last saw them a moment longer, so a swing reaches the position the server still has.");
         d("Hitflick", "Steers the knockback of your hits: FLICK flicks the view away on a hit and back; HAZARD silently aims it at nearby void or lava; DISPLACE turns at the hit toward the void or a set angle.");
+        help("InvulnBlink", "max-ticks", "Most ticks held. Shortened by your ping so it always lets go before your immunity ends.");
+        help("InvulnBlink", "min-ticks", "Does not start when fewer ticks than this could be held (ping too high to be worth it).");
+        help("InvulnBlink", "margin", "Ticks of safety margin; more lets go earlier.");
+        help("InvulnBlink", "range", "Starts only with an enemy this near (blocks).");
+        help("InvulnBlink", "release-on-hit", "Lets go as soon as you attack while held, so the hit arrives as early as it can.");
+        help("InvulnBlink", "cooldown", "Ticks after letting go before it can start again.");
         help("Hitflick", "Keep-hitbox", "FLICK: flick only as far as the look still meets the target's hitbox (Grim and Polar check that), about 5-10 degrees. Off: the full Direction, but a server that checks the look does not count the hit.");
         help("Hitflick", "mode", "FLICK: the flick away and back. HAZARD: what KBDisplacement did. DISPLACE: what Displace did. VOID: turns only when the target is near a void edge, to knock it off. Each has its own settings below.");
         help("Hitflick", "displace-Turn-range", "Only turn for a target within this many blocks; further hits go at once on your normal look. A hit that must still land can turn about 22 degrees at 1 block, 11 at 2 and 8 at 3. 0 is off.");
@@ -180,6 +186,7 @@ final class ModuleDocsEn {
         help("Displace", "Keep-hitbox", "Turn the server-side look only as far as it still meets the target's hitbox (Grim and Polar check that); turned further the hit does not count. On, the turn is only 5-10 degrees and moves only the sprint / Knockback part of the push, so on servers like Pika or Grim the effect is small. Off = the full offset, for servers that do not check the hit's look.");
         d("KeepSprint", "Keeps sprinting after an attack instead of slowing down.");
         d("InvulnTiming", "Times attacks to the end of the target's invulnerability, and spends spare swings on someone who can be hurt.");
+        d("InvulnBlink", "After you are hit you cannot be hurt for about half a second; your packets are held for that time: you move and attack as usual while the opponent sees you standing still, and everything goes out at once before the immunity ends. Does not start with too high a ping, no enemy near, void below, or in water or on a ladder; stops at once on a server correction.");
         d("KeepRange", "Lets go of forward during a combo (S-tap) so you do not walk into the target and waste their knockback.");
         d("SpeedBlocker", "Puts a block in the path of a player running at you: the sprint stops, so the hit they had ready loses most of its knockback and you get the first one. Works in stick fights too.");
         help("SpeedBlocker", "scan-range", "How far to look for a player coming in.");

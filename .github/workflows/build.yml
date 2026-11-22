@@ -64,6 +64,18 @@ jobs:
           gradle build --no-daemon --stacktrace
 
       # Same check as release.yml: fail instead of uploading a jar Forge cannot load.
+      - name: SpotBugs scan
+        run: |
+          set -e
+          curl -sSL -o sb.tgz https://repo1.maven.org/maven2/com/github/spotbugs/spotbugs/4.8.6/spotbugs-4.8.6.tgz
+          tar xzf sb.tgz
+          find ~/.gradle/caches .gradle build/loom-cache -name '*.jar' 2>/dev/null | grep -v spotbugs > aux.txt || true
+          wc -l aux.txt
+          java -Xmx3g -jar spotbugs-4.8.6/lib/spotbugs.jar -textui -effort:max -medium -auxclasspathFromFile aux.txt -onlyAnalyze 'atlas.-' build/classes/java/main > spotbugs.txt 2> sb-err.txt || true
+          echo "=== SPOTBUGS $(wc -l < spotbugs.txt) lines"
+          grep -E '^(H|M) (C|M|D|B|I|S|P|V)' spotbugs.txt | grep -vE ' (EI|EI2|MS|SE|DM_DEFAULT_ENCODING|NM_|SIC_|URF_|UUF_|UWF_|SS_|ST_WRITE_TO_STATIC)' | head -1500 || true
+          echo "=== END"
+
       - name: Check the jar is the client
         run: |
           set -euo pipefail

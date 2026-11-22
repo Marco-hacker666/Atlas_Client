@@ -91,7 +91,8 @@ public class InvulnBlink extends Module {
         in.safe = this.safe();
         in.stillHeld = Atlas.blinkManager.getBlinkingModule() == BlinkModules.INVULN_BLINK;
 
-        boolean couldStart = !this.plan.holding() && in.freshHit && in.enemyNear && in.safe;
+        boolean couldStart = !this.plan.holding() && in.freshHit && in.enemyNear && in.safe
+                && !atlas.util.ItemUtil.isHoldingBlock();
         in.mayHold = couldStart && Atlas.blinkManager.getBlinkingModule() == BlinkModules.NONE
                 && !Arbiter.catching() && LagGuard.mayHold(BlinkModules.INVULN_BLINK.moduleName(), false, null);
         in.attacked = this.attacked;
@@ -112,6 +113,9 @@ public class InvulnBlink extends Module {
         if (!this.isEnabled()) {
             return;
         }
+        if (event.getType() == EventType.SEND && this.plan.holding() && judgedWhereWeAre(event.getPacket())) {
+            this.letGo("block");
+        }
         if (event.getType() == EventType.SEND && event.getPacket() instanceof C02PacketUseEntity
                 && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK) {
             this.attacked = true;
@@ -119,6 +123,15 @@ public class InvulnBlink extends Module {
         if (event.getType() == EventType.RECEIVE && event.getPacket() instanceof S08PacketPlayerPosLook) {
             mc.addScheduledTask(this::corrected);
         }
+    }
+
+    private static boolean judgedWhereWeAre(net.minecraft.network.Packet<?> packet) {
+        if (packet instanceof net.minecraft.network.play.client.C08PacketPlayerBlockPlacement) {
+            return ((net.minecraft.network.play.client.C08PacketPlayerBlockPlacement) packet).getPlacedBlockDirection() != 255;
+        }
+        return packet instanceof net.minecraft.network.play.client.C07PacketPlayerDigging
+                && ((net.minecraft.network.play.client.C07PacketPlayerDigging) packet).getStatus()
+                != net.minecraft.network.play.client.C07PacketPlayerDigging.Action.RELEASE_USE_ITEM;
     }
 
     private void corrected() {

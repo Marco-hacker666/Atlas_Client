@@ -807,6 +807,7 @@ public class Disabler extends Module {
     }
 
     private void debugMessage(String msg) {
+        atlas.util.DiagNotes.note("Disabler", msg, true);
         if (this.chatDebug.getValue()) {
             mc.thePlayer.addChatMessage(new ChatComponentText("§7[§bDisabler§7] §f" + msg));
         }

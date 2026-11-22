@@ -193,7 +193,7 @@ public final class LagGuard {
         if (blink != null) {
             BlinkModules owner = blink.getBlinkingModule();
             if (owner != BlinkModules.NONE && LagGuardRules.guarded(owner.moduleName())
-                    && !RHYTHM.equals(owner.moduleName())) {
+                    && !RHYTHM.equals(owner.moduleName()) && !LagGuardRules.knockbackTolerant(owner.moduleName())) {
                 blink.setBlinkState(false, owner);
                 n++;
             }

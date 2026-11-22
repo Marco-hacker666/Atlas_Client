@@ -170,4 +170,18 @@ public class LagGuardRulesTest {
         assertTrue(struck.contains("Backtrack"));
         assertEquals(50L, rules.capMs("Backtrack"));
     }
+
+    @Test
+    public void invulnBlinkMayHoldInAKnockbackButStillStrikesOut() {
+        LagGuardRules rules = groundedFor(10);
+        rules.knockback(10);
+        assertEquals("knockback", rules.deny(11, "FakeLag", false));
+        assertNull(rules.deny(11, "InvulnBlink", false));
+        rules.held(12, "InvulnBlink", 100L);
+        rules.setback(13, null);
+        rules.held(100, "InvulnBlink", 100L);
+        rules.setback(101, null);
+        assertEquals(2, rules.strikes("InvulnBlink"));
+        assertEquals("struck out", rules.deny(200, "InvulnBlink", false));
+    }
 }

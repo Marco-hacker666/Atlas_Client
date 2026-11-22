@@ -21,7 +21,7 @@ public class Debug extends Module {
 
     public final BooleanProperty governor = new BooleanProperty("governor", false);
 
-    public final BooleanProperty autoDisable = new BooleanProperty("auto-disable", true);
+    public final BooleanProperty autoDisable = new BooleanProperty("auto-disable", false);
 
     public final BooleanProperty autoDisableDryRun = new BooleanProperty("auto-disable-dry-run", false,
             this.autoDisable::getValue);
@@ -32,13 +32,13 @@ public class Debug extends Module {
             this.autoDisable::getValue);
 
     public final BooleanProperty logFiles = new BooleanProperty("log-files", true);
-    public final BooleanProperty chat = new BooleanProperty("chat", true);
+    public final BooleanProperty chat = new BooleanProperty("chat", false);
 
     private int timer;
     private boolean applied;
 
     public Debug() {
-        super("Debug", false, false,
+        super("Debug", true, true,
                 "One switch for the diagnostic tools, with each behind its own section");
     }
 

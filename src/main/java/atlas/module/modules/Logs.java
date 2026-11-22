@@ -10,16 +10,41 @@ import java.util.regex.Pattern;
 public class Logs extends Module {
     private static final Pattern SESSION_LOG = Pattern.compile("^([a-z0-9]+(?:-[a-z0-9]+)*)-(\\d{8})-(\\d{6})\\.txt$");
     private static final File DIR = new File("./config/Atlas/");
-    private static volatile boolean full;
+    private static volatile boolean full = true;
     private static final java.util.Set<String> FIXED_DIAGNOSTICS = new java.util.HashSet<String>(
             java.util.Arrays.asList("gui-perf.txt", "servers.txt", "adaptive.txt", "autotune.txt"));
 
     private static final long FIXED_MAX_BYTES = 1024L * 1024L;
 
     public final IntProperty keepDays = new IntProperty("keep-days", 7, 1, 60);
+    public final atlas.property.properties.BooleanProperty defaultsApplied =
+            new atlas.property.properties.BooleanProperty("diagnostics-defaults", false, () -> false);
 
     public Logs() {
-        super("Logs", false, false, "Writes every diagnostic log while on; off keeps only the flags log. Old logs are deleted at startup.");
+        super("Logs", true, true, "Writes every diagnostic log while on; off keeps only the flags log. Old logs are deleted at startup.");
+    }
+
+    public static void applyDiagnosticDefaults() {
+        if (atlas.Atlas.moduleManager == null) {
+            return;
+        }
+        Logs logs = (Logs) atlas.Atlas.moduleManager.modules.get(Logs.class);
+        Debug debug = (Debug) atlas.Atlas.moduleManager.modules.get(Debug.class);
+        if (logs == null || logs.defaultsApplied.getValue()) {
+            return;
+        }
+        logs.defaultsApplied.setValue(true);
+        if (!logs.isEnabled()) {
+            logs.setEnabled(true);
+            logs.setHidden(true);
+        }
+        if (debug != null && !debug.isEnabled()) {
+            debug.chat.setValue(false);
+            debug.autoDisable.setValue(false);
+            debug.governor.setValue(false);
+            debug.setEnabled(true);
+            debug.setHidden(true);
+        }
     }
 
     @Override

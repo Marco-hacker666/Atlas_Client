@@ -205,6 +205,8 @@ public class Atlas {
         moduleManager.modules.put(Adaptive.class, new Adaptive());
         moduleManager.modules.put(InvulnTiming.class, new InvulnTiming());
         moduleManager.modules.put(InvulnBlink.class, new InvulnBlink());
+        moduleManager.modules.put(EdgeGuard.class, new EdgeGuard());
+        moduleManager.modules.put(FightBrain.class, new FightBrain());
         moduleManager.modules.put(FlagResponder.class, new FlagResponder());
         moduleManager.modules.put(LatencyGovernor.class, new LatencyGovernor());
 

@@ -17,11 +17,11 @@ public final class ModuleCategories {
                 AimAssist.class, AutoClicker.class, AutoWeapon.class, BackTrack.class, HitBox.class, HitSelect.class, KnockbackDelay.class, LagRange.class,
                 Piercing.class, Reach.class, SprintReset.class, TimerRange.class, Velocity.class, BlockHit.class,
                 KillAura.class, NoDelay.class, JumpReset.class, Wtap.class,
-                MoreKB.class, KeepRange.class, Hitflick.class, InvulnTiming.class, InvulnBlink.class,
+                MoreKB.class, KeepRange.class, Hitflick.class, InvulnTiming.class, InvulnBlink.class, FightBrain.class,
                 SpeedBlocker.class,
                 Humanization.class);
         put(Category.PLAYER,
-                MLG.class, Blink.class, NoFall.class, AntiVoid.class, Clutch.class, AutoTool.class, AutoSwap.class,
+                MLG.class, Blink.class, NoFall.class, AntiVoid.class, EdgeGuard.class, Clutch.class, AutoTool.class, AutoSwap.class,
                 InvManager.class, Refill.class, AntiAFK.class, AntiFireball.class, AutoAnduril.class,
                 InventoryClicker.class, FastUse.class, ItemUseFix.class,
                 FakeLag.class, AutoRod.class, AutoHeal.class, FastBow.class, ArmorBreaker.class, PearlSaver.class, ThrowAura.class, ProjectileAimBot.class);

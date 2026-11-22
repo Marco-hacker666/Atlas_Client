@@ -79,6 +79,14 @@ final class ModuleDocsEn {
         help("Hitflick", "displace-Void-max-turn", "VOID: how far off the line to the target the void may be. At most 25 degrees with Keep-hitbox.");
         d("ServerLag", "Delays the packets the server sends, as if the server lagged; damage, health, sounds and chat still arrive at once. Works as FakeLag's incoming half.");
         d("FakeLag", "Delays your outgoing movement so the server's copy of you runs behind, for the first hit.");
+        help("FakeLag", "ramp", "PING: how the delay comes back after a reset. INSTANT: at the next redraw; SMOOTH: climbs at ramp-speed. The delay is drawn from delay to delay + delay-random and redrawn every 400-600 ms.");
+        help("FakeLag", "ramp-speed", "PING with SMOOTH: ms of delay regained per second.");
+        help("FakeLag", "dash-time", "PING: on a reset the delay falls to nothing over this many ms and what is held goes out at once (the dash).");
+        help("FakeLag", "reset-distance", "PING: an opponent closer than this to you (feet to feet) resets the delay.");
+        help("FakeLag", "server-reach", "PING: an opponent closer than this to where the server has you resets it too. 0 is off.");
+        help("FakeLag", "start-delay", "PING: after a reset, this many ms (+-25) before holding again.");
+        help("FakeLag", "flush-time", "PING: after an attack, a block placed or broken, an inventory click, a screen, an item in use or a correction, no delay for this long (ms).");
+        help("FakeLag", "dash", "PING: on, what falls due in a reset goes in one tick; off, at most catch-up positions a tick, gentler on setbacks.");
         d("HitSelect", "Lets an attack through only when it suits you, e.g. when it costs less knockback. Every mode also decides Silent Aura's hits. Combo, first hit, low health and hit-back conditions can let hits through.");
         d("MoreKB", "Resets sprint on attack so each hit deals more knockback.");
         d("FastBow", "Draws and shoots the bow faster.");
@@ -186,6 +194,8 @@ final class ModuleDocsEn {
         help("Displace", "Keep-hitbox", "Turn the server-side look only as far as it still meets the target's hitbox (Grim and Polar check that); turned further the hit does not count. On, the turn is only 5-10 degrees and moves only the sprint / Knockback part of the push, so on servers like Pika or Grim the effect is small. Off = the full offset, for servers that do not check the hit's look.");
         d("KeepSprint", "Keeps sprinting after an attack instead of slowing down.");
         d("InvulnTiming", "Times attacks to the end of the target's invulnerability, and spends spare swings on someone who can be hurt.");
+        d("FightBrain", "Works out where each fight stands (approach, our combo, a trade, their combo) and has the fight modules act for it: in a combo or a trade, clicks into the target's immunity while chasing it are not made (no swing, no slowdown, sprint kept) and the click at the end of it goes; while being comboed every click goes (a sprint hit cuts the knockback's carry) and KnockbackDelay holds every knockback, to stay in reach of the hit back. Sends no packet of its own.");
+        d("EdgeGuard", "When a hit near an edge would push you into the void, the knockback is held a few ticks while you walk back from the edge, then taken; on a one-wide bridge hit sideways you stand still and Clutch puts a block where the push lands first. The push is simulated first: if it lands on something anyway it is not held. Only on the ground, with an enemy near and a drop close by; everything after the knockback is held with it, so the server sees a slow connection.");
         d("InvulnBlink", "After you are hit you cannot be hurt for about half a second; your packets are held for that time: you move and attack as usual while the opponent sees you standing still, and everything goes out at once before the immunity ends. Does not start with too high a ping, no enemy near, void below, or in water or on a ladder; stops at once on a server correction.");
         d("KeepRange", "Lets go of forward during a combo (S-tap) so you do not walk into the target and waste their knockback.");
         d("SpeedBlocker", "Puts a block in the path of a player running at you: the sprint stops, so the hit they had ready loses most of its knockback and you get the first one. Works in stick fights too.");
@@ -251,6 +261,7 @@ final class ModuleDocsEn {
         help("LagRange", "let-out", "When to let go: Gradual sends about two held packets a tick; At once sends them all together.");
         help("LagRange", "recoil-time", "When to let go: after an attack, a dig or knockback, no holding for this long (ms).");
         help("LagRange", "flag-pause", "When to let go: after a server correction, no holding for this long (ms).");
+        help("LagRange", "skip-every", "After this many holds (or one more, drawn each time) one approach goes without holding, so the lag does not come with every approach the same way. 0 is off.");
         help("LagRange", "show-position", "Draws where the server has you, in third person.");
         help("LagRange", "log", "File: each hold and let-out with its reason in config/Atlas/lagrange-*.txt.");
         help("LagRange", "release-on-sprint-reset", "When to let go: a W-tap (sprint stopping) lets everything out at once, so the hit after it is judged from where you are. (From Slinky)");
@@ -296,6 +307,7 @@ final class ModuleDocsEn {
         d("TimerRange", "Briefly speeds up the game clock when approaching a target, to reach attack range first.");
         help("TimerRange", "mode", "NORMAL/SMART/MODERN: ours (freeze, then a faster timer for a while). SLINKY: OpenSlinky Regular -- runs a few ticks ahead when the crosshair will reach the target, then stands still as long. LEGIT: OpenSlinky Legit -- stands still first with outgoing packets held, then runs those ticks at once.");
         help("TimerRange", "min-dist", "SLINKY/LEGIT: not used closer than this to the target.");
+        help("TimerRange", "max-target-hurt", "NORMAL/SMART/MODERN: boost only on a target whose hurt time is at most this. No blow lands in the ten ticks after a hit, so a boost then only risks a setback. 10 is off.");
         help("TimerRange", "duration", "SLINKY: the most ticks run ahead.");
         help("TimerRange", "duration-legit", "LEGIT: the most ticks stood still (1-4).");
         help("TimerRange", "cooldown", "SLINKY/LEGIT: seconds between uses.");

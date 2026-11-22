@@ -90,8 +90,10 @@ public class InvulnBlink extends Module {
         in.enemyNear = this.enemyNear();
         in.safe = this.safe();
         in.stillHeld = Atlas.blinkManager.getBlinkingModule() == BlinkModules.INVULN_BLINK;
-        in.mayHold = Atlas.blinkManager.getBlinkingModule() == BlinkModules.NONE && !Arbiter.catching()
-                && LagGuard.mayHold(BlinkModules.INVULN_BLINK.moduleName(), false, null);
+
+        boolean couldStart = !this.plan.holding() && in.freshHit && in.enemyNear && in.safe;
+        in.mayHold = couldStart && Atlas.blinkManager.getBlinkingModule() == BlinkModules.NONE
+                && !Arbiter.catching() && LagGuard.mayHold(BlinkModules.INVULN_BLINK.moduleName(), false, null);
         in.attacked = this.attacked;
         int ping = Ping.own();
         in.pingMs = ping < 0 ? UNKNOWN_PING : ping;

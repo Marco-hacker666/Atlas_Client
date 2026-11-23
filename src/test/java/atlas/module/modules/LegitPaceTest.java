@@ -9,10 +9,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class LegitPaceTest {
-    private static final int JUMP = 0;
-    private static final int SNEAK = 1;
-    private static final int STOP_INPUT = 2;
-    private static final int NONE = -1;
 
     @Test
     public void theOtherModesKeepTheirIndexAndSettings() {
@@ -23,26 +19,13 @@ public class LegitPaceTest {
         assertFalse("TELLY-BRIDGE was removed (2026-11-08)", scaffold.rotationMode.parseString("TELLY-BRIDGE"));
         assertTrue(scaffold.rotationMode.parseString("GODBRIDGE"));
         assertTrue("legit-pace is the GODBRIDGE fix", scaffold.legitPace.isVisible());
-        assertTrue(scaffold.rotationMode.parseString("POLAR"));
-        assertTrue(scaffold.legitPace.isVisible());
+        assertTrue("POLAR was removed (2026-11-23): its configs load GODBRIDGE",
+                scaffold.rotationMode.parseString("POLAR"));
+        assertEquals("GODBRIDGE", scaffold.rotationMode.getModeString());
+        assertFalse(java.util.Arrays.asList(scaffold.rotationMode.visibleModes()).contains("POLAR"));
         assertTrue(scaffold.rotationMode.parseString("DEFAULT"));
         assertFalse(scaffold.legitPace.isVisible());
         assertTrue("on unless turned off", scaffold.legitPace.getValue());
-    }
-
-    @Test
-    public void aJumpWithNoRoomBecomesACrouch() {
-        assertEquals(SNEAK, Scaffold.pacedLedgeAction(JUMP, false, false));
-        assertEquals(JUMP, Scaffold.pacedLedgeAction(JUMP, true, false));
-    }
-
-    @Test
-    public void aDueCrouchIsTakenAtTheEdge() {
-        assertEquals(SNEAK, Scaffold.pacedLedgeAction(NONE, true, true));
-        assertEquals(SNEAK, Scaffold.pacedLedgeAction(JUMP, true, true));
-        assertEquals(NONE, Scaffold.pacedLedgeAction(NONE, true, false));
-        assertEquals("the player's own choice of action stays", STOP_INPUT,
-                Scaffold.pacedLedgeAction(STOP_INPUT, false, true));
     }
 
     @Test

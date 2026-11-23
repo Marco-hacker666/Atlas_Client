@@ -42,8 +42,7 @@ public class RetiredModesTest {
         assertFalse("nor keep-y", scaffold.isSpeedTellyKeepY());
         assertTrue("auto jump comes on", scaffold.tellyAutoJump.getValue());
         assertTrue(scaffold.tellyAutoJump.isVisible());
-        assertTrue(scaffold.rotationMode.parseString("POLAR"));
-        assertEquals(10, (int) scaffold.rotationMode.getValue());
+        assertTrue(scaffold.rotationMode.parseString("GODBRIDGE"));
         assertFalse("its switch is this mode's", scaffold.tellyAutoJump.isVisible());
     }
 

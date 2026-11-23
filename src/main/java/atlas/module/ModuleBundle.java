@@ -220,7 +220,7 @@ public final class ModuleBundle implements PropertyGroup {
             this.ownKeys.put(property, property.getName());
             property.rekey(this.prefix + "-" + property.getName());
             property.alsoWhen(shown);
-            property.fixGroup(this.title);
+            property.fixGroup(ModuleDocs.bundleHeading(this.title, this.child, property.getGroup()));
             this.members.add(property);
         }
         EventManager.register(this);

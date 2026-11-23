@@ -53,6 +53,13 @@ public final class ModuleDocs {
         return group;
     }
 
+    static String bundleHeading(String title, Module child, String group) {
+        if (group == null || "一般".equals(group) || !GROUPS.containsKey(child.getClass().getSimpleName())) {
+            return title;
+        }
+        return title + " · " + heading(group);
+    }
+
     public static List<Property<?>> apply(Module module, List<Property<?>> properties) {
         String key = module.getClass().getSimpleName();
         String description = DESCRIPTIONS.get(key);
@@ -605,6 +612,7 @@ public final class ModuleDocs {
 
         d("Blink", "暫時扣住自己送出的移動封包，之後以伺服器能接受的節奏放出（瞬移般的效果）。");
         d("Clutch", "被打下橋或走到虛空邊緣時，自動轉頭放方塊把自己接住。");
+        help("Clutch", "hit-settle", "被打到後等這麼多 tick 再放方塊，讓擊退先生效。0 = 不等。");
         help("Clutch", "turn-random", "轉頭速度每 2～4 tick 隨機變化的幅度（%）：快來不及接時只會更快、不會更慢；往下看很陡時，左右也會輕微飄動。0 = 關。");
         help("Clutch", "snapback-style", "轉回原本視角的方式：Even＝平均分成幾 tick 轉回去（最後一 tick 剛好對準），Speed＝每 tick 固定轉幾度（舊的）。");
         help("Clutch", "snapback-ticks", "Even：分幾 tick 轉回原本的視角。");
@@ -886,21 +894,16 @@ public final class ModuleDocs {
         help("HUDStyle", "outline-color", "外框的顏色。");
         help("HUDStyle", "outline-opacity", "外框有多明顯。");
 
-        g("KillAura2",
-                h("常用", "mode", "min-cps", "max-cps", "attack-range", "auto-block", "legit-threat", "legit-tolerance", "block-min-ticks", "block-stop-sprint", "block-release", "block-log", "move-fix"),
-                h("目標", "sort", "switch-delay", "scan-extra", "fov", "players", "mobs", "animals", "teams",
-                        "bot-check", "through-walls", "raycast"),
-                h("轉頭", "min-turn", "max-turn", "turn-accel", "aim-drift", "flick-overshoot", "lazy", "short-stop"),
-                h("出手", "swing-range", "max-per-tick", "require-press", "weapons-only", "inventory-check",
-                        "ignored-backoff"));
         g("KillAura",
                 h("常用", "Rotations", "CPS Mode", "MinCPS", "MaxCPS", "AttackRange", "SwingRange", "auto-block",
                         "Mode", "MoveFix"),
                 h("目標", "Sort", "SwitchDelay", "FOV", "Players", "Bosses", "Mobs", "Animals", "Golems",
                         "Silverfish", "Teams", "BotCheck", "ThroughWalls"),
                 h("出手", "ScanExtra", "Raycast", "ExitClick", "RequirePress",
-                        "AllowMining", "WeaponsOnly", "AllowTools", "InventoryCheck"),
-                h("格擋", "AttackTick", "LegitThreat", "LegitTolerance", "LegitSameTick", "AutoBlockRequirePress", "AutoBlockCPS", "AutoBlockRange"),
+                        "AllowMining", "WeaponsOnly", "AllowTools", "InventoryCheck", "AttackOnDamage",
+                        "NoAirSprintHit", "simulate-clicks"),
+                h("格擋", "AttackTick", "LegitThreat", "LegitTolerance", "LegitSameTick", "AutoBlockRequirePress", "AutoBlockCPS", "AutoBlockRange",
+                        "yuri-*"),
                 h("轉頭", "SmoothBack", "AimMode", "MinTurnSpeed", "MaxTurnSpeed",
                         "Multipoint", "AimDrift", "FlickOvershoot", "TurnAccel", "Smoothing", "AngleStep", "AimLead", "AimLeadCap",
                         "RotationTiming", "LazyRotation", "ShortStop", "FailAim"),
@@ -914,9 +917,9 @@ public final class ModuleDocs {
                 h("觸發", "trigger", "hold-key", "edge-fall", "void-only", "safe-drop", "min-height", "combat-window",
                         "only-sideways", "fov"),
                 h("放置", "reach", "place-interval", "safe-mode", "early-turn", "chain", "chain-length", "keep-y", "extra-block", "auto-ladder",
-                        "swing", "pre-aim", "counter-knockback", "counter-delay"),
-                h("轉頭", "mode", "move-fix", "speed", "max-speed", "rotation-random", "humanize", "ease",
-                        "reset-angle", "snapback-speed", "snapback-delay", "snap-on-jump"),
+                        "swing", "pre-aim", "counter-knockback", "counter-delay", "hit-settle"),
+                h("轉頭", "mode", "move-fix", "speed", "max-speed", "rotation-random", "turn-random", "humanize", "ease",
+                        "reset-angle", "snapback-*", "snap-on-jump"),
                 h("物品", "auto-switch", "switch-back", "item-spoof", "only-on-depletion", "pause-autoclicker"),
                 h("其他", "disable-after", "log"));
         g("Scaffold",
@@ -940,6 +943,9 @@ public final class ModuleDocs {
         g("Velocity",
                 h("模式與比例", "mode", "chance", "horizontal", "vertical", "explosions-horizontal",
                         "explosions-vertical"),
+                h("作用條件", "only-while-targeting", "pause-on-S"),
+                h("模式設定", "jitter", "intave-*", "intave14-*", "grim-*", "oldgrim-*", "matrix-*", "legit-*",
+                        "delay-*", "tick-*", "zip-*", "karhu-*", "xz-*"),
                 h("Reduce 模式", "reduce", "attack-times", "only-sprinting", "reduce-when-can-attack", "slap-reduce"),
                 h("Jump / Rotate", "jump", "rotate", "rotate-ticks", "tickExact"),
                 h("Lag 模式", "lag-*"),
@@ -972,13 +978,12 @@ public final class ModuleDocs {
                 h("重複檢查", "DuplicateInWorld", "DuplicateInTab", "DuplicateCompareMode"),
                 h("處理", "RemoveFromWorld", "Remove-Interval", "Debug"));
         g("Disabler",
-                h("Grim / 通用", "grim-place", "start-sprint", "basic-disabler", "move-disabler",
-                        "no-rotation-disabler", "modify-mode", "offset-amount", "only-combat"),
+                h("Grim / 通用", "grim-place", "basic-disabler", "no-rotation-disabler", "modify-mode", "only-combat"),
                 h("取消封包", "cancel-*", "c03-no-move"),
                 h("Vulcan", "vulcan-*"),
                 h("Verus", "verus-*"),
-                h("Intave / Matrix", "intave-*", "matrix-*", "ta-packet-counter"),
-                h("Watchdog / 其他伺服器", "watchdog-*", "lifeboat", "spigot-spam", "message", "exp-void-tp*"),
+                h("Intave / Matrix", "intave-*", "matrix-*"),
+                h("Watchdog / 其他伺服器", "watchdog-*", "lifeboat", "message", "exp-void-tp*"),
                 h("重送與除錯", "buffer-size", "repeat-times*", "flag-delay", "chat-debug"));
         g("TimerRange",
                 h("模式與時鐘", "mode", "ticks", "timer-boost", "boost-delay-*", "timer-charged",
@@ -998,18 +1003,15 @@ public final class ModuleDocs {
                 h("Slinky 格擋", "block-range", "max-hold-ticks", "random-hold-ticks", "block-cooldown-ms", "require-*", "max-hurt-time"),
                 h("Slinky 假動畫", "fake-animation*"),
                 h("Slinky 延遲封包", "lag-*"),
+                h("Full", "full-*"),
+                h("Yuri", "yuri-*"),
                 h("Raven", "raven-*"));
         g("TargetHUD",
-                h("樣式", "style", "Anim Mode", "animations", "head", "indicator", "outline", "shadow"),
+                h("樣式", "style", "Anim Mode", "animations", "head", "indicator", "outline", "shadow", "bold-text",
+                        "text-size"),
                 h("顏色", "color", "CustomColor", "Bg-Alpha", "background"),
                 h("位置與大小", "position-*", "offset-*", "scale"),
                 h("顯示條件", "ka-only", "chat-preview"));
-        g("ESP2D",
-                h("方框", "Outline", "Mode", "Local-Player", "Dropped-Items"),
-                h("血量", "Health-Bar", "HBar-Mode", "Render-Absorption", "HealthNumber", "HP-Mode"),
-                h("護甲", "Armor-Bar", "ABar-Mode", "ItemArmorNumber", "ArmorItems", "ArmorDurability"),
-                h("名字", "Tags", "Tags-Background", "Item-Tags", "Font-Scale"),
-                h("顏色", "Color", "Red", "Green", "Blue", "Saturation", "Brightness"));
         g("Blink",
                 h("扣住", "direction", "mode", "hold-transactions", "auto-off", "timeout"),
                 h("釋放", "auto-send", "send-threshold", "max-drift", "latency-budget", "ping-aware",
@@ -1021,7 +1023,7 @@ public final class ModuleDocs {
                 h("歸因", "context", "blame", "blame-window"),
                 h("方塊與傷害", "detect-rejects", "place-log", "detect-low-damage", "damage-chat"),
                 h("提示", "chat", "sound", "log-file"),
-                h("HUD", "hud", "hud-*"));
+                h("HUD", "hud", "hud-*", "scale", "background"));
         g("BedwarUtils",
                 h("資訊 HUD", "hud", "hud-x", "hud-y", "hud-scale", "hud-shadow", "diamond-upgrades", "item-tracker",
                         "invis-alert", "auto-inc"),
@@ -1038,6 +1040,141 @@ public final class ModuleDocs {
                 h("整理", "auto-armor", "auto-armor-interval", "drop-trash", "check-durability", "blocks",
                         "projectiles", "arrow"),
                 h("固定格子", "*-slot"));
+        g("KillAuraLB",
+                h("一般", "Technique", "MinCPS", "MaxCPS", "MaxPerTick", "MissCooldown", "NearMiss*"),
+                h("距離", "RangeIncrease", "LagAware*", "ThroughWallsRange", "ScanRangeIncrease*"),
+                h("目標", "TargetFOV", "HurtTime", "Priority", "Players", "Mobs", "Animals", "Golems", "Silverfish",
+                        "Bosses", "Teams", "BotCheck"),
+                h("轉頭", "AngleSmooth", "MovementCorrection", "ResetThreshold", "TicksUntilReset", "RotationTiming",
+                        "ThroughWalls", "LazyRotation"),
+                h("轉頭平滑", "Noise-*", "React-*", "Recorded-*", "Tracking-*", "HorizontalTurnSpeed*",
+                        "VerticalTurnSpeed*", "Sigmoid-*", "HorizontalSpeed*", "VerticalSpeed*",
+                        "DirectionChangeFactor*", "Interpolation-*", "YawAcceleration*", "PitchAcceleration*",
+                        "DynamicAccel", "CoefDistance", "YawCrosshairAccel*", "PitchCrosshairAccel*",
+                        "AccelerationError", "YawAccelError", "PitchAccelError", "ConstantError", "YawConstantError",
+                        "PitchConstantError", "SigmoidDeceleration", "Deceleration-*"),
+                h("短停與失誤", "ShortStop*", "Fail", "Fail-*"),
+                h("瞄準點", "Exempt*", "Gaussian*", "Lazy", "Lazy-*", "Delay", "Delay-*"),
+                h("出手", "Require-*", "Raycast", "AttackPath", "Criticals", "KeepSprint", "IgnoreOpenInventory",
+                        "SimulateInventoryClosing", "AttackOnDamage", "NoAirSprintHit"),
+                h("格擋", "AutoBlocking", "BlockMode", "SimulateVanillaUse", "UnblockMode", "Reblock*",
+                        "PauseOnUnblock*", "AutoBlock-Chance", "Blink", "PrioritizeBlocking", "OnScanRange",
+                        "OnlyWhenInDanger", "BlockHurtTime", "Danger-*"),
+                h("節奏", "Rhythm-*"),
+                h("揮空提示", "FailSwing*", "NotifyWhenFail", "Notify-*"),
+                h("FightBot", "FightBot", "FightBot-*", "OpponentRange", "DangerousYaw", "RunawayOnCooldown",
+                        "VisibleOnly", "NotWhenVoid", "Leader", "Leader-*", "Auto-*"),
+                h("距離顯示", "RangeIndicator", "Indicator-*"),
+                h("目標標記", "TargetRender", "TargetRender-*"));
+        g("NoSlow",
+                h("劍", "Sword Mode", "HW *", "Swap Delay", "No Attack", "Sword Motion", "Sword Sprint",
+                        "Only Kill Aura Auto Block"),
+                h("食物", "Food *"),
+                h("弓", "Bow *"),
+                h("模式設定", "NG *", "Anti-Switch", "Exhi *", "GrimTest *", "GrimSemi *", "Luckyvn *",
+                        "OldIntave *", "Intave14 *", "IntaveBlink *", "OldIntaveV2 *", "Vulcan *", "Grim19 *"));
+        g("AimAssist",
+                h("目標", "target-mode", "sort-by", "exceed-fov", "line-of-sight", "ignore-invisible", "weapons-only",
+                        "allow-tools", "bot-check", "teams"),
+                h("觸發", "require-click", "require-mouse-move", "stop-on-block-break"),
+                h("轉頭", "speed-h", "speed-v", "lock-vertical", "predict", "randomization", "hitbox-*", "dead-zone",
+                        "horizontal-speed", "vertical-speed", "smoothing", "multipoint", "lead", "strafe-increase"),
+                h("Silent 模式", "max-offset", "silent-*", "move-fix"));
+        g("ProjectileAimBot",
+                h("物品", "bow", "egg", "snowball", "ender-pearl", "other-items"),
+                h("目標", "range", "through-walls", "through-walls-range", "priority", "teams", "bot-check"),
+                h("瞄準", "gravity-type", "predict", "latency-compensation", "allow-lob", "turn-speed", "move-fix",
+                        "highest-body-point", "lowest-body-point"),
+                h("射擊", "auto-shoot", "shoot-charge", "redraw", "early-let-go", "charge-random"),
+                h("閃避", "dodge-*", "learn-habits"),
+                h("顯示", "mark", "show-path", "bow-trace"));
+        g("SprintReset",
+                h("時機", "Only While Sprinting", "Only While Moving", "Reset On Crit", "min-gap", "chance",
+                        "wait-for-damage", "select-hits"),
+                h("重置方式", "release-*", "randomize", "Smart Reset", "Fast Reset"),
+                h("Crab 模式", "crab-*"),
+                h("Zest 模式", "zest-*"));
+        g("Tower",
+                h("模式設定", "vanilla-speed", "jump-*", "constant-motion", "packet-delay", "teleport-*",
+                        "sprint-speed", "off-ground-speed", "no-strafe", "low-hop", "only-while-moving",
+                        "blocksmc-speed", "timer", "not-while-moving", "trigger-motion", "drag-motion", "tunnel-*",
+                        "turn-delay"));
+        g("AutoClicker",
+                h("點擊", "min-cps", "max-cps", "click-mode", "randomization", "low-max-cps", "jitter",
+                        "jitter-strength", "double-*", "fatigue*", "click-sound", "start-delay-ms"),
+                h("格擋", "block-hit", "block-hit-ticks"),
+                h("挖方塊", "break-blocks", "range", "hit-box-*", "break-chance"),
+                h("限制", "weapons-only", "allow-tools", "inv-fill-*", "gui-attack"));
+        g("SpeedBlocker",
+                h("偵測", "range", "scan-range", "min-approach", "lead", "lead-ping", "contact-ticks"),
+                h("放置", "speed", "place-interval", "swap-delay", "restore-delay", "max-retries", "retry-cooldown",
+                        "move-fix"),
+                h("對象", "require-sprint", "ignore-teammates", "target-invisible"),
+                h("顯示與除錯", "show-plan", "record-runs", "debug", "debug-chat"));
+        g("KnockbackDelay",
+                h("模式設定", "SteadyDelay", "Ramp", "AirDelay", "GroundDelay", "GroundTicks", "Cooldown", "Chance",
+                        "AirMax", "AirChance", "MaxDivergence"),
+                h("目標", "RequireTarget", "TargetRange", "TargetFOV"),
+                h("扣住", "HoldOthers", "HoldTransactions", "MaxVertical"),
+                h("作用條件", "WaterCheck", "RealtimeDamage", "OnlySwords", "RequireAttackKey", "OnlyInAir"));
+        g("FakeLag",
+                h("距離", "range", "melee-distance"),
+                h("釋放", "release-on-attack", "release-style", "catch-up", "taper", "hold-transactions"),
+                h("PING 模式", "ramp", "ramp-speed", "dash", "dash-time", "reset-distance", "server-reach",
+                        "start-delay", "flush-time"),
+                h("顯示與除錯", "log"));
+        g("Displace",
+                h("觸發", "Hit-mode", "Max-hurt-time", "Hit-cooldown", "Has-knockback", "Item-whitelist",
+                        "Whitelisted-items", "Ignore-teammates", "Only-facing-away"),
+                h("虛空", "Find-void", "Void-*"),
+                h("其他", "Blink", "Keep-hitbox", "Show-direction"));
+        g("BackTrack",
+                h("延遲", "adaptive", "normal-delay", "adaptive-delay", "randomize", "hold", "release-on-hit",
+                        "interrupt-lagrange"),
+                h("目標", "players", "teams", "bot-check", "max-hurt-time", "weapons-only", "only-in-combat",
+                        "require-attack-key"),
+                h("顯示", "esp", "esp-head", "hit-stats"));
+        g("TargetOrbit",
+                h("顏色", "color", "custom-color", "core-color"),
+                h("樣式", "crystals", "crystal-size", "comets", "trail"),
+                h("光暈", "body-glow", "glow-*", "hit-rings"),
+                h("顯示條件", "combat-range", "combat-time"));
+        g("BedNuker",
+                h("破壞", "ground-spoof", "ignore-velocity", "tool-check", "swing", "post-break-delay",
+                        "break-margin", "abort-on-drop", "move-fix"),
+                h("目標", "surroundings", "outside-first", "whitelist", "protect-own-bed", "own-bed-radius"),
+                h("顯示", "show-target", "show-progress"));
+        g("MommyIsHere",
+                h("觸發", "panic-key", "trigger", "modifier", "restore-key", "phone-remote"),
+                h("動作", "action", "mute", "hide-game", "cover", "close-apps", "pause-game", "leave-server",
+                        "auto-rejoin", "force", "custom-shell", "quit-game", "delay"));
+        g("Radar",
+                h("對象", "players", "friends", "enemies", "bots", "show-pvp"),
+                h("顏色", "color", "fill-color", "outline-color", "cross-color", "background"),
+                h("位置與大小", "position", "offset-x", "offset-y", "radar-radius", "dot-radius", "scale"));
+        g("HitSelect",
+                h("作用條件", "only-in-combo", "first-hit", "wait-first", "low-health", "hit-back", "only-jumping",
+                        "weapon-only", "more-damage"));
+        g("Speed",
+                h("模式設定", "vulcan-*", "grim-*", "intave-*", "blocksmc-*", "hypixel-*", "matrix-*",
+                        "strafe-boost", "speed-timer"));
+        g("JumpReset",
+                h("作用條件", "require-sprint", "only-if-helps", "min-reduction", "moving-forward", "mouse-down",
+                        "aiming-on-player", "range", "fov"),
+                h("暫停", "pause-when", "flag-ticks", "combat-ticks"));
+        g("Pointers",
+                h("樣式", "style", "scale", "radius", "distance-radius"),
+                h("顏色", "colors", "near", "far", "*-color"));
+        g("AuraAutoBlock",
+                h("觸發", "require-killaura", "require-right-click", "manual-left-click"),
+                h("智慧解除", "smart-unblock*"),
+                h("NoSlow", "allow-noslow", "only-unblock-without-noslow", "disable-noslow-in-range",
+                        "noslow-disable-range"));
+        g("KeepSprint",
+                h("命中控制", "hit-control", "Hit Slow Down *", "Buffer *", "Max Buffer", "Velocity Hit Sprint",
+                        "Normal Hit Sprint", "Only In Air"));
+        g("CheatDetector",
+                h("檢查", "check-*", "reach-limit"));
 
         help("move-fix", "移動修正：靜默轉頭時讓移動方向跟伺服器看到的視角一致，避免移動類 flag。");
         help("movefix", "移動修正：靜默轉頭時讓移動方向跟伺服器看到的視角一致，避免移動類 flag。");

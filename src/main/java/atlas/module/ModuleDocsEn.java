@@ -326,6 +326,7 @@ final class ModuleDocsEn {
 
         d("Blink", "Holds your outgoing movement and releases it at a pace the server accepts (a teleport-like effect).");
         d("Clutch", "When knocked off a bridge or walking off an edge over the void, turns and places a block to catch you.");
+        help("Clutch", "hit-settle", "Ticks to wait after a hit before placing, so the knockback takes effect first. 0 = no wait.");
         help("Clutch", "turn-random", "How much the turn speed wanders, every 2-4 ticks (%): when a catch is due only faster, never slower; while looking steeply down the yaw drifts a little too. 0 = off.");
         help("Clutch", "snapback-style", "How the view turns back: Even = equal parts over a few ticks, the last one exact; Speed = fixed degrees a tick (the old way).");
         help("Clutch", "snapback-ticks", "Even: ticks to turn the view back over.");
@@ -730,6 +731,36 @@ final class ModuleDocsEn {
         heading("固定格子", "Fixed slots");
         heading("HUD 顯示", "HUD");
         heading("背景", "Background");
+        heading("模式設定", "Mode settings");
+        heading("作用條件", "When it works");
+        heading("劍", "Sword");
+        heading("食物", "Food");
+        heading("弓", "Bow");
+        heading("Silent 模式", "Silent mode");
+        heading("瞄準", "Aiming");
+        heading("射擊", "Shooting");
+        heading("閃避", "Dodging");
+        heading("重置方式", "How it resets");
+        heading("Crab 模式", "Crab mode");
+        heading("Zest 模式", "Zest mode");
+        heading("挖方塊", "Breaking blocks");
+        heading("偵測", "Detection");
+        heading("PING 模式", "PING mode");
+        heading("虛空", "Void");
+        heading("延遲", "Delay");
+        heading("光暈", "Glow");
+        heading("破壞", "Breaking");
+        heading("動作", "Actions");
+        heading("暫停", "Pausing");
+        heading("智慧解除", "Smart unblock");
+        heading("命中控制", "Hit control");
+        heading("檢查", "Checks");
+        heading("轉頭平滑", "Angle smoothing");
+        heading("短停與失誤", "Short stop & fail");
+        heading("瞄準點", "Aim point");
+        heading("揮空提示", "Missed swings");
+        heading("距離顯示", "Range indicator");
+        heading("目標標記", "Target mark");
 
         help("move-fix", "Movement fix: with silent rotations, keeps movement in line with the rotation the server sees, avoiding movement flags.");
         help("movefix", "Movement fix: with silent rotations, keeps movement in line with the rotation the server sees, avoiding movement flags.");

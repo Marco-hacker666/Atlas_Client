@@ -171,6 +171,11 @@ public class Scaffold extends Module {
     private long eagleLastSneakTime = 0L;
     private int eagleBlocksPlaced = 0;
 
+    private final IntProperty retiredPolarSneakBelow = new IntProperty("polar-force-sneak-below-count", 5, 0, 20, () -> false);
+    private final IntProperty retiredPolarSneakTime = new IntProperty("polar-sneak-time", 1, 1, 10, () -> false);
+    private final ModeProperty retiredPolarModes = new ModeProperty("polar-modes", 0,
+            new String[]{"Jump", "Sneak", "StopInput", "Backwards"}, () -> false);
+
     private final IntProperty jumpEveryBlocks = new IntProperty("jump-every-blocks", 7, 0, 20, this::godBridgeShown);
 
     private final BooleanProperty godBridgeTrace = new BooleanProperty("godbridge-trace", true, this::isRunMode);

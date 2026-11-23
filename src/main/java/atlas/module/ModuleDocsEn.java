@@ -666,6 +666,7 @@ final class ModuleDocsEn {
         heading("其他", "Other");
         heading("移動", "Movement");
         heading("疊高與高度", "Tower & height");
+        heading("放置位置（LINE）", "Placement (LINE)");
         heading("顯示", "Display");
         heading("模式與比例", "Mode & amounts");
         heading("Reduce 模式", "Reduce mode");

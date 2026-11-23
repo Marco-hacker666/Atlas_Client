@@ -51,7 +51,6 @@ public class Scaffold extends Module {
     private static final int ROTATION_SNAP = 7;
     private static final int ROTATION_THREE_FMC = 8;
     private static final int ROTATION_SNAP2 = 9;
-    private static final int ROTATION_POLAR = 10;
     private static final int ROTATION_TELLY = 11;
     private static final int ROTATION_SPEED_TELLY = 12;
     private static final int ROTATION_WEIRD_TELLY = 13;
@@ -73,11 +72,6 @@ public class Scaffold extends Module {
     private boolean snapAligned = true;
     private java.io.File snapTraceFile;
 
-    private static final int POLAR_JUMP = 0;
-    private static final int POLAR_SNEAK = 1;
-    private static final int POLAR_STOP_INPUT = 2;
-    private static final int POLAR_BACKWARDS = 3;
-    private static final int LEDGE_NONE = -1;
     private static final double[] placeOffsets = new double[]{
             0.03125,
             0.09375,
@@ -132,7 +126,7 @@ public class Scaffold extends Module {
     private float lastSnapPlacePitch = Float.NaN;
     public final ModeProperty rotationMode = new ModeProperty("rotations", 2, new String[]{"NONE", "DEFAULT", "BACKWARDS", "SIDEWAYS", "GODBRIDGE", "SMOOTH", "Hypixel", "SNAP", "3FMC", "SNAP2", "POLAR", "TELLY", "SPEED-TELLY", "WEIRD-TELLY", "GODBRIDGE2", "MOONWALK", "SNAP-SPEED"})
 
-            .retire("GODBRIDGE", "SIDEWAYS", "3FMC")
+            .retire("GODBRIDGE", "SIDEWAYS", "3FMC", "POLAR")
 
             .alias("B4", "SPEED-TELLY")
 
@@ -147,7 +141,9 @@ public class Scaffold extends Module {
     public final PercentProperty groundMotion = new PercentProperty("ground-motion", 100);
     public final PercentProperty airMotion = new PercentProperty("air-motion", 100);
     public final PercentProperty speedMotion = new PercentProperty("speed-motion", 100);
-    public final ModeProperty tower = new ModeProperty("tower", 0, new String[]{"NONE", "VANILLA", "EXTRA", "TELLY"});
+    public final ModeProperty tower = new ModeProperty("tower", 0, new String[]{"NONE", "VANILLA", "EXTRA", "TELLY", "PULLDOWN"});
+    public final FloatProperty pulldownTrigger = new FloatProperty("tower-pulldown-trigger", 0.1F, 0.0F, 0.2F,
+            () -> this.tower.getValue() == 4);
     public final BooleanProperty hypixeltower = new BooleanProperty("hypixeltower", false, () -> this.tower.getValue() == 3);
     public final BooleanProperty safe = new BooleanProperty("safe", false, () -> this.tower.getValue() == 3);
     public final IntProperty safeStuckDelayTicksProperty = new IntProperty("safe-delay-ticks", 1, 1, 3, () -> this.tower.getValue() == 3 && this.safe.getValue());
@@ -156,6 +152,12 @@ public class Scaffold extends Module {
     public final BooleanProperty disableWhileJumpActive = new BooleanProperty("no-keep-y-on-jump-potion", false, () -> this.keepY.getValue() != 0);
 
     public final BooleanProperty multiplace = new BooleanProperty("multi-place", false);
+    public final ModeProperty placement = new ModeProperty("placement", 0, new String[]{"LINE", "CLASSIC"});
+    public final IntProperty linePredict = new IntProperty("line-predict", 1, 0, 3, this::lineOn);
+    public final IntProperty expand = new IntProperty("expand", 0, 0, 6, this::lineOn);
+    public final BooleanProperty down = new BooleanProperty("down", false, this::lineOn);
+    public final BooleanProperty stabilize = new BooleanProperty("stabilize", false, this::lineOn);
+    private final java.util.ArrayDeque<BlockPos> recentPlaced = new java.util.ArrayDeque<BlockPos>();
     public final BooleanProperty safeWalk = new BooleanProperty("safe-walk", true);
     public final BooleanProperty swing = new BooleanProperty("swing", true);
     public final BooleanProperty itemSpoof = new BooleanProperty("item-spoof", false);
@@ -169,12 +171,10 @@ public class Scaffold extends Module {
     private long eagleLastSneakTime = 0L;
     private int eagleBlocksPlaced = 0;
 
-    private final IntProperty polarForceSneakBelowCount = new IntProperty("polar-force-sneak-below-count", 5, 0, 20, this::polarShown);
-    private final IntProperty polarSneakTime = new IntProperty("polar-sneak-time", 1, 1, 10, this::polarShown);
-
-    private final ModeProperty polarModes = new ModeProperty("polar-modes", POLAR_JUMP,
-            new String[]{"Jump", "Sneak", "StopInput", "Backwards"},
-            this::polarShown);
+    private final IntProperty retiredPolarSneakBelow = new IntProperty("polar-force-sneak-below-count", 5, 0, 20, () -> false);
+    private final IntProperty retiredPolarSneakTime = new IntProperty("polar-sneak-time", 1, 1, 10, () -> false);
+    private final ModeProperty retiredPolarModes = new ModeProperty("polar-modes", 0,
+            new String[]{"Jump", "Sneak", "StopInput", "Backwards"}, () -> false);
 
     private final IntProperty jumpEveryBlocks = new IntProperty("jump-every-blocks", 7, 0, 20, this::godBridgeShown);
 
@@ -187,13 +187,7 @@ public class Scaffold extends Module {
     public final BooleanProperty jumpBuildsUp = new BooleanProperty("jump-builds-up", true, this::isRunMode);
     private final PlacePace pace = new PlacePace();
     private boolean paceWasOnGround;
-    private long nextSneakEvery = 3500L;
     private final java.util.Random paceRandom = new java.util.Random();
-    private int blocksSinceJump = 0;
-    private int polarLedgeSneakTicks = 0;
-    private boolean polarLedgeStopInput = false;
-    private boolean polarLedgeStepBack = false;
-    private boolean polarLedgeJump = false;
     public final BooleanProperty espOutline = new BooleanProperty("outline-esp", false);
     public final ModeProperty espColor = new ModeProperty("outline-color", 0, new String[]{"Default", "HUD"}, () -> this.espOutline.getValue());
     private final Map<BlockPos, Long> espHighlight = new HashMap<>();
@@ -394,7 +388,7 @@ public class Scaffold extends Module {
         if (cell.equals(planned)) {
             return mop;
         }
-        if (cell.getY() != planned.getY() || !BlockUtil.isReplaceable(cell)) {
+        if (this.lineOn() || cell.getY() != planned.getY() || !BlockUtil.isReplaceable(cell)) {
             return null;
         }
         AxisAlignedBB box = mc.thePlayer.getEntityBoundingBox().offset(movedX, 0.0, movedZ)
@@ -500,7 +494,114 @@ public class Scaffold extends Module {
         return this.getBlockData(0.0, 0.0);
     }
 
+    private boolean solidUnderFeet() {
+        BlockPos under = new BlockPos(mc.thePlayer.posX, mc.thePlayer.posY - 1.0E-3, mc.thePlayer.posZ).down();
+        return !BlockUtil.isReplaceable(under);
+    }
+
+    private boolean lineOn() {
+        return this.placement.getValue() == 0 && !this.isRunMode();
+    }
+
+    private boolean goingDown() {
+        return this.lineOn() && this.down.getValue() && mc.gameSettings.keyBindSneak.isKeyDown()
+                && !mc.gameSettings.keyBindJump.isKeyDown();
+    }
+
     private BlockData getBlockData(double aheadX, double aheadZ) {
+        if (this.lineOn()) {
+            return this.lineBlockData(aheadX, aheadZ);
+        }
+        return this.classicBlockData(aheadX, aheadZ);
+    }
+
+    private LinePlacement.Line walkingLine() {
+        int[] last = null;
+        int[] previous = null;
+        java.util.Iterator<BlockPos> it = this.recentPlaced.descendingIterator();
+        if (it.hasNext()) {
+            BlockPos a = it.next();
+            last = new int[]{a.getX(), a.getY(), a.getZ()};
+            if (it.hasNext()) {
+                BlockPos b = it.next();
+                previous = new int[]{b.getX(), b.getY(), b.getZ()};
+            }
+        }
+        return LinePlacement.walkingLine(mc.thePlayer.posX, mc.thePlayer.posZ, this.getCurrentYaw(),
+                MoveUtil.isForwardPressed(), last, previous);
+    }
+
+    private BlockData lineBlockData(double aheadX, double aheadZ) {
+        int predict = this.linePredict.getValue();
+        double px = mc.thePlayer.posX + mc.thePlayer.motionX * predict + aheadX;
+        double pz = mc.thePlayer.posZ + mc.thePlayer.motionZ * predict + aheadZ;
+        int feetY = MathHelper.floor_double(mc.thePlayer.posY);
+        boolean down = this.goingDown();
+        boolean holdLayer = (this.stage != 0 || this.godBridgeHoldsLayer()) && !this.shouldKeepY;
+        int ty = down ? feetY - 2 : (holdLayer ? Math.min(feetY, this.startY) : feetY) - 1;
+        BlockPos target = new BlockPos(MathHelper.floor_double(px), ty, MathHelper.floor_double(pz));
+        LinePlacement.Line line = this.walkingLine();
+        if (!BlockUtil.isReplaceable(target)) {
+            int reach = this.expand.getValue();
+            if (reach <= 0 || down || !MoveUtil.isForwardPressed()) {
+                return null;
+            }
+            double r = Math.toRadians(this.getCurrentYaw());
+            for (int i = 1; i <= reach; i++) {
+                BlockPos ahead = new BlockPos(MathHelper.floor_double(px - Math.sin(r) * i), ty,
+                        MathHelper.floor_double(pz + Math.cos(r) * i));
+                if (!BlockUtil.isReplaceable(ahead)) {
+                    continue;
+                }
+                BlockData data = this.bestFace(ahead, false);
+                if (data != null) {
+                    return data;
+                }
+            }
+            return null;
+        }
+        for (int[] c : LinePlacement.candidates(target.getX(), target.getY(), target.getZ(), line)) {
+            BlockPos cell = new BlockPos(c[0], c[1], c[2]);
+            if (!BlockUtil.isReplaceable(cell)) {
+                continue;
+            }
+            BlockData data = this.bestFace(cell, down);
+            if (data != null) {
+                return data;
+            }
+        }
+        return null;
+    }
+
+    private BlockData bestFace(BlockPos cell, boolean awayFacesToo) {
+        Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
+        double reach = mc.playerController.getBlockReachDistance();
+        BlockData best = null;
+        double bestFacing = Double.NEGATIVE_INFINITY;
+        for (EnumFacing side : EnumFacing.VALUES) {
+            BlockPos support = cell.offset(side.getOpposite());
+            if (BlockUtil.isReplaceable(support) || BlockUtil.isInteractable(support)
+                    || !eyeReaches(eyes, support, reach)) {
+                continue;
+            }
+            Vec3i n = side.getDirectionVec();
+            double fx = support.getX() + 0.5 + n.getX() * 0.5;
+            double fy = support.getY() + 0.5 + n.getY() * 0.5;
+            double fz = support.getZ() + 0.5 + n.getZ() * 0.5;
+            double facing = LinePlacement.facing(eyes.xCoord, eyes.yCoord, eyes.zCoord, fx, fy, fz,
+                    n.getX(), n.getY(), n.getZ());
+            if (!awayFacesToo && facing < 0.0) {
+                continue;
+            }
+            if (facing > bestFacing) {
+                bestFacing = facing;
+                best = new BlockData(support, side);
+            }
+        }
+        return best;
+    }
+
+    private BlockData classicBlockData(double aheadX, double aheadZ) {
         int startY = MathHelper.floor_double(mc.thePlayer.posY);
         boolean holdLayer = (this.stage != 0 || this.godBridgeHoldsLayer()) && !this.shouldKeepY;
         BlockPos targetPos = new BlockPos(
@@ -579,6 +680,10 @@ public class Scaffold extends Module {
             }
             {
                 this.placedAt.put(blockPos.offset(enumFacing), this.tick);
+                this.recentPlaced.addLast(blockPos.offset(enumFacing));
+                while (this.recentPlaced.size() > 4) {
+                    this.recentPlaced.removeFirst();
+                }
                 if (mc.playerController.getCurrentGameType() != GameType.CREATIVE) {
                     this.blockCount--;
                 }
@@ -590,7 +695,6 @@ public class Scaffold extends Module {
                 }
                 this.markPlaced(blockPos.offset(enumFacing));
                 this.eagleBlocksPlaced++;
-                this.blocksSinceJump++;
                 if (this.isRunMode()) {
                     this.run.placed();
                 }
@@ -769,7 +873,7 @@ public class Scaffold extends Module {
 
     private boolean godBridgeShown() {
         int mode = this.rotationMode.getValue();
-        return mode == ROTATION_GODBRIDGE || mode == ROTATION_POLAR;
+        return mode == ROTATION_GODBRIDGE;
     }
 
     private boolean isRunMode() {
@@ -783,10 +887,6 @@ public class Scaffold extends Module {
 
     private boolean isMoonWalkMode() {
         return this.rotationMode.getValue() == ROTATION_MOONWALK;
-    }
-
-    private boolean polarShown() {
-        return this.rotationMode.getValue() == ROTATION_POLAR;
     }
 
     private boolean paceOn() {
@@ -1000,10 +1100,6 @@ public class Scaffold extends Module {
                 }
                 if (this.rotationMode.getValue() == ROTATION_TELLY) {
                     this.tellyTick(event);
-                    return;
-                }
-                if (this.lbGodBridge()) {
-                    this.godBridgeTick(event);
                     return;
                 }
                 float currentYaw = this.getCurrentYaw();
@@ -1586,6 +1682,14 @@ public class Scaffold extends Module {
                                 this.towerDelay = 0;
                                 return;
                         }
+                    case 4:
+                        this.towerTick = 0;
+                        this.towerDelay = 0;
+                        if (!mc.thePlayer.onGround && mc.thePlayer.motionY > -0.2
+                                && mc.thePlayer.motionY < this.pulldownTrigger.getValue() && this.solidUnderFeet()) {
+                            mc.thePlayer.motionY = -1.0;
+                        }
+                        return;
                     default:
                         this.towerTick = 0;
                         this.towerDelay = 0;
@@ -1608,11 +1712,10 @@ public class Scaffold extends Module {
                 mc.thePlayer.movementInput.sneak = false;
                 return;
             }
-            this.applyPolarLedgeInput();
             this.applyGodBridgeInput();
             this.quietThreeFmcMovement();
 
-            if (mc.thePlayer.onGround && this.stage > 0 && MoveUtil.isForwardPressed()
+            if (mc.thePlayer.onGround && this.stage > 0 && !this.goingDown() && MoveUtil.isForwardPressed()
                     && (!this.isSnapSpeedMode() || this.snapAligned)) {
                 mc.thePlayer.movementInput.jump = true;
             }
@@ -1628,6 +1731,14 @@ public class Scaffold extends Module {
             boolean tellyWalk = (this.rotationMode.getValue() == ROTATION_TELLY
                     || this.isSnapSpeedMode() && this.snapMove.getValue() == SnapBridge.JUMP)
                     && MoveUtil.isForwardPressed();
+            if (this.goingDown()) {
+                if (mc.thePlayer.movementInput.sneak) {
+                    mc.thePlayer.movementInput.sneak = false;
+                    mc.thePlayer.movementInput.moveForward /= 0.3F;
+                    mc.thePlayer.movementInput.moveStrafe /= 0.3F;
+                }
+                return;
+            }
             if (this.safeWalk.getValue() && !tellyWalk && !mc.thePlayer.movementInput.sneak && this.edgeSneak(true)) {
                 mc.thePlayer.movementInput.sneak = true;
                 mc.thePlayer.movementInput.moveForward *= 0.3F;
@@ -1638,6 +1749,23 @@ public class Scaffold extends Module {
                 mc.thePlayer.movementInput.moveForward *= 0.3F;
                 mc.thePlayer.movementInput.moveStrafe *= 0.3F;
             }
+            if (!tellyWalk && !this.isMoonWalkMode()) {
+                this.applyStabilize();
+            }
+        }
+    }
+
+    private void applyStabilize() {
+        if (!this.lineOn() || !this.stabilize.getValue() || !mc.thePlayer.onGround
+                || mc.thePlayer.movementInput.jump || mc.thePlayer.movementInput.moveForward <= 0.0F
+                || mc.thePlayer.movementInput.moveStrafe != 0.0F) {
+            return;
+        }
+        LinePlacement.Line line = this.walkingLine();
+        float side = LinePlacement.stabilizeKey(line, mc.thePlayer.posX, mc.thePlayer.posZ,
+                mc.thePlayer.motionX, mc.thePlayer.motionZ, mc.thePlayer.rotationYaw);
+        if (side != 0.0F) {
+            mc.thePlayer.movementInput.moveStrafe = mc.thePlayer.movementInput.sneak ? side * 0.3F : side;
         }
     }
 
@@ -1696,7 +1824,6 @@ public class Scaffold extends Module {
         return this.godBridgeShown();
     }
 
-    private final GodBridgeLook godBridge = new GodBridgeLook();
 
     private final GodBridge run = new GodBridge();
     private GodBridge.Plan runPlan;
@@ -2023,6 +2150,9 @@ public class Scaffold extends Module {
             return;
         }
         this.lastRotationMode = mode;
+        if (player != this.lastPlayer) {
+            this.recentPlaced.clear();
+        }
         this.lastPlayer = player;
         this.rhythm.reset();
         this.moonWalk.reset();
@@ -2159,42 +2289,6 @@ public class Scaffold extends Module {
         return best;
     }
 
-    private float[] godBridgeRotation(float aimYaw) {
-        if (!MoveUtil.isForwardPressed()) {
-            this.godBridge.release();
-            float axis = (float) Math.floor(aimYaw / 90.0F) * 90.0F;
-            return new float[]{axis + 45.0F, 75.0F};
-        }
-        return this.godBridge.look(this.getCurrentYaw(), mc.thePlayer.posX, mc.thePlayer.posZ);
-    }
-
-    private void godBridgeTick(UpdateEvent event) {
-        BlockData target = this.getBlockData(mc.thePlayer.motionX, mc.thePlayer.motionZ);
-        boolean forward = MoveUtil.isForwardPressed();
-        float[] look = forward || target != null ? this.godBridgeRotation(event.getYaw()) : null;
-        if (!forward && target == null) {
-            this.godBridge.release();
-        }
-        this.updatePolarLedge(target, look);
-        if (look != null) {
-            float[] sent = RotationHelper.request(this, look[0], look[1], 3, this.moveMode(), false,
-                    RotationHelper.NO_LIMIT, MIN_STEP);
-            if (sent != null && this.moveFix.getModeString().equals("REAL")) {
-                Atlas.rotationManager.setRotation(sent[0], sent[1], 3, false);
-            }
-            this.yaw = look[0];
-            this.pitch = look[1];
-            this.canRotate = true;
-        }
-        this.planData = target;
-
-        this.planHitVec = target == null ? null : new Vec3(target.blockPos()).addVector(0.5, 0.5, 0.5);
-        this.planSnapCanPlace = true;
-        this.planSnapMode = false;
-        this.planThreeFmc = false;
-        this.planReady = true;
-    }
-
     private boolean edgeSneak(boolean atMoveInput) {
         if (!mc.thePlayer.onGround || mc.thePlayer.capabilities.isFlying) {
             this.edgeSneakUntil = 0L;
@@ -2253,87 +2347,6 @@ public class Scaffold extends Module {
         return speed == null ? 0 : speed.getAmplifier();
     }
 
-    private void updatePolarLedge(BlockData blockData, float[] godBridgeLook) {
-        if (!this.lbGodBridge()) {
-            this.polarLedgeSneakTicks = 0;
-            this.polarLedgeStopInput = false;
-            this.polarLedgeStepBack = false;
-            this.polarLedgeJump = false;
-            this.blocksSinceJump = 0;
-            return;
-        }
-
-        if (this.polarLedgeSneakTicks > 0) {
-            this.polarLedgeStopInput = false;
-            this.polarLedgeStepBack = false;
-            this.polarLedgeJump = false;
-            return;
-        }
-        this.polarLedgeStopInput = false;
-        this.polarLedgeStepBack = false;
-        this.polarLedgeJump = false;
-        boolean onGround = mc.thePlayer.onGround;
-        boolean forward = MoveUtil.isForwardPressed();
-        boolean hasTarget = blockData != null && godBridgeLook != null;
-
-        boolean onEdge = onGround && forward && hasTarget && this.edgeSneak(false);
-        boolean canPlaceFromLook = hasTarget
-                && this.lookHit(blockData, godBridgeLook[0], godBridgeLook[1]) != null;
-        if (onEdge && !canPlaceFromLook) {
-            this.godBridge.missed(this.tick);
-        }
-        boolean paced = this.paceOn();
-        long now = System.currentTimeMillis();
-        int action = polarLedgeAction(onGround, forward, hasTarget, onEdge, canPlaceFromLook,
-                this.blockCount, this.polarForceSneakBelowCount.getValue(),
-                this.polarModes.getValue(), this.jumpBoostAmplifier());
-        if (paced) {
-            action = pacedLedgeAction(action, this.pace.roomForJump(),
-                    onEdge && this.pace.sneakDue(now, this.nextSneakEvery));
-        }
-        switch (action) {
-            case POLAR_SNEAK:
-                this.polarLedgeSneakTicks = paced
-                        ? Math.max(this.polarSneakTime.getValue(), PlacePace.MIN_SNEAK_TICKS + this.paceRandom.nextInt(3))
-                        : this.polarSneakTime.getValue();
-                if (paced) {
-                    this.nextSneakEvery = 3000L + this.paceRandom.nextInt(1500);
-                }
-                break;
-            case POLAR_STOP_INPUT:
-                this.polarLedgeStopInput = true;
-                break;
-            case POLAR_BACKWARDS:
-                this.polarLedgeStepBack = true;
-                break;
-            case POLAR_JUMP:
-                this.polarLedgeJump = true;
-                break;
-            default:
-                break;
-        }
-        int every = this.jumpEveryBlocks.getValue();
-        if (!forward) {
-            this.blocksSinceJump = 0;
-        } else if (this.polarLedgeSneakTicks == 0 && (!paced || this.pace.roomForJump())
-                && jumpDue(this.blocksSinceJump, every, onGround, this.jumpBoostAmplifier())) {
-            this.polarLedgeStopInput = false;
-            this.polarLedgeStepBack = false;
-            this.polarLedgeJump = true;
-            this.blocksSinceJump = 0;
-        }
-    }
-
-    static int pacedLedgeAction(int action, boolean roomForJump, boolean sneakDueAtEdge) {
-        if (action == POLAR_JUMP && !roomForJump) {
-            return POLAR_SNEAK;
-        }
-        if (sneakDueAtEdge && (action == LEDGE_NONE || action == POLAR_JUMP)) {
-            return POLAR_SNEAK;
-        }
-        return action;
-    }
-
     private boolean paceHolds(BlockPos support, EnumFacing side, float yaw) {
         BlockPos cell = support.offset(side);
         int neighbours = 0;
@@ -2350,69 +2363,9 @@ public class Scaffold extends Module {
                 speed == null ? 0 : speed.getAmplifier());
     }
 
-    static boolean jumpDue(int placed, int every, boolean onGround, int jumpBoostAmplifier) {
-        return every > 0 && placed >= every && onGround && jumpApexHeight(jumpBoostAmplifier) < 2.0;
-    }
-
-    static int polarLedgeAction(boolean onGround, boolean forwardPressed, boolean hasTarget,
-            boolean onEdge, boolean canPlaceFromLook, int blockCount, int forceSneakBelowCount,
-            int configuredMode, int jumpBoostAmplifier) {
-        if (!onGround || !forwardPressed || !hasTarget || !onEdge) {
-            return LEDGE_NONE;
-        }
-        if (canPlaceFromLook) {
-            return LEDGE_NONE;
-        }
-        int mode = blockCount < forceSneakBelowCount ? POLAR_SNEAK : configuredMode;
-        if (mode == POLAR_JUMP && jumpApexHeight(jumpBoostAmplifier) >= 2.0) {
-            mode = POLAR_SNEAK;
-        }
-        return mode;
-    }
-
-    static double jumpApexHeight(int jumpBoostAmplifier) {
-        double motion = 0.42 + (jumpBoostAmplifier >= 0 ? 0.1 * (jumpBoostAmplifier + 1) : 0.0);
-        double height = 0.0;
-        while (motion > 0.0) {
-            height += motion;
-            motion = (motion - 0.08) * 0.98;
-        }
-        return height;
-    }
-
-    private int jumpBoostAmplifier() {
-        PotionEffect jumpBoost = mc.thePlayer.getActivePotionEffect(Potion.jump);
-        return jumpBoost == null ? -1 : jumpBoost.getAmplifier();
-    }
-
-    private void applyPolarLedgeInput() {
-        if (!this.lbGodBridge()) {
-            return;
-        }
-        if (this.polarLedgeSneakTicks > 0) {
-            this.polarLedgeSneakTicks--;
-            if (!mc.thePlayer.movementInput.sneak) {
-                mc.thePlayer.movementInput.sneak = true;
-                mc.thePlayer.movementInput.moveForward *= 0.3F;
-                mc.thePlayer.movementInput.moveStrafe *= 0.3F;
-            }
-            return;
-        }
-        if (this.polarLedgeStopInput) {
-            mc.thePlayer.movementInput.moveForward = 0.0F;
-            mc.thePlayer.movementInput.moveStrafe = 0.0F;
-        }
-        if (this.polarLedgeStepBack) {
-            mc.thePlayer.movementInput.moveForward *= -0.5F;
-        }
-        if (this.polarLedgeJump && mc.thePlayer.onGround && !mc.thePlayer.isInWater()) {
-            mc.thePlayer.movementInput.jump = true;
-        }
-    }
-
     @EventTarget
     public void onSafeWalk(SafeWalkEvent event) {
-        if (this.isEnabled() && this.safeWalk.getValue() && mc.thePlayer.isSneaking()) {
+        if (this.isEnabled() && this.safeWalk.getValue() && mc.thePlayer.isSneaking() && !this.goingDown()) {
             event.setSafeWalk(true);
         }
     }
@@ -2553,7 +2506,6 @@ public class Scaffold extends Module {
         this.rotationTick = 3;
         this.yaw = -180.0F;
         this.pitch = 0.0F;
-        this.godBridge.release();
         this.run.release();
         this.rhythm.reset();
         this.moonWalk.reset();
@@ -2584,6 +2536,7 @@ public class Scaffold extends Module {
         this.pauseTicks = 0;
         this.correctionPending = false;
         this.placedAt.clear();
+        this.recentPlaced.clear();
         this.refused.clear();
         this.failedFaces.clear();
         this.recentRefusals = 0;

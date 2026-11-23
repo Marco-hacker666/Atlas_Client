@@ -923,11 +923,13 @@ public final class ModuleDocs {
                 h("物品", "auto-switch", "switch-back", "item-spoof", "only-on-depletion", "pause-autoclicker"),
                 h("其他", "disable-after", "log"));
         g("Scaffold",
-                h("常用", "rotations", "sprint", "tower", "keep-y", "safe-walk", "move-fix", "turn-speed"),
-                h("轉頭", "humanize", "telly-*", "gb2-*", "moonwalk-*"),
+                h("常用", "rotations", "placement", "sprint", "tower", "keep-y", "safe-walk", "move-fix", "turn-speed"),
+                h("放置位置（LINE）", "line-predict", "expand", "down", "stabilize"),
+                h("轉頭", "humanize", "rotation-random", "telly-*", "gb2-*", "moonwalk-*", "snap-*",
+                        "jump-every-blocks", "godbridge-trace"),
                 h("移動", "ground-motion", "air-motion", "speed-motion", "eagle",
                         "edge-distance", "sneak-delay", "blocks-per-sneak"),
-                h("疊高與高度", "hypixeltower", "keep-y-on-press", "no-keep-y-on-jump-potion"),
+                h("疊高與高度", "tower-pulldown-trigger", "hypixeltower", "keep-y-on-press", "no-keep-y-on-jump-potion"),
                 h("放置", "pause-on-correction", "legit-pace", "jump-builds-up", "safe", "safe-delay-ticks", "multi-place", "swing", "item-spoof"),
                 h("顯示", "block-counter", "outline-esp", "outline-color"));
         g("Humanization",
@@ -1386,7 +1388,13 @@ public final class ModuleDocs {
         help("Scaffold", "jump-every-blocks", "GODBRIDGE：每放這麼多格跳一次（隨機多一格），只在視角已固定、節奏允許時跳；POLAR：在它邊緣跳之外，到這個數也跳。0 = 不跳。");
         help("Scaffold", "godbridge-trace", "GODBRIDGE：搭橋時每個 tick 寫一行到 config/Atlas/godbridge-*.txt（要開 Logs），用來查為什麼會掉下去。只記錄，不改任何行為。");
         help("Scaffold", "jump-builds-up", "GODBRIDGE：跳的時候橋跟著往上一格（God Bridge 本來的樣子）。關掉：跳起來還是放在起跳那一層。");
-        help("Scaffold", "legit-pace", "GODBRIDGE 和 POLAR：用人做得到的速度搭橋。每 3-4.5 秒在邊緣蹲 3-5 tick，不會只蹲 1 tick；放得比 Intave 放置檢查允許的還快時，會先等方塊或不跳（直線不蹲的橋會被它標記）。關：跟以前一樣。");
+        help("Scaffold", "legit-pace", "GODBRIDGE：用人做得到的速度搭橋。每 3-4.5 秒在邊緣蹲 3-5 tick，不會只蹲 1 tick；放得比 Intave 放置檢查允許的還快時，會先等方塊或不跳（直線不蹲的橋會被它標記）。關：跟以前一樣。");
+        help("Scaffold", "placement", "放方塊的位置怎麼選。LINE：沿著你走的直線（最後兩個方塊或移動方向），只填腳下附近 ±1 格，選面向眼睛的那一面，視角沒剛好點到計畫的格子就不放，橋會比較直。CLASSIC：舊的做法，在 9×9 範圍找最近的支撐方塊。GODBRIDGE 和 GODBRIDGE2 有自己固定的視角，一律用 CLASSIC。");
+        help("Scaffold", "line-predict", "LINE：預判幾 tick 後的位置來決定腳下那格。0 = 用現在的位置。");
+        help("Scaffold", "expand", "LINE：腳下已經有方塊時，往前方最多幾格先放好。0 = 關。");
+        help("Scaffold", "down", "LINE：按住蹲下鍵就往下搭（放在腳下兩格，讓你掉下去），按跳時不作用。");
+        help("Scaffold", "stabilize", "LINE：偏離走的直線太多時，自動輕點左右鍵把你拉回線上（只在地上、只按 W 時）。");
+        help("Scaffold", "tower-pulldown-trigger", "PULLDOWN 疊高：跳到垂直速度低於這個值、腳下已有方塊時，直接往下拉落地，再跳下一次，疊得比較快。");
         help("Scaffold", "rotations", "轉頭方式。TELLY：衝刺往前跳，看前面；跳到最高點開始往下時才轉身放方塊，落地再轉回前面；高度保持在起跳那層，按住 W 在地上會自動跳。GODBRIDGE2：Augustus 那種 God Bridge，正後方看、不偏 45 度；開始時先站著（前幾 tick 蹲下）等視角轉好再走，每放幾格跳一次，跳幾次後重新開始。MOONWALK：往後搭橋時左右鍵輕輕點，讓路線在方塊中線兩邊小幅擺動，不是一直線。 SNAP-SPEED：以 SNAP 為基底再加上衝刺跳。要放方塊時一樣轉回去放，但轉頭是平滑的；在空中不會轉回前方，放完一格就維持在後方等下一格；在地上起跳那一 tick 轉到前方（或斜 45 度），等視角對好才起跳，衝刺跳的速度全往前。移動一律跟著伺服器視角修正。看 snap-move、snap-takeoff、snap-smooth。");
         help("Scaffold", "telly-turn-speed", "TELLY：每 tick 最多轉幾度（往下時轉身、落地時轉回）。135 = 約 2 tick 轉完。");
         help("Scaffold", "snap-move", "SNAP-SPEED：Jump 按住 W 沿著橋的那一層自動衝刺跳；Ground 不跳（跟 SNAP 一樣，只是轉頭平滑）。");

@@ -2584,30 +2584,10 @@ public class AtlasClickGui extends GuiScreen {
         cursor += 22;
 
         font(7.0F, true).drawTracked("SETTINGS", x + 18, cursor, FAINT, 0.8F);
-        drawResetModule(x, width, cursor, mx, my);
         cursor += 8;
 
         drawSettingsCard(sr, this.selected.getName(), propertiesOf(this.selected),
                 x + 12, x + width - 12, cursor, y + height - 6, mx, my);
-    }
-
-    private void drawResetModule(int x, int width, float cy, float mx, float my) {
-        List<Property<?>> all = Atlas.propertyManager.properties.get(this.selected.getClass());
-        int changed = all == null ? 0 : SettingFacts.countChanged(all);
-        if (changed == 0) {
-            return;
-        }
-        String text = changed + " changed  ·  Reset";
-        LiquidFont small = font(8.0F, false);
-        float right = x + width - 18;
-        float left = right - small.width(text);
-        boolean hovered = mx >= left - 4 && mx <= right + 4 && my >= cy - 7 && my <= cy + 7;
-        hit("resetModule", this.selected, left - 4, cy - 7, right + 4, cy + 7);
-        small.draw(text, left, cy, hovered ? accent() : accentText());
-        if (hovered) {
-            this.hint = changed + (changed == 1 ? " setting differs" : " settings differ")
-                    + " from the default  ·  click to reset them all (it asks first)";
-        }
     }
 
     private void drawSettingsCard(ScaledResolution sr, String owner, List<Property<?>> properties,
@@ -2875,9 +2855,6 @@ public class AtlasClickGui extends GuiScreen {
     private float drawLabel(Property<?> property, String text, float labelX, float cy, float maxWidth,
                             boolean rowHovered, float mx, float my, boolean clickable) {
         LiquidFont label = font(8.5F, false);
-        if (SettingFacts.changed(property)) {
-            Liquid.dot(labelX - 5.0F, cy, 1.5F, accent());
-        }
         String risk = riskOf(property);
         float marks = INFO_ICON + 4.0F + (risk != null ? 12.0F : 0.0F);
         float room = maxWidth >= Float.MAX_VALUE ? maxWidth : Math.max(12.0F, maxWidth - marks);
@@ -4389,20 +4366,6 @@ public class AtlasClickGui extends GuiScreen {
                 pulse("edit:" + property.getName());
                 tell(Toasts.Kind.OK, property.getLabel() + " reset to " + SettingFacts.defaultText(property));
             }
-            return;
-        }
-        if ("resetModule".equals(target.kind)) {
-            final Module module = (Module) target.payload;
-            final List<Property<?>> all = Atlas.propertyManager.properties.get(module.getClass());
-            int changed = all == null ? 0 : SettingFacts.countChanged(all);
-            this.dialog = new Dialog("Reset " + module.getName() + "?",
-                    "Puts its " + changed + (changed == 1 ? " changed setting" : " changed settings")
-                            + " back to the defaults, those of its other modes too.",
-                    new String[]{"Reset", "Cancel"}, new int[]{2, 1}, new Runnable[]{() -> {
-                        int count = all == null ? 0 : SettingFacts.resetAll(all);
-                        tell(Toasts.Kind.OK, "Reset " + count + (count == 1 ? " setting" : " settings")
-                                + " of " + module.getName() + " to the defaults");
-                    }, null});
             return;
         }
         if ("descMore".equals(target.kind)) {

@@ -476,7 +476,7 @@ public class Scaffold extends Module {
         for (EnumFacing facing : EnumFacing.VALUES) {
             if (facing != EnumFacing.DOWN) {
                 BlockPos pos = blockPos1.offset(facing);
-                if (pos.getY() <= blockPos3.getY()) {
+                if (pos.getY() <= blockPos3.getY() && BlockUtil.isReplaceable(pos)) {
                     double distance = pos.distanceSqToCenter((double) blockPos3.getX() + 0.5, (double) blockPos3.getY() + 0.5, (double) blockPos3.getZ() + 0.5);
                     if (enumFacing == null || distance < offset || distance == offset && facing == EnumFacing.UP) {
                         offset = distance;
@@ -512,16 +512,15 @@ public class Scaffold extends Module {
             return null;
         } else {
             ArrayList<BlockPos> positions = new ArrayList<>();
+            Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
+            double reach = mc.playerController.getBlockReachDistance();
             for (int x = -4; x <= 4; x++) {
                 for (int y = -4; y <= 0; y++) {
                     for (int z = -4; z <= 4; z++) {
                         BlockPos pos = targetPos.add(x, y, z);
                         if (!BlockUtil.isReplaceable(pos)
                                 && !BlockUtil.isInteractable(pos)
-                                && !(
-                                mc.thePlayer.getDistance((double) pos.getX() + 0.5, (double) pos.getY() + 0.5, (double) pos.getZ() + 0.5)
-                                        > (double) mc.playerController.getBlockReachDistance()
-                        )
+                                && eyeReaches(eyes, pos, reach)
                                 && (!holdLayer || pos.getY() < this.startY)) {
                             for (EnumFacing facing : EnumFacing.VALUES) {
                                 if (facing != EnumFacing.DOWN) {
@@ -550,6 +549,13 @@ public class Scaffold extends Module {
         }
     }
 
+    static boolean eyeReaches(Vec3 eyes, BlockPos pos, double reach) {
+        double dx = Math.max(pos.getX() - eyes.xCoord, Math.max(0.0, eyes.xCoord - (pos.getX() + 1)));
+        double dy = Math.max(pos.getY() - eyes.yCoord, Math.max(0.0, eyes.yCoord - (pos.getY() + 1)));
+        double dz = Math.max(pos.getZ() - eyes.zCoord, Math.max(0.0, eyes.zCoord - (pos.getZ() + 1)));
+        return dx * dx + dy * dy + dz * dz <= reach * reach;
+    }
+
     private void place(BlockPos blockPos, EnumFacing enumFacing, Vec3 vec3) {
         if (!this.canThreeFmcPlaceNow()) {
             return;
@@ -560,8 +566,11 @@ public class Scaffold extends Module {
         if (ItemUtil.isHoldingBlock() && this.blockCount > 0) {
             ItemStack held = mc.thePlayer.inventory.getCurrentItem();
 
-            if (held == null || !(held.getItem() instanceof ItemBlock)
-                    || !((ItemBlock) held.getItem()).canPlaceBlockOnSide(mc.theWorld, blockPos, enumFacing, mc.thePlayer, held)) {
+            if (held == null || !(held.getItem() instanceof ItemBlock)) {
+                return;
+            }
+            if (!((ItemBlock) held.getItem()).canPlaceBlockOnSide(mc.theWorld, blockPos, enumFacing, mc.thePlayer, held)) {
+                this.failedFaces.put(faceKey(blockPos, enumFacing), this.tick + 10);
                 return;
             }
             if (!mc.playerController.onPlayerRightClick(mc.thePlayer, mc.theWorld, held, blockPos, enumFacing, vec3)) {

@@ -684,7 +684,7 @@ public class KillAura extends Module {
             if (this.isPlayerBlocking() && this.autoBlock.getValue() != 1) {
                 return this.refuse("still blocking (" + this.autoBlock.getModeString() + ")");
             } else if (this.attackDelayMS > 0L && !this.exitingRange()) {
-                return false;
+                return this.refuse("click timer");
             } else if (this.otherActionsThisTick) {
                 atlas.management.TickActions.refuse();
                 return this.refuse("other action this tick");
@@ -727,9 +727,20 @@ public class KillAura extends Module {
                     if (this.cpsMode.getValue() == 1) {
                         patternIndex = (patternIndex + 4) % clickPattern.length;
                     }
-                    ((atlas.mixin.IAccessorMinecraft) mc).callClickMouse();
-                    this.hitRegistered = mc.objectMouseOver != null
-                            && mc.objectMouseOver.entityHit == this.target.getEntity();
+                    MovingObjectPosition camera = mc.objectMouseOver;
+                    MovingObjectPosition aimed = this.sentLookHit(yaw, pitch);
+                    if (aimed != null) {
+                        mc.objectMouseOver = aimed;
+                    }
+                    try {
+                        ((atlas.mixin.IAccessorMinecraft) mc).callClickMouse();
+                        this.hitRegistered = mc.objectMouseOver != null
+                                && mc.objectMouseOver.entityHit == this.target.getEntity();
+                    } finally {
+                        if (aimed != null && mc.objectMouseOver == aimed) {
+                            mc.objectMouseOver = camera;
+                        }
+                    }
                     if (human != null) {
                         if (this.hitRegistered) {
                             this.atlasHumanizer.landed(humanNow);
@@ -860,6 +871,30 @@ public class KillAura extends Module {
         }
     }
 
+    private MovingObjectPosition sentLookHit(float yaw, float pitch) {
+        if (this.target == null || mc.thePlayer == null || mc.theWorld == null) {
+            return null;
+        }
+        net.minecraft.entity.Entity entity = this.target.getEntity();
+        float border = entity.getCollisionBorderSize();
+        double reach = Math.max(3.0, this.attackRange.getValue());
+        MovingObjectPosition onBox = RotationUtil.rayTrace(
+                entity.getEntityBoundingBox().expand(border, border, border), yaw, pitch, reach);
+        if (onBox == null || onBox.hitVec == null) {
+            return null;
+        }
+        Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
+        double toEntity = eyes.distanceTo(onBox.hitVec);
+        if (!this.throughWalls.getValue()) {
+            MovingObjectPosition wall = RotationUtil.rayTrace(yaw, pitch, toEntity, 1.0F);
+            if (wall != null && wall.typeOfHit == MovingObjectType.BLOCK && wall.hitVec != null
+                    && eyes.distanceTo(wall.hitVec) < toEntity) {
+                return null;
+            }
+        }
+        return new MovingObjectPosition(entity, onBox.hitVec);
+    }
+
     private boolean refuse(String why) {
         this.refusal = why;
         return false;
@@ -896,7 +931,7 @@ public class KillAura extends Module {
                         + this.animals.getValue() + ")";
             }
         } else if (RotationUtil.distanceToEntity(this.target.getEntity()) <= range) {
-            why = this.refusal == null ? "no click due" : this.refusal;
+            why = this.refusal == null ? "no attack attempted" : this.refusal;
         }
         this.refusal = null;
         if (why != null) {

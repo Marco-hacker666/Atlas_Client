@@ -732,15 +732,17 @@ public class KillAura extends Module {
                     if (aimed != null) {
                         mc.objectMouseOver = aimed;
                     }
+                    int sentBefore = this.attackPackets;
+                    this.simulatingClick = true;
                     try {
                         ((atlas.mixin.IAccessorMinecraft) mc).callClickMouse();
-                        this.hitRegistered = mc.objectMouseOver != null
-                                && mc.objectMouseOver.entityHit == this.target.getEntity();
                     } finally {
+                        this.simulatingClick = false;
                         if (aimed != null && mc.objectMouseOver == aimed) {
                             mc.objectMouseOver = camera;
                         }
                     }
+                    this.hitRegistered = this.attackPackets > sentBefore;
                     if (human != null) {
                         if (this.hitRegistered) {
                             this.atlasHumanizer.landed(humanNow);
@@ -901,6 +903,8 @@ public class KillAura extends Module {
     }
 
     private String refusal;
+    private boolean simulatingClick;
+    private int attackPackets;
     private int watchTicks;
     private int watchInRange;
     private int watchHits;
@@ -2193,6 +2197,7 @@ public class KillAura extends Module {
             if (event.getType() == EventType.SEND && event.getPacket() instanceof C02PacketUseEntity
                     && ((C02PacketUseEntity) event.getPacket()).getAction() == C02PacketUseEntity.Action.ATTACK) {
                 this.watchHits++;
+                this.attackPackets++;
             }
             if (event.getPacket() instanceof C07PacketPlayerDigging) {
                 C07PacketPlayerDigging packet = (C07PacketPlayerDigging) event.getPacket();
@@ -2337,6 +2342,9 @@ public class KillAura extends Module {
 
     @EventTarget(whenDisabled = true)
     public void onLeftClick(LeftClickMouseEvent event) {
+        if (this.simulatingClick) {
+            return;
+        }
         if (this.isBlocking) {
             event.setCancelled(true);
         } else {

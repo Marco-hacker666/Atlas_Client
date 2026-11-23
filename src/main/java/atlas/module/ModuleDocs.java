@@ -1251,7 +1251,7 @@ public final class ModuleDocs {
         help("Scaffold", "godbridge-trace", "GODBRIDGE：搭橋時每個 tick 寫一行到 config/Atlas/godbridge-*.txt（要開 Logs），用來查為什麼會掉下去。只記錄，不改任何行為。");
         help("Scaffold", "jump-builds-up", "GODBRIDGE：跳的時候橋跟著往上一格（God Bridge 本來的樣子）。關掉：跳起來還是放在起跳那一層。");
         help("Scaffold", "legit-pace", "GODBRIDGE：用人做得到的速度搭橋。每 3-4.5 秒在邊緣蹲 3-5 tick，不會只蹲 1 tick；放得比 Intave 放置檢查允許的還快時，會先等方塊或不跳（直線不蹲的橋會被它標記）。關：跟以前一樣。");
-        help("Scaffold", "placement", "放方塊的位置怎麼選。LINE：沿著你走的直線（最後兩個方塊或移動方向），只填腳下附近 ±1 格，選面向眼睛的那一面，視角沒剛好點到計畫的格子就不放，橋會比較直。CLASSIC：舊的做法，在 9×9 範圍找最近的支撐方塊。");
+        help("Scaffold", "placement", "放方塊的位置怎麼選。LINE：沿著你走的直線（最後兩個方塊或移動方向），只填腳下附近 ±1 格，選面向眼睛的那一面，視角沒剛好點到計畫的格子就不放，橋會比較直。CLASSIC：舊的做法，在 9×9 範圍找最近的支撐方塊。GODBRIDGE 和 GODBRIDGE2 有自己固定的視角，一律用 CLASSIC。");
         help("Scaffold", "line-predict", "LINE：預判幾 tick 後的位置來決定腳下那格。0 = 用現在的位置。");
         help("Scaffold", "expand", "LINE：腳下已經有方塊時，往前方最多幾格先放好。0 = 關。");
         help("Scaffold", "down", "LINE：按住蹲下鍵就往下搭（放在腳下兩格，讓你掉下去），按跳時不作用。");

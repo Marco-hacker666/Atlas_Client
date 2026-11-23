@@ -500,7 +500,7 @@ public class Scaffold extends Module {
     }
 
     private boolean lineOn() {
-        return this.placement.getValue() == 0;
+        return this.placement.getValue() == 0 && !this.isRunMode();
     }
 
     private boolean goingDown() {
@@ -553,7 +553,7 @@ public class Scaffold extends Module {
                 if (!BlockUtil.isReplaceable(ahead)) {
                     continue;
                 }
-                BlockData data = this.bestFace(ahead, true);
+                BlockData data = this.bestFace(ahead, false);
                 if (data != null) {
                     return data;
                 }

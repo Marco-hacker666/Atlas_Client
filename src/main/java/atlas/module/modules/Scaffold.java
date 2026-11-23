@@ -1715,7 +1715,7 @@ public class Scaffold extends Module {
             this.applyGodBridgeInput();
             this.quietThreeFmcMovement();
 
-            if (mc.thePlayer.onGround && this.stage > 0 && MoveUtil.isForwardPressed()
+            if (mc.thePlayer.onGround && this.stage > 0 && !this.goingDown() && MoveUtil.isForwardPressed()
                     && (!this.isSnapSpeedMode() || this.snapAligned)) {
                 mc.thePlayer.movementInput.jump = true;
             }
@@ -2150,6 +2150,9 @@ public class Scaffold extends Module {
             return;
         }
         this.lastRotationMode = mode;
+        if (player != this.lastPlayer) {
+            this.recentPlaced.clear();
+        }
         this.lastPlayer = player;
         this.rhythm.reset();
         this.moonWalk.reset();

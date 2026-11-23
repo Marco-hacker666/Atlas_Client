@@ -53,6 +53,13 @@ public final class ModuleDocs {
         return group;
     }
 
+    static String bundleHeading(String title, Module child, String group) {
+        if (group == null || "一般".equals(group) || !GROUPS.containsKey(child.getClass().getSimpleName())) {
+            return title;
+        }
+        return title + " · " + heading(group);
+    }
+
     public static List<Property<?>> apply(Module module, List<Property<?>> properties) {
         String key = module.getClass().getSimpleName();
         String description = DESCRIPTIONS.get(key);

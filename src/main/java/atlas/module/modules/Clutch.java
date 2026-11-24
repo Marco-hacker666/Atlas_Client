@@ -946,6 +946,9 @@ public class Clutch extends Module {
         if (mode == 1) {
             return holdActive();
         }
+        if (scaffoldRunFallen() && (intoVoid() || this.predictedFall > this.safeDrop.getValue())) {
+            return true;
+        }
         boolean hit = System.currentTimeMillis() - this.lastHurtAt < this.combatWindow.getValue();
 
         boolean edge = mc.thePlayer.fallDistance >= this.edgeFall.getValue()
@@ -2351,13 +2354,22 @@ public class Clutch extends Module {
 
     private int ghostDepth(BlockPos support) {
         int depth = 0;
+        int steps = 0;
         BlockPos at = support;
-        while (at != null && depth < 3 && this.placedAt.containsKey(at) && !this.confirmed.contains(at)) {
-            depth++;
+        int due = roundTripTicks() + GHOST_GRACE;
+
+        while (at != null && steps < 6 && this.placedAt.containsKey(at) && !this.confirmed.contains(at)) {
+            Integer placed = this.placedAt.get(at);
+            if (placed != null && this.tick - placed > due) {
+                depth++;
+            }
+            steps++;
             at = this.supportOf.get(at);
         }
         return depth;
     }
+
+    static final int GHOST_GRACE = 2;
 
     private AxisAlignedBB serverBox() {
         double half = mc.thePlayer.width / 2.0;
@@ -2487,7 +2499,12 @@ public class Clutch extends Module {
 
     private boolean scaffolding() {
         Module scaffold = Atlas.moduleManager.getModule(Scaffold.class);
-        return scaffold != null && scaffold.isEnabled() && !scaffoldTelly();
+        return scaffold != null && scaffold.isEnabled() && !scaffoldTelly() && !scaffoldRunFallen();
+    }
+
+    private boolean scaffoldRunFallen() {
+        Scaffold scaffold = (Scaffold) Atlas.moduleManager.getModule(Scaffold.class);
+        return scaffold != null && scaffold.runFallen();
     }
 
     private boolean scaffoldTellyKeepY() {

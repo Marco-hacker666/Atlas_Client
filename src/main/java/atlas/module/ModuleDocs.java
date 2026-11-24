@@ -930,7 +930,7 @@ public final class ModuleDocs {
                 h("移動", "ground-motion", "air-motion", "speed-motion", "eagle",
                         "edge-distance", "sneak-delay", "blocks-per-sneak"),
                 h("疊高與高度", "tower-pulldown-trigger", "hypixeltower", "keep-y-on-press", "no-keep-y-on-jump-potion"),
-                h("放置", "pause-on-correction", "legit-pace", "jump-builds-up", "safe", "safe-delay-ticks", "multi-place", "swing", "item-spoof"),
+                h("放置", "pause-on-correction", "legit-pace", "jump-builds-up", "edge-stop", "safe", "safe-delay-ticks", "multi-place", "swing", "item-spoof"),
                 h("顯示", "block-counter", "outline-esp", "outline-color"));
         g("Humanization",
                 h("預設與套用", "preset", "apply-*"),
@@ -1387,6 +1387,7 @@ public final class ModuleDocs {
         help("Scaffold", "telly-auto-jump", "SPEED-TELLY 和 WEIRD-TELLY 模式：按住 W 在地上時自動跳，放開就停。");
         help("Scaffold", "jump-every-blocks", "GODBRIDGE：每放這麼多格跳一次（隨機多一格），只在視角已固定、節奏允許時跳；POLAR：在它邊緣跳之外，到這個數也跳。0 = 不跳。");
         help("Scaffold", "godbridge-trace", "GODBRIDGE：搭橋時每個 tick 寫一行到 config/Atlas/godbridge-*.txt（要開 Logs），用來查為什麼會掉下去。只記錄，不改任何行為。");
+        help("Scaffold", "edge-stop", "GODBRIDGE / GODBRIDGE2：safe-walk 關著也有最後一道防掉。只有「再走一步就會掉、而且來不及放方塊」時才放開按鍵（不蹲）。");
         help("Scaffold", "jump-builds-up", "GODBRIDGE：跳的時候橋跟著往上一格（God Bridge 本來的樣子）。關掉：跳起來還是放在起跳那一層。");
         help("Scaffold", "legit-pace", "GODBRIDGE：用人做得到的速度搭橋。每 3-4.5 秒在邊緣蹲 3-5 tick，不會只蹲 1 tick；放得比 Intave 放置檢查允許的還快時，會先等方塊或不跳（直線不蹲的橋會被它標記）。關：跟以前一樣。");
         help("Scaffold", "placement", "放方塊的位置怎麼選。LINE：沿著你走的直線（最後兩個方塊或移動方向），只填腳下附近 ±1 格，選面向眼睛的那一面，視角沒剛好點到計畫的格子就不放，橋會比較直。CLASSIC：舊的做法，在 9×9 範圍找最近的支撐方塊。GODBRIDGE 和 GODBRIDGE2 有自己固定的視角，一律用 CLASSIC。");

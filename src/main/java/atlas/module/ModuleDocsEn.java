@@ -984,6 +984,7 @@ final class ModuleDocsEn {
         help("Scaffold", "telly-auto-jump", "SPEED-TELLY and WEIRD-TELLY: jump by itself while W is held on the ground; let go to stop.");
         help("Scaffold", "jump-every-blocks", "GODBRIDGE: a jump every this many blocks (one more at random), only on a straight run with the look settled and room for it in the pace; POLAR: a jump at this count on top of its ledge jumps. 0 = none.");
         help("Scaffold", "godbridge-trace", "GODBRIDGE: writes a line a tick while bridging to config/Atlas/godbridge-*.txt (needs Logs), to find why it falls. Log only.");
+        help("Scaffold", "edge-stop", "GODBRIDGE / GODBRIDGE2: a last stop even with safe-walk off. The keys are let go only when one more step would fall and no block can go down in time (no crouch).");
         help("Scaffold", "jump-builds-up", "GODBRIDGE: a jump takes the bridge up one block, as the technique does. Off: blocks stay on the layer the jump left from.");
         help("Scaffold", "placement", "How the place to put a block is chosen. LINE: along the line you walk (your last two blocks or your move direction), only cells within one of the one under you, on the side facing your eyes, and only when the look really clicks that cell; bridges come out straight. CLASSIC: the old way, the nearest support within 9x9. GODBRIDGE and GODBRIDGE2 have their own fixed look and always use CLASSIC.");
         help("Scaffold", "line-predict", "LINE: ticks ahead the position used for the cell under you. 0 = where you are now.");

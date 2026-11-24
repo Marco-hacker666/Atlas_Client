@@ -165,12 +165,34 @@ public class GodBridgeTest {
         }
         float start = sim.pitch;
         GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
-        in.edge = true;
+        in.edge = false;
         in.lookPlaces = false;
         in.placePitch = start + 10.0F;
         GodBridge.Plan plan = sim.step(in);
         assertEquals(start + GodBridge.PITCH_FIX_MAX, plan.pitch, 0.3F);
         assertTrue("not learned before it is reached", Float.isNaN(sim.bridge.learnedPitch()));
+    }
+
+    @Test
+    public void atAFallingEdgeThePitchFixIsTakenWhole() {
+        Sim sim = new Sim();
+        for (int i = 0; i < 40; i++) {
+            sim.walk();
+        }
+        float start = sim.pitch;
+        GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
+        in.edge = true;
+        in.lookPlaces = false;
+        in.placePitch = start - 4.5F;
+        GodBridge.Plan plan = sim.step(in);
+        assertEquals(start - 4.5F, plan.pitch, 0.3F);
+        assertTrue("a click goes with it", plan.click);
+        in = walking(sim.now, sim.yaw, sim.pitch);
+        in.edge = true;
+        in.lookPlaces = false;
+        in.placePitch = sim.pitch + 10.0F;
+        plan = sim.step(in);
+        assertEquals("10 degrees at once at an edge", in.placePitch, plan.pitch, 0.3F);
     }
 
     @Test
@@ -423,5 +445,60 @@ public class GodBridgeTest {
         in.aheadPitch = start + 9.0F;
         GodBridge.Plan plan = sim.step(in);
         assertEquals(GodBridge.PITCH_FIX_MAX, plan.pitch - start, 0.6F);
+    }
+
+    @Test
+    public void aCameraNearTheLineBetweenTwoWaysKeepsTheRun() {
+        Sim sim = settledRun();
+        assertEquals(180.0F, sim.bridge.backYaw(), 0.01F);
+        for (int i = 0; i < 40; i++) {
+            GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
+            in.moveYaw = i % 2 == 0 ? 30.0F : 20.0F;
+            GodBridge.Plan plan = sim.step(in);
+            assertEquals("held at tick " + i, 180.0F, sim.bridge.backYaw(), 0.01F);
+            assertEquals(180.0F, plan.maxTurn, 0.01F);
+        }
+    }
+
+    @Test
+    public void aWayChangeShortOfATurnMustHoldThreeTicks() {
+        Sim sim = settledRun();
+        for (int i = 0; i < GodBridge.WAY_HOLD - 1; i++) {
+            GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
+            in.moveYaw = 40.0F;
+            sim.step(in);
+            assertEquals(180.0F, sim.bridge.backYaw(), 0.01F);
+        }
+        GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
+        in.moveYaw = 40.0F;
+        sim.step(in);
+        assertEquals(-135.0F, MathHelper.wrapAngleTo180_float(sim.bridge.backYaw()), 0.01F);
+    }
+
+    @Test
+    public void aRealTurnChangesTheWayAtOnce() {
+        Sim sim = settledRun();
+        GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
+        in.moveYaw = 90.0F;
+        sim.step(in);
+        assertEquals(-90.0F, MathHelper.wrapAngleTo180_float(sim.bridge.backYaw()), 0.01F);
+    }
+
+    @Test
+    public void atAnEdgeATurnWaitsForTheBlockUnderTheFeet() {
+        Sim sim = settledRun();
+        for (int i = 0; i < GodBridge.EDGE_HOLD; i++) {
+            GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
+            in.moveYaw = 90.0F;
+            in.edge = true;
+            GodBridge.Plan plan = sim.step(in);
+            assertEquals("kept at the edge, tick " + i, 180.0F, sim.bridge.backYaw(), 0.01F);
+            assertFalse("no stop while the look is kept", plan.stop);
+        }
+        GodBridge.Input in = walking(sim.now, sim.yaw, sim.pitch);
+        in.moveYaw = 90.0F;
+        in.edge = true;
+        sim.step(in);
+        assertEquals(-90.0F, MathHelper.wrapAngleTo180_float(sim.bridge.backYaw()), 0.01F);
     }
 }

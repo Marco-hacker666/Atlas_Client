@@ -185,6 +185,8 @@ public class Scaffold extends Module {
     public final BooleanProperty legitPace = new BooleanProperty("legit-pace", true, this::godBridgeShown);
 
     public final BooleanProperty jumpBuildsUp = new BooleanProperty("jump-builds-up", true, this::isRunMode);
+
+    public final BooleanProperty edgeStop = new BooleanProperty("edge-stop", true, this::isRunMode);
     private final PlacePace pace = new PlacePace();
     private boolean paceWasOnGround;
     private final java.util.Random paceRandom = new java.util.Random();
@@ -1721,7 +1723,8 @@ public class Scaffold extends Module {
             }
             this.applyMoonWalkInput();
             if (this.isRunMode()) {
-                if (this.safeWalk.getValue() && this.godBridgeWouldFall() && !this.godBridgePlacesAhead()) {
+                if ((this.safeWalk.getValue() || this.edgeStop.getValue()) && this.godBridgeWouldFall()
+                        && !this.godBridgePlacesAhead()) {
                     mc.thePlayer.movementInput.moveForward = 0.0F;
                     mc.thePlayer.movementInput.moveStrafe = 0.0F;
                 }
@@ -1820,15 +1823,24 @@ public class Scaffold extends Module {
 
     private static final float SNAP_STEP = 360.0F;
 
+    public boolean runFallen() {
+        return this.isEnabled() && this.isRunMode() && mc.thePlayer != null && !mc.thePlayer.onGround
+                && mc.thePlayer.motionY < 0.0 && mc.thePlayer.posY < (double) this.startY - 0.05;
+    }
+
     private boolean lbGodBridge() {
         return this.godBridgeShown();
     }
-
 
     private final GodBridge run = new GodBridge();
     private GodBridge.Plan runPlan;
 
     private void godBridgeRunTick(UpdateEvent event) {
+        if (this.runFallen() && Atlas.moduleManager.getModule(Clutch.class).isEnabled()) {
+            this.runPlan = null;
+            this.planReady = false;
+            return;
+        }
         BlockData target = this.getBlockData(mc.thePlayer.motionX, mc.thePlayer.motionZ);
         boolean forward = MoveUtil.isForwardPressed();
         long now = System.currentTimeMillis();
@@ -2013,7 +2025,8 @@ public class Scaffold extends Module {
             return false;
         }
         float pitch = this.godBridgePlacePitch(target, this.run.lookYaw(), this.run.lookPitch(), step[0], step[1]);
-        if (Float.isNaN(pitch) || Math.abs(pitch - this.run.lookPitch()) > GodBridge.PITCH_FIX_MAX) {
+
+        if (Float.isNaN(pitch) || Math.abs(pitch - this.run.lookPitch()) > GodBridge.EDGE_PITCH_FIX_MAX) {
             return false;
         }
 
@@ -2077,7 +2090,9 @@ public class Scaffold extends Module {
         in.forward = MoveUtil.isForwardPressed();
         in.jumpKey = mc.gameSettings.keyBindJump.isKeyDown();
         in.onGround = mc.thePlayer.onGround;
-        in.diagonal = GodBridge.diagonal(Math.round((this.getCurrentYaw() + 180.0F) / 45.0F) * 45.0F);
+
+        in.diagonal = this.run.running() ? GodBridge.diagonal(this.run.backYaw())
+                : GodBridge.diagonal(Math.round((this.getCurrentYaw() + 180.0F) / 45.0F) * 45.0F);
         in.settled = plan.look && plan.maxTurn >= 180.0F;
         double speed = Math.hypot(mc.thePlayer.motionX, mc.thePlayer.motionZ);
         in.sliding = mc.thePlayer.onGround && speed > SLIDE_STOPPED;

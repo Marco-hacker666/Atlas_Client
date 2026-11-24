@@ -31,9 +31,19 @@ final class GodBridge {
 
     static final float PITCH_FIX_MAX = 6.0F;
 
+    static final float EDGE_PITCH_FIX_MAX = 18.0F;
+
     static final float AIR_PITCH_FIX_MAX = 12.0F;
 
     static final float AIR_RETURN_STEP = 1.2F;
+
+    static final float WAY_MARGIN = 12.0F;
+
+    static final int WAY_HOLD = 3;
+
+    static final float WAY_NOW = 67.5F;
+
+    static final int EDGE_HOLD = 6;
 
     static final class Input {
         double x;
@@ -90,6 +100,8 @@ final class GodBridge {
     private int jumpAt;
     private int ticks;
     private int groundTicks;
+    private int wayTicks;
+    private int edgeHeld;
     private int lastSwap = Integer.MIN_VALUE / 2;
     private long nextClick = Long.MIN_VALUE;
     private float lookYaw;
@@ -120,6 +132,10 @@ final class GodBridge {
 
     float lookPitch() {
         return this.lookPitch;
+    }
+
+    float backYaw() {
+        return this.backYaw;
     }
 
     int side() {
@@ -159,7 +175,7 @@ final class GodBridge {
             this.learnedPitch = Float.NaN;
             this.running = false;
         }
-        if (!this.running || Math.abs(MathHelper.wrapAngleTo180_float(back - this.backYaw)) >= 45.0F) {
+        if (!this.running || wayChanged(in)) {
             start(in, back);
         }
         drift();
@@ -186,7 +202,7 @@ final class GodBridge {
             if (air && Float.isNaN(this.groundPitch)) {
                 this.groundPitch = this.pitchBase;
             }
-            float step = clamp(in.placePitch - pitch, air ? AIR_PITCH_FIX_MAX : PITCH_FIX_MAX);
+            float step = clamp(in.placePitch - pitch, air ? AIR_PITCH_FIX_MAX : in.edge ? EDGE_PITCH_FIX_MAX : PITCH_FIX_MAX);
             this.pitchBase += step;
             pitch += step;
             fixed = Math.abs(in.placePitch - pitch) < 0.01F;
@@ -195,7 +211,7 @@ final class GodBridge {
                 this.groundPitch = Float.NaN;
             }
         } else if (in.onGround && !in.lookPlaces && settled && !Float.isNaN(in.aheadPitch)) {
-            this.pitchBase += clamp(in.aheadPitch - pitch, PITCH_FIX_MAX);
+            this.pitchBase += clamp(in.aheadPitch - pitch, in.edge ? EDGE_PITCH_FIX_MAX : PITCH_FIX_MAX);
             pitch = this.pitchBase + this.driftPitch;
         }
         if (in.lookPlaces && in.edge) {
@@ -230,9 +246,31 @@ final class GodBridge {
         return plan;
     }
 
+    private boolean wayChanged(Input in) {
+        float off = Math.abs(MathHelper.wrapAngleTo180_float(in.moveYaw + 180.0F - this.backYaw));
+        if (off <= 22.5F + WAY_MARGIN) {
+            this.wayTicks = 0;
+            this.edgeHeld = 0;
+            return false;
+        }
+        if (in.onGround && in.edge && this.edgeHeld < EDGE_HOLD) {
+            this.edgeHeld++;
+            return false;
+        }
+        this.wayTicks++;
+        if (off < WAY_NOW && this.wayTicks < WAY_HOLD) {
+            return false;
+        }
+        this.wayTicks = 0;
+        this.edgeHeld = 0;
+        return true;
+    }
+
     private void start(Input in, float back) {
         this.running = true;
         this.backYaw = back;
+        this.wayTicks = 0;
+        this.edgeHeld = 0;
         this.side = sideAt(back, in.x, in.z);
         this.offset = drawOffset();
         float fresh = this.straightBack

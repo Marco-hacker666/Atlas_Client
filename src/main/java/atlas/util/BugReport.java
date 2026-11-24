@@ -272,7 +272,7 @@ public final class BugReport {
         line(sb, "Click menu", setting("ClickGUI", "Style"));
         line(sb, "Java", System.getProperty("java.version") + " (" + System.getProperty("java.vendor") + ")");
         line(sb, "OS", System.getProperty("os.name") + " " + System.getProperty("os.version") + " " + System.getProperty("os.arch"));
-        line(sb, "Memory", (Runtime.getRuntime().maxMemory() >> 20) + " MB max");
+        line(sb, "Memory", memory());
         line(sb, "GPU", safe(() -> GL11.glGetString(GL11.GL_RENDERER)) + " | GL " + safe(() -> GL11.glGetString(GL11.GL_VERSION)));
         line(sb, "Mobile-safe", safe(atlas.util.render.MobileSafe::describe));
         line(sb, "Device", safe(atlas.util.render.DeviceProfile::describe));
@@ -312,6 +312,7 @@ public final class BugReport {
         tail(sb, "Fights (last 60)", newest("fights-"), 60);
         tail(sb, "Hits (last 60)", newest("hits-"), 60);
         tail(sb, "Notes (last 120)", newest("notes-"), 120);
+        tail(sb, "Performance (last 40)", newest("perf-"), 40);
         gameLog(sb, 250);
         sb.append("```\n");
     }
@@ -441,6 +442,27 @@ public final class BugReport {
         } catch (Throwable t) {
             return System.currentTimeMillis();
         }
+    }
+
+    static String memory() {
+        Runtime runtime = Runtime.getRuntime();
+        long used = (runtime.totalMemory() - runtime.freeMemory()) >> 20;
+        StringBuilder out = new StringBuilder();
+        out.append(runtime.maxMemory() >> 20).append(" MB max, ").append(used).append(" MB used");
+        try {
+            long count = 0L;
+            long millis = 0L;
+            for (java.lang.management.GarbageCollectorMXBean gc
+                    : java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()) {
+                count += Math.max(0L, gc.getCollectionCount());
+                millis += Math.max(0L, gc.getCollectionTime());
+            }
+            long upSeconds = Math.max(1L, java.lang.management.ManagementFactory.getRuntimeMXBean().getUptime() / 1000L);
+            out.append(", GC ").append(count).append(" runs, ").append(String.format("%.1f", millis / 1000.0))
+                    .append(" s in ").append(upSeconds).append(" s up");
+        } catch (Throwable ignored) {
+        }
+        return out.toString();
     }
 
     private static File newest(String prefix) {

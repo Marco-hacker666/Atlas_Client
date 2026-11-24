@@ -16,10 +16,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 
 public class DenickCommand extends Command {
     private static final Minecraft mc = Minecraft.getMinecraft();
+    private static final List<String> RESOLVER = Arrays.asList(
+            "list", "who", "lookup", "guess", "toggle", "set", "mode", "cloud", "channels", "status", "clear", "save", "help");
 
     public DenickCommand() {
         super(new ArrayList<>(Collections.singletonList("denick")));
@@ -27,6 +31,11 @@ public class DenickCommand extends Command {
 
     @Override
     public void runCommand(ArrayList<String> args) {
+        if (args.size() < 2 || RESOLVER.contains(args.get(1).toLowerCase(Locale.ROOT))) {
+            if (resolver(args.subList(1, args.size()).toArray(new String[0]))) {
+                return;
+            }
+        }
         if (args.size() < 2) {
             ChatUtil.sendFormatted(String.format("%sUsage: .%s <&oname&r>&r", Atlas.clientName, args.get(0).toLowerCase(Locale.ROOT)));
         } else {
@@ -68,6 +77,20 @@ public class DenickCommand extends Command {
                         )
                 );
             }
+            resolver(new String[]{"who", args.get(1)});
         }
+    }
+
+    private static boolean resolver(String[] args) {
+        atlas.nickresolver.NicknameResolver core = atlas.nickresolver.NicknameResolver.get();
+        if (core == null || core.command() == null || mc.thePlayer == null) {
+            return false;
+        }
+        try {
+            core.command().processCommand(mc.thePlayer, args);
+        } catch (Exception e) {
+            ChatUtil.sendRaw(ChatColors.formatColor(Atlas.clientName) + e.getMessage());
+        }
+        return true;
     }
 }

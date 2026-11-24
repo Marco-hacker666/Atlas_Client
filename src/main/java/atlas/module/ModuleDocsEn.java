@@ -491,6 +491,7 @@ final class ModuleDocsEn {
         d("TargetFilter", "One shared answer to who counts as a target (friends, team, bots, invisible, distance) for combat and latency modules.");
         d("MCF", "Middle-click a player to add or remove a friend.");
         d("NickHider", "Hides your name (chat, scoreboard, level).");
+        d("Denick", "Finds the real account behind a nickname: signed skins, offline UUIDs, Mojang lookups and a database shared by Atlas players (with share on and a yes in the privacy window). Shows the real name in name tags and chat; .denick list / who for details.");
         d("MommyIsHere", "A panic key: while on, its panic-key at once silences and hides the game, brings up the cover, closes chosen programs, then optionally sleeps or shuts down. The restore key (or the phone) undoes it. .mommy setup picks the cover and programs, pairs the phone and tests it.");
         help("MommyIsHere", "panic-key", "The key that sets it off (not the module bind). With a menu open only keys that type nothing count (F1-F15, Insert, Pause, Page Up/Down, ...), so typing in chat never does.");
         help("MommyIsHere", "trigger", "Double tap (default): two presses within 0.4 s, firing on the second; Hold: held 0.3 s; Single: one press (best with a modifier).");

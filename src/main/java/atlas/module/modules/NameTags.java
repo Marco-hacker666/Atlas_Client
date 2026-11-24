@@ -159,6 +159,10 @@ public class NameTags extends Module {
                     && (entity.ignoreFrustumCheck || RenderUtil.isInViewFrustum(entity.getEntityBoundingBox(), 10.0))) {
                 String teamName = TeamUtil.stripName(entity);
                 if (!StringUtils.isBlank(EnumChatFormatting.getTextWithoutFormattingCodes(teamName))) {
+                    String denick = Denick.tag((EntityLivingBase) entity);
+                    if (denick != null) {
+                        teamName = teamName + " " + denick;
+                    }
                     double x = RenderUtil.lerpDouble(entity.posX, entity.lastTickPosX, event.getPartialTicks())
                             - ((IAccessorRenderManager) mc.getRenderManager()).getRenderPosX();
                     double y = RenderUtil.lerpDouble(entity.posY, entity.lastTickPosY, event.getPartialTicks())
@@ -436,6 +440,11 @@ public class NameTags extends Module {
             name = prefix + entity.getName();
         } else {
             name = entity.getDisplayName().getFormattedText();
+        }
+
+        String denick = Denick.tag(entity);
+        if (denick != null) {
+            name = name + " " + denick;
         }
 
         if (ravenHealth.getValue()) {

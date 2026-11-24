@@ -40,6 +40,8 @@ public abstract class MixinNetworkManager {
         }
         if (!packet.getClass().getName().startsWith("net.minecraft.network.play.client")) {
             atlas.management.LagGuard.onReceive(packet);
+
+            atlas.module.modules.Denick.observe(packet);
             if (Atlas.delayManager != null && Atlas.delayManager.shouldDelay((Packet<INetHandlerPlayClient>) packet)) {
                 callbackInfo.cancel();
             } else {

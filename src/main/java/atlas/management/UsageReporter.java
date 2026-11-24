@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 public final class UsageReporter {
     private static final File CONSENT_FILE = new File("./config/Atlas/usage-consent.txt");
 
-    private static final String YES = "yes3";
+    private static final String YES = "yes4";
     public static final int CONSENT_VERSION = 3;
     private static final File NAME_FILE = new File("./config/Atlas/usage-name.txt");
 

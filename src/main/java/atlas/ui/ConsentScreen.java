@@ -26,7 +26,8 @@ public final class ConsentScreen extends GuiScreen {
             "Your system: OS, Java, memory, graphics card, screen",
             "Your mod list (names, versions) and resource packs",
             "Anticheat alerts, Atlas debug logs and crash reports from your game",
-            "Bug reports you send will show they came from you"};
+            "Bug reports you send will show they came from you",
+            "Denick: other players you see (shown name, UUID, skin) for the shared nickname list"};
     private static final String[] OUTRO = {
             "Only the Atlas owner and admins can see it (the IP and location: the owner only); the public Atlas site "
                     + "shows only a name you pick. Deleted "

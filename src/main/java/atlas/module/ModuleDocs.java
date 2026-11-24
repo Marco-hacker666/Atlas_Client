@@ -788,6 +788,7 @@ public final class ModuleDocs {
         d("TargetFilter", "統一判斷「誰算目標」（好友、隊友、假人、隱身、距離），給戰鬥與延遲類模組共用。");
         d("MCF", "中鍵點玩家加入或移除好友。");
         d("NickHider", "隱藏自己的名字（聊天、計分板、等級）。");
+        d("Denick", "找出使用暱稱的玩家的真實帳號：皮膚簽章、離線 UUID、Mojang 查詢，以及 Atlas 玩家共享的資料庫（share 開啟且在隱私視窗同意後）。真名顯示在名牌和聊天裡；.denick list / who 查看。");
         d("MommyIsHere", "緊急鍵：開著這個模組時，用 panic-key 觸發，立刻把遊戲靜音並藏起來、叫出掩護畫面、關掉指定程式，必要時再睡眠／關機。restore-key（或手機）一鍵還原。.mommy setup 設定掩護和要關的程式、配對手機、測試。");
         help("MommyIsHere", "panic-key", "觸發的按鍵（不是模組本身的開關鍵）。開著選單時只有不會打字的鍵（F1~F15、Insert、Pause、Page Up/Down 等）有效，不會在聊天打字時誤觸。");
         help("MommyIsHere", "trigger", "觸發方式：Double tap（預設）0.4 秒內按兩下，第二下立刻觸發；Hold 按住 0.3 秒；Single 按一下（建議搭配 modifier）。");

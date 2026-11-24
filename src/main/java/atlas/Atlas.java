@@ -223,6 +223,9 @@ public class Atlas {
         moduleManager.modules.put(ChestAura.class, new ChestAura());
         moduleManager.modules.put(NameTags.class, new NameTags());
         moduleManager.modules.put(NickHider.class, new NickHider());
+
+        moduleManager.modules.put(Denick.class, new Denick());
+        Denick.install();
         moduleManager.modules.put(NoFall.class, new NoFall());
         moduleManager.modules.put(Stasis.class, new Stasis());
         moduleManager.modules.put(TargetFilter.class, new TargetFilter());

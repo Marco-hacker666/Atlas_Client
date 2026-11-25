@@ -116,6 +116,7 @@ public class Statistics extends Module {
         } else {
             if (shaders) {
                 BlurUtils.prepareBlur();
+                BlurUtils.region("Statistics", area[0], area[1], area[0] + area[2], area[1] + area[3]);
                 RoundedUtils.drawRound(area[0], area[1], area[2], area[3], 6 * s, Color.BLACK);
                 BlurUtils.blurEnd(2, 3);
             }

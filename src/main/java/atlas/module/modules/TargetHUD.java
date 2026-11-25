@@ -600,9 +600,11 @@ public class TargetHUD extends Module {
                     HudPanel.panel(n6, n7, n8, n9 + 13, true, alpha / 255.0F);
                 } else if (RenderFixes.shouldUseShaders()) {
                     BlurUtils.prepareBloom();
+                    BlurUtils.region("Target HUD", n6, n7, n8, n9 + 13);
                     RoundedUtils.drawRound(n6, n7, n8 - n6, n9 + 13 - n7, 8.0F, true, new Color(0, 0, 0, maxAlphaBackground));
                     BlurUtils.bloomEnd(3, bloomRadius);
                     BlurUtils.prepareBlur();
+                    BlurUtils.region("Target HUD", n6, n7, n8, n9 + 13);
                     RoundedUtils.drawRound(n6, n7, n8 - n6, n9 + 13 - n7, 8.0F, true, new Color(RenderUtil.mergeAlpha(Color.black.getRGB(), maxAlphaOutline)));
                     BlurUtils.blurEnd(2, blurRadius);
                 } else {
@@ -964,10 +966,12 @@ public class TargetHUD extends Module {
             HudPanel.panel(x, y, x + width, y + height, true, alpha);
         } else if (RenderFixes.shouldUseShaders()) {
             BlurUtils.prepareBloom();
+            BlurUtils.region("Target HUD", x, y, x + width, y + height);
             RoundedUtils.drawRound(x, y, width, height, 10.0F, true, new Color(0, 0, 0, maxAlphaBackground));
             BlurUtils.bloomEnd(3, 2.0F);
 
             BlurUtils.prepareBlur();
+            BlurUtils.region("Target HUD", x, y, x + width, y + height);
             RoundedUtils.drawRound(
                     x,
                     y,
@@ -1033,6 +1037,7 @@ public class TargetHUD extends Module {
 
         if (RenderFixes.shouldUseShaders()) {
             BlurUtils.prepareBloom();
+            BlurUtils.region("Target HUD bar", barX, healthBarY, barX + barWidth * healthPercent, healthBarY + 6);
             RoundedUtils.drawRound(barX, healthBarY, barWidth * healthPercent, 6, 3, true, new Color(0, 220, 255, 180));
             BlurUtils.bloomEnd(4, 3.0F);
         }

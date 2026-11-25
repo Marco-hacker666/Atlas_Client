@@ -78,6 +78,7 @@ public class Hotbar extends Module {
         } else {
             if (RenderFixes.shouldUseShaders()) {
                 BlurUtils.prepareBlur();
+                BlurUtils.region("Hotbar", area[0], area[1], area[0] + area[2], area[1] + area[3]);
                 RoundedUtils.drawRound(area[0], area[1], area[2], area[3], 8.0F * s, Color.WHITE);
                 BlurUtils.blurEnd(2, 4.0F);
             }

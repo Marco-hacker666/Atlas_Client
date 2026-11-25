@@ -273,7 +273,8 @@ public final class BugReport {
         line(sb, "Java", System.getProperty("java.version") + " (" + System.getProperty("java.vendor") + ")");
         line(sb, "OS", System.getProperty("os.name") + " " + System.getProperty("os.version") + " " + System.getProperty("os.arch"));
         line(sb, "Memory", memory());
-        line(sb, "Effects", atlas.util.render.Effects.describe());
+        line(sb, "Effects", atlas.util.render.Effects.describe() + (atlas.util.render.Effects.fastBlur()
+                ? ", fast blur" : ", full-screen blur"));
         line(sb, "GPU timing", atlas.util.render.GpuTimer.describe());
         line(sb, "GPU", safe(() -> GL11.glGetString(GL11.GL_RENDERER)) + " | GL " + safe(() -> GL11.glGetString(GL11.GL_VERSION)));
         line(sb, "Mobile-safe", safe(atlas.util.render.MobileSafe::describe));

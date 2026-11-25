@@ -783,6 +783,7 @@ public final class ModuleDocs {
         d("TeamHealthDisplay", "顯示隊友或敵人的血量。");
         d("RenderFixes", "較現代的聊天框與計分板外觀（圓角、可移動）。");
         help("RenderFixes", "shader", "聊天框、計分板、快捷欄等的模糊背景。只有這個模組開著時才看這個設定；模組關掉時模糊照常。");
+        help("RenderFixes", "fast-blur", "模糊與光暈只計算每個元件蓋住的那一塊（加上模糊會讀到的範圍），而不是整個螢幕。看起來完全一樣，顯示卡的工作少很多。關掉 = 舊的整個螢幕算法，用來比較，或萬一哪裡顯示不對時。.perf compare 會自動比較兩者。");
         help("RenderFixes", "effects", "Atlas 在遊戲中的模糊與光暈（HUD、快捷欄、目標 HUD、聊天框、計分板）。Auto：開著，但畫著它們時遊戲連續 15 秒低於 30 FPS，這次遊戲就自動關掉，並提示一次。Full：一直開。Lite：一直關。模組關掉時也有效；ClickGUI 和選單不受影響。");
         d("AntiDebuff", "移除失明、反胃等畫面效果。");
 

@@ -72,6 +72,15 @@ public class KawaseBlur {
     }
 
     public static void renderBlur(int stencilFrameBufferTexture, int iterations, float offset) {
+        renderBlur(stencilFrameBufferTexture, iterations, offset, null);
+    }
+
+    /**
+     * @param region where the mask is, window pixels {x0, y0, x1, y1} (see BlurRegion), or null for the whole
+     *               screen. With a region every pass only draws the pixels that region needs, so the blur
+     *               costs what the element covers instead of the screen; what it draws is the same.
+     */
+    public static void renderBlur(int stencilFrameBufferTexture, int iterations, float offset, int[] region) {
         initShaders();
 
         if (kawaseDown == null || kawaseUp == null) {
@@ -93,16 +102,58 @@ public class KawaseBlur {
         }
         lastIterations = iterations;
 
-        renderFBO(framebufferList.get(1), mc.getFramebuffer().framebufferTexture, kawaseDown, offset);
-
-        for (int i = 1; i < iterations; i++) {
-            renderFBO(framebufferList.get(i + 1), framebufferList.get(i).framebufferTexture, kawaseDown, offset);
+        int[][] plan = region == null ? null : plan(iterations, offset, region);
+        atlas.util.render.GlScissor saved = plan == null ? null : atlas.util.render.GlScissor.save();
+        if (saved != null && saved.enabled()) {
+            /* Drawn inside someone's scissor clip: the whole-screen path, which that clip applies to as before. */
+            plan = null;
+            saved = null;
         }
+        try {
+            if (plan != null) {
+                GL11.glEnable(GL11.GL_SCISSOR_TEST);
+                atlas.util.render.GlScissor.set(plan[1]);
+            }
+            renderFBO(framebufferList.get(1), mc.getFramebuffer().framebufferTexture, kawaseDown, offset);
 
-        for (int i = iterations; i > 1; i--) {
-            renderFBO(framebufferList.get(i - 1), framebufferList.get(i).framebufferTexture, kawaseUp, offset);
+            for (int i = 1; i < iterations; i++) {
+                if (plan != null) {
+                    atlas.util.render.GlScissor.set(plan[i + 1]);
+                }
+                renderFBO(framebufferList.get(i + 1), framebufferList.get(i).framebufferTexture, kawaseDown, offset);
+            }
+
+            for (int i = iterations; i > 1; i--) {
+                if (plan != null) {
+                    atlas.util.render.GlScissor.set(plan[i - 1]);
+                }
+                renderFBO(framebufferList.get(i - 1), framebufferList.get(i).framebufferTexture, kawaseUp, offset);
+            }
+
+            if (plan != null) {
+                atlas.util.render.GlScissor.set(plan[0]);
+            }
+            finish(stencilFrameBufferTexture, offset);
+        } finally {
+            if (saved != null) {
+                saved.restore();
+            }
         }
+    }
 
+    /** The rectangles each pass draws; a region off screen still runs every pass, on no pixels. */
+    private static int[][] plan(int iterations, float offset, int[] region) {
+        int[] widths = new int[iterations + 1];
+        int[] heights = new int[iterations + 1];
+        for (int i = 0; i <= iterations; i++) {
+            widths[i] = framebufferList.get(i).framebufferWidth;
+            heights[i] = framebufferList.get(i).framebufferHeight;
+        }
+        int[][] plan = BlurRegion.plan(BlurRegion.BLUR, widths, heights, offset, region);
+        return plan != null ? plan : BlurRegion.nothing(iterations);
+    }
+
+    private static void finish(int stencilFrameBufferTexture, float offset) {
         Framebuffer lastBuffer = framebufferList.get(0);
         lastBuffer.framebufferClear();
         lastBuffer.bindFramebuffer(false);

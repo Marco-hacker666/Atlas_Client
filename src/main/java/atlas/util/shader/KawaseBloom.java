@@ -77,6 +77,15 @@ public class KawaseBloom {
     }
 
     public static void renderBlur(int framebufferTexture, int iterations, float offset, float strength) {
+        renderBlur(framebufferTexture, iterations, offset, strength, null);
+    }
+
+    /**
+     * @param region where the glow's shapes are, window pixels {x0, y0, x1, y1} (see BlurRegion), or null for
+     *               the whole screen. With a region every pass only draws what the shapes and their glow need;
+     *               what it draws is the same.
+     */
+    public static void renderBlur(int framebufferTexture, int iterations, float offset, float strength, int[] region) {
         initShaders();
 
         if (kawaseDown == null || kawaseUp == null) {
@@ -104,19 +113,61 @@ public class KawaseBloom {
 
         GlStateManager.clearColor(0, 0, 0, 0);
 
-        float currentOffset = offset;
-        renderFBO(framebufferList.get(1), framebufferTexture, kawaseDown, currentOffset);
-
-        for (int i = 1; i < iterations; i++) {
-            currentOffset = offset / (float) Math.pow(1.5, i);
-            renderFBO(framebufferList.get(i + 1), framebufferList.get(i).framebufferTexture, kawaseDown, currentOffset);
+        int[][] plan = region == null ? null : plan(iterations, offset, region);
+        atlas.util.render.GlScissor saved = plan == null ? null : atlas.util.render.GlScissor.save();
+        if (saved != null && saved.enabled()) {
+            /* Drawn inside someone's scissor clip: the whole-screen path, which that clip applies to as before. */
+            plan = null;
+            saved = null;
         }
+        try {
+            if (plan != null) {
+                GL11.glEnable(GL11.GL_SCISSOR_TEST);
+                atlas.util.render.GlScissor.set(plan[1]);
+            }
+            float currentOffset = offset;
+            renderFBO(framebufferList.get(1), framebufferTexture, kawaseDown, currentOffset);
 
-        for (int i = iterations; i > 1; i--) {
-            currentOffset = offset / (float) Math.pow(1.5, i - 1);
-            renderFBO(framebufferList.get(i - 1), framebufferList.get(i).framebufferTexture, kawaseUp, currentOffset);
+            for (int i = 1; i < iterations; i++) {
+                if (plan != null) {
+                    atlas.util.render.GlScissor.set(plan[i + 1]);
+                }
+                currentOffset = offset / (float) Math.pow(1.5, i);
+                renderFBO(framebufferList.get(i + 1), framebufferList.get(i).framebufferTexture, kawaseDown, currentOffset);
+            }
+
+            for (int i = iterations; i > 1; i--) {
+                if (plan != null) {
+                    atlas.util.render.GlScissor.set(plan[i - 1]);
+                }
+                currentOffset = offset / (float) Math.pow(1.5, i - 1);
+                renderFBO(framebufferList.get(i - 1), framebufferList.get(i).framebufferTexture, kawaseUp, currentOffset);
+            }
+
+            if (plan != null) {
+                atlas.util.render.GlScissor.set(plan[0]);
+            }
+            finish(framebufferTexture, offset, strength);
+        } finally {
+            if (saved != null) {
+                saved.restore();
+            }
         }
+    }
 
+    /** The rectangles each pass draws; shapes off screen still run every pass, on no pixels. */
+    private static int[][] plan(int iterations, float offset, int[] region) {
+        int[] widths = new int[iterations + 1];
+        int[] heights = new int[iterations + 1];
+        for (int i = 0; i <= iterations; i++) {
+            widths[i] = framebufferList.get(i).framebufferWidth;
+            heights[i] = framebufferList.get(i).framebufferHeight;
+        }
+        int[][] plan = BlurRegion.plan(BlurRegion.BLOOM, widths, heights, offset, region);
+        return plan != null ? plan : BlurRegion.nothing(iterations);
+    }
+
+    private static void finish(int framebufferTexture, float offset, float strength) {
         Framebuffer lastBuffer = framebufferList.get(0);
         lastBuffer.framebufferClear();
         lastBuffer.bindFramebuffer(false);

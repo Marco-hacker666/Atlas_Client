@@ -73,10 +73,10 @@ public class PerfLog {
         double seconds = (now - this.windowStart) / 1e9;
         Runtime runtime = Runtime.getRuntime();
         long usedMb = (runtime.totalMemory() - runtime.freeMemory()) >> 20;
-        String header = String.format("window %.1fs | fps avg %d min %d | gc %.0f ms/s | heap %d/%d MB | effects %s | %s",
+        String header = String.format("window %.1fs | fps avg %d min %d | gc %.0f ms/s | heap %d/%d MB | effects %s%s | %s",
                 seconds, this.fpsSum / this.ticks, this.fpsMin == Integer.MAX_VALUE ? 0 : this.fpsMin,
                 (gcMillis() - this.windowGcStart) / Math.max(0.001, seconds), usedMb, runtime.maxMemory() >> 20,
-                Effects.lite() ? "lite" : "full",
+                Effects.lite() ? "lite" : "full", Effects.fastBlur() ? ", fast blur" : ", full-screen blur",
                 mc.getCurrentServerData() == null ? "local" : mc.getCurrentServerData().serverIP);
         List<String> lines = new ArrayList<String>();
         lines.add(atlas.util.render.GpuTimer.on() ? atlas.util.render.GpuTimer.takeWindow().line(12)

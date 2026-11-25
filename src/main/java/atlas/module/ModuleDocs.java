@@ -782,6 +782,8 @@ public final class ModuleDocs {
         d("Radar", "小地圖雷達，顯示附近玩家的方向與距離。");
         d("TeamHealthDisplay", "顯示隊友或敵人的血量。");
         d("RenderFixes", "較現代的聊天框與計分板外觀（圓角、可移動）。");
+        help("RenderFixes", "shader", "聊天框、計分板、快捷欄等的模糊背景。只有這個模組開著時才看這個設定；模組關掉時模糊照常。");
+        help("RenderFixes", "effects", "Atlas 在遊戲中的模糊與光暈（HUD、快捷欄、目標 HUD、聊天框、計分板）。Auto：開著，但畫著它們時遊戲連續 15 秒低於 30 FPS，這次遊戲就自動關掉，並提示一次。Full：一直開。Lite：一直關。模組關掉時也有效；ClickGUI 和選單不受影響。");
         d("AntiDebuff", "移除失明、反胃等畫面效果。");
 
         d("AntiBot", "辨識伺服器的假人（NPC、反作弊機器人），讓其他模組略過它們。");

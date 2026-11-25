@@ -485,6 +485,8 @@ final class ModuleDocsEn {
         d("Radar", "A minimap radar of nearby players' direction and distance.");
         d("TeamHealthDisplay", "Shows teammates' or enemies' health.");
         d("RenderFixes", "Modern chat and scoreboard rendering (rounded, movable).");
+        help("RenderFixes", "shader", "Blurred backgrounds behind the chat, scoreboard, hotbar and others. Only read while this module is on; with the module off, blur stays on.");
+        help("RenderFixes", "effects", "Atlas's in-game blur and glow (HUD, hotbar, target HUD, chat, scoreboard). Auto: on, but turned off for this session, with one notice, when the game stays under 30 FPS for 15 seconds while drawing them. Full: always on. Lite: always off. Works with the module off too; the ClickGUIs and menus are not affected.");
         d("AntiDebuff", "Removes blindness and nausea screen effects.");
 
         d("AntiBot", "Recognises server bots (NPCs, anticheat bots) so other modules ignore them.");

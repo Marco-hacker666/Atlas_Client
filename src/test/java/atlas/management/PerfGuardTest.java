@@ -46,6 +46,16 @@ public class PerfGuardTest {
     }
 
     @Test
+    public void aNewWorldStartsTheSlowCountAgain() {
+        PerfGuard guard = new PerfGuard();
+        for (int i = 0; i < PerfGuard.LOW_FPS_SECONDS - 1; i++) {
+            assertEquals(PerfGuard.Decision.NONE, guard.second(slow()));
+        }
+        guard.newWorld();
+        assertEquals(PerfGuard.LOW_FPS_SECONDS, secondsUntil(guard, slow(), PerfGuard.Decision.GO_LITE, 60));
+    }
+
+    @Test
     public void slowSecondsThatAreNotOursDoNotCount() {
         PerfGuard.Second noEffects = slow();
         noEffects.effectsDrawn = false;

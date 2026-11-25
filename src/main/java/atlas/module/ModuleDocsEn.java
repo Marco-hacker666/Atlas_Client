@@ -487,6 +487,7 @@ final class ModuleDocsEn {
         d("RenderFixes", "Modern chat and scoreboard rendering (rounded, movable).");
         help("RenderFixes", "shader", "Blurred backgrounds behind the chat, scoreboard, hotbar and others. Only read while this module is on; with the module off, blur stays on.");
         help("RenderFixes", "fast-blur", "Blur and glow only compute the area each element covers (plus what the blur reads around it) instead of the whole screen. Looks exactly the same, much less GPU work. Off = the old whole-screen way, to compare or if something ever looks wrong. .perf compare compares the two.");
+        help("RenderFixes", "gpu-timing", "Measures how long the GPU spends on each frame, Atlas's 2D and 3D passes and each blur and glow (one frame in four, never waiting on the GPU), for the perf log, the bug report and .perf. Off = nothing is measured. Works with the module off too.");
         help("RenderFixes", "effects", "Atlas's in-game blur and glow (HUD, hotbar, target HUD, chat, scoreboard). Auto: on, but turned off for this session, with one notice, when the game stays under 30 FPS for 15 seconds while drawing them. Full: always on. Lite: always off. Works with the module off too; the ClickGUIs and menus are not affected.");
         d("AntiDebuff", "Removes blindness and nausea screen effects.");
 

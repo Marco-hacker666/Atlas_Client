@@ -12,6 +12,7 @@ import java.nio.IntBuffer;
 import java.nio.LongBuffer;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 /**
  * How long the GPU spends on a frame and on parts of it (Atlas's 2D and 3D passes, each blur and glow), from
@@ -19,7 +20,7 @@ import java.util.Map;
  * measured frame is read when its slot comes round again, sixteen frames later, and only if the GPU is done
  * with it, so nothing ever waits on the GPU; a frame not ready by then is skipped. Off where the driver has no
  * timer queries (OpenGL below 3.3 without ARB_timer_query, the macOS legacy context, phones) or rejects them,
- * and for good after any error.
+ * for good after any error, and while RenderFixes > gpu-timing is off.
  *
  * <p>Render thread only.
  */
@@ -41,6 +42,7 @@ public final class GpuTimer {
     private static boolean inFrame;
     private static int frameMark = -1;
     private static int frameCount;
+    private static volatile BooleanSupplier allowed = () -> true;
 
     private static final IntBuffer INT = BufferUtils.createIntBuffer(16);
     private static final LongBuffer LONG = BufferUtils.createLongBuffer(16);
@@ -54,8 +56,25 @@ public final class GpuTimer {
     private GpuTimer() {
     }
 
+    /** The setting that turns timing off (RenderFixes > gpu-timing), read at the start of every frame. */
+    public static void setSwitch(BooleanSupplier on) {
+        allowed = on == null ? () -> true : on;
+    }
+
+    private static boolean allowed() {
+        try {
+            return allowed.getAsBoolean();
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
     /** At the start of a frame (EntityRenderer.updateCameraAndRender). */
     public static void frameStart() {
+        if (!allowed()) {
+            frameEnd();
+            return;
+        }
         if (state == 0) {
             start();
         }
@@ -134,10 +153,13 @@ public final class GpuTimer {
     }
 
     public static boolean on() {
-        return state == 1;
+        return state == 1 && allowed();
     }
 
     public static String describe() {
+        if (!allowed()) {
+            return "off (RenderFixes > gpu-timing)";
+        }
         return state == 1 ? "on (" + (core ? "GL 3.3" : "ARB_timer_query") + ")" : "off (" + why + ")";
     }
 
@@ -191,17 +213,17 @@ public final class GpuTimer {
             }
             IntBuffer all = BufferUtils.createIntBuffer(FRAMES * MARKS);
             GL15.glGenQueries(all);
-            /* One timestamp, read back at once (the only wait, once): a driver that takes the calls but fails
-               them would otherwise put a GL error in the log (or OptiFine's chat) on every measured frame. */
+            /* One timestamp and an availability check (neither waits for the GPU): a driver that takes the
+               calls but fails them would otherwise put a GL error in the log (or OptiFine's chat) on every
+               measured frame. */
             int probe = all.get(0);
-            LONG.clear();
             if (core) {
                 GL33.glQueryCounter(probe, GL33.GL_TIMESTAMP);
-                GL33.glGetQueryObject(probe, GL15.GL_QUERY_RESULT, LONG);
             } else {
                 ARBTimerQuery.glQueryCounter(probe, ARBTimerQuery.GL_TIMESTAMP);
-                ARBTimerQuery.glGetQueryObject(probe, GL15.GL_QUERY_RESULT, LONG);
             }
+            INT.clear();
+            GL15.glGetQueryObject(probe, GL15.GL_QUERY_RESULT_AVAILABLE, INT);
             int error = GL11.glGetError();
             if (error != GL11.GL_NO_ERROR) {
                 drainErrors();

@@ -43,6 +43,7 @@ public class RenderFixes extends Module {
             atlas.util.render.Effects.MODES);
     public final BooleanProperty fastBlur = new BooleanProperty("fast-blur", true,
             () -> this.effects.getValue() != atlas.util.render.Effects.LITE);
+    public final BooleanProperty gpuTiming = new BooleanProperty("gpu-timing", true);
     public final BooleanProperty chat = new BooleanProperty("chat", true);
     public final BooleanProperty scoreboard = new BooleanProperty("scoreboard", true);
     public final IntProperty chatX = new IntProperty("chat-x", 0, -DRAG_LIMIT, DRAG_LIMIT);
@@ -64,6 +65,7 @@ public class RenderFixes extends Module {
 
     public RenderFixes() {
         super("RenderFixes", true, false, "Modern rounded chat and scoreboard rendering");
+        atlas.util.render.GpuTimer.setSwitch(() -> this.gpuTiming.getValue());
     }
 
     @EventTarget(whenDisabled = true)

@@ -311,6 +311,7 @@ public class Atlas {
         moduleManager.modules.put(Accessories.class, new Accessories());
         commandManager.commands.add(new BindCommand());
         commandManager.commands.add(new atlas.command.commands.ReportCommand());
+        commandManager.commands.add(new atlas.command.commands.PerfCommand());
         commandManager.commands.add(new atlas.command.commands.RunDataCommand());
         commandManager.commands.add(new atlas.command.commands.MommyCommand());
         commandManager.commands.add(new atlas.command.commands.SupportCommand());

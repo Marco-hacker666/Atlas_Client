@@ -50,6 +50,7 @@ public class PerfLog {
         }
         long now = System.nanoTime();
         long wall = System.currentTimeMillis();
+        PerfCompare.tick();
         findServer(wall);
         if (this.ticks == 0) {
             this.windowStart = now;

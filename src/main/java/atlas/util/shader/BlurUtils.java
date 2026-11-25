@@ -3,6 +3,7 @@ package atlas.util.shader;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.shader.Framebuffer;
 import atlas.util.RenderUtil;
+import atlas.util.render.Effects;
 import atlas.util.render.FramebufferCompat;
 
 public class BlurUtils {
@@ -13,24 +14,26 @@ public class BlurUtils {
     private static boolean bloomMasked;
 
     public static void prepareBlur() {
-        if (!FramebufferCompat.available()) {
+        if (!FramebufferCompat.available() || Effects.liteInGame()) {
             blurMasked = true;
             GlStateManager.colorMask(false, false, false, false);
             return;
         }
         blurMasked = false;
+        Effects.drawn();
         stencilFrameBufferBlur = RenderUtil.createFrameBuffer(stencilFrameBufferBlur);
         stencilFrameBufferBlur.framebufferClear();
         stencilFrameBufferBlur.bindFramebuffer(false);
     }
 
     public static void prepareBloom() {
-        if (!FramebufferCompat.available()) {
+        if (!FramebufferCompat.available() || Effects.liteInGame()) {
             bloomMasked = true;
             GlStateManager.colorMask(false, false, false, false);
             return;
         }
         bloomMasked = false;
+        Effects.drawn();
         stencilFrameBufferBloom = RenderUtil.createFrameBuffer(stencilFrameBufferBloom);
         stencilFrameBufferBloom.framebufferClear();
         stencilFrameBufferBloom.bindFramebuffer(false);

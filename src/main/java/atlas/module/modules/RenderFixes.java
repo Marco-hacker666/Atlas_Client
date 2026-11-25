@@ -8,6 +8,7 @@ import atlas.events.Render2DEvent;
 import atlas.module.Module;
 import atlas.property.properties.BooleanProperty;
 import atlas.property.properties.IntProperty;
+import atlas.property.properties.ModeProperty;
 import atlas.util.RenderUtil;
 import atlas.util.shader.BlurUtils;
 import atlas.util.shader.RoundedUtils;
@@ -38,6 +39,8 @@ public class RenderFixes extends Module {
     private static final int DRAG_LIMIT = 5000;
 
     public final BooleanProperty shader = new BooleanProperty("shader", true);
+    public final ModeProperty effects = new ModeProperty("effects", atlas.util.render.Effects.AUTO,
+            atlas.util.render.Effects.MODES);
     public final BooleanProperty chat = new BooleanProperty("chat", true);
     public final BooleanProperty scoreboard = new BooleanProperty("scoreboard", true);
     public final IntProperty chatX = new IntProperty("chat-x", 0, -DRAG_LIMIT, DRAG_LIMIT);
@@ -63,6 +66,7 @@ public class RenderFixes extends Module {
 
     @EventTarget(whenDisabled = true)
     public void onRender2D(Render2DEvent event) {
+        atlas.util.render.Effects.setMode(this.effects.getValue());
         updateDragging();
     }
 

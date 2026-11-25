@@ -45,6 +45,7 @@ public final class GpuTimer {
     private static boolean inFrame;
     private static int frameMark = -1;
     private static int frameCount;
+    private static boolean paused;
     private static volatile BooleanSupplier allowed = () -> true;
 
     private static final IntBuffer INT = BufferUtils.createIntBuffer(16);
@@ -76,7 +77,15 @@ public final class GpuTimer {
     public static void frameStart() {
         if (!allowed()) {
             frameEnd();
+            if (!paused) {
+                pause();
+            }
             return;
+        }
+        if (paused) {
+            // back on: a fresh recent window, so nothing from before the pause reads as recent
+            paused = false;
+            recentSince = System.currentTimeMillis();
         }
         if (state == 0) {
             start();
@@ -287,7 +296,12 @@ public final class GpuTimer {
             return;
         }
         INT.clear();
+        INT.put(0, Integer.MIN_VALUE);
         GL15.glGetQueryObject(ids[frame][count - 1], GL15.GL_QUERY_RESULT_AVAILABLE, INT);
+        if (INT.get(0) == Integer.MIN_VALUE) {
+            off(new IllegalStateException("availability query gave no answer"));
+            return;
+        }
         boolean probe = generation[frame] == probeGeneration;
         if (INT.get(0) == 0) {
             WINDOW.dropped();
@@ -300,10 +314,15 @@ public final class GpuTimer {
         long[] stamps = new long[count];
         for (int i = 0; i < count; i++) {
             LONG.clear();
+            LONG.put(0, Long.MIN_VALUE);
             if (core) {
                 GL33.glGetQueryObject(ids[frame][i], GL15.GL_QUERY_RESULT, LONG);
             } else {
                 ARBTimerQuery.glGetQueryObject(ids[frame][i], GL15.GL_QUERY_RESULT, LONG);
+            }
+            if (LONG.get(0) == Long.MIN_VALUE) {
+                off(new IllegalStateException("timestamp query gave no answer"));
+                return;
             }
             stamps[i] = LONG.get(0);
         }
@@ -332,6 +351,16 @@ public final class GpuTimer {
             RECENT.reset();
             recentSince = now;
         }
+    }
+
+    /** Timing switched off: drop what is in flight and what was gathered, keep the query objects. */
+    private static void pause() {
+        paused = true;
+        if (pending != null) {
+            java.util.Arrays.fill(pending, false);
+        }
+        RECENT.reset();
+        lastRecent = new GpuStats();
     }
 
     /** Clears errors left by earlier GL calls (not ours) so the check in start sees only its own. */

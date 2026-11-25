@@ -58,9 +58,7 @@ public class BlurUtils {
         Framebuffer before = stencilFrameBufferBlur;
         stencilFrameBufferBlur = RenderUtil.createFrameBuffer(stencilFrameBufferBlur);
         boolean whole = stencilFrameBufferBlur != before || ++blurClears % FULL_CLEAR_EVERY == 0;
-        if (!clear(stencilFrameBufferBlur, whole ? null : blurDirty)) {
-            unknown = true;
-        }
+        clear(stencilFrameBufferBlur, whole ? null : blurDirty);
         blurDirty = null;
         stencilFrameBufferBlur.bindFramebuffer(false);
     }
@@ -77,9 +75,7 @@ public class BlurUtils {
         Framebuffer before = stencilFrameBufferBloom;
         stencilFrameBufferBloom = RenderUtil.createFrameBuffer(stencilFrameBufferBloom);
         boolean whole = stencilFrameBufferBloom != before || ++bloomClears % FULL_CLEAR_EVERY == 0;
-        if (!clear(stencilFrameBufferBloom, whole ? null : bloomDirty)) {
-            unknown = true;
-        }
+        clear(stencilFrameBufferBloom, whole ? null : bloomDirty);
         bloomDirty = null;
         stencilFrameBufferBloom.bindFramebuffer(false);
     }
@@ -164,27 +160,24 @@ public class BlurUtils {
     }
 
     /**
-     * Clears a mask framebuffer: only where it can hold pixels when that is known, otherwise all of it.
-     *
-     * @return false when a whole clear was limited by a caller's scissor clip (as it always was), so parts of
-     *         the framebuffer may still hold old pixels and its area must not be trusted this time
+     * Clears a mask framebuffer: only where it can hold pixels when that is known, otherwise all of it. A
+     * caller's scissor clip does not limit it: the passes read the mask outside that clip too, so a clipped
+     * clear would leave an earlier element's shape in it.
      */
-    private static boolean clear(Framebuffer mask, int[] dirty) {
-        if (dirty == null) {
-            boolean clipped = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
-            mask.framebufferClear();
-            return !clipped;
-        }
-        int[] r = BlurRegion.clamp(dirty, mask.framebufferWidth, mask.framebufferHeight);
+    private static void clear(Framebuffer mask, int[] dirty) {
         GlScissor saved = GlScissor.save();
         try {
-            GL11.glEnable(GL11.GL_SCISSOR_TEST);
-            GlScissor.set(r == null ? new int[]{0, 0, 0, 0} : r);
+            if (dirty == null) {
+                GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            } else {
+                int[] r = BlurRegion.clamp(dirty, mask.framebufferWidth, mask.framebufferHeight);
+                GL11.glEnable(GL11.GL_SCISSOR_TEST);
+                GlScissor.set(r == null ? new int[]{0, 0, 0, 0} : r);
+            }
             mask.framebufferClear();
         } finally {
             saved.restore();
         }
-        return true;
     }
 
     /**

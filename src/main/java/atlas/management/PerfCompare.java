@@ -61,6 +61,12 @@ public final class PerfCompare {
             return;
         }
         lastTick = now;
+        if (Effects.lite()) {
+            // Auto turned blur and glow off mid-way: the halves no longer measure the same work
+            stop();
+            say("&eThe comparison stopped: effects went Lite (low FPS), so its numbers would be wrong.");
+            return;
+        }
         ticks++;
         if (ticks == SETTLE_TICKS) {
             GpuTimer.resetProbe();
@@ -99,6 +105,12 @@ public final class PerfCompare {
         say(String.format("&fFast-blur off: &e%.0f fps&r  ·  fast-blur on: &a%.0f fps", off.fps, on.fps));
         if (!GpuTimer.on()) {
             say("&7GPU timing is " + GpuTimer.describe() + ", so only FPS is shown.");
+            return;
+        }
+        if (off.gpu.frames() == 0 || on.gpu.frames() == 0) {
+            // too few frames read back in four seconds (very low FPS): no GPU figures rather than empty ones
+            say("&7GPU timing had no frames read back in " + (off.gpu.frames() == 0 ? "the off half" : "the on half")
+                    + " (FPS too low for four seconds), so only FPS is shown.");
             return;
         }
         double offEffects = effects(off.gpu);

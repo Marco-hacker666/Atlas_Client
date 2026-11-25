@@ -114,16 +114,20 @@ public class KawaseBloom {
         GlStateManager.clearColor(0, 0, 0, 0);
 
         int[][] plan = region == null ? null : plan(iterations, offset, region);
-        atlas.util.render.GlScissor saved = plan == null ? null : atlas.util.render.GlScissor.save();
-        if (saved != null && saved.enabled()) {
-            /* Drawn inside someone's scissor clip: the whole-screen path, which that clip applies to as before. */
+        atlas.util.render.GlScissor saved = atlas.util.render.GlScissor.save();
+        /* Drawn inside someone's scissor clip: the whole-screen path. Its clip is in screen pixels, which mean
+           other places in the smaller levels, so the level passes run unclipped (every level texel fresh, none
+           left from an earlier blur) and the clip comes back for the last pass and the composite. */
+        boolean clipped = saved.enabled();
+        if (clipped) {
             plan = null;
-            saved = null;
         }
         try {
             if (plan != null) {
                 GL11.glEnable(GL11.GL_SCISSOR_TEST);
                 atlas.util.render.GlScissor.set(plan[1]);
+            } else if (clipped) {
+                GL11.glDisable(GL11.GL_SCISSOR_TEST);
             }
             float currentOffset = offset;
             renderFBO(framebufferList.get(1), framebufferTexture, kawaseDown, currentOffset);
@@ -146,12 +150,12 @@ public class KawaseBloom {
 
             if (plan != null) {
                 atlas.util.render.GlScissor.set(plan[0]);
+            } else if (clipped) {
+                saved.restore();
             }
             finish(framebufferTexture, offset, strength);
         } finally {
-            if (saved != null) {
-                saved.restore();
-            }
+            saved.restore();
         }
     }
 

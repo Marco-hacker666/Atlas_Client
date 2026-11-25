@@ -84,6 +84,11 @@ public final class PerfGuard {
         return s.fps > 0 && s.fps < LOW_FPS;
     }
 
+    /** A new world (or back from the menu): the slow streak starts again; this session's decisions stay. */
+    public void newWorld() {
+        this.slowSeconds = 0;
+    }
+
     public void reset() {
         this.slowSeconds = 0;
         this.gcSeconds = 0;

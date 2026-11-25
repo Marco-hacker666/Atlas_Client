@@ -105,6 +105,7 @@ public class PerfLog {
             this.secondWorld = world;
             this.secondStart = wall;
             this.secondGc = gc;
+            this.guard.newWorld();
             return;
         }
         PerfGuard.Second s = new PerfGuard.Second();

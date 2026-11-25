@@ -27,7 +27,12 @@ public abstract class MixinGuiIngameForge {
             )}
     )
     private void renderGameOverlay(float float1, CallbackInfo callbackInfo) {
-        EventManager.call(new Render2DEvent(float1));
+        int gpu = atlas.util.render.GpuTimer.begin("Atlas 2D");
+        try {
+            EventManager.call(new Render2DEvent(float1));
+        } finally {
+            atlas.util.render.GpuTimer.end(gpu, null);
+        }
     }
 
     @Redirect(

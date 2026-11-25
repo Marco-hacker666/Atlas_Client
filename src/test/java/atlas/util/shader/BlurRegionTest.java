@@ -82,6 +82,14 @@ public class BlurRegionTest {
     }
 
     @Test
+    public void aHugeRectangleStillCoversTheScreen() {
+        int[] r = BlurRegion.maskRect(MODELVIEW, PROJECTION, VIEWPORT, -1.0E30F, -1.0E30F, 1.0E30F, 1.0E30F);
+        assertTrue(r[0] < 0 && r[1] < 0 && r[2] > 1920 && r[3] > 1080);
+        int[][] plan = BlurRegion.plan(BlurRegion.BLUR, sizes(1920, 3, 2), sizes(1080, 3, 2), 4.0F, r);
+        assertArrayEquals(new int[]{0, 0, 1920, 1080}, plan[0]);
+    }
+
+    @Test
     public void cornersBehindTheEyeAreNotMapped() {
         float[] perspective = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, -1, 0, 0, -0.1F, 0};
         float[] eye = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 5, 1};

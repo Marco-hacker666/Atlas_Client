@@ -48,7 +48,14 @@ public final class BlurRegion {
             maxX = Math.max(maxX, winX);
             maxY = Math.max(maxY, winY);
         }
-        return new int[]{(int) Math.floor(minX), (int) Math.floor(minY), (int) Math.ceil(maxX), (int) Math.ceil(maxY)};
+        /* Far past the screen is the same as a million pixels past it, and keeps the int arithmetic (padding,
+           margins) from overflowing. */
+        return new int[]{(int) Math.floor(limit(minX)), (int) Math.floor(limit(minY)), (int) Math.ceil(limit(maxX)),
+                (int) Math.ceil(limit(maxY))};
+    }
+
+    private static double limit(double v) {
+        return Math.max(-1.0E6, Math.min(1.0E6, v));
     }
 
     /**

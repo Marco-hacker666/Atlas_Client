@@ -38,6 +38,9 @@ public final class GpuTimer {
     private static int[][] ends;
     private static int[] used;
     private static boolean[] pending;
+    /** The probe each measured frame belongs to; one reset starts a new one (see resetProbe). */
+    private static int[] generation;
+    private static int probeGeneration;
     private static int slot = -1;
     private static boolean inFrame;
     private static int frameMark = -1;
@@ -94,8 +97,10 @@ public final class GpuTimer {
             }
             used[slot] = 0;
             pending[slot] = false;
+            generation[slot] = probeGeneration;
             inFrame = true;
-            frameMark = mark(GpuStats.FRAME);
+            int index = mark(GpuStats.FRAME);
+            frameMark = index < 0 ? -1 : slot * MARKS + index;
         } catch (Throwable t) {
             off(t);
         }
@@ -175,8 +180,12 @@ public final class GpuTimer {
         return lastRecent.copy();
     }
 
-    /** A measurement the caller starts and reads (the .perf comparison). */
+    /**
+     * A measurement the caller starts and reads (the .perf comparison). Frames measured before the reset but
+     * read after it (sixteen frames later, over a second at low FPS) are left out of it.
+     */
     public static void resetProbe() {
+        probeGeneration++;
         PROBE.reset();
     }
 
@@ -243,6 +252,7 @@ public final class GpuTimer {
             }
             used = new int[FRAMES];
             pending = new boolean[FRAMES];
+            generation = new int[FRAMES];
             recentSince = System.currentTimeMillis();
             state = 1;
             why = "";
@@ -278,10 +288,13 @@ public final class GpuTimer {
         }
         INT.clear();
         GL15.glGetQueryObject(ids[frame][count - 1], GL15.GL_QUERY_RESULT_AVAILABLE, INT);
+        boolean probe = generation[frame] == probeGeneration;
         if (INT.get(0) == 0) {
             WINDOW.dropped();
             RECENT.dropped();
-            PROBE.dropped();
+            if (probe) {
+                PROBE.dropped();
+            }
             return;
         }
         long[] stamps = new long[count];
@@ -310,7 +323,9 @@ public final class GpuTimer {
         }
         WINDOW.frame(nanos);
         RECENT.frame(nanos);
-        PROBE.frame(nanos);
+        if (probe) {
+            PROBE.frame(nanos);
+        }
         long now = System.currentTimeMillis();
         if (now - recentSince >= RECENT_MS) {
             lastRecent = RECENT.copy();

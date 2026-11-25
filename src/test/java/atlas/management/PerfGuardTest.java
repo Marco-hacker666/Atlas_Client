@@ -3,6 +3,7 @@ package atlas.management;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class PerfGuardTest {
@@ -59,6 +60,29 @@ public class PerfGuardTest {
         for (PerfGuard.Second s : new PerfGuard.Second[]{noEffects, menu, away, capped, already}) {
             assertEquals(-1, secondsUntil(new PerfGuard(), s, PerfGuard.Decision.GO_LITE, 60));
         }
+    }
+
+    @Test
+    public void fullOrLiteSettingIsNeverChangedButTheMemoryWarningStillComes() {
+        PerfGuard guard = new PerfGuard();
+        PerfGuard.Second s = slow();
+        s.auto = false;
+        s.gcMillis = 200;
+        assertEquals(PerfGuard.GC_SECONDS, secondsUntil(guard, s, PerfGuard.Decision.WARN_MEMORY, 100));
+        assertEquals(-1, secondsUntil(guard, s, PerfGuard.Decision.GO_LITE, 60));
+        assertFalse(guard.wentLite());
+    }
+
+    @Test
+    public void slowSecondsOutsideAutoDoNotAddUp() {
+        PerfGuard guard = new PerfGuard();
+        for (int i = 0; i < PerfGuard.LOW_FPS_SECONDS - 1; i++) {
+            assertEquals(PerfGuard.Decision.NONE, guard.second(slow()));
+        }
+        PerfGuard.Second full = slow();
+        full.auto = false;
+        assertEquals(PerfGuard.Decision.NONE, guard.second(full));
+        assertEquals(PerfGuard.LOW_FPS_SECONDS, secondsUntil(guard, slow(), PerfGuard.Decision.GO_LITE, 60));
     }
 
     @Test

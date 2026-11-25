@@ -110,6 +110,7 @@ public class PerfLog {
         s.frameLimit = mc.gameSettings.limitFramerate;
         s.effectsDrawn = Effects.drawnWithin(1500L);
         s.liteAlready = Effects.lite();
+        s.auto = Effects.auto();
         s.gcMillis = gc - this.secondGc;
         s.wallMillis = elapsed;
         this.secondStart = wall;

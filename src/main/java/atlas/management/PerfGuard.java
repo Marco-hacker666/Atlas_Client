@@ -23,6 +23,8 @@ public final class PerfGuard {
         public boolean effectsDrawn;
         /** Lite effects are already on (by the setting or by an earlier decision). */
         public boolean liteAlready;
+        /** The effects setting is Auto. Full and Lite are the player's choice, so they are never changed. */
+        public boolean auto = true;
         public long gcMillis;
         public long wallMillis = 1000L;
     }
@@ -72,7 +74,7 @@ public final class PerfGuard {
     }
 
     private static boolean countsAsSlow(Second s) {
-        if (!s.inWorld || s.screenOpen || !s.windowActive || s.liteAlready || !s.effectsDrawn) {
+        if (!s.auto || !s.inWorld || s.screenOpen || !s.windowActive || s.liteAlready || !s.effectsDrawn) {
             return false;
         }
         boolean limited = s.frameLimit > 0 && s.frameLimit <= 250;

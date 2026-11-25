@@ -34,6 +34,11 @@ public final class Effects {
         return screen == null || screen instanceof net.minecraft.client.gui.GuiChat;
     }
 
+    /** The effects setting is Auto: only then may Atlas turn blur and glow off by itself. */
+    public static boolean auto() {
+        return mode == AUTO;
+    }
+
     public static void setMode(int value) {
         mode = Math.max(AUTO, Math.min(LITE, value));
     }

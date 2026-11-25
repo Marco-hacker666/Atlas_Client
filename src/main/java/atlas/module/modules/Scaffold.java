@@ -196,6 +196,11 @@ public class Scaffold extends Module {
 
     private static final int[] TURNING_MODES = {1, 2, 3, 4, 5, 6, ROTATION_MOONWALK};
     public final IntProperty turnSpeed = new IntProperty("turn-speed", 80, 10, 180, this::turnLimited);
+    public final BooleanProperty steadyYaw = new BooleanProperty("steady-yaw", false, this::steadyYawShown);
+    public final IntProperty maxPlaceTurn = new IntProperty("max-place-turn", 0, 0, 90,
+            () -> this.rotationMode.getValue() != 0);
+    private float lastSentYaw = Float.NaN;
+    private float lastSentPitch = Float.NaN;
 
     public final BooleanProperty humanize = new BooleanProperty("humanize", true, () -> false);
     private final atlas.humanize.Humanizer human = new atlas.humanize.Humanizer(atlas.humanize.Humanizer.CONSUMER_SCAFFOLD);
@@ -307,6 +312,66 @@ public class Scaffold extends Module {
             default:
                 return RotationHelper.MOVE_LOOK;
         }
+    }
+
+    /** The modes that hold the bridge yaw (or its diagonal) and look for the block with the pitch. */
+    private boolean steadyYawShown() {
+        int mode = this.rotationMode.getValue();
+        return mode == 1 || mode == 2 || mode == 3 || mode == 5 || mode == 6;
+    }
+
+    private boolean steadyYawOn() {
+        return this.steadyYaw.getValue() && this.steadyYawShown();
+    }
+
+    /**
+     * Keeps the bridge yaw and finds the pitch that lands on the planned face: the stretch of pitches that hit
+     * it nearest to the current pitch, and inside that stretch the current pitch if it still hits (else the
+     * nearest one a little inside the stretch, so the sent, grid-snapped look still hits). Null when no pitch
+     * at that yaw reaches the face.
+     *
+     * @return {yaw, pitch} or null
+     */
+    private float[] steadyAim(BlockData plan, float yaw, float currentPitch) {
+        float bestLo = Float.NaN;
+        float bestHi = Float.NaN;
+        float bestGap = Float.MAX_VALUE;
+        float runLo = Float.NaN;
+        for (int i = 0; i <= 120; i++) {
+            float p = 30.0F + i * 0.5F;
+            boolean hits = p < 90.0F && this.lookHit(plan, yaw, p) != null;
+            if (hits && Float.isNaN(runLo)) {
+                runLo = p;
+            }
+            if (!hits && !Float.isNaN(runLo)) {
+                float runHi = p - 0.5F;
+                float gap = currentPitch < runLo ? runLo - currentPitch : currentPitch > runHi ? currentPitch - runHi : 0.0F;
+                if (gap < bestGap) {
+                    bestGap = gap;
+                    bestLo = runLo;
+                    bestHi = runHi;
+                }
+                runLo = Float.NaN;
+            }
+        }
+        if (Float.isNaN(bestLo)) {
+            return null;
+        }
+        for (int i = 0; i < 9 && bestLo - 0.05F >= 30.0F && this.lookHit(plan, yaw, bestLo - 0.05F) != null; i++) {
+            bestLo -= 0.05F;
+        }
+        for (int i = 0; i < 9 && bestHi + 0.05F < 90.0F && this.lookHit(plan, yaw, bestHi + 0.05F) != null; i++) {
+            bestHi += 0.05F;
+        }
+        float margin = Math.min(0.3F, (bestHi - bestLo) / 2.0F);
+        float pitch = Math.max(bestLo + margin, Math.min(bestHi - margin, currentPitch));
+        if (this.lookHit(plan, yaw, pitch) == null) {
+            pitch = (bestLo + bestHi) / 2.0F;
+            if (this.lookHit(plan, yaw, pitch) == null) {
+                return null;
+            }
+        }
+        return new float[]{yaw, pitch};
     }
 
     private boolean turnLimited() {
@@ -1251,6 +1316,18 @@ public class Scaffold extends Module {
                     } else if (threeFmcMode) {
                         this.canRotate = false;
                     }
+                    if (this.steadyYawOn() && !snapMode && !threeFmcMode) {
+                        float holdYaw = RotationUtil.quantizeAngle(this.rotationMode.getValue() == 2 ? yawDiffTo180 : diagonalYaw);
+                        float[] steady = this.steadyAim(blockData, holdYaw, event.getPitch());
+                        if (steady != null) {
+                            MovingObjectPosition steadyHit = this.lookHit(blockData, steady[0], steady[1]);
+                            this.yaw = steady[0];
+                            this.pitch = steady[1];
+                            this.canRotate = true;
+                            hitVec = steadyHit.hitVec;
+                            aimDiff = Math.abs(MathHelper.wrapAngleTo180_float(steady[0] - refYaw)) + Math.abs(steady[1] - refPitch);
+                        }
+                    }
                 }
                 boolean towerRotating = this.towering || this.isTowering();
                 boolean snapAlreadyLooking = false;
@@ -1312,6 +1389,9 @@ public class Scaffold extends Module {
                     float targetPitch = this.pitch;
                     if (this.rotationRandom.getValue() > 0.0F && blockData != null && !towerRotating) {
                         float[] wandered = this.wander(targetYaw, targetPitch);
+                        if (this.steadyYawOn()) {
+                            wandered[0] = targetYaw;
+                        }
                         if (this.lookHit(blockData, wandered[0], wandered[1]) != null) {
                             targetYaw = wandered[0];
                             targetPitch = wandered[1];
@@ -1434,7 +1514,16 @@ public class Scaffold extends Module {
 
     @EventTarget(Priority.LOWEST)
     public void onUpdateClick(UpdateEvent event) {
-        if (!this.isEnabled() || event.getType() != EventType.PRE || !this.planReady) {
+        if (!this.isEnabled() || event.getType() != EventType.PRE) {
+            return;
+        }
+        float[] sentNow = RotationHelper.packetLook(event);
+        float turned = Float.isNaN(this.lastSentYaw) ? 0.0F
+                : Math.max(Math.abs(MathHelper.wrapAngleTo180_float(sentNow[0] - this.lastSentYaw)),
+                Math.abs(sentNow[1] - this.lastSentPitch));
+        this.lastSentYaw = sentNow[0];
+        this.lastSentPitch = sentNow[1];
+        if (!this.planReady) {
             return;
         }
         this.planReady = false;
@@ -1455,6 +1544,10 @@ public class Scaffold extends Module {
         if (blockData != null && hitVec != null && this.paceOn() && mc.thePlayer.onGround
                 && this.paceHolds(along != null ? along.getBlockPos() : blockData.blockPos(),
                 along != null ? along.sideHit : blockData.facing(), sentYaw)) {
+            hitVec = null;
+        }
+        // the look turned too far this tick: wait for the next one (a turn and a place in one tick stand out)
+        if (hitVec != null && this.maxPlaceTurn.getValue() > 0 && turned > this.maxPlaceTurn.getValue()) {
             hitVec = null;
         }
         if (blockData != null && hitVec != null && snapCanPlace && this.rotationTick <= 0) {
@@ -2558,6 +2651,8 @@ public class Scaffold extends Module {
         this.planReady = false;
         this.planData = null;
         this.planHitVec = null;
+        this.lastSentYaw = Float.NaN;
+        this.lastSentPitch = Float.NaN;
         this.syncClutch();
     }
 
@@ -2593,6 +2688,8 @@ public class Scaffold extends Module {
         this.planReady = false;
         this.planData = null;
         this.planHitVec = null;
+        this.lastSentYaw = Float.NaN;
+        this.lastSentPitch = Float.NaN;
     }
 
     public int getBlockCount() {

@@ -91,6 +91,9 @@ public class KillAuraLB extends Module {
     public final IntProperty nearMissRate = new IntProperty("NearMiss-Rate", 7, 4, 15, this.nearMisses::getValue);
 
     public final FloatProperty rangeIncrease = new FloatProperty("RangeIncrease", 0.0F, 0.0F, 5.0F);
+    /** Up to how much shorter than the range the first hit may wait for; a new edge after each crossing. */
+    public final FloatProperty rangeDrift = new FloatProperty("RangeDrift", 0.0F, 0.0F, 0.5F);
+    private final atlas.lb.combat.ReachDrift reachDrift = new atlas.lb.combat.ReachDrift(new java.util.Random());
 
     public final BooleanProperty lagAware = new BooleanProperty("LagAware", true);
     public final FloatProperty lagMargin = new FloatProperty("LagAware-Margin", 0.05F, 0.0F, 0.3F, this.lagAware::getValue);
@@ -875,7 +878,7 @@ public class KillAuraLB extends Module {
     }
 
     private float interactionRange() {
-        return AuraRules.interactionRange(this.rangeIncrease.getValue());
+        return AuraRules.interactionRange(this.rangeIncrease.getValue()) - this.reachDrift.cut();
     }
 
     private float wallsRange() {
@@ -893,6 +896,9 @@ public class KillAuraLB extends Module {
         }
         this.rhythmTick++;
         applySettings();
+        EntityLivingBase driftTarget = this.targetTracker.target();
+        this.reachDrift.update(AuraRules.interactionRange(this.rangeIncrease.getValue()), this.rangeDrift.getValue(),
+                driftTarget, driftTarget == null ? 0.0 : RotationUtil.distanceToBox(driftTarget, mc.thePlayer.getPositionEyes(1.0F)));
         sampleServerPositions();
         if (this.placeYieldTicks > 0) {
             this.placeYieldTicks--;

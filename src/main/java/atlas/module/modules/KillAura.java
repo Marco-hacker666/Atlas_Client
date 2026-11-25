@@ -81,7 +81,10 @@ public class KillAura extends Module {
     public final IntProperty yuriHurtTicks = new IntProperty("yuri-hurt-ticks", 4, 0, 10,
             () -> this.autoBlock.getValue() >= YURI_FIRST && this.yuriOnlyWhenHurt.getValue());
 
-    public final BooleanProperty simulateClicks = new BooleanProperty("simulate-clicks", false);
+    public final BooleanProperty simulateClicks = new BooleanProperty("simulate-clicks", true);
+    /** Up to how much shorter than AttackRange the first hit may wait for; a new edge after each crossing. */
+    public final FloatProperty attackRangeDrift = new FloatProperty("AttackRangeDrift", 0.0F, 0.0F, 0.5F, this::atlasEngine);
+    private final atlas.lb.combat.ReachDrift reachDrift = new atlas.lb.combat.ReachDrift(new java.util.Random());
 
     private final atlas.humanize.Humanizer atlasHumanizer = new atlas.humanize.Humanizer(atlas.humanize.Humanizer.CONSUMER_ATLAS_AURA);
     private final KillAuraYuri yuri = new KillAuraYuri();
@@ -315,7 +318,7 @@ public class KillAura extends Module {
         this.aimMaxSpeed = new IntProperty("MaxTurnSpeed", 60, 1, 180);
         this.multipoint = new BooleanProperty("Multipoint", true, () -> this.aimMode.getValue() == 1);
         this.turnAccel = new IntProperty("TurnAccel", 30, 1, 180);
-        this.throughWalls = new BooleanProperty("ThroughWalls", true);
+        this.throughWalls = new BooleanProperty("ThroughWalls", false);
         this.requirePress = new BooleanProperty("RequirePress", false);
         this.allowMining = new BooleanProperty("AllowMining", true);
         this.weaponsOnly = new BooleanProperty("WeaponsOnly", true);
@@ -359,6 +362,9 @@ public class KillAura extends Module {
         this.minCPS.when(() -> cpsMode.getValue() == 0 || cpsMode.getValue() == 2);
         this.maxCPS.when(() -> cpsMode.getValue() == 0 || cpsMode.getValue() == 2);
         this.moveFix.when(() -> rotations.getValue() != 0);
+        // block settings only matter with an auto-block mode picked
+        this.autoBlockRequirePress.alsoWhen(() -> autoBlock.getValue() != 0);
+        this.autoBlockRange.alsoWhen(() -> autoBlock.getValue() != 0);
 
         for (java.lang.reflect.Field field : KillAura.class.getDeclaredFields()) {
             if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
@@ -390,7 +396,7 @@ public class KillAura extends Module {
 
     public float attackReach() {
         KillAuraLB lb = liquidBounce();
-        return lb != null ? lb.reach() : this.attackRange.getValue();
+        return lb != null ? lb.reach() : this.atlasReach();
     }
 
     private boolean isGenericAim() {
@@ -547,7 +553,7 @@ public class KillAura extends Module {
         if (this.raycast.getValue() == 0 || this.target == null) {
             return;
         }
-        double range = this.attackRange.getValue();
+        double range = this.atlasReach();
         Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
         Vec3 look = ((IAccessorEntity) mc.thePlayer).callGetVectorForRotation(pitch, yaw);
         Vec3 end = eyes.addVector(look.xCoord * range, look.yCoord * range, look.zCoord * range);
@@ -590,7 +596,7 @@ public class KillAura extends Module {
         if (entity.hurtTime > 7) {
             return false;
         }
-        double range = this.attackRange.getValue();
+        double range = this.atlasReach();
         double border = entity.getCollisionBorderSize();
         AxisAlignedBB box = entity.getEntityBoundingBox().expand(border, border, border);
         Vec3 eyes = mc.thePlayer.getPositionEyes(1.0F);
@@ -795,7 +801,7 @@ public class KillAura extends Module {
         if (real.isVecInside(mc.thePlayer.getPositionEyes(1.0F))) {
             return true;
         }
-        return RotationUtil.rayTrace(real, yaw, pitch, this.attackRange.getValue()) != null;
+        return RotationUtil.rayTrace(real, yaw, pitch, this.atlasReach()) != null;
     }
 
     private void sendUseItem() {
@@ -822,7 +828,7 @@ public class KillAura extends Module {
         EntityLivingBase entity = this.target.getEntity();
         double border = entity.getCollisionBorderSize();
         AxisAlignedBB real = entity.getEntityBoundingBox().expand(border, border, border);
-        MovingObjectPosition mop = RotationUtil.rayTrace(real, yaw, pitch, this.attackRange.getValue());
+        MovingObjectPosition mop = RotationUtil.rayTrace(real, yaw, pitch, this.atlasReach());
         if (mop == null) {
             this.sendUseItem();
             return;
@@ -879,7 +885,7 @@ public class KillAura extends Module {
         }
         net.minecraft.entity.Entity entity = this.target.getEntity();
         float border = entity.getCollisionBorderSize();
-        double reach = Math.max(3.0, this.attackRange.getValue());
+        double reach = Math.max(3.0, this.atlasReach());
         MovingObjectPosition onBox = RotationUtil.rayTrace(
                 entity.getEntityBoundingBox().expand(border, border, border), yaw, pitch, reach);
         if (onBox == null || onBox.hitVec == null) {
@@ -915,7 +921,7 @@ public class KillAura extends Module {
             return;
         }
         String why = null;
-        double range = this.attackRange.getValue();
+        double range = this.atlasReach();
         if (this.target == null) {
             net.minecraft.entity.EntityLivingBase near = null;
             double best = range;
@@ -1050,12 +1056,17 @@ public class KillAura extends Module {
         return RotationUtil.distanceToBox(axisAlignedBB) <= this.scanRange();
     }
 
+    /** AttackRange, shortened by the drift's current cut (see ReachDrift). */
+    private float atlasReach() {
+        return this.attackRange.getValue() - this.reachDrift.cut();
+    }
+
     private boolean isInAttackRange(EntityLivingBase entityLivingBase) {
-        return RotationUtil.distanceToEntity(entityLivingBase) <= (double) this.attackRange.getValue();
+        return RotationUtil.distanceToEntity(entityLivingBase) <= (double) this.atlasReach();
     }
 
     private boolean isBoxInAttackRange(AxisAlignedBB axisAlignedBB) {
-        return RotationUtil.distanceToBox(axisAlignedBB) <= (double) this.attackRange.getValue();
+        return RotationUtil.distanceToBox(axisAlignedBB) <= (double) this.atlasReach();
     }
 
     public double leadTicks() {
@@ -1933,8 +1944,8 @@ public class KillAura extends Module {
     }
 
     private Vec3 searchCenterPoint(AxisAlignedBB bb, Vec3 eyes) {
-        double scanRange = Math.max(this.attackRange.getValue(), this.swingRange.getValue());
-        double attackRange = this.attackRange.getValue();
+        double scanRange = Math.max(this.atlasReach(), this.swingRange.getValue());
+        double attackRange = this.atlasReach();
         double throughWallsRange = this.throughWalls.getValue() ? attackRange : 0;
 
         double minBody = this.liquidBounceBodyPointMin.getValue();
@@ -2078,6 +2089,9 @@ public class KillAura extends Module {
         if (this.atlasOn() || this.wantsToDisable && this.atlasEngine()) {
             switch (event.getType()) {
                 case PRE:
+                    this.reachDrift.update(this.attackRange.getValue(), this.attackRangeDrift.getValue(),
+                            this.target == null ? null : this.target.getEntity(),
+                            this.target == null ? 0.0 : RotationUtil.distanceToBox(this.target.getBox()));
                     if (this.target == null && !this.isSmoothBacking && !this.wantsToDisable) {
                         this.serverRotation = new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
                         this.currentAimVec = null;
@@ -2473,13 +2487,13 @@ public class KillAura extends Module {
                 }
             }
         }
-        boolean onTarget = RotationUtil.rayTrace(box, yaw, pitch, this.attackRange.getValue() + 0.15) != null;
+        boolean onTarget = RotationUtil.rayTrace(box, yaw, pitch, this.atlasReach() + 0.15) != null;
         float[] step = this.advancedAim.step(yaw, pitch, want[0], want[1], entity.getEntityId(), onTarget, s);
         return RotationUtil.gcd(step, new float[]{yaw, pitch});
     }
 
     private Vec3 advancedPick(AxisAlignedBB box, Vec3 aim, Vec3 eyes, float nearYaw) {
-        double range = this.attackRange.getValue();
+        double range = this.atlasReach();
         Vec3 nearest = atlas.util.AdvancedAim.nearestInside(box, eyes);
         float[] toNearest = RotationEngine.rotationsTo(eyes, nearest, nearYaw);
         if (RotationUtil.rayTrace(box, toNearest[0], toNearest[1], range) != null) {
@@ -2520,12 +2534,12 @@ public class KillAura extends Module {
         }
         float offset = MathHelper.clamp_float(MathHelper.wrapAngleTo180_float(planYaw - centre), low * 0.85F, high * 0.85F);
         float yaw = centre + offset;
-        return RotationUtil.rayTrace(box, yaw, pitch, this.attackRange.getValue()) != null ? yaw : Float.NaN;
+        return RotationUtil.rayTrace(box, yaw, pitch, this.atlasReach()) != null ? yaw : Float.NaN;
     }
 
     private boolean advancedAttack(float yaw, float pitch) {
         atlas.util.AdvancedAim.Settings s = this.advancedSettings();
-        boolean onTarget = RotationUtil.rayTrace(this.target.getBox(), yaw, pitch, this.attackRange.getValue()) != null
+        boolean onTarget = RotationUtil.rayTrace(this.target.getBox(), yaw, pitch, this.atlasReach()) != null
                 || this.kbDisplacing && this.isBoxInAttackRange(this.target.getBox());
         if (this.advancedAim.triggerReady(this.target.getEntity().getEntityId(), onTarget,
                 System.currentTimeMillis(), s)) {

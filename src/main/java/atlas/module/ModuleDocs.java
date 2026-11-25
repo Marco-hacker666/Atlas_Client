@@ -902,7 +902,7 @@ public final class ModuleDocs {
                         "Mode", "MoveFix"),
                 h("目標", "Sort", "SwitchDelay", "FOV", "Players", "Bosses", "Mobs", "Animals", "Golems",
                         "Silverfish", "Teams", "BotCheck", "ThroughWalls"),
-                h("出手", "ScanExtra", "Raycast", "ExitClick", "RequirePress",
+                h("出手", "AttackRangeDrift", "ScanExtra", "Raycast", "ExitClick", "RequirePress",
                         "AllowMining", "WeaponsOnly", "AllowTools", "InventoryCheck", "AttackOnDamage",
                         "NoAirSprintHit", "simulate-clicks"),
                 h("格擋", "AttackTick", "LegitThreat", "LegitTolerance", "LegitSameTick", "AutoBlockRequirePress", "AutoBlockCPS", "AutoBlockRange",
@@ -928,7 +928,7 @@ public final class ModuleDocs {
         g("Scaffold",
                 h("常用", "rotations", "placement", "sprint", "tower", "keep-y", "safe-walk", "move-fix", "turn-speed"),
                 h("放置位置（LINE）", "line-predict", "expand", "down", "stabilize"),
-                h("轉頭", "humanize", "rotation-random", "telly-*", "gb2-*", "moonwalk-*", "snap-*",
+                h("轉頭", "steady-yaw", "max-place-turn", "humanize", "rotation-random", "telly-*", "gb2-*", "moonwalk-*", "snap-*",
                         "jump-every-blocks", "godbridge-trace"),
                 h("移動", "ground-motion", "air-motion", "speed-motion", "eagle",
                         "edge-distance", "sneak-delay", "blocks-per-sneak"),
@@ -1047,7 +1047,7 @@ public final class ModuleDocs {
                 h("固定格子", "*-slot"));
         g("KillAuraLB",
                 h("一般", "Technique", "MinCPS", "MaxCPS", "MaxPerTick", "MissCooldown", "NearMiss*"),
-                h("距離", "RangeIncrease", "LagAware*", "ThroughWallsRange", "ScanRangeIncrease*"),
+                h("距離", "RangeIncrease", "RangeDrift", "LagAware*", "ThroughWallsRange", "ScanRangeIncrease*"),
                 h("目標", "TargetFOV", "HurtTime", "Priority", "Players", "Mobs", "Animals", "Golems", "Silverfish",
                         "Bosses", "Teams", "BotCheck"),
                 h("轉頭", "AngleSmooth", "MovementCorrection", "ResetThreshold", "TicksUntilReset", "RotationTiming",
@@ -1296,6 +1296,7 @@ public final class ModuleDocs {
         help(ka, "MinCPS", "每秒攻擊次數下限（實際在上下限間隨機，最高受 tick 限制為 20）。");
         help(ka, "MaxCPS", "每秒攻擊次數上限。");
         help(ka, "AttackRange", "真正出手的距離（格）。原版是 3.0。");
+        help(ka, "AttackRangeDrift", "出手距離隨機縮短 0 到這個值，目標每次進出就重抽，開打距離不會每次都一樣。只會變短。0 = 關。");
         help(ka, "SwingRange", "開始轉頭與揮手的距離，略大於攻擊距離。");
         help(ka, "RotationTiming", "Normal：一直瞄準。Snap：只在「轉到位時剛好要點」才轉頭。");
         help(ka, "LazyRotation", "視角已經打得到目標就不再轉。");
@@ -1333,6 +1334,7 @@ public final class ModuleDocs {
         help("TellyRecorder", "aura-target", "開 record-with-aura 時：錄 aura 正在打的那個人，不是離你準心最近的人。");
         help("TellyRecorder", "aim-fov", "只錄準心在目標附近幾度內的 tick，看別的地方不算。");
         help("TellyRecorder", "only-when-clicking", "最近 1 秒內有揮手或按著攻擊鍵才錄：真的在打，不是只站在人旁邊。");
+        help("KillAuraLB", "RangeDrift", "第一下要等到比攻擊距離短多少以內才打（隨機，0 到這個值）。目標每次進出這個距離就重抽一次，所以開打的距離不會每次都一樣。只會變短，不會變長。0 = 關。");
         help("KillAuraLB", "RangeIncrease", "攻擊距離 = 3.0 + 這個值。LB 預設 1.0 也就是 4 格，會檢查距離的伺服器請調低。");
         help("KillAuraLB", "MovementCorrection", "Off：照鏡頭走。Strict：照伺服器朝向走。Silent：連按鍵方向一起轉。ChangeLook：鏡頭跟著瞄準轉。");
         help("KillAuraLB", "AutoBlocking", "LB 的自動格擋：兩下之間舉劍，打之前放下。");
@@ -1385,6 +1387,8 @@ public final class ModuleDocs {
         help(cl, "rotation-random", "隨機程度（點擊位置的分散範圍）。");
         help(cl, "speed", "每 tick 最少轉幾度。");
         help(cl, "max-speed", "每 tick 最多轉幾度。");
+        help("Scaffold", "steady-yaw", "yaw 固定在搭橋方向，只用 pitch 找方塊的側面（像真人倒退搭橋只上下微調）。找不到時照原本的方式瞄。只在 DEFAULT、BACKWARDS、SMOOTH、Hypixel 模式。");
+        help("Scaffold", "max-place-turn", "這一 tick 送出的視角轉超過幾度就先不放，等下一 tick（同一 tick 又轉又放很明顯）。0 = 關。");
         help("Scaffold", "turn-speed", "每 tick 最多轉幾度（DEFAULT～Hypixel 模式）。不再一次甩到位，轉不到就等下一 tick，不會亂點。180 = 不限制。");
         help("Scaffold", "humanize", "轉頭加上 Rotations 引擎的速度隨機與弧線，比較像人手。");
         help("Scaffold", "telly-auto-jump", "SPEED-TELLY 和 WEIRD-TELLY 模式：按住 W 在地上時自動跳，放開就停。");

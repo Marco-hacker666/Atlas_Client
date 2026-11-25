@@ -20,6 +20,7 @@ public class KawaseBlur {
     private static ShaderUtils kawaseDown;
     private static ShaderUtils kawaseUp;
     private static int currentIterations;
+    private static int lastIterations;
 
     private static void initShaders() {
         if (kawaseDown == null) {
@@ -75,13 +76,22 @@ public class KawaseBlur {
 
         if (kawaseDown == null || kawaseUp == null) {
             System.err.println("KawaseBlur shaders not initialized, skipping blur render");
+            /* The mask framebuffer was just unbound: draw on into the game's framebuffer, not the window's. */
+            mc.getFramebuffer().bindFramebuffer(true);
             return;
         }
 
-        if (currentIterations != iterations || framebuffer.framebufferWidth != mc.displayWidth || framebuffer.framebufferHeight != mc.displayHeight) {
-            initFrameBuffers(iterations);
-            currentIterations = iterations;
+        /* Level i is always displayWidth / 3^i, so one chain serves every pass count; it is only rebuilt for a
+           new size or more levels (it used to be rebuilt whenever two callers asked for different counts). */
+        if (currentIterations < iterations || framebuffer.framebufferWidth != mc.displayWidth || framebuffer.framebufferHeight != mc.displayHeight) {
+            initFrameBuffers(Math.max(iterations, currentIterations));
+            currentIterations = Math.max(iterations, currentIterations);
+        } else if (iterations != lastIterations) {
+            /* Where the chain used to be rebuilt: creating framebuffers turns the depth test on, so keep leaving
+               that, and whatever is drawn next sees the state it saw before. */
+            GlStateManager.enableDepth();
         }
+        lastIterations = iterations;
 
         renderFBO(framebufferList.get(1), mc.getFramebuffer().framebufferTexture, kawaseDown, offset);
 

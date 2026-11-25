@@ -20,6 +20,7 @@ public class KawaseBloom {
     private static ShaderUtils kawaseDown;
     private static ShaderUtils kawaseUp;
     private static int currentIterations;
+    private static int lastIterations;
 
     private static void initShaders() {
         if (kawaseDown == null) {
@@ -80,13 +81,22 @@ public class KawaseBloom {
 
         if (kawaseDown == null || kawaseUp == null) {
             System.err.println("KawaseBloom shaders not initialized, skipping bloom render");
+            /* The mask framebuffer was just unbound: draw on into the game's framebuffer, not the window's. */
+            mc.getFramebuffer().bindFramebuffer(true);
             return;
         }
 
-        if (currentIterations != iterations || (framebuffer.framebufferWidth != mc.displayWidth || framebuffer.framebufferHeight != mc.displayHeight)) {
-            initFramebuffers(iterations);
-            currentIterations = iterations;
+        /* Level i is always displayWidth / 2^i, so one chain serves every pass count (the target HUD's health
+           bar asks for 4 and everything else for 3: the chain used to be rebuilt on every such switch). */
+        if (currentIterations < iterations || (framebuffer.framebufferWidth != mc.displayWidth || framebuffer.framebufferHeight != mc.displayHeight)) {
+            initFramebuffers(Math.max(iterations, currentIterations));
+            currentIterations = Math.max(iterations, currentIterations);
+        } else if (iterations != lastIterations) {
+            /* Where the chain used to be rebuilt: creating framebuffers turns the depth test on, so keep leaving
+               that, and whatever is drawn next sees the state it saw before. */
+            GlStateManager.enableDepth();
         }
+        lastIterations = iterations;
 
         RenderUtil.setAlphaLimit(0);
         GlStateManager.enableBlend();

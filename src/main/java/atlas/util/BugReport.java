@@ -273,6 +273,7 @@ public final class BugReport {
         line(sb, "Java", System.getProperty("java.version") + " (" + System.getProperty("java.vendor") + ")");
         line(sb, "OS", System.getProperty("os.name") + " " + System.getProperty("os.version") + " " + System.getProperty("os.arch"));
         line(sb, "Memory", memory());
+        line(sb, "Effects", atlas.util.render.Effects.describe());
         line(sb, "GPU", safe(() -> GL11.glGetString(GL11.GL_RENDERER)) + " | GL " + safe(() -> GL11.glGetString(GL11.GL_VERSION)));
         line(sb, "Mobile-safe", safe(atlas.util.render.MobileSafe::describe));
         line(sb, "Device", safe(atlas.util.render.DeviceProfile::describe));
@@ -312,7 +313,7 @@ public final class BugReport {
         tail(sb, "Fights (last 60)", newest("fights-"), 60);
         tail(sb, "Hits (last 60)", newest("hits-"), 60);
         tail(sb, "Notes (last 120)", newest("notes-"), 120);
-        tail(sb, "Performance (last 40)", newest("perf-"), 40);
+        tail(sb, "Performance (last 80)", newest("perf-"), 80);
         gameLog(sb, 250);
         sb.append("```\n");
     }

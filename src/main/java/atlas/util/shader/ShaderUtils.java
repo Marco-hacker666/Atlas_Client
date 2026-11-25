@@ -14,6 +14,7 @@ import static org.lwjgl.opengl.GL20.*;
 
 public class ShaderUtils {
     public final int programID;
+    private final java.util.Map<String, Integer> locations = new java.util.HashMap<String, Integer>();
     private final String kawaseUpGlow = "#version 120\n" +
             "\n" +
             "uniform sampler2D inTexture, textureToCheck;\n" +
@@ -484,8 +485,19 @@ public class ShaderUtils {
         glUseProgram(0);
     }
 
-    public void setUniformf(String name, float... args) {
+    /** Uniform locations never change after linking; looking them up on every draw cost a driver call each. */
+    private int location(String name) {
+        Integer cached = this.locations.get(name);
+        if (cached != null) {
+            return cached;
+        }
         int loc = glGetUniformLocation(programID, name);
+        this.locations.put(name, loc);
+        return loc;
+    }
+
+    public void setUniformf(String name, float... args) {
+        int loc = location(name);
         if (loc == -1) {
             return;
         }
@@ -506,7 +518,7 @@ public class ShaderUtils {
     }
 
     public void setUniformi(String name, int... args) {
-        int loc = glGetUniformLocation(programID, name);
+        int loc = location(name);
         if (loc == -1) {
             return;
         }

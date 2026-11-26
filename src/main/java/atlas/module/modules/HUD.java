@@ -562,6 +562,33 @@ public class HUD extends Module {
         return null;
     }
 
+    /**
+     * Runs a blur or glow end call outside the list's scale and puts the scale back. The passes draw their
+     * result through a full-screen quad, so inside a scale other than 1 it landed scaled again, away from the
+     * list (with the list on the right and a scale under 1, off it entirely).
+     */
+    private void endOutsideScale(Runnable end) {
+        GlStateManager.popMatrix();
+        try {
+            end.run();
+        } finally {
+            GlStateManager.pushMatrix();
+            GlStateManager.scale(this.scale.getValue(), this.scale.getValue(), 0.0F);
+        }
+    }
+
+    /** The rectangle around both, for BlurUtils.region. */
+    private static float[] grow(float[] area, float x1, float y1, float x2, float y2) {
+        if (area == null) {
+            return new float[]{Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2)};
+        }
+        area[0] = Math.min(area[0], Math.min(x1, x2));
+        area[1] = Math.min(area[1], Math.min(y1, y2));
+        area[2] = Math.max(area[2], Math.max(x1, x2));
+        area[3] = Math.max(area[3], Math.max(y1, y2));
+        return area;
+    }
+
     private void renderCustomList() {
         ListStyle style = this.readListStyle(this.listLook);
         long now = System.nanoTime();
@@ -588,6 +615,10 @@ public class HUD extends Module {
             if (!atlas.util.render.MobileSafe.active()) {
                 if (style.glow) {
                     atlas.util.shader.BlurUtils.prepareBloom();
+                    float[] glowArea = frame.glowBounds();
+                    if (glowArea != null) {
+                        atlas.util.shader.BlurUtils.region("HUD list", glowArea[0], glowArea[1], glowArea[2], glowArea[3]);
+                    }
 
                     frame.paintGlow(painter, 1.0F);
                     painter.finish();
@@ -599,6 +630,10 @@ public class HUD extends Module {
                 }
                 if (style.blur && frame.hasBacking()) {
                     atlas.util.shader.BlurUtils.prepareBlur();
+                    float[] backingArea = frame.backingBounds();
+                    if (backingArea != null) {
+                        atlas.util.shader.BlurUtils.region("HUD list", backingArea[0], backingArea[1], backingArea[2], backingArea[3]);
+                    }
                     frame.paintBacking(painter, 0xFFFFFFFF);
                     painter.finish();
                     GlStateManager.popMatrix();
@@ -873,6 +908,7 @@ public class HUD extends Module {
                     atlas.util.shader.BlurUtils.prepareBloom();
                     long offset = 0L;
                     float currentY = y;
+                    float[] glowArea = null;
                     for (Module module : this.activeModules) {
                         float totalWidth = this.getModuleRenderWidth(module);
                         float pad = this.padding.getValue();
@@ -881,6 +917,7 @@ public class HUD extends Module {
                         float bgX2 = x / this.scale.getValue() + 1.0F + pad + (this.posX.getValue() == 0 ? totalWidth : 0.0F);
                         float bgY2 = currentY / this.scale.getValue() + height + pad + (this.posY.getValue() == 0 ? (this.shadow.getValue() ? 1.0F : 0.0F) : (offset == 0L ? 1.0F : 0.0F));
 
+                        glowArea = grow(glowArea, bgX1, bgY1, bgX2, bgY2);
                         int glowRgb = this.glowColorMode.getValue() == 0 ? this.getColor(l, offset).getRGB()
                                 : this.glowCustomColor.getValue();
 
@@ -902,12 +939,17 @@ public class HUD extends Module {
                         currentY += (height + (this.shadow.getValue() ? 1.0F : 0.0F) + this.padding.getValue() * 2.0F) * this.scale.getValue() * (this.posY.getValue() == 0 ? 1.0F : -1.0F);
                         offset++;
                     }
-                    atlas.util.shader.BlurUtils.bloomEnd(3, this.glowRadius.getValue(), this.glowAlpha.getValue() / 255.0F);
+                    if (glowArea != null) {
+                        atlas.util.shader.BlurUtils.region("HUD list", glowArea[0], glowArea[1], glowArea[2], glowArea[3]);
+                    }
+                    this.endOutsideScale(() -> atlas.util.shader.BlurUtils.bloomEnd(3, this.glowRadius.getValue(),
+                            this.glowAlpha.getValue() / 255.0F));
                 }
                 if (this.blur.getValue()) {
                     atlas.util.shader.BlurUtils.prepareBlur();
                     long offset = 0L;
                     float currentY = y;
+                    float[] blurArea = null;
                     for (Module module : this.activeModules) {
                         float totalWidth = this.getModuleRenderWidth(module);
                         float pad = this.padding.getValue();
@@ -915,6 +957,7 @@ public class HUD extends Module {
                         float bgY1 = currentY / this.scale.getValue() - pad - (this.posY.getValue() == 0 ? (offset == 0L ? 1.0F : 0.0F) : (this.shadow.getValue() ? 1.0F : 0.0F));
                         float bgX2 = x / this.scale.getValue() + 1.0F + pad + (this.posX.getValue() == 0 ? totalWidth : 0.0F);
                         float bgY2 = currentY / this.scale.getValue() + height + pad + (this.posY.getValue() == 0 ? (this.shadow.getValue() ? 1.0F : 0.0F) : (offset == 0L ? 1.0F : 0.0F));
+                        blurArea = grow(blurArea, bgX1, bgY1, bgX2, bgY2);
                         int blurColor = 0xFFFFFFFF;
                         if (this.rounded.getValue()) {
                             float bgW = bgX2 - bgX1;
@@ -933,7 +976,10 @@ public class HUD extends Module {
                         currentY += (height + (this.shadow.getValue() ? 1.0F : 0.0F) + this.padding.getValue() * 2.0F) * this.scale.getValue() * (this.posY.getValue() == 0 ? 1.0F : -1.0F);
                         offset++;
                     }
-                    atlas.util.shader.BlurUtils.blurEnd(2, this.blurRadius.getValue());
+                    if (blurArea != null) {
+                        atlas.util.shader.BlurUtils.region("HUD list", blurArea[0], blurArea[1], blurArea[2], blurArea[3]);
+                    }
+                    this.endOutsideScale(() -> atlas.util.shader.BlurUtils.blurEnd(2, this.blurRadius.getValue()));
                 }
             }
 

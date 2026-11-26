@@ -328,6 +328,7 @@ final class Liquid {
             return;
         }
         Framebuffer main = mc.getFramebuffer();
+        int gpu = atlas.util.render.GpuTimer.begin("ClickGUI backdrop");
         try {
             ensureTargets(mc.displayWidth, mc.displayHeight);
             main.bindFramebuffer(false);
@@ -358,6 +359,7 @@ final class Liquid {
             GlStateManager.enableBlend();
             GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             GlStateManager.bindTexture(0);
+            atlas.util.render.GpuTimer.end(gpu, null);
         }
     }
 

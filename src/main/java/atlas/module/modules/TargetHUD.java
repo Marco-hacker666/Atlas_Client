@@ -600,9 +600,11 @@ public class TargetHUD extends Module {
                     HudPanel.panel(n6, n7, n8, n9 + 13, true, alpha / 255.0F);
                 } else if (RenderFixes.shouldUseShaders()) {
                     BlurUtils.prepareBloom();
+                    BlurUtils.region("Target HUD", n6, n7, n8, n9 + 13);
                     RoundedUtils.drawRound(n6, n7, n8 - n6, n9 + 13 - n7, 8.0F, true, new Color(0, 0, 0, maxAlphaBackground));
                     BlurUtils.bloomEnd(3, bloomRadius);
                     BlurUtils.prepareBlur();
+                    BlurUtils.region("Target HUD", n6, n7, n8, n9 + 13);
                     RoundedUtils.drawRound(n6, n7, n8 - n6, n9 + 13 - n7, 8.0F, true, new Color(RenderUtil.mergeAlpha(Color.black.getRGB(), maxAlphaOutline)));
                     BlurUtils.blurEnd(2, blurRadius);
                 } else {
@@ -936,6 +938,23 @@ public class TargetHUD extends Module {
         GL11.glPopMatrix();
     }
 
+    /**
+     * Runs a blur or glow end call outside this style's scale (about the panel's centre) and puts it back. The
+     * passes draw their result through a full-screen quad, so inside a scale other than 1 the blur landed
+     * scaled again and no longer matched the panel.
+     */
+    private static void endOutsideScale(Runnable end, double centerX, double centerY, float scale) {
+        GL11.glPopMatrix();
+        try {
+            end.run();
+        } finally {
+            GL11.glPushMatrix();
+            GL11.glTranslated(centerX, centerY, 0);
+            GL11.glScalef(scale, scale, 1.0F);
+            GL11.glTranslated(-centerX, -centerY, 0);
+        }
+    }
+
     private void drawBlueDevStyle(EntityLivingBase entity) {
         float alpha = Math.min(1.0F, this.animatedScale);
 
@@ -964,10 +983,12 @@ public class TargetHUD extends Module {
             HudPanel.panel(x, y, x + width, y + height, true, alpha);
         } else if (RenderFixes.shouldUseShaders()) {
             BlurUtils.prepareBloom();
+            BlurUtils.region("Target HUD", x, y, x + width, y + height);
             RoundedUtils.drawRound(x, y, width, height, 10.0F, true, new Color(0, 0, 0, maxAlphaBackground));
-            BlurUtils.bloomEnd(3, 2.0F);
+            endOutsideScale(() -> BlurUtils.bloomEnd(3, 2.0F), x + width / 2.0, y + height / 2.0, sc);
 
             BlurUtils.prepareBlur();
+            BlurUtils.region("Target HUD", x, y, x + width, y + height);
             RoundedUtils.drawRound(
                     x,
                     y,
@@ -977,7 +998,7 @@ public class TargetHUD extends Module {
                     true,
                     new Color(RenderUtil.mergeAlpha(Color.black.getRGB(), maxAlphaOutline))
             );
-            BlurUtils.blurEnd(2, 3.0F);
+            endOutsideScale(() -> BlurUtils.blurEnd(2, 3.0F), x + width / 2.0, y + height / 2.0, sc);
         }
 
         int bgColor = new Color(
@@ -1033,8 +1054,9 @@ public class TargetHUD extends Module {
 
         if (RenderFixes.shouldUseShaders()) {
             BlurUtils.prepareBloom();
+            BlurUtils.region("Target HUD bar", barX, healthBarY, barX + barWidth * healthPercent, healthBarY + 6);
             RoundedUtils.drawRound(barX, healthBarY, barWidth * healthPercent, 6, 3, true, new Color(0, 220, 255, 180));
-            BlurUtils.bloomEnd(4, 3.0F);
+            endOutsideScale(() -> BlurUtils.bloomEnd(4, 3.0F), x + width / 2.0, y + height / 2.0, sc);
         }
 
         RenderUtil.drawRoundedGradientRect(barX, healthBarY, barX + barWidth * healthPercent, healthBarY + 6, 3, cyan, cyan, blue, blue);

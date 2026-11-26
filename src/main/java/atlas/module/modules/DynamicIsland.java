@@ -88,6 +88,7 @@ public class DynamicIsland extends Module {
             HudPanel.panel(x, y, x + width, y + height);
         } else {
             atlas.util.shader.BlurUtils.prepareBlur();
+            atlas.util.shader.BlurUtils.region("Dynamic island", x, y, x + width, y + height);
             RenderUtil.drawRoundedRect(x, y, width, height, this.radius, 0xFFFFFFFF);
             atlas.util.shader.BlurUtils.blurEnd(2, 4.0f);
 

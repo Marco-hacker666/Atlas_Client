@@ -104,6 +104,34 @@ public final class ListFrame {
         }
     }
 
+    /** {x1, y1, x2, y2} around the glow shapes, or null when there are none. */
+    public float[] glowBounds() {
+        return bounds(this.bodies, false);
+    }
+
+    /** {x1, y1, x2, y2} around the backing (blurred) shapes, or null when there are none. */
+    public float[] backingBounds() {
+        return bounds(this.ops, true);
+    }
+
+    private static float[] bounds(List<Op> list, boolean backingOnly) {
+        float[] out = null;
+        for (Op op : list) {
+            if (op.text != null || (backingOnly && !op.backing)) {
+                continue;
+            }
+            if (out == null) {
+                out = new float[]{op.x1, op.y1, op.x2, op.y2};
+            } else {
+                out[0] = Math.min(out[0], op.x1);
+                out[1] = Math.min(out[1], op.y1);
+                out[2] = Math.max(out[2], op.x2);
+                out[3] = Math.max(out[3], op.y2);
+            }
+        }
+        return out;
+    }
+
     public boolean hasBacking() {
         for (Op op : this.ops) {
             if (op.backing) {

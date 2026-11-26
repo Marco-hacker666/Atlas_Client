@@ -41,6 +41,9 @@ public class RenderFixes extends Module {
     public final BooleanProperty shader = new BooleanProperty("shader", true);
     public final ModeProperty effects = new ModeProperty("effects", atlas.util.render.Effects.AUTO,
             atlas.util.render.Effects.MODES);
+    public final BooleanProperty fastBlur = new BooleanProperty("fast-blur", true,
+            () -> this.effects.getValue() != atlas.util.render.Effects.LITE);
+    public final BooleanProperty gpuTiming = new BooleanProperty("gpu-timing", true);
     public final BooleanProperty chat = new BooleanProperty("chat", true);
     public final BooleanProperty scoreboard = new BooleanProperty("scoreboard", true);
     public final IntProperty chatX = new IntProperty("chat-x", 0, -DRAG_LIMIT, DRAG_LIMIT);
@@ -62,11 +65,13 @@ public class RenderFixes extends Module {
 
     public RenderFixes() {
         super("RenderFixes", true, false, "Modern rounded chat and scoreboard rendering");
+        atlas.util.render.GpuTimer.setSwitch(() -> this.gpuTiming.getValue());
     }
 
     @EventTarget(whenDisabled = true)
     public void onRender2D(Render2DEvent event) {
         atlas.util.render.Effects.setMode(this.effects.getValue());
+        atlas.util.render.Effects.setFastBlur(this.fastBlur.getValue());
         updateDragging();
     }
 
@@ -157,7 +162,7 @@ public class RenderFixes extends Module {
         ScaledResolution sr = new ScaledResolution(mc);
         GlStateManager.pushMatrix();
         GlStateManager.translate(0.0F, -(sr.getScaledHeight() - 48.0F), 0.0F);
-        drawGlassPanel(bounds.x, bounds.y, bounds.width, bounds.height, 7.0F, 92);
+        drawGlassPanel("Chat", bounds.x, bounds.y, bounds.width, bounds.height, 7.0F, 92);
         GlStateManager.popMatrix();
     }
 
@@ -226,7 +231,7 @@ public class RenderFixes extends Module {
         float x = 2.0F;
         float y = height - 14.0F;
         float boxWidth = width - 4.0F;
-        drawGlassPanel(x, y, boxWidth, 12.0F, 5.0F, 96);
+        drawGlassPanel("Chat input", x, y, boxWidth, 12.0F, 5.0F, 96);
     }
 
     public static boolean renderScoreboard(ScoreObjective objective, ScaledResolution scaledRes) {
@@ -276,7 +281,7 @@ public class RenderFixes extends Module {
         lastScoreboardBounds = new Bounds(x, y, width, height, defaultX, defaultY);
         lastScoreboardRender = System.currentTimeMillis();
 
-        drawGlassPanel(x, y, width, height, 7.0F, 98);
+        drawGlassPanel("Scoreboard", x, y, width, height, 7.0F, 98);
 
         int textColor = new Color(238, 241, 245, 238).getRGB();
         int scoreColor = new Color(255, 106, 106, 238).getRGB();
@@ -364,7 +369,7 @@ public class RenderFixes extends Module {
         property.setValue(clamped);
     }
 
-    private static void drawGlassPanel(float x, float y, float width, float height, float radius, int alpha) {
+    private static void drawGlassPanel(String name, float x, float y, float width, float height, float radius, int alpha) {
         if (width <= 0.0F || height <= 0.0F) {
             return;
         }
@@ -372,6 +377,7 @@ public class RenderFixes extends Module {
         RenderUtil.resetColor();
         if (shouldUseShaders()) {
             BlurUtils.prepareBlur();
+            BlurUtils.region(name, x, y, x + width, y + height);
             RenderUtil.drawRoundedRect(x, y, width, height, radius, 0xFFFFFFFF, true, true, true, true);
             BlurUtils.blurEnd(2, 4.0F);
         }

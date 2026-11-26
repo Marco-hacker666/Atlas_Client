@@ -47,6 +47,7 @@ public abstract class MixinEntityRenderer {
             at = {@At("HEAD")}
     )
     private void updateCameraAndRender(float float1, long long2, CallbackInfo callbackInfo) {
+        atlas.util.render.GpuTimer.frameStart();
         if (this.mc.thePlayer != null) {
             Scaffold scaffold = (Scaffold) Atlas.moduleManager.modules.get(Scaffold.class);
             if (scaffold.isEnabled() && scaffold.itemSpoof.getValue()) {
@@ -86,6 +87,7 @@ public abstract class MixinEntityRenderer {
             at = {@At("RETURN")}
     )
     private void postUpdateCameraAndRender(float float1, long long2, CallbackInfo callbackInfo) {
+        atlas.util.render.GpuTimer.frameEnd();
         if (this.slot != null) {
             this.mc.thePlayer.inventory.currentItem = this.slot.value;
             this.slot = null;
@@ -150,7 +152,12 @@ public abstract class MixinEntityRenderer {
             )}
     )
     private void renderWorldPass(int integer, float float2, long long3, CallbackInfo callbackInfo) {
-        EventManager.call(new Render3DEvent(float2));
+        int gpu = atlas.util.render.GpuTimer.begin("Atlas 3D");
+        try {
+            EventManager.call(new Render3DEvent(float2));
+        } finally {
+            atlas.util.render.GpuTimer.end(gpu, null);
+        }
     }
 
     @ModifyArg(

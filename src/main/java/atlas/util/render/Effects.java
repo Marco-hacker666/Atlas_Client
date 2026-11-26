@@ -14,6 +14,8 @@ public final class Effects {
     private static volatile int mode = AUTO;
     private static volatile boolean autoLite;
     private static volatile long lastDrawnMs;
+    private static volatile boolean fastBlur = true;
+    private static volatile Boolean fastBlurOverride;
 
     private Effects() {
     }
@@ -32,6 +34,21 @@ public final class Effects {
         }
         net.minecraft.client.gui.GuiScreen screen = net.minecraft.client.Minecraft.getMinecraft().currentScreen;
         return screen == null || screen instanceof net.minecraft.client.gui.GuiChat;
+    }
+
+    /** Blur and glow only compute the area each element covers (RenderFixes fast-blur); same look. */
+    public static boolean fastBlur() {
+        Boolean forced = fastBlurOverride;
+        return forced != null ? forced : fastBlur;
+    }
+
+    /** For the .perf comparison: forces fast-blur on or off for a moment; null goes back to the setting. */
+    public static void overrideFastBlur(Boolean on) {
+        fastBlurOverride = on;
+    }
+
+    public static void setFastBlur(boolean on) {
+        fastBlur = on;
     }
 
     /** The effects setting is Auto: only then may Atlas turn blur and glow off by itself. */

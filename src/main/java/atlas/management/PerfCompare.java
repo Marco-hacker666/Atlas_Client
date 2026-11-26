@@ -109,7 +109,9 @@ public final class PerfCompare {
         }
         if (off.gpu.frames() == 0 || on.gpu.frames() == 0) {
             // too few frames read back in four seconds (very low FPS): no GPU figures rather than empty ones
-            say("&7GPU timing had no frames read back in " + (off.gpu.frames() == 0 ? "the off half" : "the on half")
+            String halves = off.gpu.frames() == 0 && on.gpu.frames() == 0 ? "either half"
+                    : off.gpu.frames() == 0 ? "the off half" : "the on half";
+            say("&7GPU timing had no frames read back in " + halves
                     + " (FPS too low for four seconds), so only FPS is shown.");
             return;
         }

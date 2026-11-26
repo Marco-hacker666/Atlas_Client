@@ -91,6 +91,9 @@ public class KillAuraLB extends Module {
     public final IntProperty nearMissRate = new IntProperty("NearMiss-Rate", 7, 4, 15, this.nearMisses::getValue);
 
     public final FloatProperty rangeIncrease = new FloatProperty("RangeIncrease", 0.0F, 0.0F, 5.0F);
+    /** Up to how much shorter than the range the first hit may wait for; a new edge after each crossing. */
+    public final FloatProperty rangeDrift = new FloatProperty("RangeDrift", 0.0F, 0.0F, 0.5F);
+    private final atlas.lb.combat.ReachDrift reachDrift = new atlas.lb.combat.ReachDrift(new java.util.Random());
 
     public final BooleanProperty lagAware = new BooleanProperty("LagAware", true);
     public final FloatProperty lagMargin = new FloatProperty("LagAware-Margin", 0.05F, 0.0F, 0.3F, this.lagAware::getValue);
@@ -875,7 +878,7 @@ public class KillAuraLB extends Module {
     }
 
     private float interactionRange() {
-        return AuraRules.interactionRange(this.rangeIncrease.getValue());
+        return AuraRules.interactionRange(this.rangeIncrease.getValue()) - this.reachDrift.cut();
     }
 
     private float wallsRange() {
@@ -924,6 +927,7 @@ public class KillAuraLB extends Module {
         Rotation sent = null;
         if (inputPath()) {
             this.inputTarget = think();
+            updateDrift();
             this.inputRotation = this.inputTarget != null ? this.ask(this.inputTarget) : null;
             this.inputThought = true;
             sent = this.inputRotation != null ? this.inputRotation
@@ -991,7 +995,25 @@ public class KillAuraLB extends Module {
             }
             return;
         }
-        applyRotation(event, think());
+        Rotation thought = think();
+        updateDrift();
+        applyRotation(event, thought);
+    }
+
+    private int driftTick = -1;
+
+    /**
+     * Once a tick, right after the target is picked (so a target picked this tick is not hit at the full
+     * range first): the range drift's edge for it.
+     */
+    private void updateDrift() {
+        if (this.driftTick == this.rhythmTick || mc.thePlayer == null) {
+            return;
+        }
+        this.driftTick = this.rhythmTick;
+        EntityLivingBase target = this.targetTracker.target();
+        this.reachDrift.update(AuraRules.interactionRange(this.rangeIncrease.getValue()), this.rangeDrift.getValue(),
+                target, target == null ? 0.0 : RotationUtil.distanceToBox(target, mc.thePlayer.getPositionEyes(1.0F)));
     }
 
     private Rotation think() {

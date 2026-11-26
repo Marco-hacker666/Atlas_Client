@@ -883,6 +883,7 @@ final class ModuleDocsEn {
         help(ka, "MinCPS", "Lowest attacks per second (random between the two; ticks cap it at 20).");
         help(ka, "MaxCPS", "Highest attacks per second.");
         help(ka, "AttackRange", "Distance at which it actually attacks (blocks). Vanilla is 3.0.");
+        help(ka, "AttackRangeDrift", "Shortens the attack range by a random 0 to this, drawn again each time the target crosses it, so the first hit does not always come at the same distance. Only ever shorter. 0 = off.");
         help(ka, "SwingRange", "Distance at which it starts turning and swinging; a little more than the attack range.");
         help(ka, "RotationTiming", "Normal: always aim. Snap: turn only when the click will be due as the aim lands.");
         help(ka, "LazyRotation", "Do not turn while the look already hits the target.");
@@ -903,6 +904,7 @@ final class ModuleDocsEn {
         help("KillAuraLB", "MissCooldown", "Waits out vanilla's delay after a swing at the air, as a real click would.");
         help("KillAuraLB", "NearMiss", "Now and then a click turns just past the target's side and swings at the air, as a person misses by a hair; taken on a click the target is still immune to. Without any, Intave reads the attacks as automated and cuts your damage.");
         help("KillAuraLB", "NearMiss-Rate", "Near misses per 100 attacks. Intave wants at least 4.");
+        help("KillAuraLB", "RangeDrift", "How much shorter than the reach the first hit may wait for (random, 0 to this). Drawn again each time the target crosses it, so the aura does not start at the same distance every time. Only ever shorter. 0 = off.");
         help("KillAuraLB", "RangeIncrease", "Reach = 3.0 + this. LiquidBounce's default 1.0 means 4.0 blocks: lower it for servers that check reach.");
         help("KillAuraLB", "ThroughWallsRange", "Reach for a target behind a block (never more than the reach).");
         help("KillAuraLB", "AngleSmooth", "How each tick turns: Linear (degrees a tick), Sigmoid, Interpolation (Bezier/sigmoid ease), Acceleration (turn rate built up from the last tick's), AimAssist (Atlas's AimAssist Smooth turn and aim point, using the AimAssist module's own speeds, smoothing, lead and multipoint; AimAssist itself can stay off), Tracking, Noise (speed and aim point drift with a smooth noise; the turn speeds up and slows down), Noise-React (reacts a few ticks late, swings like a spring, small tremor), Recorded (your own aim from the Recorder's aim files, matched by how far off you are).");
@@ -984,6 +986,8 @@ final class ModuleDocsEn {
         help(cl, "rotation-random", "How random (how far the click spot spreads on the face).");
         help(cl, "speed", "Fewest degrees per tick.");
         help(cl, "max-speed", "Most degrees per tick.");
+        help("Scaffold", "steady-yaw", "Holds the bridge yaw and finds the block's side with the pitch alone, like a player bridging backwards. Falls back to the usual aim when no pitch reaches it. DEFAULT, BACKWARDS, SMOOTH and Hypixel modes.");
+        help("Scaffold", "max-place-turn", "Skips placing in a tick whose sent look turned more than this many degrees, and places next tick instead (turning and placing in one tick stands out). Plain bridging only: not while towering or with keep-y on. 0 = off.");
         help("Scaffold", "turn-speed", "Most degrees turned per tick (DEFAULT to Hypixel modes). The look no longer snaps; if it is not there yet, the click waits a tick. 180 = no limit.");
         help("Scaffold", "humanize", "Turns use the Rotations engine's speed variation and curve.");
         help("Scaffold", "telly-auto-jump", "SPEED-TELLY and WEIRD-TELLY: jump by itself while W is held on the ground; let go to stop.");

@@ -935,7 +935,7 @@ public final class ModuleDocs {
                 h("移動", "ground-motion", "air-motion", "speed-motion", "eagle",
                         "edge-distance", "sneak-delay", "blocks-per-sneak"),
                 h("疊高與高度", "tower-pulldown-trigger", "hypixeltower", "keep-y-on-press", "no-keep-y-on-jump-potion"),
-                h("放置", "pause-on-correction", "legit-pace", "jump-builds-up", "edge-stop", "safe", "safe-delay-ticks", "multi-place", "swing", "item-spoof"),
+                h("放置", "sure-place", "pause-on-correction", "legit-pace", "jump-builds-up", "edge-stop", "safe", "safe-delay-ticks", "multi-place", "swing", "item-spoof"),
                 h("顯示", "block-counter", "outline-esp", "outline-color"));
         g("Humanization",
                 h("預設與套用", "preset", "apply-*"),
@@ -1426,6 +1426,7 @@ public final class ModuleDocs {
         help("Scaffold", "moonwalk-middle-max", "MOONWALK：中線位置（最多），每隔一段時間在兩者之間重新隨機。");
         help("Scaffold", "moonwalk-redraw-min", "MOONWALK：每隔幾 tick 重新隨機中線（最少）。");
         help("Scaffold", "moonwalk-redraw-max", "MOONWALK：每隔幾 tick 重新隨機中線（最多）。");
+        help("Scaffold", "sure-place", "盡量不漏放：先模擬接下來兩個 tick 的移動，算出哪一格方塊會接住你；快要掉下去而視角還沒對到那個面時，那一 tick 不限轉速直接轉過去，選一個吸附到滑鼠格點後仍然打得到的位置，必要時同一 tick 補第二格。safe-walk（或 edge-stop）開著時，地上的邊緣由它們撐住，所以只有在空中（跳、keep-y、往上蓋）才會快速轉頭。快速轉頭比較容易被轉頭檢查抓。BACKWARDS、MOONWALK 固定往後的 yaw 打不到面時（人偏離橋的中線），會在同一個 yaw 重新找 pitch，找不到才改用對得到面的視角。某個面放不進去（裡面有東西）時，2 tick 後就重試，不是 10 tick。漏放時會把原因寫進 config/Atlas/notes-*.txt。只在 DEFAULT、BACKWARDS、SMOOTH、Hypixel、MOONWALK、GODBRIDGE2 模式。");
         help("Scaffold", "pause-on-correction", "被伺服器拉回後，等一個來回延遲再放方塊；被退回的方塊也會暫停。避免在錯的位置連續放出 ghost block。");
         help(cl, "pre-aim", "還沒到時機前先把頭轉到大概的位置，等一下轉比較少。");
         help(cl, "counter-knockback", "被打飛時往回走，抵銷一部分擊退。");

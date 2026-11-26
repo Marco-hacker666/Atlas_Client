@@ -388,6 +388,11 @@ public class Scaffold extends Module {
                 && this.lookHit(plan, yaw + half, pitch + half) != null;
     }
 
+    /** Whether the look reaches the face: from every corner of the snap box when onGrid, else as given. */
+    private boolean lands(BlockData plan, float yaw, float pitch, boolean onGrid) {
+        return onGrid ? this.hitsAfterSnap(plan, yaw, pitch) : this.lookHit(plan, yaw, pitch) != null;
+    }
+
     private boolean turnLimited() {
         int mode = this.rotationMode.getValue();
         for (int m : TURNING_MODES) {
@@ -1271,6 +1276,8 @@ public class Scaffold extends Module {
                 }
                 float aimDiff = Float.MAX_VALUE;
                 Vec3 hitVec = null;
+                // set when this tick's look is the steady-yaw one, checked against the mouse grid
+                boolean steadyAimed = false;
                 if (blockData != null) {
                     double[] x = aimOffsets;
                     double[] y = aimOffsets;
@@ -1338,6 +1345,7 @@ public class Scaffold extends Module {
                             this.yaw = steady[0];
                             this.pitch = steady[1];
                             this.canRotate = true;
+                            steadyAimed = true;
                             hitVec = steadyHit.hitVec;
                             aimDiff = Math.abs(MathHelper.wrapAngleTo180_float(steady[0] - refYaw)) + Math.abs(steady[1] - refPitch);
                         }
@@ -1401,12 +1409,14 @@ public class Scaffold extends Module {
                         || this.isSnapSpeedMode())) {
                     float targetYaw = this.yaw;
                     float targetPitch = this.pitch;
+                    // the steady look passed the grid check: a look changed from it must pass it too, else it stays
+                    boolean gridChecked = steadyAimed && !towerRotating;
                     if (this.rotationRandom.getValue() > 0.0F && blockData != null && !towerRotating) {
                         float[] wandered = this.wander(targetYaw, targetPitch);
                         if (this.steadyYawOn()) {
                             wandered[0] = targetYaw;
                         }
-                        if (this.lookHit(blockData, wandered[0], wandered[1]) != null) {
+                        if (this.lands(blockData, wandered[0], wandered[1], gridChecked)) {
                             targetYaw = wandered[0];
                             targetPitch = wandered[1];
                         }
@@ -1440,7 +1450,7 @@ public class Scaffold extends Module {
                     if (!snapMode) {
                         float[] aimed = atlas.humanize.HumanTurn.apply(this.human, event.getYaw(), event.getPitch(),
                                 targetYaw, targetPitch);
-                        if (blockData == null || this.lookHit(blockData, aimed[0], aimed[1]) != null) {
+                        if (blockData == null || this.lands(blockData, aimed[0], aimed[1], gridChecked)) {
                             targetYaw = aimed[0];
                             targetPitch = aimed[1];
                         }

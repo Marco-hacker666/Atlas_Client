@@ -985,7 +985,7 @@ final class ModuleDocsEn {
         help(cl, "speed", "Fewest degrees per tick.");
         help(cl, "max-speed", "Most degrees per tick.");
         help("Scaffold", "steady-yaw", "Holds the bridge yaw and finds the block's side with the pitch alone, like a player bridging backwards. Falls back to the usual aim when no pitch reaches it. DEFAULT, BACKWARDS, SMOOTH and Hypixel modes.");
-        help("Scaffold", "max-place-turn", "Skips placing in a tick whose sent look turned more than this many degrees, and places next tick instead (turning and placing in one tick stands out). 0 = off.");
+        help("Scaffold", "max-place-turn", "Skips placing in a tick whose sent look turned more than this many degrees, and places next tick instead (turning and placing in one tick stands out). Plain bridging only: not while towering or with keep-y on. 0 = off.");
         help("Scaffold", "turn-speed", "Most degrees turned per tick (DEFAULT to Hypixel modes). The look no longer snaps; if it is not there yet, the click waits a tick. 180 = no limit.");
         help("Scaffold", "humanize", "Turns use the Rotations engine's speed variation and curve.");
         help("Scaffold", "telly-auto-jump", "SPEED-TELLY and WEIRD-TELLY: jump by itself while W is held on the ground; let go to stop.");

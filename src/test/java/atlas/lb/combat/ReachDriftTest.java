@@ -47,6 +47,32 @@ public class ReachDriftTest {
     }
 
     @Test
+    public void standingStillNeverRedraws() {
+        for (long seed = 0; seed < 200; seed++) {
+            ReachDrift d = new ReachDrift(new Random(seed));
+            Object t = new Object();
+            d.update(3.0F, 0.5F, t, 4.0);
+            for (double dist = 4.0; dist > 2.4; dist -= 0.01) {
+                d.update(3.0F, 0.5F, t, dist);
+            }
+            float settled = d.cut();
+            for (int i = 0; i < 20; i++) {
+                d.update(3.0F, 0.5F, t, 2.4);
+                assertEquals("seed " + seed, settled, d.cut(), 0.0F);
+            }
+            // and at a distance sitting between edges: no flip-flop either
+            float now = d.cut();
+            double between = 3.0 - now + 0.001;
+            d.update(3.0F, 0.5F, t, between);
+            float after = d.cut();
+            for (int i = 0; i < 20; i++) {
+                d.update(3.0F, 0.5F, t, between);
+                assertEquals("seed " + seed, after, d.cut(), 0.0F);
+            }
+        }
+    }
+
+    @Test
     public void eachTargetAndEachCrossingGetsItsOwnEdge() {
         ReachDrift d = new ReachDrift(new Random(4));
         Set<Float> cuts = new HashSet<Float>();

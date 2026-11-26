@@ -896,9 +896,6 @@ public class KillAuraLB extends Module {
         }
         this.rhythmTick++;
         applySettings();
-        EntityLivingBase driftTarget = this.targetTracker.target();
-        this.reachDrift.update(AuraRules.interactionRange(this.rangeIncrease.getValue()), this.rangeDrift.getValue(),
-                driftTarget, driftTarget == null ? 0.0 : RotationUtil.distanceToBox(driftTarget, mc.thePlayer.getPositionEyes(1.0F)));
         sampleServerPositions();
         if (this.placeYieldTicks > 0) {
             this.placeYieldTicks--;
@@ -930,6 +927,7 @@ public class KillAuraLB extends Module {
         Rotation sent = null;
         if (inputPath()) {
             this.inputTarget = think();
+            updateDrift();
             this.inputRotation = this.inputTarget != null ? this.ask(this.inputTarget) : null;
             this.inputThought = true;
             sent = this.inputRotation != null ? this.inputRotation
@@ -997,7 +995,25 @@ public class KillAuraLB extends Module {
             }
             return;
         }
-        applyRotation(event, think());
+        Rotation thought = think();
+        updateDrift();
+        applyRotation(event, thought);
+    }
+
+    private int driftTick = -1;
+
+    /**
+     * Once a tick, right after the target is picked (so a target picked this tick is not hit at the full
+     * range first): the range drift's edge for it.
+     */
+    private void updateDrift() {
+        if (this.driftTick == this.rhythmTick || mc.thePlayer == null) {
+            return;
+        }
+        this.driftTick = this.rhythmTick;
+        EntityLivingBase target = this.targetTracker.target();
+        this.reachDrift.update(AuraRules.interactionRange(this.rangeIncrease.getValue()), this.rangeDrift.getValue(),
+                target, target == null ? 0.0 : RotationUtil.distanceToBox(target, mc.thePlayer.getPositionEyes(1.0F)));
     }
 
     private Rotation think() {

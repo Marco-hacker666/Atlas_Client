@@ -1388,7 +1388,7 @@ public final class ModuleDocs {
         help(cl, "speed", "每 tick 最少轉幾度。");
         help(cl, "max-speed", "每 tick 最多轉幾度。");
         help("Scaffold", "steady-yaw", "yaw 固定在搭橋方向，只用 pitch 找方塊的側面（像真人倒退搭橋只上下微調）。找不到時照原本的方式瞄。只在 DEFAULT、BACKWARDS、SMOOTH、Hypixel 模式。");
-        help("Scaffold", "max-place-turn", "這一 tick 送出的視角轉超過幾度就先不放，等下一 tick（同一 tick 又轉又放很明顯）。0 = 關。");
+        help("Scaffold", "max-place-turn", "這一 tick 送出的視角轉超過幾度就先不放，等下一 tick（同一 tick 又轉又放很明顯）。只管一般搭橋：往上蓋和 keep-y 開著時不擋。0 = 關。");
         help("Scaffold", "turn-speed", "每 tick 最多轉幾度（DEFAULT～Hypixel 模式）。不再一次甩到位，轉不到就等下一 tick，不會亂點。180 = 不限制。");
         help("Scaffold", "humanize", "轉頭加上 Rotations 引擎的速度隨機與弧線，比較像人手。");
         help("Scaffold", "telly-auto-jump", "SPEED-TELLY 和 WEIRD-TELLY 模式：按住 W 在地上時自動跳，放開就停。");

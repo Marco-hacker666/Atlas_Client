@@ -2089,9 +2089,6 @@ public class KillAura extends Module {
         if (this.atlasOn() || this.wantsToDisable && this.atlasEngine()) {
             switch (event.getType()) {
                 case PRE:
-                    this.reachDrift.update(this.attackRange.getValue(), this.attackRangeDrift.getValue(),
-                            this.target == null ? null : this.target.getEntity(),
-                            this.target == null ? 0.0 : RotationUtil.distanceToBox(this.target.getBox()));
                     if (this.target == null && !this.isSmoothBacking && !this.wantsToDisable) {
                         this.serverRotation = new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
                         this.currentAimVec = null;
@@ -2189,6 +2186,10 @@ public class KillAura extends Module {
                     if (this.target != null) {
                         this.target.update();
                     }
+                    // after the target is picked, so one picked this tick gets its edge before any hit
+                    this.reachDrift.update(this.attackRange.getValue(), this.attackRangeDrift.getValue(),
+                            this.target == null ? null : this.target.getEntity(),
+                            this.target == null ? 0.0 : RotationUtil.distanceToBox(this.target.getBox()));
                     break;
                 case POST:
                     if (this.isPlayerBlocking() && !mc.thePlayer.isBlocking()) {

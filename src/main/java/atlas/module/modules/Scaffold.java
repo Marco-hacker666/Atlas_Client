@@ -365,13 +365,27 @@ public class Scaffold extends Module {
         }
         float margin = Math.min(0.3F, (bestHi - bestLo) / 2.0F);
         float pitch = Math.max(bestLo + margin, Math.min(bestHi - margin, currentPitch));
-        if (this.lookHit(plan, yaw, pitch) == null) {
+        if (!this.hitsAfterSnap(plan, yaw, pitch)) {
             pitch = (bestLo + bestHi) / 2.0F;
-            if (this.lookHit(plan, yaw, pitch) == null) {
+            if (!this.hitsAfterSnap(plan, yaw, pitch)) {
+                // too narrow for the mouse grid to land on: leave it to the usual aim
                 return null;
             }
         }
         return new float[]{yaw, pitch};
+    }
+
+    /**
+     * The sent look is snapped to the mouse-sensitivity grid, which moves each angle by up to half a grid
+     * step: the look must reach the face from every corner of that box, not only at its centre.
+     */
+    private boolean hitsAfterSnap(BlockData plan, float yaw, float pitch) {
+        float half = (float) (RotationUtil.gcd() / 2.0) + 0.001F;
+        return this.lookHit(plan, yaw, pitch) != null
+                && this.lookHit(plan, yaw - half, pitch - half) != null
+                && this.lookHit(plan, yaw + half, pitch - half) != null
+                && this.lookHit(plan, yaw - half, pitch + half) != null
+                && this.lookHit(plan, yaw + half, pitch + half) != null;
     }
 
     private boolean turnLimited() {
@@ -1546,8 +1560,10 @@ public class Scaffold extends Module {
                 along != null ? along.sideHit : blockData.facing(), sentYaw)) {
             hitVec = null;
         }
-        // the look turned too far this tick: wait for the next one (a turn and a place in one tick stand out)
-        if (hitVec != null && this.maxPlaceTurn.getValue() > 0 && turned > this.maxPlaceTurn.getValue()) {
+        // the look turned too far this tick: wait for the next one (a turn and a place in one tick stand out).
+        // Bridging only: towering and keep-y have no later placement in the tick to fall back on.
+        if (hitVec != null && this.maxPlaceTurn.getValue() > 0 && turned > this.maxPlaceTurn.getValue()
+                && this.keepY.getValue() == 0 && !this.towering && !this.isTowering()) {
             hitVec = null;
         }
         if (blockData != null && hitVec != null && snapCanPlace && this.rotationTick <= 0) {

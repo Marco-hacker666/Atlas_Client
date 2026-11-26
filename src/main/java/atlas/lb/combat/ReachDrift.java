@@ -41,13 +41,17 @@ public final class ReachDrift {
         if (target == null) {
             return;
         }
+        if (this.cut > drift) {
+            // the drift was turned down: a cut within it
+            this.cut = this.random.nextFloat() * drift;
+            this.inside = distance <= base - this.cut;
+            return;
+        }
         boolean now = distance <= base - this.cut;
         if (now != this.inside) {
-            this.inside = now;
             this.cut = this.random.nextFloat() * drift;
-        }
-        if (this.cut > drift) {
-            this.cut = this.random.nextFloat() * drift;
+            // judged against the new edge, so standing still never counts as another crossing
+            this.inside = distance <= base - this.cut;
         }
     }
 

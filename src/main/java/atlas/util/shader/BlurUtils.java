@@ -28,18 +28,13 @@ public class BlurUtils {
     private static final int BLUR = 1;
     private static final int BLOOM = 2;
 
-    /** Which mask is being drawn now (between prepare and end, when not masked off). */
     private static int drawing = NONE;
-    /** Where that mask is, window pixels; null: not said (or not known), so the whole screen is used. */
+
     private static int[] declared;
     private static boolean unknown;
     private static String label;
     private static int gpuMark = -1;
 
-    /*
-     * Where each mask framebuffer may still hold pixels from its last use: the next prepare only clears that,
-     * not the whole screen. Null: anywhere (cleared whole, as before). Cleared whole every so often anyway.
-     */
     private static final int FULL_CLEAR_EVERY = 30;
     private static int[] blurDirty;
     private static int[] bloomDirty;
@@ -80,14 +75,6 @@ public class BlurUtils {
         stencilFrameBufferBloom.bindFramebuffer(false);
     }
 
-    /**
-     * Says where the mask drawn between prepareBlur/prepareBloom and the end call is: a rectangle in the
-     * current GL coordinates, so call it while the matrix the mask is drawn with is in place. Can be called
-     * more than once (the rectangles add up). The blur or glow then only computes the pixels that area needs
-     * and looks the same. Without it the whole screen is blurred, as before.
-     *
-     * @param name what it is, for the GPU timings in the perf log
-     */
     public static void region(String name, float x1, float y1, float x2, float y2) {
         if (drawing == NONE) {
             return;
@@ -159,11 +146,6 @@ public class BlurUtils {
         gpuMark = GpuTimer.begin(kind == BLOOM ? "glow" : "blur");
     }
 
-    /**
-     * Clears a mask framebuffer: only where it can hold pixels when that is known, otherwise all of it. A
-     * caller's scissor clip does not limit it: the passes read the mask outside that clip too, so a clipped
-     * clear would leave an earlier element's shape in it.
-     */
     private static void clear(Framebuffer mask, int[] dirty) {
         GlScissor saved = GlScissor.save();
         try {
@@ -180,10 +162,6 @@ public class BlurUtils {
         }
     }
 
-    /**
-     * Where the mask is, when fast-blur may use it (declared, known and fast-blur on), else null: the whole
-     * screen as before, and the next prepare clears the whole mask framebuffer as before.
-     */
     private static int[] known() {
         if (declared == null || unknown || label == null || !Effects.fastBlur()) {
             return null;
@@ -191,11 +169,6 @@ public class BlurUtils {
         return declared;
     }
 
-    /**
-     * Whether the end call is made where the passes' full-screen quad covers the screen exactly (see
-     * BlurRegion.fillsViewport). One made inside a scale draws its result moved by it, so it keeps the
-     * whole-screen path, which draws it just as before.
-     */
     private static boolean fillsScreen(Framebuffer mask) {
         float[][] m = matrices();
         ScaledResolution sr = new ScaledResolution(Minecraft.getMinecraft());
@@ -203,7 +176,6 @@ public class BlurUtils {
         return BlurRegion.fillsViewport(m[0], m[1], viewport, sr.getScaledWidth_double(), sr.getScaledHeight_double());
     }
 
-    /** The modelview and projection matrices now, column major. */
     private static float[][] matrices() {
         MODELVIEW.clear();
         PROJECTION.clear();
@@ -227,11 +199,6 @@ public class BlurUtils {
         label = null;
     }
 
-    /**
-     * The rectangle in window pixels, from the matrices the mask is drawn with (see BlurRegion.maskRect). The
-     * viewport is the mask framebuffer's: prepare set it (framebufferClear binds with the viewport), so it is
-     * not read back from the driver.
-     */
     private static int[] windowRect(float x1, float y1, float x2, float y2) {
         Framebuffer mask = drawing == BLOOM ? stencilFrameBufferBloom : stencilFrameBufferBlur;
         float[][] m = matrices();

@@ -82,7 +82,7 @@ public class KillAura extends Module {
             () -> this.autoBlock.getValue() >= YURI_FIRST && this.yuriOnlyWhenHurt.getValue());
 
     public final BooleanProperty simulateClicks = new BooleanProperty("simulate-clicks", true);
-    /** Up to how much shorter than AttackRange the first hit may wait for; a new edge after each crossing. */
+
     public final FloatProperty attackRangeDrift = new FloatProperty("AttackRangeDrift", 0.0F, 0.0F, 0.5F, this::atlasEngine);
     private final atlas.lb.combat.ReachDrift reachDrift = new atlas.lb.combat.ReachDrift(new java.util.Random());
 
@@ -362,7 +362,7 @@ public class KillAura extends Module {
         this.minCPS.when(() -> cpsMode.getValue() == 0 || cpsMode.getValue() == 2);
         this.maxCPS.when(() -> cpsMode.getValue() == 0 || cpsMode.getValue() == 2);
         this.moveFix.when(() -> rotations.getValue() != 0);
-        // block settings only matter with an auto-block mode picked
+
         this.autoBlockRequirePress.alsoWhen(() -> autoBlock.getValue() != 0);
         this.autoBlockRange.alsoWhen(() -> autoBlock.getValue() != 0);
 
@@ -1056,7 +1056,6 @@ public class KillAura extends Module {
         return RotationUtil.distanceToBox(axisAlignedBB) <= this.scanRange();
     }
 
-    /** AttackRange, shortened by the drift's current cut (see ReachDrift). */
     private float atlasReach() {
         return this.attackRange.getValue() - this.reachDrift.cut();
     }
@@ -2186,7 +2185,7 @@ public class KillAura extends Module {
                     if (this.target != null) {
                         this.target.update();
                     }
-                    // after the target is picked, so one picked this tick gets its edge before any hit
+
                     this.reachDrift.update(this.attackRange.getValue(), this.attackRangeDrift.getValue(),
                             this.target == null ? null : this.target.getEntity(),
                             this.target == null ? 0.0 : RotationUtil.distanceToBox(this.target.getBox()));

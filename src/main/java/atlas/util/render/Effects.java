@@ -1,10 +1,5 @@
 package atlas.util.render;
 
-/**
- * Lite effects: Atlas's in-game blur and glow (HUD, hotbar, target HUD, chat and scoreboard) are skipped,
- * drawn through the same masked path used where framebuffers are missing. On by the RenderFixes "effects"
- * setting, or for this session when the game stayed slow while they were drawn.
- */
 public final class Effects {
     public static final int AUTO = 0;
     public static final int FULL = 1;
@@ -25,9 +20,6 @@ public final class Effects {
         return m == LITE || m == AUTO && autoLite;
     }
 
-    /**
-     * Lite only while playing (no screen, or the chat): the ClickGUIs and the menus keep their look.
-     */
     public static boolean liteInGame() {
         if (!lite()) {
             return false;
@@ -36,13 +28,11 @@ public final class Effects {
         return screen == null || screen instanceof net.minecraft.client.gui.GuiChat;
     }
 
-    /** Blur and glow only compute the area each element covers (RenderFixes fast-blur); same look. */
     public static boolean fastBlur() {
         Boolean forced = fastBlurOverride;
         return forced != null ? forced : fastBlur;
     }
 
-    /** For the .perf comparison: forces fast-blur on or off for a moment; null goes back to the setting. */
     public static void overrideFastBlur(Boolean on) {
         fastBlurOverride = on;
     }
@@ -51,7 +41,6 @@ public final class Effects {
         fastBlur = on;
     }
 
-    /** The effects setting is Auto: only then may Atlas turn blur and glow off by itself. */
     public static boolean auto() {
         return mode == AUTO;
     }
@@ -68,7 +57,6 @@ public final class Effects {
         return autoLite;
     }
 
-    /** Called when blur or glow is about to be drawn for real. */
     public static void drawn() {
         lastDrawnMs = System.currentTimeMillis();
     }

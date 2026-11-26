@@ -104,12 +104,10 @@ public final class ListFrame {
         }
     }
 
-    /** {x1, y1, x2, y2} around the glow shapes, or null when there are none. */
     public float[] glowBounds() {
         return bounds(this.bodies, false);
     }
 
-    /** {x1, y1, x2, y2} around the backing (blurred) shapes, or null when there are none. */
     public float[] backingBounds() {
         return bounds(this.ops, true);
     }

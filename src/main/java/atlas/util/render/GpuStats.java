@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** GPU time per section, summed over frames, read back as milliseconds per frame. Pure, so it can be tested. */
 public final class GpuStats {
     public static final String FRAME = "frame";
 
@@ -16,7 +15,6 @@ public final class GpuStats {
     private int frames;
     private int dropped;
 
-    /** One frame's measured sections, nanoseconds by name (a name can appear once; repeats are summed by the caller). */
     public void frame(Map<String, Long> nanos) {
         this.frames++;
         for (Map.Entry<String, Long> entry : nanos.entrySet()) {
@@ -30,7 +28,6 @@ public final class GpuStats {
         }
     }
 
-    /** A frame whose results were not ready in time (skipped so nothing waits on the GPU). */
     public void dropped() {
         this.dropped++;
     }
@@ -43,13 +40,11 @@ public final class GpuStats {
         return this.dropped;
     }
 
-    /** Average over all frames, including those the section did not run in. */
     public double msPerFrame(String name) {
         long[] total = this.totals.get(name);
         return total == null || this.frames == 0 ? 0.0 : total[0] / 1.0E6 / this.frames;
     }
 
-    /** Sections other than the frame, the most expensive first. */
     public List<String> sections() {
         List<String> names = new ArrayList<String>(this.totals.keySet());
         names.remove(FRAME);
@@ -62,7 +57,6 @@ public final class GpuStats {
         return names;
     }
 
-    /** Sum of every section whose name ends with one of the suffixes (e.g. " blur", " glow"). */
     public double msPerFrameEndingWith(String... suffixes) {
         double sum = 0.0;
         for (String name : this.totals.keySet()) {
@@ -92,7 +86,6 @@ public final class GpuStats {
         this.dropped = 0;
     }
 
-    /** For the perf log: one line with the frame and the sections. */
     public String line(int top) {
         if (this.frames == 0) {
             return "gpu: no frames measured" + (this.dropped > 0 ? " (" + this.dropped + " not ready in time)" : "");

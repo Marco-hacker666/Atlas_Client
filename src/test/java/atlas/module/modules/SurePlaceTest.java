@@ -38,7 +38,6 @@ public class SurePlaceTest {
         }
     }
 
-    /** Floor up to x = 0, the bridge's end; the cells past it are empty. */
     private static Floor bridgeEnd() {
         return new Floor().box(-100, -1, -100, 0, 0, 100);
     }
@@ -75,7 +74,7 @@ public class SurePlaceTest {
         }
         assertEquals(3, need[8]);
         assertEquals(2, need[9]);
-        // the last tick a block can still go in: one move later the player is falling into the cell
+
         assertEquals(1, need[10]);
         assertEquals(SurePlace.BLOCKED, need[11]);
         assertEquals(SurePlace.BLOCKED, need[12]);
@@ -120,7 +119,6 @@ public class SurePlaceTest {
         PlayerSim sim = standing(-0.4, 0.0, 0.5);
         PlayerSim.Input in = east(0.3F, false, true);
         for (int t = 0; t < 30; t++) {
-            // with the block the sneak clamp lets the player walk on, but without it they still do not fall
             assertEquals("tick " + t, SurePlace.NOT_YET, SurePlace.neededIn(sim, world, in, 0, -1, 0, 2));
             sim.tick(world, in);
         }
@@ -137,7 +135,7 @@ public class SurePlaceTest {
         assertEquals(SurePlace.NOT_YET, SurePlace.neededIn(sim, world, back, 0, -1, 0, 3));
         int walkNeed = SurePlace.neededIn(sim, world, walking, 0, -1, 0, 3);
         assertTrue("walking off needs it: " + walkNeed, walkNeed > 0);
-        // in either order, the input that walks off decides
+
         assertEquals(walkNeed, SurePlace.soonest(sim, world, new PlayerSim.Input[]{back, walking}, 0, -1, 0, 3));
         assertEquals(walkNeed, SurePlace.soonest(sim, world, new PlayerSim.Input[]{walking, back}, 0, -1, 0, 3));
         assertEquals(SurePlace.NOT_YET, SurePlace.soonest(sim, world, new PlayerSim.Input[]{back}, 0, -1, 0, 3));

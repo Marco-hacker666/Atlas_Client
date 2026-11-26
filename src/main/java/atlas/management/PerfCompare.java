@@ -9,10 +9,6 @@ import net.minecraft.client.Minecraft;
 
 import java.util.List;
 
-/**
- * ".perf compare": fast-blur off, then on (one second to settle and four measured each), then the FPS and
- * the GPU time of the blur and glow in each, in chat. The setting itself is not changed.
- */
 public final class PerfCompare {
     private static final int SETTLE_TICKS = 20;
     private static final int MEASURE_TICKS = 80;
@@ -49,7 +45,6 @@ public final class PerfCompare {
         say("&7Comparing fast-blur off and on, about 10 seconds. Keep the view still; leave menus closed.");
     }
 
-    /** Client tick, in a world. */
     static void tick() {
         if (phase == 0) {
             return;
@@ -62,7 +57,6 @@ public final class PerfCompare {
         }
         lastTick = now;
         if (Effects.lite()) {
-            // Auto turned blur and glow off mid-way: the halves no longer measure the same work
             stop();
             say("&eThe comparison stopped: effects went Lite (low FPS), so its numbers would be wrong.");
             return;
@@ -108,7 +102,6 @@ public final class PerfCompare {
             return;
         }
         if (off.gpu.frames() == 0 || on.gpu.frames() == 0) {
-            // too few frames read back in four seconds (very low FPS): no GPU figures rather than empty ones
             String halves = off.gpu.frames() == 0 && on.gpu.frames() == 0 ? "either half"
                     : off.gpu.frames() == 0 ? "the off half" : "the on half";
             say("&7GPU timing had no frames read back in " + halves

@@ -101,7 +101,6 @@ public class PerfLog {
         long gc = gcMillis();
         int world = System.identityHashCode(mc.theWorld);
         if (world != this.secondWorld) {
-            // a new world (or back from the menu): start counting again instead of judging the time away
             this.secondWorld = world;
             this.secondStart = wall;
             this.secondGc = gc;

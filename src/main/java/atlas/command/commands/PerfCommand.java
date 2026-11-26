@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/** ".perf": FPS and GPU time of the last few seconds. ".perf compare": fast-blur off against on. */
 public class PerfCommand extends Command {
     public PerfCommand() {
         super(new ArrayList<>(Arrays.asList("perf", "fps")));

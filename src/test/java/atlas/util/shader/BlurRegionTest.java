@@ -9,7 +9,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class BlurRegionTest {
-    /** The GUI overlay at 1920x1080, scale 2: ortho(0, 960, 540, 0, 1000, 3000), translate(0, 0, -2000). */
     private static final float[] MODELVIEW = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -2000, 1};
     private static final float[] PROJECTION = {2.0F / 960, 0, 0, 0, 0, -2.0F / 540, 0, 0, 0, 0, -2.0F / 2000, 0,
             -1, 1, -2, 1};
@@ -116,7 +115,6 @@ public class BlurRegionTest {
         }
     }
 
-    /** Plans the OpenGL check (Mesa, scissored passes against the whole-screen ones) found pixel-identical. */
     @Test
     public void plansCheckedOnOpenGlStayTheSame() {
         int[][] blur = BlurRegion.plan(BlurRegion.BLUR, sizes(1920, 3, 2), sizes(1080, 3, 2), 10.0F,

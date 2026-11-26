@@ -42,7 +42,7 @@ public class ReachDriftTest {
         }
         double edge = 3.0 - first;
         d.update(3.0F, 0.4F, t, edge - 0.01);
-        // crossing in draws a new cut (the same value again is possible but not with this seed)
+
         assertTrue(first != d.cut());
     }
 
@@ -60,7 +60,7 @@ public class ReachDriftTest {
                 d.update(3.0F, 0.5F, t, 2.4);
                 assertEquals("seed " + seed, settled, d.cut(), 0.0F);
             }
-            // and at a distance sitting between edges: no flip-flop either
+
             float now = d.cut();
             double between = 3.0 - now + 0.001;
             d.update(3.0F, 0.5F, t, between);

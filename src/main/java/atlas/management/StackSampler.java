@@ -7,11 +7,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Looks at what the client thread (and, in singleplayer, the integrated server thread) is doing ten times
- * a second, and says who the time goes to: an Atlas module, another mod, or Minecraft itself. This covers
- * what the event profiler cannot see: Forge listeners, mixins and other mods.
- */
 public final class StackSampler {
     static final long PERIOD_MS = 100L;
     private static final int TOP = 12;
@@ -31,9 +26,6 @@ public final class StackSampler {
     private Thread server;
     private Thread worker;
 
-    /**
-     * @param active counts only while true (in a world), so menus and loading screens do not fill the numbers
-     */
     public StackSampler(Thread client, java.util.function.BooleanSupplier active) {
         this.client = client;
         this.active = active;
@@ -87,7 +79,6 @@ public final class StackSampler {
         }
     }
 
-    /** The lines for one perf window; resets the counts. */
     public synchronized List<String> take() {
         List<String> lines = new ArrayList<String>();
         this.clientTally.write("client thread", lines);

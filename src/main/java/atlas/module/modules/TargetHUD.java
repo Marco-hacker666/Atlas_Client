@@ -938,11 +938,6 @@ public class TargetHUD extends Module {
         GL11.glPopMatrix();
     }
 
-    /**
-     * Runs a blur or glow end call outside this style's scale (about the panel's centre) and puts it back. The
-     * passes draw their result through a full-screen quad, so inside a scale other than 1 the blur landed
-     * scaled again and no longer matched the panel.
-     */
     private static void endOutsideScale(Runnable end, double centerX, double centerY, float scale) {
         GL11.glPopMatrix();
         try {

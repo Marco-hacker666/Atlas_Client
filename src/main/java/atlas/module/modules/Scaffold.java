@@ -202,9 +202,9 @@ public class Scaffold extends Module {
     public final BooleanProperty surePlace = new BooleanProperty("sure-place", false, this::surePlaceShown);
     private float lastSentYaw = Float.NaN;
     private float lastSentPitch = Float.NaN;
-    /** Ticks until this tick's planned block holds the player up (SurePlace.neededIn); 0 when not soon. */
+
     private int planNeed;
-    /** Why place() last returned without placing, for the sure-place notes. */
+
     private String placeSkip;
 
     public final BooleanProperty humanize = new BooleanProperty("humanize", true, () -> false);
@@ -319,7 +319,6 @@ public class Scaffold extends Module {
         }
     }
 
-    /** The modes that hold the bridge yaw (or its diagonal) and look for the block with the pitch. */
     private boolean steadyYawShown() {
         int mode = this.rotationMode.getValue();
         return mode == 1 || mode == 2 || mode == 3 || mode == 5 || mode == 6;
@@ -329,14 +328,6 @@ public class Scaffold extends Module {
         return this.steadyYaw.getValue() && this.steadyYawShown();
     }
 
-    /**
-     * Keeps the bridge yaw and finds the pitch that lands on the planned face: the stretch of pitches that hit
-     * it nearest to the current pitch, and inside that stretch the current pitch if it still hits (else the
-     * nearest one a little inside the stretch, so the sent, grid-snapped look still hits). Null when no pitch
-     * at that yaw reaches the face.
-     *
-     * @return {yaw, pitch} or null
-     */
     private float[] steadyAim(BlockData plan, float yaw, float currentPitch) {
         float bestLo = Float.NaN;
         float bestHi = Float.NaN;
@@ -373,17 +364,12 @@ public class Scaffold extends Module {
         if (!this.hitsAfterSnap(plan, yaw, pitch)) {
             pitch = (bestLo + bestHi) / 2.0F;
             if (!this.hitsAfterSnap(plan, yaw, pitch)) {
-                // too narrow for the mouse grid to land on: leave it to the usual aim
                 return null;
             }
         }
         return new float[]{yaw, pitch};
     }
 
-    /**
-     * The sent look is snapped to the mouse-sensitivity grid, which moves each angle by up to half a grid
-     * step: the look must reach the face from every corner of that box, not only at its centre.
-     */
     private boolean hitsAfterSnap(BlockData plan, float yaw, float pitch) {
         float half = (float) (RotationUtil.gcd() / 2.0) + 0.001F;
         return this.lookHit(plan, yaw, pitch) != null
@@ -393,12 +379,10 @@ public class Scaffold extends Module {
                 && this.lookHit(plan, yaw + half, pitch + half) != null;
     }
 
-    /** Whether the look reaches the face: from every corner of the snap box when onGrid, else as given. */
     private boolean lands(BlockData plan, float yaw, float pitch, boolean onGrid) {
         return onGrid ? this.hitsAfterSnap(plan, yaw, pitch) : this.lookHit(plan, yaw, pitch) != null;
     }
 
-    /** The modes sure-place covers: the usual turning modes and GODBRIDGE2. */
     private boolean surePlaceShown() {
         int mode = this.rotationMode.getValue();
         return mode == 1 || mode == 2 || mode == 3 || mode == 5 || mode == 6 || mode == ROTATION_MOONWALK
@@ -409,14 +393,8 @@ public class Scaffold extends Module {
         return this.surePlace.getValue() && this.surePlaceShown();
     }
 
-    /** A block needed within this many moves may be aimed at full turn speed. */
     private static final int SURE_TICKS = 2;
 
-    /**
-     * Ticks until the planned block holds the player up ({@link SurePlace#neededIn}). NOT_YET when sure-place is
-     * off, when the move cannot be simulated, and on the ground while safe-walk or edge-stop keeps the player on
-     * the edge anyway.
-     */
     private int surePlaceNeed(BlockData plan) {
         if (!this.surePlaceOn() || plan == null || !SimPlayer.supported(mc.thePlayer)) {
             return SurePlace.NOT_YET;
@@ -426,14 +404,11 @@ public class Scaffold extends Module {
         }
         SimPlayer.Snapshot now = SimPlayer.snapshot(mc.thePlayer, PlayerSim.Stage.START);
         if (mc.thePlayer.onGround && this.stage > 0 && !this.goingDown() && MoveUtil.isForwardPressed()) {
-            // keep-y jumps by itself on the next move (onMoveInput)
             now.input.jump = true;
         }
         PlayerSim.Input[] ins = {now.input};
         if (this.isMoonWalkMode() && mc.thePlayer.onGround && !now.input.jump && !now.input.sneak
                 && !mc.thePlayer.isInWater() && MoveUtil.getForwardValue() > 0.0F && MoveUtil.getLeftValue() == 0.0F) {
-            // MOONWALK presses a strafe key on the next move (applyMoonWalkInput). Where that key depends on a
-            // random draw, every key it could be is forecast and the soonest need counts. Both moves use it.
             float[] keys = this.moonWalk.keys(mc.thePlayer.rotationYaw, mc.thePlayer.posX, mc.thePlayer.posZ,
                     mc.thePlayer.motionX, mc.thePlayer.motionZ, this.moonWalkSettings());
             float slow = NoSlow.wouldSlowMove(mc.thePlayer) ? 0.2F : 1.0F;
@@ -449,7 +424,6 @@ public class Scaffold extends Module {
         return SurePlace.soonest(now.sim, now.world, ins, cell.getX(), cell.getY(), cell.getZ(), SURE_TICKS);
     }
 
-    /** Safe-walk sneaks, or edge-stop stops, before a step with no floor under it. */
     private boolean edgeHeld() {
         if (this.isRunMode()) {
             return this.safeWalk.getValue() || this.edgeStop.getValue();
@@ -457,7 +431,6 @@ public class Scaffold extends Module {
         return this.safeWalk.getValue() && !this.goingDown();
     }
 
-    /** The points on a face the aim tries: a grid on the face, the face's own axis fixed. */
     private static double[][] faceOffsets(EnumFacing facing) {
         double[] x = aimOffsets;
         double[] y = aimOffsets;
@@ -484,12 +457,6 @@ public class Scaffold extends Module {
         return new double[][]{x, y, z};
     }
 
-    /**
-     * Of the face points that reach the planned face, the one nearest to the reference look whose look still
-     * reaches it after the mouse-grid snap. Null when none does.
-     *
-     * @return {yaw, pitch} or null
-     */
     private float[] firmLook(BlockData plan, float fromYaw, float fromPitch, float refYaw, float refPitch) {
         double[][] offsets = faceOffsets(plan.facing());
         ArrayList<float[]> reaching = new ArrayList<>();
@@ -516,7 +483,6 @@ public class Scaffold extends Module {
         return null;
     }
 
-    /** After a placement for a block needed now: one more in the same tick when the next one is needed too. */
     private void surePlaceExtra(float yaw, float pitch) {
         BlockData next = this.getBlockData();
         if (next == null || this.surePlaceNeed(next) <= 0) {
@@ -905,7 +871,7 @@ public class Scaffold extends Module {
             }
             if (!((ItemBlock) held.getItem()).canPlaceBlockOnSide(mc.theWorld, blockPos, enumFacing, mc.thePlayer, held)) {
                 this.placeSkip = "the cell cannot take the block (something in it)";
-                // nothing was sent, so sure-place tries the face again soon
+
                 this.failedFaces.put(faceKey(blockPos, enumFacing), this.tick + (this.surePlaceOn() ? 2 : 10));
                 return;
             }
@@ -1429,7 +1395,7 @@ public class Scaffold extends Module {
                 }
                 float aimDiff = Float.MAX_VALUE;
                 Vec3 hitVec = null;
-                // set when this tick's look is the steady-yaw one, checked against the mouse grid
+
                 boolean steadyAimed = false;
                 if (blockData != null) {
                     double[][] offsets = faceOffsets(blockData.facing());
@@ -1487,8 +1453,7 @@ public class Scaffold extends Module {
                     }
                 }
                 boolean towerRotating = this.towering || this.isTowering();
-                // sure-place: a block needed within SURE_TICKS moves gets a look that survives the grid snap,
-                // and below the turn may go at full speed
+
                 int need = towerRotating ? SurePlace.NOT_YET : this.surePlaceNeed(blockData);
                 boolean firmAimed = steadyAimed;
                 if (need > 0 && !steadyAimed) {
@@ -1557,8 +1522,6 @@ public class Scaffold extends Module {
                                 || this.lands(blockData, held, this.pitch, firmAimed)) {
                             this.yaw = held;
                         } else {
-                            // the held yaw with this pitch misses the face (the player is off the bridge's line):
-                            // keep the yaw and find the pitch that reaches it, else keep the look that does
                             float[] steady = this.steadyAim(blockData, held, this.pitch);
                             if (steady != null) {
                                 this.yaw = steady[0];
@@ -1574,8 +1537,7 @@ public class Scaffold extends Module {
                         || this.isSnapSpeedMode())) {
                     float targetYaw = this.yaw;
                     float targetPitch = this.pitch;
-                    // the steady (or sure-place) look passed the grid check: a look changed from it must pass it
-                    // too, else it stays
+
                     boolean gridChecked = firmAimed && !towerRotating;
                     boolean urgent = need > 0 && !towerRotating;
                     if (this.rotationRandom.getValue() > 0.0F && blockData != null && !towerRotating) {
@@ -1623,7 +1585,7 @@ public class Scaffold extends Module {
                         }
                     }
                     int moveYaw = this.moveMode();
-                    // urgent: reach the look in this tick, not after the usual speed-up
+
                     float minStep = snapMode || urgent ? SNAP_STEP : MIN_STEP;
                     float walkYaw = currentYaw;
                     boolean takeOff = false;
@@ -1725,7 +1687,7 @@ public class Scaffold extends Module {
         boolean snapCanPlace = this.planSnapCanPlace;
         boolean snapMode = this.planSnapMode;
         boolean threeFmcMode = this.planThreeFmc;
-        // sure-place: the block is needed within SURE_TICKS moves, so nothing below waits for a later tick
+
         int need = this.planNeed;
         boolean planned = hitVec != null;
         this.placeSkip = null;
@@ -1743,8 +1705,7 @@ public class Scaffold extends Module {
                 along != null ? along.sideHit : blockData.facing(), sentYaw)) {
             hitVec = null;
         }
-        // the look turned too far this tick: wait for the next one (a turn and a place in one tick stand out).
-        // Bridging only: towering and keep-y have no later placement in the tick to fall back on.
+
         if (hitVec != null && need <= 0 && this.maxPlaceTurn.getValue() > 0 && turned > this.maxPlaceTurn.getValue()
                 && this.keepY.getValue() == 0 && !this.towering && !this.isTowering()) {
             hitVec = null;
@@ -2186,8 +2147,7 @@ public class Scaffold extends Module {
         GodBridge.Plan plan = this.run.tick(in);
         this.runPlan = plan;
         godBridgeTrace(in, plan, target, event);
-        // sure-place: the run's look does not place and the block is needed within SURE_TICKS moves: turn
-        // straight to the nearest look that reaches the face (it survives the grid snap) and click
+
         int need = target != null && !in.lookPlaces ? this.surePlaceNeed(target) : SurePlace.NOT_YET;
         float[] firm = need > 0 ? this.firmLook(target, event.getYaw(), event.getPitch(), event.getYaw(), event.getPitch())
                 : null;

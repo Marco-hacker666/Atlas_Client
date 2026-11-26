@@ -72,14 +72,6 @@ final class MoonWalk {
         return (float) (this.dir * Math.signum(at[1]));
     }
 
-    /**
-     * Every key {@link #strafe} could press for this position, without changing any state. Where strafe draws at
-     * random (a first or due redraw of the middle, the first width, a new width after a turn), every key a value
-     * in the settings' range could lead to is included, so the set always holds the key strafe will press. With
-     * nothing drawn it is that one key.
-     *
-     * @return 1 to 3 distinct keys out of -1, 0 and 1
-     */
     float[] keys(float moveYaw, double x, double z, double motionX, double motionZ, Settings s) {
         if (!straight(moveYaw)) {
             return new float[]{0.0F};
@@ -103,7 +95,6 @@ final class MoonWalk {
             press[dir + 1] = true;
         }
         if (passed(dir, rest, goal[0]) || passed(dir, rest, goal[1])) {
-            // a turn: the width is drawn again
             int back = -dir;
             double[] turned = goals(back, middle, drawnWidth);
             if (!passed(back, rest, turned[1]) || !passed(back, rest, turned[0])) {
@@ -123,7 +114,6 @@ final class MoonWalk {
         return java.util.Arrays.copyOf(out, n);
     }
 
-    /** {lowest, highest} goal over the ranges; the goal grows with the middle and, going +, with the width. */
     private static double[] goals(int dir, double[] middle, double[] width) {
         double a = goal(dir, middle[0], dir > 0 ? width[0] : width[1]);
         double b = goal(dir, middle[1], dir > 0 ? width[1] : width[0]);
@@ -134,7 +124,6 @@ final class MoonWalk {
         return dir > 0 ? rest >= goal : rest <= goal;
     }
 
-    /** {where the slide ends across the row, the side that is left}, or null outside the band the sway works in. */
     private static double[] sway(float moveYaw, double x, double z, double motionX, double motionZ) {
         float axis = Math.round(moveYaw / 90.0F) * 90.0F;
         double radians = Math.toRadians(axis);

@@ -138,7 +138,7 @@ public class MoonWalkTest {
                 assertEquals("keys leave the width", width, moon.width(), 0.0);
                 assertTrue(keys.length >= 1 && keys.length <= 3);
                 float key = moon.strafe(0.0F, x, 0.5, motionX, 0.0, s);
-                // through redraws of the middle and new widths after turns
+
                 assertTrue("seed " + seed + " tick " + i + ": " + key + " not in " + java.util.Arrays.toString(keys),
                         holds(keys, key));
                 if (keys.length == 1) {
@@ -153,7 +153,6 @@ public class MoonWalkTest {
 
     @Test
     public void aPendingDrawGivesEveryKeyItCouldLeadTo() {
-        // a fresh sway at 0.56 with no slide: a width under 0.06 turns it back (-1), a wider one keeps +1
         float[] keys = new MoonWalk(new Random(1)).keys(0.0F, 0.56, 0.5, 0.0, 0.0, new MoonWalk.Settings());
         assertTrue(holds(keys, 1.0F));
         assertTrue(holds(keys, -1.0F));

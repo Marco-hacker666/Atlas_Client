@@ -5,7 +5,6 @@ import org.lwjgl.opengl.GL11;
 
 import java.nio.IntBuffer;
 
-/** The scissor test and box saved before a region-limited pass and put back after it. */
 public final class GlScissor {
     private static final IntBuffer BOX = BufferUtils.createIntBuffer(16);
 
@@ -30,12 +29,10 @@ public final class GlScissor {
         return new GlScissor(enabled, BOX.get(0), BOX.get(1), BOX.get(2), BOX.get(3));
     }
 
-    /** The scissor test was on when saved: someone is clipping what is drawn. */
     public boolean enabled() {
         return this.enabled;
     }
 
-    /** Scissor to {x0, y0, x1, y1} (window pixels of the bound framebuffer). */
     public static void set(int[] r) {
         GL11.glScissor(r[0], r[1], Math.max(0, r[2] - r[0]), Math.max(0, r[3] - r[1]));
     }

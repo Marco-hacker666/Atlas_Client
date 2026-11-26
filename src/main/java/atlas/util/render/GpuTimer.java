@@ -14,16 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
 
-/**
- * How long the GPU spends on a frame and on parts of it (Atlas's 2D and 3D passes, each blur and glow), from
- * GL timestamp queries. Every fourth frame is measured (reading results back costs a driver call each), and a
- * measured frame is read when its slot comes round again, sixteen frames later, and only if the GPU is done
- * with it, so nothing ever waits on the GPU; a frame not ready by then is skipped. Off where the driver has no
- * timer queries (OpenGL below 3.3 without ARB_timer_query, the macOS legacy context, phones) or rejects them,
- * for good after any error, and while RenderFixes > gpu-timing is off.
- *
- * <p>Render thread only.
- */
 public final class GpuTimer {
     private static final int FRAMES = 4;
     private static final int MARKS = 96;
@@ -38,7 +28,7 @@ public final class GpuTimer {
     private static int[][] ends;
     private static int[] used;
     private static boolean[] pending;
-    /** The probe each measured frame belongs to; one reset starts a new one (see resetProbe). */
+
     private static int[] generation;
     private static int probeGeneration;
     private static int slot = -1;
@@ -60,7 +50,6 @@ public final class GpuTimer {
     private GpuTimer() {
     }
 
-    /** The setting that turns timing off (RenderFixes > gpu-timing), read at the start of every frame. */
     public static void setSwitch(BooleanSupplier on) {
         allowed = on == null ? () -> true : on;
     }
@@ -73,7 +62,6 @@ public final class GpuTimer {
         }
     }
 
-    /** At the start of a frame (EntityRenderer.updateCameraAndRender). */
     public static void frameStart() {
         if (!allowed()) {
             frameEnd();
@@ -83,7 +71,6 @@ public final class GpuTimer {
             return;
         }
         if (paused) {
-            // back on: a fresh recent window, so nothing from before the pause reads as recent
             paused = false;
             recentSince = System.currentTimeMillis();
         }
@@ -115,7 +102,6 @@ public final class GpuTimer {
         }
     }
 
-    /** At the end of a frame. */
     public static void frameEnd() {
         if (state != 1 || !inFrame) {
             return;
@@ -128,11 +114,6 @@ public final class GpuTimer {
         }
     }
 
-    /**
-     * Starts timing a part of the frame. Parts can nest and overlap.
-     *
-     * @return a token for {@link #end}, or -1 when not timing
-     */
     public static int begin(String name) {
         if (state != 1 || !inFrame) {
             return -1;
@@ -146,7 +127,6 @@ public final class GpuTimer {
         }
     }
 
-    /** Ends a part; the name, if given, replaces the one given to begin. */
     public static void end(int token, String name) {
         if (state != 1 || !inFrame || token < 0 || token / MARKS != slot) {
             return;
@@ -177,22 +157,16 @@ public final class GpuTimer {
         return state == 1 ? "on (" + (core ? "GL 3.3" : "ARB_timer_query") + ")" : "off (" + why + ")";
     }
 
-    /** Since the last perf window; resets it. */
     public static GpuStats takeWindow() {
         GpuStats out = WINDOW.copy();
         WINDOW.reset();
         return out;
     }
 
-    /** The last few seconds. */
     public static GpuStats recent() {
         return lastRecent.copy();
     }
 
-    /**
-     * A measurement the caller starts and reads (the .perf comparison). Frames measured before the reset but
-     * read after it (sixteen frames later, over a second at low FPS) are left out of it.
-     */
     public static void resetProbe() {
         probeGeneration++;
         PROBE.reset();
@@ -231,9 +205,7 @@ public final class GpuTimer {
             }
             IntBuffer all = BufferUtils.createIntBuffer(FRAMES * MARKS);
             GL15.glGenQueries(all);
-            /* One timestamp and an availability check (neither waits for the GPU): a driver that takes the
-               calls but fails them would otherwise put a GL error in the log (or OptiFine's chat) on every
-               measured frame. */
+
             int probe = all.get(0);
             if (core) {
                 GL33.glQueryCounter(probe, GL33.GL_TIMESTAMP);
@@ -288,7 +260,6 @@ public final class GpuTimer {
         return index;
     }
 
-    /** Reads a finished frame, if the GPU is done with it; otherwise counts it as skipped. Never waits. */
     private static void resolve(int frame) {
         int count = used[frame];
         pending[frame] = false;
@@ -353,7 +324,6 @@ public final class GpuTimer {
         }
     }
 
-    /** Timing switched off: drop what is in flight and what was gathered, keep the query objects. */
     private static void pause() {
         paused = true;
         if (pending != null) {
@@ -363,10 +333,8 @@ public final class GpuTimer {
         lastRecent = new GpuStats();
     }
 
-    /** Clears errors left by earlier GL calls (not ours) so the check in start sees only its own. */
     private static void drainErrors() {
         for (int i = 0; i < 16 && GL11.glGetError() != GL11.GL_NO_ERROR; i++) {
-            // keep reading: each call returns and clears one error flag
         }
     }
 

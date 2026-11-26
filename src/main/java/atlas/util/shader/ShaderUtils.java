@@ -485,7 +485,6 @@ public class ShaderUtils {
         glUseProgram(0);
     }
 
-    /** Uniform locations never change after linking; looking them up on every draw cost a driver call each. */
     private int location(String name) {
         Integer cached = this.locations.get(name);
         if (cached != null) {

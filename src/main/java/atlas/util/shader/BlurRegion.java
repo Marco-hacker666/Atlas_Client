@@ -1,13 +1,5 @@
 package atlas.util.shader;
 
-/**
- * Which pixels a Kawase blur or bloom has to compute so that what it draws is the same as blurring the
- * whole screen. The shaders only read a few texels around each pixel, so a HUD element needs its own
- * rectangle plus the distance the passes reach, not the screen. Pure arithmetic, no GL.
- *
- * <p>Rectangles are {x0, y0, x1, y1} in pixels of the framebuffer they belong to, GL window coordinates
- * (origin bottom left), x1 and y1 exclusive.
- */
 public final class BlurRegion {
     public static final int BLUR = 0;
     public static final int BLOOM = 1;
@@ -15,14 +7,6 @@ public final class BlurRegion {
     private BlurRegion() {
     }
 
-    /**
-     * A rectangle given in the current GL coordinates (what the mask is drawn with) in window pixels.
-     *
-     * @param modelview  GL_MODELVIEW_MATRIX, column major
-     * @param projection GL_PROJECTION_MATRIX, column major
-     * @param viewport   GL_VIEWPORT: x, y, width, height
-     * @return {x0, y0, x1, y1}, or null when a corner does not map to the screen (or is behind the eye)
-     */
     public static int[] toWindow(float[] modelview, float[] projection, int[] viewport,
                                  float x1, float y1, float x2, float y2) {
         double minX = Double.POSITIVE_INFINITY;
@@ -48,8 +32,7 @@ public final class BlurRegion {
             maxX = Math.max(maxX, winX);
             maxY = Math.max(maxY, winY);
         }
-        /* Far past the screen is the same as a million pixels past it, and keeps the int arithmetic (padding,
-           margins) from overflowing. */
+
         return new int[]{(int) Math.floor(limit(minX)), (int) Math.floor(limit(minY)), (int) Math.ceil(limit(maxX)),
                 (int) Math.ceil(limit(maxY))};
     }
@@ -58,10 +41,6 @@ public final class BlurRegion {
         return Math.max(-1.0E6, Math.min(1.0E6, v));
     }
 
-    /**
-     * Where a mask rectangle lands, in window pixels, with room for the soft edge shapes are drawn with (one
-     * unit of the current coordinates plus two pixels each way). What BlurUtils.region uses.
-     */
     public static int[] maskRect(float[] modelview, float[] projection, int[] viewport,
                                  float x1, float y1, float x2, float y2) {
         int[] r = toWindow(modelview, projection, viewport, Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2),
@@ -73,7 +52,6 @@ public final class BlurRegion {
         return grow(r, pad, pad);
     }
 
-    /** How many window pixels one unit of the current coordinates is (the larger of x and y); 1 if unknown. */
     public static double pixelsPerUnit(float[] modelview, float[] projection, int[] viewport) {
         double[] origin = window(modelview, projection, viewport, 0.0, 0.0);
         double[] alongX = window(modelview, projection, viewport, 1.0, 0.0);
@@ -97,15 +75,6 @@ public final class BlurRegion {
                 viewport[1] + (clip[1] / clip[3] + 1.0) * 0.5 * viewport[3]};
     }
 
-    /**
-     * Whether the full-screen quad the passes draw (ShaderUtils.drawQuads: (0, 0) to (width, height) in the
-     * current coordinates, the screen's scaled size) lands on the viewport corner for corner. The passes read
-     * the mask and composite their result through that quad's texture coordinates, so only then does each
-     * pixel's result stay on that pixel. Under any other transform (an end call made inside a scale) the
-     * result lands somewhere else, possibly outside the mask's area, and only the whole-screen path draws it
-     * there as before. The tolerance is a thousandth of a pixel: float rounding of an exact overlay is far
-     * below it, while any real offset would make the composite blend in texels from outside the area.
-     */
     public static boolean fillsViewport(float[] modelview, float[] projection, int[] viewport, double width, double height) {
         double left = viewport[0];
         double bottom = viewport[1];
@@ -122,7 +91,6 @@ public final class BlurRegion {
         return true;
     }
 
-    /** A plan that draws nothing: every pass still runs (same GL state afterwards), on no pixels. */
     public static int[][] nothing(int levels) {
         int[][] out = new int[levels + 1][];
         for (int i = 0; i <= levels; i++) {
@@ -154,7 +122,6 @@ public final class BlurRegion {
         return new int[]{r[0] - x, r[1] - y, r[2] + x, r[3] + y};
     }
 
-    /** Clamped to the framebuffer; null when nothing is left. */
     public static int[] clamp(int[] r, int width, int height) {
         int x0 = Math.max(0, r[0]);
         int y0 = Math.max(0, r[1]);
@@ -163,14 +130,6 @@ public final class BlurRegion {
         return x1 > x0 && y1 > y0 ? new int[]{x0, y0, x1, y1} : null;
     }
 
-    /**
-     * How far, in full-resolution pixels (x, y), the passes read around a pixel they draw: every pass reads
-     * up to its offset (down: one output texel each way, up: two) plus one source texel for linear filtering,
-     * plus one coarsest texel and two pixels of slack for rounding.
-     *
-     * @param levelWidths  index 0 is the full width, then each level's framebuffer width
-     * @param levelHeights the same for heights
-     */
     public static int[] margin(int kind, int[] levelWidths, int[] levelHeights, float offset) {
         return new int[]{axisMargin(kind, levelWidths, offset), axisMargin(kind, levelHeights, offset)};
     }
@@ -195,12 +154,10 @@ public final class BlurRegion {
         return (int) Math.ceil(reach);
     }
 
-    /** The offset a down pass into level k, or the up pass out of level k, uses (see KawaseBlur, KawaseBloom). */
     private static double passOffset(int kind, double offset, int k) {
         return kind == BLOOM ? offset / Math.pow(1.5, k - 1) : offset;
     }
 
-    /** A full-resolution rectangle in a level's pixels: scaled out to whole texels, one more each way. */
     public static int[] toLevel(int[] r, int width, int height, int levelWidth, int levelHeight) {
         int x0 = (int) Math.floor(r[0] * (double) levelWidth / width) - 1;
         int y0 = (int) Math.floor(r[1] * (double) levelHeight / height) - 1;
@@ -210,14 +167,6 @@ public final class BlurRegion {
         return clamped == null ? new int[]{0, 0, 0, 0} : clamped;
     }
 
-    /**
-     * The rectangles to draw: [0] the last pass and the composite (full resolution), [k] level k.
-     * A blur only changes pixels under its mask; a bloom also spreads its glow around the mask, so its last
-     * pass covers the mask plus the reach and the levels twice the reach.
-     *
-     * @param declared where the mask is, full-resolution window pixels
-     * @return null when nothing on screen can change
-     */
     public static int[][] plan(int kind, int[] levelWidths, int[] levelHeights, float offset, int[] declared) {
         int width = levelWidths[0];
         int height = levelHeights[0];

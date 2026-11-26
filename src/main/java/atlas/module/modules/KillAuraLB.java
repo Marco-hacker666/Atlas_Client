@@ -91,7 +91,7 @@ public class KillAuraLB extends Module {
     public final IntProperty nearMissRate = new IntProperty("NearMiss-Rate", 7, 4, 15, this.nearMisses::getValue);
 
     public final FloatProperty rangeIncrease = new FloatProperty("RangeIncrease", 0.0F, 0.0F, 5.0F);
-    /** Up to how much shorter than the range the first hit may wait for; a new edge after each crossing. */
+
     public final FloatProperty rangeDrift = new FloatProperty("RangeDrift", 0.0F, 0.0F, 0.5F);
     private final atlas.lb.combat.ReachDrift reachDrift = new atlas.lb.combat.ReachDrift(new java.util.Random());
 
@@ -1002,10 +1002,6 @@ public class KillAuraLB extends Module {
 
     private int driftTick = -1;
 
-    /**
-     * Once a tick, right after the target is picked (so a target picked this tick is not hit at the full
-     * range first): the range drift's edge for it.
-     */
     private void updateDrift() {
         if (this.driftTick == this.rhythmTick || mc.thePlayer == null) {
             return;

@@ -562,11 +562,6 @@ public class HUD extends Module {
         return null;
     }
 
-    /**
-     * Runs a blur or glow end call outside the list's scale and puts the scale back. The passes draw their
-     * result through a full-screen quad, so inside a scale other than 1 it landed scaled again, away from the
-     * list (with the list on the right and a scale under 1, off it entirely).
-     */
     private void endOutsideScale(Runnable end) {
         GlStateManager.popMatrix();
         try {
@@ -577,7 +572,6 @@ public class HUD extends Module {
         }
     }
 
-    /** The rectangle around both, for BlurUtils.region. */
     private static float[] grow(float[] area, float x1, float y1, float x2, float y2) {
         if (area == null) {
             return new float[]{Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2)};

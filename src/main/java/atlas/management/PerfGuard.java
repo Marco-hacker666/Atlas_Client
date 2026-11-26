@@ -1,10 +1,5 @@
 package atlas.management;
 
-/**
- * Decides, once a second, two things a weak computer needs: turning Atlas's blur and glow off when the
- * game stays slow while they are drawn, and telling the player once when Minecraft spends a large share of
- * its time collecting garbage (too little memory). Pure, so it can be tested.
- */
 public final class PerfGuard {
     static final int LOW_FPS = 30;
     static final int LOW_FPS_SECONDS = 15;
@@ -17,13 +12,13 @@ public final class PerfGuard {
         public boolean inWorld;
         public boolean screenOpen;
         public boolean windowActive = true;
-        /** The frame limit in the video settings; 0 or anything above 250 means unlimited. */
+
         public int frameLimit;
-        /** Atlas drew blur or glow during this second. */
+
         public boolean effectsDrawn;
-        /** Lite effects are already on (by the setting or by an earlier decision). */
+
         public boolean liteAlready;
-        /** The effects setting is Auto. Full and Lite are the player's choice, so they are never changed. */
+
         public boolean auto = true;
         public long gcMillis;
         public long wallMillis = 1000L;
@@ -84,7 +79,6 @@ public final class PerfGuard {
         return s.fps > 0 && s.fps < LOW_FPS;
     }
 
-    /** A new world (or back from the menu): the slow streak starts again; this session's decisions stay. */
     public void newWorld() {
         this.slowSeconds = 0;
     }

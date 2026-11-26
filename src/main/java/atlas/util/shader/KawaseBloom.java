@@ -80,29 +80,20 @@ public class KawaseBloom {
         renderBlur(framebufferTexture, iterations, offset, strength, null);
     }
 
-    /**
-     * @param region where the glow's shapes are, window pixels {x0, y0, x1, y1} (see BlurRegion), or null for
-     *               the whole screen. With a region every pass only draws what the shapes and their glow need;
-     *               what it draws is the same.
-     */
     public static void renderBlur(int framebufferTexture, int iterations, float offset, float strength, int[] region) {
         initShaders();
 
         if (kawaseDown == null || kawaseUp == null) {
             System.err.println("KawaseBloom shaders not initialized, skipping bloom render");
-            /* The mask framebuffer was just unbound: draw on into the game's framebuffer, not the window's. */
+
             mc.getFramebuffer().bindFramebuffer(true);
             return;
         }
 
-        /* Level i is always displayWidth / 2^i, so one chain serves every pass count (the target HUD's health
-           bar asks for 4 and everything else for 3: the chain used to be rebuilt on every such switch). */
         if (currentIterations < iterations || (framebuffer.framebufferWidth != mc.displayWidth || framebuffer.framebufferHeight != mc.displayHeight)) {
             initFramebuffers(Math.max(iterations, currentIterations));
             currentIterations = Math.max(iterations, currentIterations);
         } else if (iterations != lastIterations) {
-            /* Where the chain used to be rebuilt: creating framebuffers turns the depth test on, so keep leaving
-               that, and whatever is drawn next sees the state it saw before. */
             GlStateManager.enableDepth();
         }
         lastIterations = iterations;
@@ -115,9 +106,7 @@ public class KawaseBloom {
 
         int[][] plan = region == null ? null : plan(iterations, offset, region);
         atlas.util.render.GlScissor saved = atlas.util.render.GlScissor.save();
-        /* Drawn inside someone's scissor clip: the whole-screen path. Its clip is in screen pixels, which mean
-           other places in the smaller levels, so the level passes run unclipped (every level texel fresh, none
-           left from an earlier blur) and the clip comes back for the last pass and the composite. */
+
         boolean clipped = saved.enabled();
         if (clipped) {
             plan = null;
@@ -159,7 +148,6 @@ public class KawaseBloom {
         }
     }
 
-    /** The rectangles each pass draws; shapes off screen still run every pass, on no pixels. */
     private static int[][] plan(int iterations, float offset, int[] region) {
         int[] widths = new int[iterations + 1];
         int[] heights = new int[iterations + 1];

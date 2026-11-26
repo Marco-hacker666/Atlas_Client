@@ -429,6 +429,17 @@ public class Scaffold extends Module {
             // keep-y jumps by itself on the next move (onMoveInput)
             now.input.jump = true;
         }
+        if (this.isMoonWalkMode() && mc.thePlayer.onGround && !now.input.jump && !now.input.sneak
+                && !mc.thePlayer.isInWater() && MoveUtil.getForwardValue() > 0.0F && MoveUtil.getLeftValue() == 0.0F) {
+            // MOONWALK presses a strafe key on the next move (applyMoonWalkInput); peek at it without drawing.
+            // Both forecast moves use it.
+            float[] turned = RotationHelper.get().turnedInput((float) MoveUtil.getForwardValue(),
+                    this.moonWalk.peek(mc.thePlayer.rotationYaw, mc.thePlayer.posX, mc.thePlayer.posZ,
+                            mc.thePlayer.motionX, mc.thePlayer.motionZ, this.moonWalkSettings()));
+            float slow = NoSlow.wouldSlowMove(mc.thePlayer) ? 0.2F : 1.0F;
+            now.input.forward = turned[0] * slow;
+            now.input.strafe = turned[1] * slow;
+        }
         BlockPos cell = plan.blockPos().offset(plan.facing());
         return SurePlace.neededIn(now.sim, now.world, now.input, cell.getX(), cell.getY(), cell.getZ(), SURE_TICKS);
     }
@@ -2447,6 +2458,11 @@ public class Scaffold extends Module {
             this.moonWalk.reset();
             return;
         }
+        keys.moveStrafe = this.moonWalk.strafe(mc.thePlayer.rotationYaw, mc.thePlayer.posX, mc.thePlayer.posZ,
+                mc.thePlayer.motionX, mc.thePlayer.motionZ, this.moonWalkSettings());
+    }
+
+    private MoonWalk.Settings moonWalkSettings() {
         MoonWalk.Settings s = new MoonWalk.Settings();
         s.widthMin = this.moonWidthMin.getValue();
         s.widthMax = this.moonWidthMax.getValue();
@@ -2454,8 +2470,7 @@ public class Scaffold extends Module {
         s.middleMax = this.moonMiddleMax.getValue();
         s.redrawMin = this.moonRedrawMin.getValue();
         s.redrawMax = this.moonRedrawMax.getValue();
-        keys.moveStrafe = this.moonWalk.strafe(mc.thePlayer.rotationYaw, mc.thePlayer.posX, mc.thePlayer.posZ,
-                mc.thePlayer.motionX, mc.thePlayer.motionZ, s);
+        return s;
     }
 
     private boolean tellyBack;

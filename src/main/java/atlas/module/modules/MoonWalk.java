@@ -55,6 +55,60 @@ final class MoonWalk {
                 this.width = drawWidth(s);
             }
         }
+        double[] at = sway(moveYaw, x, z, motionX, motionZ);
+        if (at == null) {
+            return 0.0F;
+        }
+        double rest = at[0];
+        double goal = goal(this.dir, this.middle, this.width);
+        if (this.dir > 0 ? rest >= goal : rest <= goal) {
+            this.dir = -this.dir;
+            this.width = drawWidth(s);
+            goal = goal(this.dir, this.middle, this.width);
+            if (this.dir > 0 ? rest >= goal : rest <= goal) {
+                return 0.0F;
+            }
+        }
+        return (float) (this.dir * Math.signum(at[1]));
+    }
+
+    /**
+     * The key {@link #strafe} would press for this position, without changing any state (no random draw, no
+     * turn). Where strafe would draw at random (a first or due redraw of the middle, a new width after a turn),
+     * this uses the middle of the settings' range and the current width instead, so it can differ from strafe
+     * near a turn.
+     */
+    float peek(float moveYaw, double x, double z, double motionX, double motionZ, Settings s) {
+        if (!straight(moveYaw)) {
+            return 0.0F;
+        }
+        double middle = this.middle;
+        double width = this.width;
+        if (width < 0.0 || this.redrawIn - 1 <= 0) {
+            middle = clamp((s.middleMin + s.middleMax) / 2.0, 0.5 - MIDDLE_LIMIT, 0.5 + MIDDLE_LIMIT);
+            if (width < 0.0) {
+                width = clamp((s.widthMin + s.widthMax) / 2.0, 0.0, WIDTH_CAP);
+            }
+        }
+        double[] at = sway(moveYaw, x, z, motionX, motionZ);
+        if (at == null) {
+            return 0.0F;
+        }
+        int dir = this.dir;
+        double rest = at[0];
+        double goal = goal(dir, middle, width);
+        if (dir > 0 ? rest >= goal : rest <= goal) {
+            dir = -dir;
+            goal = goal(dir, middle, width);
+            if (dir > 0 ? rest >= goal : rest <= goal) {
+                return 0.0F;
+            }
+        }
+        return (float) (dir * Math.signum(at[1]));
+    }
+
+    /** {where the slide ends across the row, the side that is left}, or null outside the band the sway works in. */
+    private static double[] sway(float moveYaw, double x, double z, double motionX, double motionZ) {
         float axis = Math.round(moveYaw / 90.0F) * 90.0F;
         double radians = Math.toRadians(axis);
 
@@ -64,24 +118,14 @@ final class MoonWalk {
         double left = alongZ ? Math.cos(radians) : Math.sin(radians);
         double frac = lateral - Math.floor(lateral);
         if (Math.abs(frac - 0.5) > ACTIVE) {
-            return 0.0F;
+            return null;
         }
-        double rest = frac + motion * SLIDE;
-        double goal = goal();
-        if (this.dir > 0 ? rest >= goal : rest <= goal) {
-            this.dir = -this.dir;
-            this.width = drawWidth(s);
-            goal = goal();
-            if (this.dir > 0 ? rest >= goal : rest <= goal) {
-                return 0.0F;
-            }
-        }
-        return (float) (this.dir * Math.signum(left));
+        return new double[]{frac + motion * SLIDE, left};
     }
 
-    private double goal() {
+    private static double goal(int dir, double middle, double width) {
         double reach = ACTIVE - STOP_MARGIN;
-        return clamp(this.middle + this.dir * this.width, 0.5 - reach, 0.5 + reach);
+        return clamp(middle + dir * width, 0.5 - reach, 0.5 + reach);
     }
 
     void reset() {

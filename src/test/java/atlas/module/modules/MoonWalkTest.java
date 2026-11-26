@@ -109,36 +109,65 @@ public class MoonWalkTest {
         }
     }
 
+    private static boolean holds(float[] keys, float key) {
+        for (float k : keys) {
+            if (k == key) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Test
-    public void peekPressesTheSameKeyAsStrafeAndChangesNothing() {
-        MoonWalk moon = new MoonWalk(new Random(7));
+    public void keysAlwaysHoldTheKeyStrafePressesAndChangeNothing() {
+        for (long seed = 0; seed < 20; seed++) {
+            MoonWalk moon = new MoonWalk(new Random(seed));
+            MoonWalk.Settings s = new MoonWalk.Settings();
+            s.redrawMin = 2;
+            s.redrawMax = 6;
+            s.middleMin = 0.4;
+            s.middleMax = 0.6;
+            double x = 0.5;
+            double motionX = 0.0;
+            int single = 0;
+            for (int i = 0; i < 400; i++) {
+                double middle = moon.middle();
+                double width = moon.width();
+                float[] keys = moon.keys(0.0F, x, 0.5, motionX, 0.0, s);
+                assertEquals("keys leave the middle", middle, moon.middle(), 0.0);
+                assertEquals("keys leave the width", width, moon.width(), 0.0);
+                assertTrue(keys.length >= 1 && keys.length <= 3);
+                float key = moon.strafe(0.0F, x, 0.5, motionX, 0.0, s);
+                // through redraws of the middle and new widths after turns
+                assertTrue("seed " + seed + " tick " + i + ": " + key + " not in " + java.util.Arrays.toString(keys),
+                        holds(keys, key));
+                if (keys.length == 1) {
+                    single++;
+                }
+                motionX = motionX * FRICTION + key * SIDE_PUSH;
+                x += motionX;
+            }
+            assertTrue("mostly one key: " + single, single > 200);
+        }
+    }
+
+    @Test
+    public void aPendingDrawGivesEveryKeyItCouldLeadTo() {
+        // a fresh sway at 0.56 with no slide: a width under 0.06 turns it back (-1), a wider one keeps +1
+        float[] keys = new MoonWalk(new Random(1)).keys(0.0F, 0.56, 0.5, 0.0, 0.0, new MoonWalk.Settings());
+        assertTrue(holds(keys, 1.0F));
+        assertTrue(holds(keys, -1.0F));
+    }
+
+    @Test
+    public void withNothingDrawnItIsTheOneKeyStrafePresses() {
+        MoonWalk moon = new MoonWalk(new Random(3));
         MoonWalk.Settings s = new MoonWalk.Settings();
         s.redrawMin = 1000;
         s.redrawMax = 1000;
-        double x = 0.5;
-        double motionX = 0.0;
-        moon.strafe(0.0F, x, 0.5, motionX, 0.0, s);
-        int same = 0;
-        int checked = 0;
-        for (int i = 0; i < 300; i++) {
-            double middle = moon.middle();
-            double width = moon.width();
-            float peeked = moon.peek(0.0F, x, 0.5, motionX, 0.0, s);
-            assertEquals("peek leaves the middle", middle, moon.middle(), 0.0);
-            assertEquals("peek leaves the width", width, moon.width(), 0.0);
-            float key = moon.strafe(0.0F, x, 0.5, motionX, 0.0, s);
-            boolean turned = moon.width() != width;
-            if (!turned) {
-                // away from a turn (where strafe draws a new width) the two agree
-                checked++;
-                if (peeked == key) {
-                    same++;
-                }
-            }
-            motionX = motionX * FRICTION + key * SIDE_PUSH;
-            x += motionX;
-        }
-        assertTrue("checked " + checked, checked > 100);
-        assertEquals(checked, same);
+        moon.strafe(0.0F, 0.5, 0.5, 0.0, 0.0, s);
+        float[] keys = moon.keys(0.0F, 0.5, 0.5, 0.0, 0.0, s);
+        assertEquals(1, keys.length);
+        assertEquals(keys[0], moon.strafe(0.0F, 0.5, 0.5, 0.0, 0.0, s), 0.0F);
     }
 }

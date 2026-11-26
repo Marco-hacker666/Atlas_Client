@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class SurePlaceTest {
     private static final double RESTING_FALL = -0.0784000015258789;
@@ -124,5 +125,21 @@ public class SurePlaceTest {
             sim.tick(world, in);
         }
         assertEquals(0.3, sim.box.maxX - 0.3, 0.01);
+    }
+
+    @Test
+    public void soonestTakesTheMostUrgentOfThePossibleInputs() {
+        Floor world = bridgeEnd();
+        PlayerSim sim = standing(-0.1, 0.0, 0.5);
+        sim.motionX = 0.2;
+        PlayerSim.Input back = east(-1.0F, false, false);
+        PlayerSim.Input walking = east(1.0F, false, false);
+        assertEquals(SurePlace.NOT_YET, SurePlace.neededIn(sim, world, back, 0, -1, 0, 3));
+        int walkNeed = SurePlace.neededIn(sim, world, walking, 0, -1, 0, 3);
+        assertTrue("walking off needs it: " + walkNeed, walkNeed > 0);
+        // in either order, the input that walks off decides
+        assertEquals(walkNeed, SurePlace.soonest(sim, world, new PlayerSim.Input[]{back, walking}, 0, -1, 0, 3));
+        assertEquals(walkNeed, SurePlace.soonest(sim, world, new PlayerSim.Input[]{walking, back}, 0, -1, 0, 3));
+        assertEquals(SurePlace.NOT_YET, SurePlace.soonest(sim, world, new PlayerSim.Input[]{back}, 0, -1, 0, 3));
     }
 }

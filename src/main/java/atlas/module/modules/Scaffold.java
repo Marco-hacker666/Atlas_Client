@@ -429,19 +429,24 @@ public class Scaffold extends Module {
             // keep-y jumps by itself on the next move (onMoveInput)
             now.input.jump = true;
         }
+        PlayerSim.Input[] ins = {now.input};
         if (this.isMoonWalkMode() && mc.thePlayer.onGround && !now.input.jump && !now.input.sneak
                 && !mc.thePlayer.isInWater() && MoveUtil.getForwardValue() > 0.0F && MoveUtil.getLeftValue() == 0.0F) {
-            // MOONWALK presses a strafe key on the next move (applyMoonWalkInput); peek at it without drawing.
-            // Both forecast moves use it.
-            float[] turned = RotationHelper.get().turnedInput((float) MoveUtil.getForwardValue(),
-                    this.moonWalk.peek(mc.thePlayer.rotationYaw, mc.thePlayer.posX, mc.thePlayer.posZ,
-                            mc.thePlayer.motionX, mc.thePlayer.motionZ, this.moonWalkSettings()));
+            // MOONWALK presses a strafe key on the next move (applyMoonWalkInput). Where that key depends on a
+            // random draw, every key it could be is forecast and the soonest need counts. Both moves use it.
+            float[] keys = this.moonWalk.keys(mc.thePlayer.rotationYaw, mc.thePlayer.posX, mc.thePlayer.posZ,
+                    mc.thePlayer.motionX, mc.thePlayer.motionZ, this.moonWalkSettings());
             float slow = NoSlow.wouldSlowMove(mc.thePlayer) ? 0.2F : 1.0F;
-            now.input.forward = turned[0] * slow;
-            now.input.strafe = turned[1] * slow;
+            ins = new PlayerSim.Input[keys.length];
+            for (int i = 0; i < keys.length; i++) {
+                float[] turned = RotationHelper.get().turnedInput((float) MoveUtil.getForwardValue(), keys[i]);
+                ins[i] = now.input.copy();
+                ins[i].forward = turned[0] * slow;
+                ins[i].strafe = turned[1] * slow;
+            }
         }
         BlockPos cell = plan.blockPos().offset(plan.facing());
-        return SurePlace.neededIn(now.sim, now.world, now.input, cell.getX(), cell.getY(), cell.getZ(), SURE_TICKS);
+        return SurePlace.soonest(now.sim, now.world, ins, cell.getX(), cell.getY(), cell.getZ(), SURE_TICKS);
     }
 
     /** Safe-walk sneaks, or edge-stop stops, before a step with no floor under it. */

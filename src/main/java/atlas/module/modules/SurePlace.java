@@ -23,6 +23,24 @@ final class SurePlace {
     }
 
     /**
+     * {@link #neededIn} over several possible inputs for the next moves, taken conservatively: the soonest tick
+     * any of them needs the block, else NOT_YET (or BLOCKED, which does not depend on the input).
+     */
+    static int soonest(PlayerSim start, PlayerSim.World world, PlayerSim.Input[] ins, int x, int y, int z, int horizon) {
+        int best = NOT_YET;
+        for (PlayerSim.Input in : ins) {
+            int need = neededIn(start, world, in, x, y, z, horizon);
+            if (need == BLOCKED) {
+                return BLOCKED;
+            }
+            if (need > 0 && (best == NOT_YET || need < best)) {
+                best = need;
+            }
+        }
+        return best;
+    }
+
+    /**
      * @return the first tick (1 = the next move) at which the block holds the player up, {@link #NOT_YET} when
      * it does not within {@code horizon} ticks, or {@link #BLOCKED}
      */

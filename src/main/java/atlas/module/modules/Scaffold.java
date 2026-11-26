@@ -199,8 +199,13 @@ public class Scaffold extends Module {
     public final BooleanProperty steadyYaw = new BooleanProperty("steady-yaw", false, this::steadyYawShown);
     public final IntProperty maxPlaceTurn = new IntProperty("max-place-turn", 0, 0, 90,
             () -> this.rotationMode.getValue() != 0);
+    public final BooleanProperty surePlace = new BooleanProperty("sure-place", false, this::surePlaceShown);
     private float lastSentYaw = Float.NaN;
     private float lastSentPitch = Float.NaN;
+    /** Ticks until this tick's planned block holds the player up (SurePlace.neededIn); 0 when not soon. */
+    private int planNeed;
+    /** Why place() last returned without placing, for the sure-place notes. */
+    private String placeSkip;
 
     public final BooleanProperty humanize = new BooleanProperty("humanize", true, () -> false);
     private final atlas.humanize.Humanizer human = new atlas.humanize.Humanizer(atlas.humanize.Humanizer.CONSUMER_SCAFFOLD);
@@ -391,6 +396,125 @@ public class Scaffold extends Module {
     /** Whether the look reaches the face: from every corner of the snap box when onGrid, else as given. */
     private boolean lands(BlockData plan, float yaw, float pitch, boolean onGrid) {
         return onGrid ? this.hitsAfterSnap(plan, yaw, pitch) : this.lookHit(plan, yaw, pitch) != null;
+    }
+
+    /** The modes sure-place covers: the usual turning modes and GODBRIDGE2. */
+    private boolean surePlaceShown() {
+        int mode = this.rotationMode.getValue();
+        return mode == 1 || mode == 2 || mode == 3 || mode == 5 || mode == 6 || mode == ROTATION_MOONWALK
+                || mode == ROTATION_GODBRIDGE2;
+    }
+
+    private boolean surePlaceOn() {
+        return this.surePlace.getValue() && this.surePlaceShown();
+    }
+
+    /** A block needed within this many moves may be aimed at full turn speed. */
+    private static final int SURE_TICKS = 2;
+
+    /**
+     * Ticks until the planned block holds the player up ({@link SurePlace#neededIn}). NOT_YET when sure-place is
+     * off, when the move cannot be simulated, and on the ground while safe-walk or edge-stop keeps the player on
+     * the edge anyway.
+     */
+    private int surePlaceNeed(BlockData plan) {
+        if (!this.surePlaceOn() || plan == null || !SimPlayer.supported(mc.thePlayer)) {
+            return SurePlace.NOT_YET;
+        }
+        if (mc.thePlayer.onGround && this.edgeHeld()) {
+            return SurePlace.NOT_YET;
+        }
+        SimPlayer.Snapshot now = SimPlayer.snapshot(mc.thePlayer, PlayerSim.Stage.START);
+        if (mc.thePlayer.onGround && this.stage > 0 && !this.goingDown() && MoveUtil.isForwardPressed()) {
+            // keep-y jumps by itself on the next move (onMoveInput)
+            now.input.jump = true;
+        }
+        BlockPos cell = plan.blockPos().offset(plan.facing());
+        return SurePlace.neededIn(now.sim, now.world, now.input, cell.getX(), cell.getY(), cell.getZ(), SURE_TICKS);
+    }
+
+    /** Safe-walk sneaks, or edge-stop stops, before a step with no floor under it. */
+    private boolean edgeHeld() {
+        if (this.isRunMode()) {
+            return this.safeWalk.getValue() || this.edgeStop.getValue();
+        }
+        return this.safeWalk.getValue() && !this.goingDown();
+    }
+
+    /** The points on a face the aim tries: a grid on the face, the face's own axis fixed. */
+    private static double[][] faceOffsets(EnumFacing facing) {
+        double[] x = aimOffsets;
+        double[] y = aimOffsets;
+        double[] z = aimOffsets;
+        switch (facing) {
+            case NORTH:
+                z = new double[]{0.0};
+                break;
+            case EAST:
+                x = new double[]{1.0};
+                break;
+            case SOUTH:
+                z = new double[]{1.0};
+                break;
+            case WEST:
+                x = new double[]{0.0};
+                break;
+            case DOWN:
+                y = new double[]{0.0};
+                break;
+            case UP:
+                y = new double[]{1.0};
+        }
+        return new double[][]{x, y, z};
+    }
+
+    /**
+     * Of the face points that reach the planned face, the one nearest to the reference look whose look still
+     * reaches it after the mouse-grid snap. Null when none does.
+     *
+     * @return {yaw, pitch} or null
+     */
+    private float[] firmLook(BlockData plan, float fromYaw, float fromPitch, float refYaw, float refPitch) {
+        double[][] offsets = faceOffsets(plan.facing());
+        ArrayList<float[]> reaching = new ArrayList<>();
+        for (double dx : offsets[0]) {
+            for (double dy : offsets[1]) {
+                for (double dz : offsets[2]) {
+                    double relX = (double) plan.blockPos().getX() + dx - mc.thePlayer.posX;
+                    double relY = (double) plan.blockPos().getY() + dy - mc.thePlayer.posY - (double) mc.thePlayer.getEyeHeight();
+                    double relZ = (double) plan.blockPos().getZ() + dz - mc.thePlayer.posZ;
+                    float[] look = RotationUtil.getRotationsTo(relX, relY, relZ, fromYaw, fromPitch);
+                    if (this.lookHit(plan, look[0], look[1]) != null) {
+                        float away = Math.abs(MathHelper.wrapAngleTo180_float(look[0] - refYaw)) + Math.abs(look[1] - refPitch);
+                        reaching.add(new float[]{look[0], look[1], away});
+                    }
+                }
+            }
+        }
+        reaching.sort(Comparator.comparingDouble(look -> look[2]));
+        for (float[] look : reaching) {
+            if (this.hitsAfterSnap(plan, look[0], look[1])) {
+                return new float[]{look[0], look[1]};
+            }
+        }
+        return null;
+    }
+
+    /** After a placement for a block needed now: one more in the same tick when the next one is needed too. */
+    private void surePlaceExtra(float yaw, float pitch) {
+        BlockData next = this.getBlockData();
+        if (next == null || this.surePlaceNeed(next) <= 0) {
+            return;
+        }
+        MovingObjectPosition hit = this.lookHit(next, yaw, pitch);
+        if (hit != null) {
+            this.place(hit.getBlockPos(), hit.sideHit, hit.hitVec);
+        }
+    }
+
+    private void noteSureMiss(String why) {
+        atlas.util.DiagNotes.note("Scaffold", "sure-place: a block needed on the next move was not placed | " + why
+                + " | mode " + this.rotationMode.getModeString() + " | " + (mc.thePlayer.onGround ? "ground" : "air"), true);
     }
 
     private boolean turnLimited() {
@@ -745,22 +869,32 @@ public class Scaffold extends Module {
 
     private void place(BlockPos blockPos, EnumFacing enumFacing, Vec3 vec3) {
         if (!this.canThreeFmcPlaceNow()) {
+            this.placeSkip = "3FMC timing";
             return;
         }
-        if (this.pauseTicks > 0 || this.faceFailed(blockPos, enumFacing)) {
+        if (this.pauseTicks > 0) {
+            this.placeSkip = "paused after a server correction or refused block";
+            return;
+        }
+        if (this.faceFailed(blockPos, enumFacing)) {
+            this.placeSkip = "that face failed a moment ago";
             return;
         }
         if (ItemUtil.isHoldingBlock() && this.blockCount > 0) {
             ItemStack held = mc.thePlayer.inventory.getCurrentItem();
 
             if (held == null || !(held.getItem() instanceof ItemBlock)) {
+                this.placeSkip = "no blocks in hand";
                 return;
             }
             if (!((ItemBlock) held.getItem()).canPlaceBlockOnSide(mc.theWorld, blockPos, enumFacing, mc.thePlayer, held)) {
-                this.failedFaces.put(faceKey(blockPos, enumFacing), this.tick + 10);
+                this.placeSkip = "the cell cannot take the block (something in it)";
+                // nothing was sent, so sure-place tries the face again soon
+                this.failedFaces.put(faceKey(blockPos, enumFacing), this.tick + (this.surePlaceOn() ? 2 : 10));
                 return;
             }
             if (!mc.playerController.onPlayerRightClick(mc.thePlayer, mc.theWorld, held, blockPos, enumFacing, vec3)) {
+                this.placeSkip = "the game refused the click";
                 this.failedFaces.put(faceKey(blockPos, enumFacing), this.tick + 10);
                 return;
             }
@@ -793,6 +927,8 @@ public class Scaffold extends Module {
                     PacketUtil.sendPacket(new C0APacketAnimation());
                 }
             }
+        } else {
+            this.placeSkip = "no blocks in hand";
         }
     }
 
@@ -1093,6 +1229,7 @@ public class Scaffold extends Module {
         if (this.isEnabled() && event.getType() == EventType.PRE) {
             this.placedThisTick = false;
             this.planReady = false;
+            this.planNeed = SurePlace.NOT_YET;
             this.tick++;
             if (this.pauseTicks > 0) {
                 this.pauseTicks--;
@@ -1279,28 +1416,10 @@ public class Scaffold extends Module {
                 // set when this tick's look is the steady-yaw one, checked against the mouse grid
                 boolean steadyAimed = false;
                 if (blockData != null) {
-                    double[] x = aimOffsets;
-                    double[] y = aimOffsets;
-                    double[] z = aimOffsets;
-                    switch (blockData.facing()) {
-                        case NORTH:
-                            z = new double[]{0.0};
-                            break;
-                        case EAST:
-                            x = new double[]{1.0};
-                            break;
-                        case SOUTH:
-                            z = new double[]{1.0};
-                            break;
-                        case WEST:
-                            x = new double[]{0.0};
-                            break;
-                        case DOWN:
-                            y = new double[]{0.0};
-                            break;
-                        case UP:
-                            y = new double[]{1.0};
-                    }
+                    double[][] offsets = faceOffsets(blockData.facing());
+                    double[] x = offsets[0];
+                    double[] y = offsets[1];
+                    double[] z = offsets[2];
                     float bestYaw = -180.0F;
                     float bestPitch = 0.0F;
                     float bestDiff = 0.0F;
@@ -1352,6 +1471,20 @@ public class Scaffold extends Module {
                     }
                 }
                 boolean towerRotating = this.towering || this.isTowering();
+                // sure-place: a block needed within SURE_TICKS moves gets a look that survives the grid snap,
+                // and below the turn may go at full speed
+                int need = towerRotating ? SurePlace.NOT_YET : this.surePlaceNeed(blockData);
+                boolean firmAimed = steadyAimed;
+                if (need > 0 && !steadyAimed) {
+                    float[] firm = this.firmLook(blockData, event.getYaw(), event.getPitch(), refYaw, refPitch);
+                    if (firm != null) {
+                        this.yaw = firm[0];
+                        this.pitch = firm[1];
+                        this.canRotate = true;
+                        firmAimed = true;
+                        hitVec = this.lookHit(blockData, firm[0], firm[1]).hitVec;
+                    }
+                }
                 boolean snapAlreadyLooking = false;
                 boolean snapCanPlace = true;
                 if (snapMode && !towerRotating && blockData != null) {
@@ -1394,13 +1527,29 @@ public class Scaffold extends Module {
                     }
                 }
                 if (this.canRotate && MoveUtil.isForwardPressed() && Math.abs(MathHelper.wrapAngleTo180_float(yawDiffTo180 - this.yaw)) < 90.0F) {
+                    float held = Float.NaN;
                     switch (this.rotationMode.getValue()) {
                         case 2:
                         case ROTATION_MOONWALK:
-                            this.yaw = RotationUtil.quantizeAngle(yawDiffTo180);
+                            held = RotationUtil.quantizeAngle(yawDiffTo180);
                             break;
                         case 3:
-                            this.yaw = RotationUtil.quantizeAngle(diagonalYaw);
+                            held = RotationUtil.quantizeAngle(diagonalYaw);
+                    }
+                    if (!Float.isNaN(held)) {
+                        if (!this.surePlaceOn() || blockData == null || hitVec == null
+                                || this.lands(blockData, held, this.pitch, firmAimed)) {
+                            this.yaw = held;
+                        } else {
+                            // the held yaw with this pitch misses the face (the player is off the bridge's line):
+                            // keep the yaw and find the pitch that reaches it, else keep the look that does
+                            float[] steady = this.steadyAim(blockData, held, this.pitch);
+                            if (steady != null) {
+                                this.yaw = steady[0];
+                                this.pitch = steady[1];
+                                firmAimed = true;
+                            }
+                        }
                     }
                 }
                 float placeYaw = this.yaw;
@@ -1409,8 +1558,10 @@ public class Scaffold extends Module {
                         || this.isSnapSpeedMode())) {
                     float targetYaw = this.yaw;
                     float targetPitch = this.pitch;
-                    // the steady look passed the grid check: a look changed from it must pass it too, else it stays
-                    boolean gridChecked = steadyAimed && !towerRotating;
+                    // the steady (or sure-place) look passed the grid check: a look changed from it must pass it
+                    // too, else it stays
+                    boolean gridChecked = firmAimed && !towerRotating;
+                    boolean urgent = need > 0 && !towerRotating;
                     if (this.rotationRandom.getValue() > 0.0F && blockData != null && !towerRotating) {
                         float[] wandered = this.wander(targetYaw, targetPitch);
                         if (this.steadyYawOn()) {
@@ -1446,7 +1597,7 @@ public class Scaffold extends Module {
                         targetPitch = event.getPitch();
                     }
 
-                    float cap = this.turnLimited() && !towerRotating ? this.turnSpeed.getValue() : RotationHelper.NO_LIMIT;
+                    float cap = this.turnLimited() && !towerRotating && !urgent ? this.turnSpeed.getValue() : RotationHelper.NO_LIMIT;
                     if (!snapMode) {
                         float[] aimed = atlas.humanize.HumanTurn.apply(this.human, event.getYaw(), event.getPitch(),
                                 targetYaw, targetPitch);
@@ -1456,7 +1607,8 @@ public class Scaffold extends Module {
                         }
                     }
                     int moveYaw = this.moveMode();
-                    float minStep = snapMode ? SNAP_STEP : MIN_STEP;
+                    // urgent: reach the look in this tick, not after the usual speed-up
+                    float minStep = snapMode || urgent ? SNAP_STEP : MIN_STEP;
                     float walkYaw = currentYaw;
                     boolean takeOff = false;
                     if (this.isSnapSpeedMode() && !towerRotating) {
@@ -1531,6 +1683,7 @@ public class Scaffold extends Module {
                 this.planSnapCanPlace = snapCanPlace;
                 this.planSnapMode = snapMode;
                 this.planThreeFmc = threeFmcMode;
+                this.planNeed = need;
                 this.planReady = true;
             }
         }
@@ -1556,6 +1709,10 @@ public class Scaffold extends Module {
         boolean snapCanPlace = this.planSnapCanPlace;
         boolean snapMode = this.planSnapMode;
         boolean threeFmcMode = this.planThreeFmc;
+        // sure-place: the block is needed within SURE_TICKS moves, so nothing below waits for a later tick
+        int need = this.planNeed;
+        boolean planned = hitVec != null;
+        this.placeSkip = null;
 
         float[] packet = RotationHelper.packetLook(event);
         float sentYaw = packet[0];
@@ -1565,14 +1722,14 @@ public class Scaffold extends Module {
             along = this.lookHit(blockData, sentYaw, sentPitch);
             hitVec = along == null ? null : along.hitVec;
         }
-        if (blockData != null && hitVec != null && this.paceOn() && mc.thePlayer.onGround
+        if (blockData != null && hitVec != null && need <= 0 && this.paceOn() && mc.thePlayer.onGround
                 && this.paceHolds(along != null ? along.getBlockPos() : blockData.blockPos(),
                 along != null ? along.sideHit : blockData.facing(), sentYaw)) {
             hitVec = null;
         }
         // the look turned too far this tick: wait for the next one (a turn and a place in one tick stand out).
         // Bridging only: towering and keep-y have no later placement in the tick to fall back on.
-        if (hitVec != null && this.maxPlaceTurn.getValue() > 0 && turned > this.maxPlaceTurn.getValue()
+        if (hitVec != null && need <= 0 && this.maxPlaceTurn.getValue() > 0 && turned > this.maxPlaceTurn.getValue()
                 && this.keepY.getValue() == 0 && !this.towering && !this.isTowering()) {
             hitVec = null;
         }
@@ -1604,6 +1761,8 @@ public class Scaffold extends Module {
                         break;
                     }
                 }
+            } else if (need > 0 && !snapMode && this.placedThisTick) {
+                this.surePlaceExtra(sentYaw, sentPitch);
             }
         }
         if (this.targetFacing != null) {
@@ -1641,6 +1800,19 @@ public class Scaffold extends Module {
                     }
                 }
             }
+        }
+        if (need == 1 && !this.placedThisTick) {
+            String why;
+            if (!planned) {
+                why = "no placing look this tick (nothing in reach, or the face is hidden)";
+            } else if (this.rotationMode.getValue() != 0 && along == null) {
+                why = "the sent look missed the face";
+            } else if (this.rotationTick > 0) {
+                why = "rotation-tick wait";
+            } else {
+                why = this.placeSkip != null ? this.placeSkip : "not placed";
+            }
+            this.noteSureMiss(why);
         }
     }
 
@@ -1998,7 +2170,22 @@ public class Scaffold extends Module {
         GodBridge.Plan plan = this.run.tick(in);
         this.runPlan = plan;
         godBridgeTrace(in, plan, target, event);
-        if (plan.look) {
+        // sure-place: the run's look does not place and the block is needed within SURE_TICKS moves: turn
+        // straight to the nearest look that reaches the face (it survives the grid snap) and click
+        int need = target != null && !in.lookPlaces ? this.surePlaceNeed(target) : SurePlace.NOT_YET;
+        float[] firm = need > 0 ? this.firmLook(target, event.getYaw(), event.getPitch(), event.getYaw(), event.getPitch())
+                : null;
+        if (firm != null) {
+            float[] sent = RotationHelper.request(this, firm[0], firm[1], 3, this.moveMode(), false,
+                    RotationHelper.NO_LIMIT, SNAP_STEP);
+            if (sent != null && this.moveFix.getModeString().equals("REAL")) {
+                Atlas.rotationManager.setRotation(sent[0], sent[1], 3, false);
+            }
+            this.yaw = firm[0];
+            this.pitch = firm[1];
+            this.canRotate = true;
+            plan.click = true;
+        } else if (plan.look) {
             float[] aimed = atlas.humanize.HumanTurn.apply(this.human, event.getYaw(), event.getPitch(), plan.yaw, plan.pitch);
             float[] sent = RotationHelper.request(this, aimed[0], aimed[1], 3, this.moveMode(), false,
                     plan.maxTurn, Math.min(MIN_STEP, plan.maxTurn));
@@ -2014,6 +2201,7 @@ public class Scaffold extends Module {
         this.planSnapCanPlace = true;
         this.planSnapMode = false;
         this.planThreeFmc = false;
+        this.planNeed = need;
         this.planReady = true;
     }
 
